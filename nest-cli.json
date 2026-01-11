@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json.schemastore.org/nest-cli",
+  "collection": "@nestjs/schematics",
+  "monorepo": true,
+  "root": "apps/api-gateway",
+  "sourceRoot": "apps/api-gateway/src",
+  "projects": {
+    "api-gateway": {
+      "type": "application",
+      "root": "apps/api-gateway",
+      "entryFile": "main",
+      "sourceRoot": "apps/api-gateway/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/api-gateway/tsconfig.app.json"
+      }
+    },
+    "ws-gateway": {
+      "type": "application",
+      "root": "apps/ws-gateway",
+      "entryFile": "main",
+      "sourceRoot": "apps/ws-gateway/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/ws-gateway/tsconfig.app.json"
+      }
+    },
+    "chat-service": {
+      "type": "application",
+      "root": "apps/chat-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/chat-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/chat-service/tsconfig.app.json"
+      }
+    },
+    "presence-service": {
+      "type": "application",
+      "root": "apps/presence-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/presence-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/presence-service/tsconfig.app.json"
+      }
+    },
+    "media-service": {
+      "type": "application",
+      "root": "apps/media-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/media-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/media-service/tsconfig.app.json"
+      }
+    },
+    "notification-service": {
+      "type": "application",
+      "root": "apps/notification-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/notification-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/notification-service/tsconfig.app.json"
+      }
+    },
+    "contracts": {
+      "type": "library",
+      "root": "libs/contracts",
+      "entryFile": "index",
+      "sourceRoot": "libs/contracts/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/contracts/tsconfig.lib.json"
+      }
+    },
+    "config": {
+      "type": "library",
+      "root": "libs/config",
+      "entryFile": "index",
+      "sourceRoot": "libs/config/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/config/tsconfig.lib.json"
+      }
+    },
+    "logger": {
+      "type": "library",
+      "root": "libs/logger",
+      "entryFile": "index",
+      "sourceRoot": "libs/logger/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/logger/tsconfig.lib.json"
+      }
+    },
+    "kafka": {
+      "type": "library",
+      "root": "libs/kafka",
+      "entryFile": "index",
+      "sourceRoot": "libs/kafka/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/kafka/tsconfig.lib.json"
+      }
+    },
+    "scylla": {
+      "type": "library",
+      "root": "libs/scylla",
+      "entryFile": "index",
+      "sourceRoot": "libs/scylla/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/scylla/tsconfig.lib.json"
+      }
+    },
+    "auth": {
+      "type": "library",
+      "root": "libs/auth",
+      "entryFile": "index",
+      "sourceRoot": "libs/auth/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/auth/tsconfig.lib.json"
+      }
+    },
+    "mvp-access": {
+      "type": "library",
+      "root": "libs/mvp-access",
+      "entryFile": "index",
+      "sourceRoot": "libs/mvp-access/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/mvp-access/tsconfig.lib.json"
+      }
+    }
+  },
+  "compilerOptions": {
+    "deleteOutDir": true
+  }
+}

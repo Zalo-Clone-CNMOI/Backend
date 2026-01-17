@@ -13,6 +13,8 @@ Key goals for the MVP:
 - Media upload via **S3 presigned URL** (media-service)
 - Notifications via **mock provider** (notification-service)
 
+![alt text](image.png)
+
 ## Apps
 
 - `apps/api-gateway`: HTTP REST edge (health now; will host auth/profile/search later)

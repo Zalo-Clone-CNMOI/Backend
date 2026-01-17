@@ -12,6 +12,13 @@ export interface AppConfig {
   scyllaLocalDatacenter: string;
   scyllaKeyspace: string;
 
+  // PostgreSQL configuration
+  postgresHost?: string;
+  postgresPort?: number;
+  postgresUser?: string;
+  postgresPassword?: string;
+  postgresDatabase?: string;
+
   redisUrl?: string;
 
   awsRegion?: string;
@@ -49,6 +56,13 @@ export function loadConfig(serviceName: string): AppConfig {
       .filter(Boolean),
     scyllaLocalDatacenter: process.env.SCYLLA_LOCAL_DATACENTER ?? 'datacenter1',
     scyllaKeyspace: process.env.SCYLLA_KEYSPACE ?? 'chat',
+
+    // PostgreSQL
+    postgresHost: process.env.POSTGRES_HOST ?? 'localhost',
+    postgresPort: readNumber(process.env.POSTGRES_PORT) ?? 5432,
+    postgresUser: process.env.POSTGRES_USER ?? 'postgres',
+    postgresPassword: process.env.POSTGRES_PASSWORD ?? 'postgres',
+    postgresDatabase: process.env.POSTGRES_DATABASE ?? 'zaloclone',
 
     redisUrl: process.env.REDIS_URL,
 

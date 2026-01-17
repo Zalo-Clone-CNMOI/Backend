@@ -121,6 +121,51 @@
       "compilerOptions": {
         "tsConfigPath": "libs/mvp-access/tsconfig.lib.json"
       }
+    },
+    "constant": {
+      "type": "library",
+      "root": "libs/constant",
+      "entryFile": "index",
+      "sourceRoot": "libs/constant/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/constant/tsconfig.lib.json"
+      }
+    },
+    "decorator": {
+      "type": "library",
+      "root": "libs/decorator",
+      "entryFile": "index",
+      "sourceRoot": "libs/decorator/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/decorator/tsconfig.lib.json"
+      }
+    },
+    "interceptors": {
+      "type": "library",
+      "root": "libs/interceptor",
+      "entryFile": "index",
+      "sourceRoot": "libs/interceptor/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/interceptor/tsconfig.lib.json"
+      }
+    },
+    "middleware": {
+      "type": "library",
+      "root": "libs/middleware",
+      "entryFile": "index",
+      "sourceRoot": "libs/middleware/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/middleware/tsconfig.lib.json"
+      }
+    },
+    "swagger": {
+      "type": "library",
+      "root": "libs/swagger",
+      "entryFile": "index",
+      "sourceRoot": "libs/swagger/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/swagger/tsconfig.lib.json"
+      }
     }
   },
   "compilerOptions": {

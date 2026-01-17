@@ -1,0 +1,288 @@
+# ZaloClone Database Schema - DBML Format
+# Để visualize: https://dbdiagram.io/
+
+# =============================================================================
+# USERS DOMAIN
+# =============================================================================
+
+Table users {
+  id uuid [pk, default: `gen_random_uuid()`]
+  phone varchar(20) [not null, unique]
+  email varchar(255) [unique]
+  password_hash varchar(255) [not null]
+  full_name varchar(255) [not null]
+  avatar_url varchar(500)
+  bio varchar(500)
+  gender varchar(10)
+  date_of_birth date
+  status varchar(20) [default: 'active']
+  last_seen_at timestamp
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+  
+  Note: 'Người dùng hệ thống. Là entity chính của ứng dụng.'
+}
+
+Table device_tokens {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null, ref: > users.id]
+  token varchar(500) [not null]
+  platform varchar(20) [not null]
+  device_id varchar(255)
+  is_active boolean [default: true]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+  
+  indexes {
+    (user_id, token) [unique]
+  }
+  
+  Note: 'Device tokens cho FCM/APNs push notification.'
+}
+
+Ref: device_tokens.user_id > users.id [delete: cascade]
+
+# =============================================================================
+# CONVERSATIONS DOMAIN
+# =============================================================================
+
+Table conversations {
+  id uuid [pk, default: `gen_random_uuid()`]
+  type varchar(20) [not null, default: 'direct']
+  name varchar(255)
+  avatar_url varchar(500)
+  created_by uuid [ref: > users.id]
+  last_message_id uuid
+  last_message_at timestamp
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+  
+  indexes {
+    (last_message_at)
+  }
+  
+  Note: 'Cuộc hội thoại. Type: direct (1-1) hoặc group (nhóm).'
+}
+
+Ref: conversations.created_by > users.id [delete: set null]
+
+Table conversation_members {
+  id uuid [pk, default: `gen_random_uuid()`]
+  conversation_id uuid [not null, ref: > conversations.id]
+  user_id uuid [not null, ref: > users.id]
+  role varchar(20) [default: 'member']
+  nickname varchar(100)
+  is_muted boolean [default: false]
+  last_read_at timestamp
+  joined_at timestamp [default: `now()`]
+  left_at timestamp
+  
+  indexes {
+    (conversation_id, user_id) [unique]
+    (user_id, left_at)
+  }
+  
+  Note: 'Thành viên conversation. Role: owner, admin, member.'
+}
+
+Ref: conversation_members.conversation_id > conversations.id [delete: cascade]
+Ref: conversation_members.user_id > users.id [delete: cascade]
+
+# =============================================================================
+# FRIENDS/CONTACTS DOMAIN
+# =============================================================================
+
+Table friendships {
+  id uuid [pk, default: `gen_random_uuid()`]
+  requester_id uuid [not null, ref: > users.id]
+  addressee_id uuid [not null, ref: > users.id]
+  status varchar(20) [not null, default: 'pending']
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+  
+  indexes {
+    (requester_id, addressee_id) [unique]
+    (addressee_id, status)
+    (requester_id, status)
+  }
+  
+  Note: 'Quan hệ bạn bè. Status: pending, accepted, blocked.'
+}
+
+Ref: friendships.requester_id > users.id [delete: cascade]
+Ref: friendships.addressee_id > users.id [delete: cascade]
+
+# =============================================================================
+# MEDIA DOMAIN
+# =============================================================================
+
+Table media_files {
+  id uuid [pk, default: `gen_random_uuid()`]
+  key varchar(500) [not null, unique]
+  bucket varchar(100) [not null]
+  content_type varchar(100) [not null]
+  size_bytes bigint
+  uploaded_by uuid [ref: > users.id]
+  conversation_id uuid [ref: > conversations.id]
+  status varchar(20) [default: 'pending']
+  created_at timestamp [default: `now()`]
+  uploaded_at timestamp
+  
+  indexes {
+    (conversation_id, created_at)
+    (uploaded_by)
+  }
+  
+  Note: 'Metadata của files trên S3. Status: pending, uploaded, deleted.'
+}
+
+Ref: media_files.uploaded_by > users.id [delete: set null]
+Ref: media_files.conversation_id > conversations.id [delete: set null]
+
+# =============================================================================
+# NHẬT KÝ DOMAIN (TIMELINE / POSTS)
+# =============================================================================
+
+Table posts {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null, ref: > users.id]
+  content text
+  visibility varchar(20) [default: 'friends']
+  like_count int [default: 0]
+  comment_count int [default: 0]
+  share_count int [default: 0]
+  is_pinned boolean [default: false]
+  is_deleted boolean [default: false]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+  
+  indexes {
+    (user_id, created_at)
+    (created_at)
+  }
+  
+  Note: 'Bài đăng Nhật Ký. Visibility: public, friends, only_me.'
+}
+
+Ref: posts.user_id > users.id [delete: cascade]
+
+Table post_media {
+  id uuid [pk, default: `gen_random_uuid()`]
+  post_id uuid [not null, ref: > posts.id]
+  media_url varchar(500) [not null]
+  media_type varchar(20) [not null]
+  thumbnail_url varchar(500)
+  width int
+  height int
+  duration_seconds int
+  display_order int [default: 0]
+  created_at timestamp [default: `now()`]
+  
+  indexes {
+    (post_id, display_order)
+  }
+  
+  Note: 'Media đính kèm bài đăng. Type: image, video.'
+}
+
+Ref: post_media.post_id > posts.id [delete: cascade]
+
+Table post_likes {
+  id uuid [pk, default: `gen_random_uuid()`]
+  post_id uuid [not null, ref: > posts.id]
+  user_id uuid [not null, ref: > users.id]
+  reaction_type varchar(20) [default: 'like']
+  created_at timestamp [default: `now()`]
+  
+  indexes {
+    (post_id, user_id) [unique]
+    (user_id, created_at)
+  }
+  
+  Note: 'Lượt like/reaction bài đăng. Reaction: like, love, haha, wow, sad, angry.'
+}
+
+Ref: post_likes.post_id > posts.id [delete: cascade]
+Ref: post_likes.user_id > users.id [delete: cascade]
+
+Table post_comments {
+  id uuid [pk, default: `gen_random_uuid()`]
+  post_id uuid [not null, ref: > posts.id]
+  user_id uuid [not null, ref: > users.id]
+  parent_comment_id uuid [ref: > post_comments.id]
+  content text [not null]
+  like_count int [default: 0]
+  is_deleted boolean [default: false]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+  
+  indexes {
+    (post_id, created_at)
+    (parent_comment_id)
+    (user_id)
+  }
+  
+  Note: 'Bình luận bài đăng. Hỗ trợ reply (nested comments).'
+}
+
+Ref: post_comments.post_id > posts.id [delete: cascade]
+Ref: post_comments.user_id > users.id [delete: cascade]
+Ref: post_comments.parent_comment_id > post_comments.id [delete: cascade]
+
+Table comment_likes {
+  id uuid [pk, default: `gen_random_uuid()`]
+  comment_id uuid [not null, ref: > post_comments.id]
+  user_id uuid [not null, ref: > users.id]
+  created_at timestamp [default: `now()`]
+  
+  indexes {
+    (comment_id, user_id) [unique]
+  }
+  
+  Note: 'Lượt like bình luận.'
+}
+
+Ref: comment_likes.comment_id > post_comments.id [delete: cascade]
+Ref: comment_likes.user_id > users.id [delete: cascade]
+
+# =============================================================================
+# NOTIFICATION DOMAIN
+# =============================================================================
+
+Table notification_preferences {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null, unique, ref: > users.id]
+  push_enabled boolean [default: true]
+  sound_enabled boolean [default: true]
+  vibrate_enabled boolean [default: true]
+  show_preview boolean [default: true]
+  quiet_hours_start time
+  quiet_hours_end time
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+  
+  Note: 'Cài đặt notification của user.'
+}
+
+Ref: notification_preferences.user_id > users.id [delete: cascade]
+
+Table notification_logs {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null, ref: > users.id]
+  channel varchar(20) [not null]
+  provider varchar(50) [not null]
+  title varchar(255)
+  body text
+  data jsonb
+  status varchar(20) [not null]
+  error_message text
+  sent_at timestamp [default: `now()`]
+  
+  indexes {
+    (user_id, sent_at)
+  }
+  
+  Note: 'Lịch sử notification đã gửi. Để debug và analytics.'
+}
+
+Ref: notification_logs.user_id > users.id [delete: cascade]

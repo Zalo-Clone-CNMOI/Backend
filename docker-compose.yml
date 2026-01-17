@@ -42,3 +42,33 @@ services:
       - "4566:4566"
     volumes:
       - "./.localstack:/var/lib/localstack"
+
+  db:
+    image: postgres:15-alpine
+    container_name: zaloclone_db
+    ports:
+      - '5439:5432'
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: zaloclone
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    restart: always
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d zaloclone']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - zaloclone_network
+
+volumes:
+  db_data:
+    driver: local
+
+networks:
+  zaloclone_network:
+    driver: bridge
+

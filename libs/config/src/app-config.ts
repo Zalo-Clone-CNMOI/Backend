@@ -58,12 +58,11 @@ export function loadConfig(serviceName: string): AppConfig {
     scyllaKeyspace: process.env.SCYLLA_KEYSPACE ?? 'chat',
 
     // PostgreSQL
-    postgresHost: process.env.POSTGRES_HOST ?? 'localhost',
-    postgresPort: readNumber(process.env.POSTGRES_PORT) ?? 5432,
-    postgresUser: process.env.POSTGRES_USER ?? 'postgres',
-    postgresPassword: process.env.POSTGRES_PASSWORD ?? 'postgres',
-    postgresDatabase: process.env.POSTGRES_DATABASE ?? 'zaloclone',
-
+    postgresHost: process.env.DB_HOST ?? 'localhost',
+    postgresPort: readNumber(process.env.DB_PORT) ?? 5439,
+    postgresUser: process.env.DB_USERNAME ?? 'postgres',
+    postgresPassword: process.env.DB_PASSWORD ?? 'postgres',
+    postgresDatabase: process.env.DB_NAME ?? 'zaloclone',
     redisUrl: process.env.REDIS_URL,
 
     awsRegion: process.env.AWS_REGION,

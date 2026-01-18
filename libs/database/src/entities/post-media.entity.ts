@@ -1,21 +1,11 @@
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  CreateDateColumn,
-  ManyToOne,
-  JoinColumn,
-  Index,
-} from 'typeorm';
+import { Entity, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { Post } from './post.entity';
+import { BaseEntity } from 'libs/shared/src';
 
 export type PostMediaType = 'image' | 'video';
 
 @Entity('post_media')
-export class PostMedia {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
+export class PostMedia extends BaseEntity {
   @Column({ type: 'uuid', name: 'post_id' })
   postId: string;
 
@@ -25,7 +15,12 @@ export class PostMedia {
   @Column({ type: 'varchar', length: 20, name: 'media_type' })
   mediaType: PostMediaType;
 
-  @Column({ type: 'varchar', length: 500, name: 'thumbnail_url', nullable: true })
+  @Column({
+    type: 'varchar',
+    length: 500,
+    name: 'thumbnail_url',
+    nullable: true,
+  })
   thumbnailUrl: string | null;
 
   @Column({ type: 'int', nullable: true })
@@ -40,9 +35,6 @@ export class PostMedia {
   @Column({ type: 'int', name: 'display_order', default: 0 })
   @Index()
   displayOrder: number;
-
-  @CreateDateColumn({ name: 'created_at' })
-  createdAt: Date;
 
   @ManyToOne(() => Post, (post) => post.media, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'post_id' })

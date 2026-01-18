@@ -1,0 +1,597 @@
+openapi: 3.0.0
+info:
+  title: SSO Service API
+  version: 1.0.0
+  description: SSO Service for authentication and user management with phone-based authentication
+servers:
+  - url: http://localhost:5001/api
+    description: Local development server
+paths:
+  /auth/register:
+    post:
+      tags:
+        - Auth
+      summary: Register a new user account
+      description: Creates a new user with phone and password
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterDto'
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponseDto'
+        '400':
+          description: Validation error
+        '409':
+          description: Phone or email already exists
+  /auth/login:
+    post:
+      tags:
+        - Auth
+      summary: Login with phone and password
+      description: Returns access and refresh tokens upon successful authentication
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginDto'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponseDto'
+        '401':
+          description: Invalid credentials
+        '403':
+          description: User deactivated or banned
+  /auth/refresh:
+    post:
+      tags:
+        - Auth
+      summary: Refresh access token
+      description: Uses refresh token to get new access token
+      operationId: refreshToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshTokenDto'
+      responses:
+        '200':
+          description: Token refreshed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshTokenResponseDto'
+        '401':
+          description: Invalid or expired refresh token
+  /auth/logout:
+    post:
+      tags:
+        - Auth
+      summary: Logout user
+      description: Invalidates the refresh token
+      operationId: logout
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogoutDto'
+      responses:
+        '200':
+          description: Logged out successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Logged out successfully
+        '401':
+          description: Unauthorized
+  /auth/forgot-password:
+    post:
+      tags:
+        - Auth
+      summary: Request password reset OTP
+      description: Sends an OTP to the user's phone if it exists
+      operationId: forgotPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForgotPasswordDto'
+      responses:
+        '200':
+          description: OTP sent if phone exists
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+  /auth/reset-password:
+    post:
+      tags:
+        - Auth
+      summary: Reset password with OTP
+      description: Resets the user password after verifying OTP
+      operationId: resetPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordDto'
+      responses:
+        '200':
+          description: Password reset successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '400':
+          description: Invalid OTP
+  /users/me:
+    get:
+      tags:
+        - Users
+      summary: Get current user profile
+      description: Get authenticated user's profile information
+      operationId: getMyProfile
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfileResponseDto'
+        '401':
+          description: Unauthorized
+    patch:
+      tags:
+        - Users
+      summary: Update current user profile
+      description: Update authenticated user's profile information
+      operationId: updateMyProfile
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileDto'
+      responses:
+        '200':
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfileResponseDto'
+        '401':
+          description: Unauthorized
+        '409':
+          description: Email already in use
+  /users/search:
+    get:
+      tags:
+        - Users
+      summary: Search users by phone or name
+      description: Search for users with pagination
+      operationId: searchUsers
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: q
+          required: true
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 50
+          description: Search query (phone or name)
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+          description: Page number
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+          description: Items per page
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedUserSearchResultDto'
+        '401':
+          description: Unauthorized
+  /users/{userId}:
+    get:
+      tags:
+        - Users
+      summary: Get user public profile by ID
+      description: Get a user's public profile information
+      operationId: getPublicProfile
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: User ID
+      responses:
+        '200':
+          description: User public profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicUserResponseDto'
+        '401':
+          description: Unauthorized
+        '404':
+          description: User not found
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT access token
+  schemas:
+    RegisterDto:
+      type: object
+      required:
+        - phone
+        - password
+        - fullName
+      properties:
+        phone:
+          type: string
+          pattern: '^(\+84|0)[3-9][0-9]{8}$'
+          description: Phone number (Vietnam format)
+          example: '+84901234567'
+        password:
+          type: string
+          minLength: 8
+          maxLength: 50
+          pattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$'
+          description: Password (min 8 chars, must contain uppercase, lowercase, number)
+          example: 'SecurePass123!'
+        fullName:
+          type: string
+          minLength: 2
+          maxLength: 255
+          description: Full name
+          example: 'Nguyễn Văn A'
+        email:
+          type: string
+          format: email
+          description: Email address
+          example: 'user@example.com'
+        dateOfBirth:
+          type: string
+          format: date
+          description: Date of birth (ISO format)
+          example: '1995-06-15'
+        gender:
+          type: string
+          enum: [male, female, other]
+          description: Gender
+          example: male
+    LoginDto:
+      type: object
+      required:
+        - phone
+        - password
+      properties:
+        phone:
+          type: string
+          description: Phone number
+          example: '+84901234567'
+        password:
+          type: string
+          description: Password
+          example: 'SecurePass123!'
+    RefreshTokenDto:
+      type: object
+      required:
+        - refreshToken
+      properties:
+        refreshToken:
+          type: string
+          description: Refresh token
+          example: 'eyJhbGciOiJIUzI1NiIs...'
+    LogoutDto:
+      type: object
+      properties:
+        deviceId:
+          type: string
+          description: Device ID to remove from notifications
+          example: 'device-uuid-xyz'
+    ForgotPasswordDto:
+      type: object
+      required:
+        - phone
+      properties:
+        phone:
+          type: string
+          pattern: '^(\+84|0)[3-9][0-9]{8}$'
+          description: Phone number
+          example: '+84901234567'
+    ResetPasswordDto:
+      type: object
+      required:
+        - phone
+        - otp
+        - newPassword
+      properties:
+        phone:
+          type: string
+          description: Phone number
+          example: '+84901234567'
+        otp:
+          type: string
+          pattern: '^\d{6}$'
+          description: OTP code
+          example: '123456'
+        newPassword:
+          type: string
+          minLength: 8
+          pattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$'
+          description: New password
+          example: 'NewSecurePass123!'
+    UpdateProfileDto:
+      type: object
+      properties:
+        fullName:
+          type: string
+          minLength: 2
+          maxLength: 255
+          description: Full name
+          example: 'Nguyễn Văn A'
+        email:
+          type: string
+          format: email
+          description: Email address
+          example: 'user@example.com'
+        bio:
+          type: string
+          maxLength: 500
+          description: Bio/About me
+          example: 'Hello, I am a software developer'
+        avatarUrl:
+          type: string
+          format: uri
+          description: Avatar URL
+          example: 'https://example.com/avatar.jpg'
+        dateOfBirth:
+          type: string
+          format: date
+          description: Date of birth (ISO format)
+          example: '1995-06-15'
+        gender:
+          type: string
+          enum: [male, female, other]
+          description: Gender
+          example: male
+    UserResponseDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: User ID
+          example: '550e8400-e29b-41d4-a716-446655440000'
+        phone:
+          type: string
+          description: Phone number
+          example: '+84901234567'
+        email:
+          type: string
+          nullable: true
+          description: Email
+          example: 'user@example.com'
+        fullName:
+          type: string
+          description: Full name
+          example: 'Nguyễn Văn A'
+        avatarUrl:
+          type: string
+          nullable: true
+          description: Avatar URL
+        bio:
+          type: string
+          nullable: true
+          description: Bio
+        gender:
+          type: string
+          nullable: true
+          description: Gender
+        dateOfBirth:
+          type: string
+          format: date-time
+          nullable: true
+          description: Date of birth
+        status:
+          type: string
+          description: User status
+          example: 'active'
+        createdAt:
+          type: string
+          format: date-time
+          description: Created at
+    TokensResponseDto:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          description: Access token
+        refreshToken:
+          type: string
+          description: Refresh token
+        expiresIn:
+          type: integer
+          description: Token expiration time in seconds
+          example: 900
+    AuthResponseDto:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/UserResponseDto'
+        tokens:
+          $ref: '#/components/schemas/TokensResponseDto'
+    RefreshTokenResponseDto:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          description: New access token
+        expiresIn:
+          type: integer
+          description: Token expiration time in seconds
+          example: 900
+    UserProfileResponseDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: User ID
+          example: '550e8400-e29b-41d4-a716-446655440000'
+        phone:
+          type: string
+          description: Phone number
+          example: '+84901234567'
+        email:
+          type: string
+          nullable: true
+          description: Email
+          example: 'user@example.com'
+        fullName:
+          type: string
+          description: Full name
+          example: 'Nguyễn Văn A'
+        avatarUrl:
+          type: string
+          nullable: true
+          description: Avatar URL
+        bio:
+          type: string
+          nullable: true
+          description: Bio
+        gender:
+          type: string
+          nullable: true
+          description: Gender
+        dateOfBirth:
+          type: string
+          format: date-time
+          nullable: true
+          description: Date of birth
+        status:
+          type: string
+          description: User status
+          example: 'active'
+        createdAt:
+          type: string
+          format: date-time
+          description: Created at
+    PublicUserResponseDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: User ID
+        fullName:
+          type: string
+          description: Full name
+        avatarUrl:
+          type: string
+          nullable: true
+          description: Avatar URL
+        bio:
+          type: string
+          nullable: true
+          description: Bio
+        status:
+          type: string
+          description: User status
+    UserSearchResultDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: User ID
+        fullName:
+          type: string
+          description: Full name
+        avatarUrl:
+          type: string
+          nullable: true
+          description: Avatar URL
+        phone:
+          type: string
+          description: Phone number (masked)
+        friendshipStatus:
+          type: string
+          enum: [none, pending_sent, pending_received, friends, blocked]
+          description: Friendship status with current user
+          example: 'none'
+    PaginatedUserSearchResultDto:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserSearchResultDto'
+        meta:
+          type: object
+          properties:
+            total:
+              type: integer
+              description: Total number of results
+            page:
+              type: integer
+              description: Current page number
+            limit:
+              type: integer
+              description: Items per page
+            totalPages:
+              type: integer
+              description: Total number of pages
+

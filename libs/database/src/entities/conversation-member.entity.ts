@@ -1,6 +1,5 @@
 import {
   Entity,
-  PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
   ManyToOne,
@@ -10,15 +9,12 @@ import {
 } from 'typeorm';
 import { User } from './user.entity';
 import { Conversation } from './conversation.entity';
-
-export type MemberRole = 'owner' | 'admin' | 'member';
+import { BaseEntity } from 'libs/shared/src';
+import { MemberRole } from '@app/constant';
 
 @Entity('conversation_members')
 @Unique(['conversationId', 'userId'])
-export class ConversationMember {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
+export class ConversationMember extends BaseEntity {
   @Column({ type: 'uuid', name: 'conversation_id' })
   @Index()
   conversationId: string;
@@ -47,11 +43,15 @@ export class ConversationMember {
   leftAt: Date | null;
 
   // Relations
-  @ManyToOne(() => Conversation, (conv) => conv.members, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Conversation, (conv) => conv.members, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'conversation_id' })
   conversation: Conversation;
 
-  @ManyToOne(() => User, (user) => user.conversationMemberships, { onDelete: 'CASCADE' })
+  @ManyToOne(() => User, (user) => user.conversationMemberships, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'user_id' })
   user: User;
 }

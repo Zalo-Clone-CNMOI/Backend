@@ -14,6 +14,7 @@ interface ApiOperatorOptions {
   summary: string;
   description: string;
 }
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 export function ApiOperationDecorator({
   type,
   summary,
@@ -21,6 +22,7 @@ export function ApiOperationDecorator({
 }: ApiOperatorOptions) {
   return applyDecorators(
     ApiOperation({ summary }),
+
     ApiOkResponse({
       type,
       description,
@@ -34,3 +36,4 @@ export function ApiOperationDecorator({
     }),
   );
 }
+/* eslint-enable @typescript-eslint/no-unsafe-assignment */

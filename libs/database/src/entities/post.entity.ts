@@ -1,26 +1,14 @@
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  CreateDateColumn,
-  UpdateDateColumn,
-  ManyToOne,
-  JoinColumn,
-  OneToMany,
-  Index,
-} from 'typeorm';
+import { Entity, Column, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
 import { User } from './user.entity';
 import { PostMedia } from './post-media.entity';
 import { PostLike } from './post-like.entity';
 import { PostComment } from './post-comment.entity';
+import { BaseEntity } from 'libs/shared/src';
 
 export type PostVisibility = 'public' | 'friends' | 'only_me';
 
 @Entity('posts')
-export class Post {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
+export class Post extends BaseEntity {
   @Column({ type: 'uuid', name: 'user_id' })
   userId: string;
 
@@ -44,13 +32,6 @@ export class Post {
 
   @Column({ type: 'boolean', name: 'is_deleted', default: false })
   isDeleted: boolean;
-
-  @CreateDateColumn({ name: 'created_at' })
-  @Index()
-  createdAt: Date;
-
-  @UpdateDateColumn({ name: 'updated_at' })
-  updatedAt: Date;
 
   @ManyToOne(() => User, (user) => user.posts, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })

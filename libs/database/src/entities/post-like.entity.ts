@@ -1,24 +1,12 @@
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  CreateDateColumn,
-  ManyToOne,
-  JoinColumn,
-  Index,
-  Unique,
-} from 'typeorm';
+import { Entity, Column, ManyToOne, JoinColumn, Index, Unique } from 'typeorm';
 import { User } from './user.entity';
 import { Post } from './post.entity';
-
-export type ReactionType = 'like' | 'love' | 'haha' | 'wow' | 'sad' | 'angry';
+import { ReactionType } from '@app/constant';
+import { BaseEntity } from 'libs/shared/src';
 
 @Entity('post_likes')
 @Unique(['postId', 'userId'])
-export class PostLike {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
+export class PostLike extends BaseEntity {
   @Column({ type: 'uuid', name: 'post_id' })
   @Index()
   postId: string;
@@ -26,12 +14,13 @@ export class PostLike {
   @Column({ type: 'uuid', name: 'user_id' })
   userId: string;
 
-  @Column({ type: 'varchar', length: 20, name: 'reaction_type', default: 'like' })
+  @Column({
+    type: 'varchar',
+    length: 20,
+    name: 'reaction_type',
+    default: ReactionType.LIKE,
+  })
   reactionType: ReactionType;
-
-  @CreateDateColumn({ name: 'created_at' })
-  @Index()
-  createdAt: Date;
 
   @ManyToOne(() => Post, (post) => post.likes, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'post_id' })

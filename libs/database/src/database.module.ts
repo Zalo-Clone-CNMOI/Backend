@@ -40,7 +40,7 @@ export const entities = [
       useFactory: (config: AppConfig) => ({
         type: 'postgres',
         host: config.postgresHost ?? 'localhost',
-        port: config.postgresPort ?? 5432,
+        port: config.postgresPort ?? 5439,
         username: config.postgresUser ?? 'postgres',
         password: config.postgresPassword ?? 'postgres',
         database: config.postgresDatabase ?? 'zaloclone',

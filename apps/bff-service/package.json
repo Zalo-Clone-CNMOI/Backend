@@ -1,0 +1,13 @@
+{
+  "name": "@apps/bff-service",
+  "version": "0.0.1",
+  "description": "",
+  "author": "",
+  "private": true,
+  "license": "UNLICENSED",
+  "scripts": {
+    "console": "console.log('Hello World!')"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

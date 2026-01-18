@@ -1,22 +1,10 @@
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  CreateDateColumn,
-  UpdateDateColumn,
-  ManyToOne,
-  JoinColumn,
-  Index,
-  Unique,
-} from 'typeorm';
+import { Entity, Column, ManyToOne, JoinColumn, Index, Unique } from 'typeorm';
 import { User } from './user.entity';
+import { BaseEntity } from 'libs/shared/src';
 
 @Entity('device_tokens')
 @Unique(['userId', 'token'])
-export class DeviceToken {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
+export class DeviceToken extends BaseEntity {
   @Column({ type: 'uuid', name: 'user_id' })
   @Index()
   userId: string;
@@ -33,12 +21,6 @@ export class DeviceToken {
 
   @Column({ type: 'boolean', name: 'is_active', default: true })
   isActive: boolean;
-
-  @CreateDateColumn({ name: 'created_at' })
-  createdAt: Date;
-
-  @UpdateDateColumn({ name: 'updated_at' })
-  updatedAt: Date;
 
   // Relations
   @ManyToOne(() => User, (user) => user.deviceTokens, { onDelete: 'CASCADE' })

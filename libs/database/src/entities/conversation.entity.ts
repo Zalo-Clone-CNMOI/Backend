@@ -1,9 +1,6 @@
 import {
   Entity,
-  PrimaryGeneratedColumn,
   Column,
-  CreateDateColumn,
-  UpdateDateColumn,
   ManyToOne,
   JoinColumn,
   OneToMany,
@@ -12,14 +9,11 @@ import {
 import { User } from './user.entity';
 import { ConversationMember } from './conversation-member.entity';
 import { MediaFile } from './media-file.entity';
-
-export type ConversationType = 'direct' | 'group';
+import { ConversationType } from '@app/constant';
+import { BaseEntity } from 'libs/shared/src';
 
 @Entity('conversations')
-export class Conversation {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
+export class Conversation extends BaseEntity {
   @Column({ type: 'varchar', length: 20, default: 'direct' })
   type: ConversationType;
 
@@ -38,12 +32,6 @@ export class Conversation {
   @Column({ type: 'timestamp', name: 'last_message_at', nullable: true })
   @Index()
   lastMessageAt: Date | null;
-
-  @CreateDateColumn({ name: 'created_at' })
-  createdAt: Date;
-
-  @UpdateDateColumn({ name: 'updated_at' })
-  updatedAt: Date;
 
   // Relations
   @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })

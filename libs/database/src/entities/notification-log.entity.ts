@@ -1,6 +1,5 @@
 import {
   Entity,
-  PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
   ManyToOne,
@@ -8,16 +7,15 @@ import {
   Index,
 } from 'typeorm';
 import { User } from './user.entity';
-
-export type NotificationChannel = 'push' | 'email' | 'sms';
-export type NotificationProvider = 'fcm' | 'apns' | 'mock';
-export type NotificationStatus = 'sent' | 'failed' | 'pending';
+import {
+  NotificationChannel,
+  NotificationProvider,
+  NotificationStatus,
+} from '@app/constant';
+import { BaseEntity } from 'libs/shared/src';
 
 @Entity('notification_logs')
-export class NotificationLog {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
+export class NotificationLog extends BaseEntity {
   @Column({ type: 'uuid', name: 'user_id' })
   userId: string;
 
@@ -46,7 +44,9 @@ export class NotificationLog {
   @Index()
   sentAt: Date;
 
-  @ManyToOne(() => User, (user) => user.notificationLogs, { onDelete: 'CASCADE' })
+  @ManyToOne(() => User, (user) => user.notificationLogs, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'user_id' })
   user: User;
 }

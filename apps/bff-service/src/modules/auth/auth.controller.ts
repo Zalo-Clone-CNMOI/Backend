@@ -94,7 +94,7 @@ export class AuthController {
 
   @Post('logout')
   @HttpCode(HttpStatus.OK)
-  @ApiBearerAuth()
+  @ApiBearerAuth('BearerAuth')
   @ApiOperation({
     summary: 'Logout user',
     description: 'Invalidates the refresh token',
@@ -189,7 +189,7 @@ export class AuthController {
   @Post('qr/confirm')
   @Throttle({ default: { limit: 2, ttl: seconds(30) } })
   @HttpCode(HttpStatus.OK)
-  @ApiBearerAuth()
+  @ApiBearerAuth('BearerAuth')
   @ApiOperation({
     summary: 'Confirm QR login from mobile',
     description:
@@ -223,7 +223,7 @@ export class AuthController {
   @Post('qr/reject')
   @Throttle({ default: { limit: 2, ttl: seconds(30) } })
   @HttpCode(HttpStatus.OK)
-  @ApiBearerAuth()
+  @ApiBearerAuth('BearerAuth')
   @ApiOperation({
     summary: 'Reject QR login from mobile',
     description: 'Mobile user rejects QR login after scanning.',

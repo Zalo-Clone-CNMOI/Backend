@@ -2,7 +2,7 @@ import { Entity, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { User } from './user.entity';
 import { Conversation } from './conversation.entity';
 import { MediaFileStatus } from '@app/constant';
-import { BaseEntity } from 'libs/shared/src';
+import { BaseEntity } from '@libs/shared';
 
 @Entity('media_files')
 export class MediaFile extends BaseEntity {

@@ -1,6 +1,6 @@
 import { Entity, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { Post } from './post.entity';
-import { BaseEntity } from 'libs/shared/src';
+import { BaseEntity } from '@libs/shared';
 
 export type PostMediaType = 'image' | 'video';
 

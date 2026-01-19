@@ -80,4 +80,10 @@ export const ErrorHttpStatus: Record<ErrorCode, HttpStatus> = {
   [ErrorCode.NOTIFICATION_NOT_FOUND]: HttpStatus.NOT_FOUND,
   [ErrorCode.NOTIFICATION_DEVICE_NOT_FOUND]: HttpStatus.NOT_FOUND,
   [ErrorCode.NOTIFICATION_SEND_FAILED]: HttpStatus.INTERNAL_SERVER_ERROR,
+
+  // ============== QR LOGIN ==============
+  [ErrorCode.QR_SESSION_NOT_FOUND]: HttpStatus.NOT_FOUND,
+  [ErrorCode.QR_SESSION_EXPIRED]: HttpStatus.GONE,
+  [ErrorCode.QR_SESSION_ALREADY_PROCESSED]: HttpStatus.CONFLICT,
+  [ErrorCode.QR_SESSION_INVALID]: HttpStatus.BAD_REQUEST,
 };

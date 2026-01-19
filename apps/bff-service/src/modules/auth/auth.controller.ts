@@ -1,17 +1,21 @@
 import {
   Controller,
   Post,
+  Get,
   Body,
+  Param,
   HttpCode,
   HttpStatus,
   Headers,
   UnauthorizedException,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import {
   ApiTags,
   ApiResponse,
   ApiOperation,
   ApiBearerAuth,
+  ApiParam,
 } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import {
@@ -23,7 +27,13 @@ import {
   ResetPasswordDto,
   AuthResponseDto,
   RefreshTokenResponseDto,
+  QrGenerateDto,
+  QrConfirmDto,
+  QrRejectDto,
+  QrSessionResponseDto,
 } from './dto';
+import type { QrStatusResponseDto as SdkQrStatusResponseDto } from '@app/clients';
+import { seconds, Throttle } from '@nestjs/throttler';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -127,5 +137,113 @@ export class AuthController {
     @Body() dto: ResetPasswordDto,
   ): Promise<{ message: string }> {
     return this.authService.resetPassword(dto);
+  }
+
+  // ==================== QR CODE LOGIN ENDPOINTS ====================
+
+  @Post('qr/generate')
+  @Throttle({ default: { limit: 2, ttl: seconds(30) } })
+  @ApiOperation({
+    summary: 'Generate QR code for login',
+    description:
+      'Creates a new QR login session for PC. PC should connect to WebSocket and wait for confirmation.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'QR session created successfully',
+    type: QrSessionResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid request - socketId is required',
+  })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
+  async qrGenerate(@Body() dto: QrGenerateDto): Promise<QrSessionResponseDto> {
+    return this.authService.qrGenerate(dto);
+  }
+
+  @Get('qr/status/:sessionId')
+  @ApiOperation({
+    summary: 'Get QR session status',
+    description:
+      'Poll the status of a QR login session. Use this as fallback when WebSocket is unavailable.',
+  })
+  @ApiParam({
+    name: 'sessionId',
+    description: 'QR session ID',
+    type: 'string',
+    format: 'uuid',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'QR session status',
+  })
+  @ApiResponse({ status: 404, description: 'Session not found' })
+  @ApiResponse({ status: 410, description: 'Session expired' })
+  async qrStatus(
+    @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
+  ): Promise<SdkQrStatusResponseDto> {
+    return this.authService.qrStatus(sessionId);
+  }
+
+  @Post('qr/confirm')
+  @Throttle({ default: { limit: 2, ttl: seconds(30) } })
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Confirm QR login from mobile',
+    description:
+      'Mobile user confirms QR login after scanning. Requires authentication.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'QR login confirmed successfully',
+  })
+  @ApiResponse({ status: 400, description: 'Invalid session ID' })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - mobile user must be logged in',
+  })
+  @ApiResponse({ status: 404, description: 'Session not found or expired' })
+  @ApiResponse({
+    status: 409,
+    description: 'Session already confirmed or rejected',
+  })
+  async qrConfirm(
+    @Headers('authorization') authorization: string,
+    @Body() dto: QrConfirmDto,
+  ): Promise<{ message: string }> {
+    if (!authorization || !authorization.startsWith('Bearer ')) {
+      throw new UnauthorizedException('Authorization token required');
+    }
+    const accessToken = authorization.substring(7);
+    return this.authService.qrConfirm(accessToken, dto);
+  }
+
+  @Post('qr/reject')
+  @Throttle({ default: { limit: 2, ttl: seconds(30) } })
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Reject QR login from mobile',
+    description: 'Mobile user rejects QR login after scanning.',
+  })
+  @ApiResponse({ status: 200, description: 'QR login rejected' })
+  @ApiResponse({ status: 400, description: 'Invalid session ID' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Session not found or expired' })
+  @ApiResponse({
+    status: 409,
+    description: 'Session already confirmed or rejected',
+  })
+  async qrReject(
+    @Headers('authorization') authorization: string,
+    @Body() dto: QrRejectDto,
+  ): Promise<{ message: string }> {
+    if (!authorization || !authorization.startsWith('Bearer ')) {
+      throw new UnauthorizedException('Authorization token required');
+    }
+    const accessToken = authorization.substring(7);
+    return this.authService.qrReject(accessToken, dto);
   }
 }

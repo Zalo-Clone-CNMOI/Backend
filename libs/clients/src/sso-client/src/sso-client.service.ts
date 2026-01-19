@@ -14,6 +14,11 @@ import type {
   UserProfileResponseDto,
   PublicUserResponseDto,
   PaginatedUserSearchResultDto,
+  QrGenerateDto,
+  QrSessionResponseDto,
+  QrStatusResponseDto,
+  QrConfirmDto,
+  QrRejectDto,
 } from './client/generated';
 
 @Injectable()
@@ -114,6 +119,80 @@ export class SsoClientService {
       };
     } catch (error) {
       this.handleError('resetPassword', error);
+    }
+  }
+
+  // ==================== QR CODE LOGIN METHODS ====================
+
+  /**
+   * Generate QR session for PC login
+   */
+  async qrGenerate(dto: QrGenerateDto): Promise<QrSessionResponseDto> {
+    try {
+      const response = await this.authApi.authQrGenerate({
+        qrGenerateDto: dto,
+      });
+      return response.data;
+    } catch (error) {
+      this.handleError('qrGenerate', error);
+    }
+  }
+
+  /**
+   * Get QR session status (polling fallback)
+   */
+  async qrStatus(sessionId: string): Promise<QrStatusResponseDto> {
+    try {
+      const response = await this.authApi.authQrStatus({ sessionId });
+      return response.data;
+    } catch (error) {
+      this.handleError('qrStatus', error);
+    }
+  }
+
+  /**
+   * Confirm QR login from mobile
+   */
+  async qrConfirm(
+    accessToken: string,
+    dto: QrConfirmDto,
+  ): Promise<{ message: string }> {
+    try {
+      const response = await this.authApi.authQrConfirm(
+        { qrConfirmDto: dto },
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        },
+      );
+      return {
+        message: response.data.message || 'QR login confirmed successfully',
+      };
+    } catch (error) {
+      this.handleError('qrConfirm', error);
+    }
+  }
+
+  /**
+   * Reject QR login from mobile
+   */
+  async qrReject(
+    accessToken: string,
+    dto: QrRejectDto,
+  ): Promise<{ message: string }> {
+    try {
+      const response = await this.authApi.authQrReject(
+        { qrRejectDto: dto },
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        },
+      );
+      return { message: response.data.message || 'QR login rejected' };
+    } catch (error) {
+      this.handleError('qrReject', error);
     }
   }
 

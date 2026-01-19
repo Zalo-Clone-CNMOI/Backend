@@ -101,6 +101,12 @@
       "@libs/mvp-access/*": [
         "libs/mvp-access/src/*"
       ],
+      "@libs/redis": [
+        "libs/redis/src"
+      ],
+      "@libs/redis/*": [
+        "libs/redis/src/*"
+      ],
       "@libs/scylla": [
         "libs/scylla/src"
       ],

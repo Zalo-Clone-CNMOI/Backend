@@ -1,5 +1,14 @@
-import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
-import { ApiTags, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  Param,
+  HttpCode,
+  HttpStatus,
+  ParseUUIDPipe,
+} from '@nestjs/common';
+import { ApiTags, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
 import { Public, CurrentUser, ApiOperationDecorator } from '@app/decorator';
 import { AuthenticatedUser } from '@app/types';
 import { AuthService } from './auth.service';
@@ -12,7 +21,13 @@ import {
   LogoutDto,
   AuthResponseDto,
   RefreshTokenResponseDto,
+  QrGenerateDto,
+  QrConfirmDto,
+  QrRejectDto,
+  QrSessionResponseDto,
+  QrStatusResponseDto,
 } from './dto';
+import { Throttle, seconds } from '@nestjs/throttler';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -130,5 +145,124 @@ export class AuthController {
     @Body() dto: ResetPasswordDto,
   ): Promise<{ message: string }> {
     return this.authService.resetPassword(dto);
+  }
+
+  // ============================================
+  // QR CODE LOGIN ENDPOINTS
+  // ============================================
+
+  /**
+   * Generate QR code for login (PC)
+   */
+  @Public()
+  @Throttle({ default: { limit: 2, ttl: seconds(30) } })
+  @Post('qr/generate')
+  @ApiOperationDecorator({
+    summary: 'Generate QR code for login',
+    description:
+      'Creates a new QR login session for PC. PC should connect to WebSocket and wait for confirmation.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'QR session created successfully',
+    type: QrSessionResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid request - socketId is required',
+  })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
+  async generateQrSession(
+    @Body() dto: QrGenerateDto,
+  ): Promise<QrSessionResponseDto> {
+    return this.authService.generateQrSession(dto);
+  }
+
+  /**
+   * Get QR session status (polling fallback for PC)
+   */
+  @Public()
+  @Get('qr/status/:sessionId')
+  @ApiOperationDecorator({
+    summary: 'Get QR session status',
+    description:
+      'Poll the status of a QR login session. Use this as fallback when WebSocket is unavailable.',
+  })
+  @ApiParam({
+    name: 'sessionId',
+    description: 'QR session ID',
+    type: 'string',
+    format: 'uuid',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'QR session status',
+    type: QrStatusResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Session not found' })
+  @ApiResponse({ status: 410, description: 'Session expired' })
+  async getQrStatus(
+    @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
+  ): Promise<QrStatusResponseDto> {
+    return this.authService.getQrStatus(sessionId);
+  }
+
+  /**
+   * Confirm QR login from mobile
+   */
+  @Post('qr/confirm')
+  @Throttle({ default: { limit: 2, ttl: seconds(30) } })
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperationDecorator({
+    summary: 'Confirm QR login from mobile',
+    description:
+      'Mobile user confirms QR login after scanning. Requires authentication.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'QR login confirmed successfully',
+  })
+  @ApiResponse({ status: 400, description: 'Invalid session ID' })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - mobile user must be logged in',
+  })
+  @ApiResponse({ status: 404, description: 'Session not found or expired' })
+  @ApiResponse({
+    status: 409,
+    description: 'Session already confirmed or rejected',
+  })
+  async confirmQrSession(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: QrConfirmDto,
+  ): Promise<{ message: string }> {
+    return this.authService.confirmQrSession(user.id, dto);
+  }
+
+  /**
+   * Reject QR login from mobile
+   */
+  @Post('qr/reject')
+  @Throttle({ default: { limit: 2, ttl: seconds(30) } })
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperationDecorator({
+    summary: 'Reject QR login from mobile',
+    description: 'Mobile user rejects QR login after scanning.',
+  })
+  @ApiResponse({ status: 200, description: 'QR login rejected' })
+  @ApiResponse({ status: 400, description: 'Invalid session ID' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Session not found or expired' })
+  @ApiResponse({
+    status: 409,
+    description: 'Session already confirmed or rejected',
+  })
+  async rejectQrSession(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: QrRejectDto,
+  ): Promise<{ message: string }> {
+    return this.authService.rejectQrSession(user.id, dto);
   }
 }

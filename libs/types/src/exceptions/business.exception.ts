@@ -57,6 +57,10 @@ export class BusinessException extends HttpException {
     return new BusinessException(ErrorCode.CONFLICT, message);
   }
 
+  static gone(errorCode: ErrorCode, message?: string): BusinessException {
+    return new BusinessException(errorCode, message);
+  }
+
   static internal(message?: string): BusinessException {
     return new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR, message);
   }

@@ -1,12 +1,22 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
+import { ClientKafka } from '@nestjs/microservices';
 import * as bcrypt from 'bcrypt';
+import { v4 as uuidv4 } from 'uuid';
 
 import { User } from '@libs/database/entities';
 import { JwtService } from '@libs/auth';
 import { ErrorCode, UserStatus } from '@app/constant';
 import { BusinessException } from '@app/types';
+import { RedisService, QrSessionStatus } from '@libs/redis';
+import { KAFKA_CLIENT } from '@libs/kafka';
+import { KafkaTopics } from '@libs/contracts';
 
 import {
   RegisterDto,
@@ -15,23 +25,34 @@ import {
   ForgotPasswordDto,
   ResetPasswordDto,
   LogoutDto,
+  QrGenerateDto,
+  QrConfirmDto,
+  QrRejectDto,
 } from './dto';
 import {
   AuthResponseDto,
   RefreshTokenResponseDto,
   UserResponseDto,
   TokensResponseDto,
+  QrSessionResponseDto,
+  QrStatusResponseDto,
+  QrSessionStatusEnum,
 } from './dto';
 
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
   private readonly SALT_ROUNDS = 12;
+  private readonly QR_SESSION_TTL_SECONDS = 300; // 5 minutes
 
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     private readonly jwtService: JwtService,
+    private readonly redisService: RedisService,
+    @Inject(KAFKA_CLIENT)
+    private readonly kafkaClient: ClientKafka,
+    private readonly dataSource: DataSource,
   ) {}
 
   /**
@@ -250,5 +271,174 @@ export class AuthService {
       refreshToken: tokens.refreshToken,
       expiresIn: tokens.expiresIn,
     };
+  }
+  /**
+   * Generate a new QR login session
+   * PC calls this to create a QR code for mobile to scan
+   */
+  async generateQrSession(dto: QrGenerateDto): Promise<QrSessionResponseDto> {
+    this.logger.log(`Generating QR session for socket: ${dto.socketId}`);
+
+    const sessionId = uuidv4();
+    const qrToken = `qr_${sessionId}_${Date.now()}`;
+    const now = Date.now();
+    const expiresAt = now + this.QR_SESSION_TTL_SECONDS * 1000;
+
+    await this.redisService.setQrSession({
+      sessionId,
+      qrToken,
+      status: QrSessionStatus.PENDING,
+      socketId: dto.socketId,
+      pcDeviceInfo: dto.deviceInfo,
+      createdAt: now,
+      expiresAt,
+    });
+
+    this.logger.log(`QR session created: ${sessionId}`);
+
+    return {
+      sessionId,
+      qrToken,
+      expiresAt: new Date(expiresAt),
+      expiresInSeconds: this.QR_SESSION_TTL_SECONDS,
+    };
+  }
+
+  /**
+   * Get QR session status
+   * PC polls this as fallback when WebSocket fails
+   */
+  async getQrStatus(sessionId: string): Promise<QrStatusResponseDto> {
+    this.logger.debug(`Getting QR status for session: ${sessionId}`);
+
+    const session = await this.redisService.getQrSession(sessionId);
+
+    if (!session) {
+      throw BusinessException.notFound(ErrorCode.QR_SESSION_NOT_FOUND);
+    }
+
+    // Check if expired (app-level check)
+    if (session.expiresAt < Date.now()) {
+      throw BusinessException.gone(ErrorCode.QR_SESSION_EXPIRED);
+    }
+
+    const response: QrStatusResponseDto = {
+      sessionId: session.sessionId,
+      status: session.status as unknown as QrSessionStatusEnum,
+    };
+
+    // If confirmed, include tokens and user info
+    if (session.status === QrSessionStatus.CONFIRMED && session.userId) {
+      const user = await this.userRepository.findOne({
+        where: { id: session.userId },
+      });
+
+      if (user) {
+        const tokens = this.jwtService.generateTokenPair(user.id, user.phone);
+        response.accessToken = tokens.accessToken;
+        response.refreshToken = tokens.refreshToken;
+        response.expiresIn = tokens.expiresIn;
+        response.user = this.toUserResponse(user);
+      }
+    }
+
+    return response;
+  }
+
+  /**
+   * Confirm QR login from mobile
+   * Mobile user confirms after scanning QR
+   */
+  async confirmQrSession(
+    userId: string,
+    dto: QrConfirmDto,
+  ): Promise<{ message: string }> {
+    this.logger.log(
+      `Confirming QR session: ${dto.sessionId} by user: ${userId}`,
+    );
+
+    // 1️⃣ Redis lock (SET NX)
+    const result = await this.redisService.confirmQrSession(
+      dto.sessionId,
+      userId,
+    );
+
+    if (!result.success) {
+      if (result.alreadyConfirmed) {
+        throw BusinessException.conflict(
+          ErrorCode.QR_SESSION_ALREADY_PROCESSED,
+        );
+      }
+      throw BusinessException.notFound(ErrorCode.QR_SESSION_NOT_FOUND);
+    }
+
+    const session = result.session!;
+
+    try {
+      await this.dataSource.transaction(async (manager) => {
+        const user = await manager.findOne(User, {
+          where: { id: userId },
+        });
+
+        if (!user) {
+          throw BusinessException.notFound(ErrorCode.USER_NOT_FOUND);
+        }
+
+        const tokens = this.jwtService.generateTokenPair(user.id, user.phone);
+
+        this.kafkaClient.emit(KafkaTopics.AuthQrConfirmed, {
+          sessionId: session.sessionId,
+          socketId: session.socketId,
+          userId: user.id,
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
+          expiresIn: tokens.expiresIn,
+          user: this.toUserResponse(user),
+        });
+      });
+
+      this.logger.log(
+        `QR session confirmed and Kafka event emitted: ${dto.sessionId}`,
+      );
+
+      return { message: 'QR login confirmed successfully' };
+    } catch (error) {
+      throw new BadRequestException(
+        'Failed to confirm QR session. Please try again.',
+        error,
+      );
+    }
+  }
+
+  /**
+   * Reject QR login from mobile
+   * Mobile user rejects after scanning QR
+   */
+  async rejectQrSession(
+    userId: string,
+    dto: QrRejectDto,
+  ): Promise<{ message: string }> {
+    this.logger.log(
+      `Rejecting QR session: ${dto.sessionId} by user: ${userId}`,
+    );
+
+    const session = await this.redisService.rejectQrSession(dto.sessionId);
+
+    if (!session) {
+      throw BusinessException.notFound(ErrorCode.QR_SESSION_NOT_FOUND);
+    }
+
+    // Emit Kafka event for ws-gateway to notify PC via WebSocket
+    this.kafkaClient.emit(KafkaTopics.AuthQrRejected, {
+      sessionId: session.sessionId,
+      socketId: session.socketId,
+      reason: dto.reason || 'User rejected the QR login',
+    });
+
+    this.logger.log(
+      `QR session rejected and Kafka event emitted: ${dto.sessionId}`,
+    );
+
+    return { message: 'QR login rejected' };
   }
 }

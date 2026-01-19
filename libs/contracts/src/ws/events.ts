@@ -8,6 +8,9 @@ export const WsEvents = {
   PresenceUpdate: 'presence:update',
 
   ChatAck: 'chat:ack',
+
+  QrConfirmed: 'qr:confirmed',
+  QrRejected: 'qr:rejected',
 } as const;
 
 export type WsEventName = (typeof WsEvents)[keyof typeof WsEvents];
@@ -46,4 +49,24 @@ export interface WsChatAckPayload {
   message_id: string;
   status: 'accepted' | 'rejected';
   reason?: string;
+}
+
+// QR Code Login Payloads
+export interface WsQrConfirmedPayload {
+  sessionId: string;
+  accessToken: string;
+  refreshToken: string;
+  expiresIn: number;
+  user: {
+    id: string;
+    phone: string;
+    fullName: string;
+    email?: string | null;
+    avatarUrl?: string | null;
+  };
+}
+
+export interface WsQrRejectedPayload {
+  sessionId: string;
+  reason: string;
 }

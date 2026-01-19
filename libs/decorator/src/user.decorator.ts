@@ -23,7 +23,6 @@ export const CurrentUser = createParamDecorator(
       return null;
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     return data ? (user[data] ?? null) : user;
   },
 );

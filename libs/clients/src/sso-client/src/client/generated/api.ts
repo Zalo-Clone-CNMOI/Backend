@@ -29,6 +29,32 @@ import { BASE_PATH, COLLECTION_FORMATS, BaseAPI, RequiredError, operationServerM
 /**
  * 
  * @export
+ * @interface AuthQrConfirm200Response
+ */
+export interface AuthQrConfirm200Response {
+    /**
+     * 
+     * @type {string}
+     * @memberof AuthQrConfirm200Response
+     */
+    'message'?: string;
+}
+/**
+ * 
+ * @export
+ * @interface AuthQrReject200Response
+ */
+export interface AuthQrReject200Response {
+    /**
+     * 
+     * @type {string}
+     * @memberof AuthQrReject200Response
+     */
+    'message'?: string;
+}
+/**
+ * 
+ * @export
  * @interface AuthResponseDto
  */
 export interface AuthResponseDto {
@@ -202,6 +228,210 @@ export interface PublicUserResponseDto {
      * @memberof PublicUserResponseDto
      */
     'status'?: string;
+}
+/**
+ * 
+ * @export
+ * @interface QrConfirmDto
+ */
+export interface QrConfirmDto {
+    /**
+     * QR session ID to confirm
+     * @type {string}
+     * @memberof QrConfirmDto
+     */
+    'sessionId': string;
+}
+/**
+ * 
+ * @export
+ * @interface QrGenerateDto
+ */
+export interface QrGenerateDto {
+    /**
+     * WebSocket socket ID of the PC client
+     * @type {string}
+     * @memberof QrGenerateDto
+     */
+    'socketId': string;
+    /**
+     * PC device information (browser, OS)
+     * @type {string}
+     * @memberof QrGenerateDto
+     */
+    'deviceInfo'?: string;
+}
+/**
+ * 
+ * @export
+ * @interface QrRejectDto
+ */
+export interface QrRejectDto {
+    /**
+     * QR session ID to reject
+     * @type {string}
+     * @memberof QrRejectDto
+     */
+    'sessionId': string;
+    /**
+     * Optional rejection reason
+     * @type {string}
+     * @memberof QrRejectDto
+     */
+    'reason'?: string;
+}
+/**
+ * 
+ * @export
+ * @interface QrSessionResponseDto
+ */
+export interface QrSessionResponseDto {
+    /**
+     * Unique session ID
+     * @type {string}
+     * @memberof QrSessionResponseDto
+     */
+    'sessionId'?: string;
+    /**
+     * Token to be encoded in QR code
+     * @type {string}
+     * @memberof QrSessionResponseDto
+     */
+    'qrToken'?: string;
+    /**
+     * Session expiration time
+     * @type {string}
+     * @memberof QrSessionResponseDto
+     */
+    'expiresAt'?: string;
+    /**
+     * Seconds until expiration
+     * @type {number}
+     * @memberof QrSessionResponseDto
+     */
+    'expiresInSeconds'?: number;
+}
+/**
+ * 
+ * @export
+ * @interface QrStatusResponseDto
+ */
+export interface QrStatusResponseDto {
+    /**
+     * Session ID
+     * @type {string}
+     * @memberof QrStatusResponseDto
+     */
+    'sessionId'?: string;
+    /**
+     * Current session status
+     * @type {string}
+     * @memberof QrStatusResponseDto
+     */
+    'status'?: QrStatusResponseDtoStatusEnum;
+    /**
+     * Access token (only present when status is CONFIRMED)
+     * @type {string}
+     * @memberof QrStatusResponseDto
+     */
+    'accessToken'?: string | null;
+    /**
+     * Refresh token (only present when status is CONFIRMED)
+     * @type {string}
+     * @memberof QrStatusResponseDto
+     */
+    'refreshToken'?: string | null;
+    /**
+     * Token expiration in seconds (only present when status is CONFIRMED)
+     * @type {number}
+     * @memberof QrStatusResponseDto
+     */
+    'expiresIn'?: number | null;
+    /**
+     * 
+     * @type {QrStatusResponseDtoUser}
+     * @memberof QrStatusResponseDto
+     */
+    'user'?: QrStatusResponseDtoUser | null;
+}
+
+/**
+    * @export
+    * @enum {string}
+    */
+export enum QrStatusResponseDtoStatusEnum {
+    PENDING = 'PENDING',
+    CONFIRMED = 'CONFIRMED',
+    REJECTED = 'REJECTED',
+    EXPIRED = 'EXPIRED'
+}
+
+/**
+ * User info (only present when status is CONFIRMED)
+ * @export
+ * @interface QrStatusResponseDtoUser
+ */
+export interface QrStatusResponseDtoUser {
+    /**
+     * User ID
+     * @type {string}
+     * @memberof QrStatusResponseDtoUser
+     */
+    'id'?: string;
+    /**
+     * Phone number
+     * @type {string}
+     * @memberof QrStatusResponseDtoUser
+     */
+    'phone'?: string;
+    /**
+     * Email
+     * @type {string}
+     * @memberof QrStatusResponseDtoUser
+     */
+    'email'?: string | null;
+    /**
+     * Full name
+     * @type {string}
+     * @memberof QrStatusResponseDtoUser
+     */
+    'fullName'?: string;
+    /**
+     * Avatar URL
+     * @type {string}
+     * @memberof QrStatusResponseDtoUser
+     */
+    'avatarUrl'?: string | null;
+    /**
+     * Bio
+     * @type {string}
+     * @memberof QrStatusResponseDtoUser
+     */
+    'bio'?: string | null;
+    /**
+     * Gender
+     * @type {string}
+     * @memberof QrStatusResponseDtoUser
+     */
+    'gender'?: string | null;
+    /**
+     * Date of birth
+     * @type {string}
+     * @memberof QrStatusResponseDtoUser
+     */
+    'dateOfBirth'?: string | null;
+    /**
+     * User status
+     * @type {string}
+     * @memberof QrStatusResponseDtoUser
+     */
+    'status'?: string;
+    /**
+     * Created at
+     * @type {string}
+     * @memberof QrStatusResponseDtoUser
+     */
+    'createdAt'?: string;
 }
 /**
  * 
@@ -585,6 +815,156 @@ export enum UserSearchResultDtoFriendshipStatusEnum {
 export const AuthApiAxiosParamCreator = function (configuration?: Configuration) {
     return {
         /**
+         * Mobile user confirms QR login after scanning. Requires authentication.
+         * @summary Confirm QR login from mobile
+         * @param {QrConfirmDto} qrConfirmDto 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        authQrConfirm: async (qrConfirmDto: QrConfirmDto, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'qrConfirmDto' is not null or undefined
+            assertParamExists('authQrConfirm', 'qrConfirmDto', qrConfirmDto)
+            const localVarPath = `/auth/qr/confirm`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication BearerAuth required
+            // http bearer authentication required
+            await setBearerAuthToObject(localVarHeaderParameter, configuration)
+
+
+    
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(qrConfirmDto, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * Creates a new QR login session for PC. PC should connect to WebSocket and wait for confirmation.
+         * @summary Generate QR code for login
+         * @param {QrGenerateDto} qrGenerateDto 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        authQrGenerate: async (qrGenerateDto: QrGenerateDto, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'qrGenerateDto' is not null or undefined
+            assertParamExists('authQrGenerate', 'qrGenerateDto', qrGenerateDto)
+            const localVarPath = `/auth/qr/generate`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+
+    
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(qrGenerateDto, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * Mobile user rejects QR login after scanning.
+         * @summary Reject QR login from mobile
+         * @param {QrRejectDto} qrRejectDto 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        authQrReject: async (qrRejectDto: QrRejectDto, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'qrRejectDto' is not null or undefined
+            assertParamExists('authQrReject', 'qrRejectDto', qrRejectDto)
+            const localVarPath = `/auth/qr/reject`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication BearerAuth required
+            // http bearer authentication required
+            await setBearerAuthToObject(localVarHeaderParameter, configuration)
+
+
+    
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(qrRejectDto, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * Poll the status of a QR login session. Use this as fallback when WebSocket is unavailable.
+         * @summary Get QR session status
+         * @param {string} sessionId QR session ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        authQrStatus: async (sessionId: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'sessionId' is not null or undefined
+            assertParamExists('authQrStatus', 'sessionId', sessionId)
+            const localVarPath = `/auth/qr/status/{sessionId}`
+                .replace(`{${"sessionId"}}`, encodeURIComponent(String(sessionId)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+
+    
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
          * Sends an OTP to the user\'s phone if it exists
          * @summary Request password reset OTP
          * @param {ForgotPasswordDto} forgotPasswordDto 
@@ -815,6 +1195,58 @@ export const AuthApiFp = function(configuration?: Configuration) {
     const localVarAxiosParamCreator = AuthApiAxiosParamCreator(configuration)
     return {
         /**
+         * Mobile user confirms QR login after scanning. Requires authentication.
+         * @summary Confirm QR login from mobile
+         * @param {QrConfirmDto} qrConfirmDto 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async authQrConfirm(qrConfirmDto: QrConfirmDto, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<AuthQrConfirm200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.authQrConfirm(qrConfirmDto, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['AuthApi.authQrConfirm']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * Creates a new QR login session for PC. PC should connect to WebSocket and wait for confirmation.
+         * @summary Generate QR code for login
+         * @param {QrGenerateDto} qrGenerateDto 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async authQrGenerate(qrGenerateDto: QrGenerateDto, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<QrSessionResponseDto>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.authQrGenerate(qrGenerateDto, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['AuthApi.authQrGenerate']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * Mobile user rejects QR login after scanning.
+         * @summary Reject QR login from mobile
+         * @param {QrRejectDto} qrRejectDto 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async authQrReject(qrRejectDto: QrRejectDto, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<AuthQrReject200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.authQrReject(qrRejectDto, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['AuthApi.authQrReject']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * Poll the status of a QR login session. Use this as fallback when WebSocket is unavailable.
+         * @summary Get QR session status
+         * @param {string} sessionId QR session ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async authQrStatus(sessionId: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<QrStatusResponseDto>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.authQrStatus(sessionId, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['AuthApi.authQrStatus']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
          * Sends an OTP to the user\'s phone if it exists
          * @summary Request password reset OTP
          * @param {ForgotPasswordDto} forgotPasswordDto 
@@ -903,6 +1335,46 @@ export const AuthApiFactory = function (configuration?: Configuration, basePath?
     const localVarFp = AuthApiFp(configuration)
     return {
         /**
+         * Mobile user confirms QR login after scanning. Requires authentication.
+         * @summary Confirm QR login from mobile
+         * @param {AuthApiAuthQrConfirmRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        authQrConfirm(requestParameters: AuthApiAuthQrConfirmRequest, options?: RawAxiosRequestConfig): AxiosPromise<AuthQrConfirm200Response> {
+            return localVarFp.authQrConfirm(requestParameters.qrConfirmDto, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * Creates a new QR login session for PC. PC should connect to WebSocket and wait for confirmation.
+         * @summary Generate QR code for login
+         * @param {AuthApiAuthQrGenerateRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        authQrGenerate(requestParameters: AuthApiAuthQrGenerateRequest, options?: RawAxiosRequestConfig): AxiosPromise<QrSessionResponseDto> {
+            return localVarFp.authQrGenerate(requestParameters.qrGenerateDto, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * Mobile user rejects QR login after scanning.
+         * @summary Reject QR login from mobile
+         * @param {AuthApiAuthQrRejectRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        authQrReject(requestParameters: AuthApiAuthQrRejectRequest, options?: RawAxiosRequestConfig): AxiosPromise<AuthQrReject200Response> {
+            return localVarFp.authQrReject(requestParameters.qrRejectDto, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * Poll the status of a QR login session. Use this as fallback when WebSocket is unavailable.
+         * @summary Get QR session status
+         * @param {AuthApiAuthQrStatusRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        authQrStatus(requestParameters: AuthApiAuthQrStatusRequest, options?: RawAxiosRequestConfig): AxiosPromise<QrStatusResponseDto> {
+            return localVarFp.authQrStatus(requestParameters.sessionId, options).then((request) => request(axios, basePath));
+        },
+        /**
          * Sends an OTP to the user\'s phone if it exists
          * @summary Request password reset OTP
          * @param {AuthApiForgotPasswordRequest} requestParameters Request parameters.
@@ -964,6 +1436,62 @@ export const AuthApiFactory = function (configuration?: Configuration, basePath?
         },
     };
 };
+
+/**
+ * Request parameters for authQrConfirm operation in AuthApi.
+ * @export
+ * @interface AuthApiAuthQrConfirmRequest
+ */
+export interface AuthApiAuthQrConfirmRequest {
+    /**
+     * 
+     * @type {QrConfirmDto}
+     * @memberof AuthApiAuthQrConfirm
+     */
+    readonly qrConfirmDto: QrConfirmDto
+}
+
+/**
+ * Request parameters for authQrGenerate operation in AuthApi.
+ * @export
+ * @interface AuthApiAuthQrGenerateRequest
+ */
+export interface AuthApiAuthQrGenerateRequest {
+    /**
+     * 
+     * @type {QrGenerateDto}
+     * @memberof AuthApiAuthQrGenerate
+     */
+    readonly qrGenerateDto: QrGenerateDto
+}
+
+/**
+ * Request parameters for authQrReject operation in AuthApi.
+ * @export
+ * @interface AuthApiAuthQrRejectRequest
+ */
+export interface AuthApiAuthQrRejectRequest {
+    /**
+     * 
+     * @type {QrRejectDto}
+     * @memberof AuthApiAuthQrReject
+     */
+    readonly qrRejectDto: QrRejectDto
+}
+
+/**
+ * Request parameters for authQrStatus operation in AuthApi.
+ * @export
+ * @interface AuthApiAuthQrStatusRequest
+ */
+export interface AuthApiAuthQrStatusRequest {
+    /**
+     * QR session ID
+     * @type {string}
+     * @memberof AuthApiAuthQrStatus
+     */
+    readonly sessionId: string
+}
 
 /**
  * Request parameters for forgotPassword operation in AuthApi.
@@ -1056,6 +1584,54 @@ export interface AuthApiResetPasswordRequest {
  * @extends {BaseAPI}
  */
 export class AuthApi extends BaseAPI {
+    /**
+     * Mobile user confirms QR login after scanning. Requires authentication.
+     * @summary Confirm QR login from mobile
+     * @param {AuthApiAuthQrConfirmRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof AuthApi
+     */
+    public authQrConfirm(requestParameters: AuthApiAuthQrConfirmRequest, options?: RawAxiosRequestConfig) {
+        return AuthApiFp(this.configuration).authQrConfirm(requestParameters.qrConfirmDto, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Creates a new QR login session for PC. PC should connect to WebSocket and wait for confirmation.
+     * @summary Generate QR code for login
+     * @param {AuthApiAuthQrGenerateRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof AuthApi
+     */
+    public authQrGenerate(requestParameters: AuthApiAuthQrGenerateRequest, options?: RawAxiosRequestConfig) {
+        return AuthApiFp(this.configuration).authQrGenerate(requestParameters.qrGenerateDto, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Mobile user rejects QR login after scanning.
+     * @summary Reject QR login from mobile
+     * @param {AuthApiAuthQrRejectRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof AuthApi
+     */
+    public authQrReject(requestParameters: AuthApiAuthQrRejectRequest, options?: RawAxiosRequestConfig) {
+        return AuthApiFp(this.configuration).authQrReject(requestParameters.qrRejectDto, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Poll the status of a QR login session. Use this as fallback when WebSocket is unavailable.
+     * @summary Get QR session status
+     * @param {AuthApiAuthQrStatusRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof AuthApi
+     */
+    public authQrStatus(requestParameters: AuthApiAuthQrStatusRequest, options?: RawAxiosRequestConfig) {
+        return AuthApiFp(this.configuration).authQrStatus(requestParameters.sessionId, options).then((request) => request(this.axios, this.basePath));
+    }
+
     /**
      * Sends an OTP to the user\'s phone if it exists
      * @summary Request password reset OTP

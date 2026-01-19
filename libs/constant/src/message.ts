@@ -94,6 +94,14 @@ export const ErrorMessage: Record<ErrorCode, string> = {
   [ErrorCode.NOTIFICATION_NOT_FOUND]: 'Notification not found.',
   [ErrorCode.NOTIFICATION_DEVICE_NOT_FOUND]: 'Device not found.',
   [ErrorCode.NOTIFICATION_SEND_FAILED]: 'Failed to send notification.',
+
+  // ============== QR LOGIN ==============
+  [ErrorCode.QR_SESSION_NOT_FOUND]: 'QR session not found.',
+  [ErrorCode.QR_SESSION_EXPIRED]:
+    'QR session has expired. Please generate a new QR code.',
+  [ErrorCode.QR_SESSION_ALREADY_PROCESSED]:
+    'QR session has already been processed.',
+  [ErrorCode.QR_SESSION_INVALID]: 'Invalid QR session.',
 };
 
 /**

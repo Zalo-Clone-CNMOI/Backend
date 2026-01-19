@@ -12,6 +12,9 @@ export const KafkaTopics = {
 
   NotificationRequested: 'notification.requested',
   NotificationSent: 'notification.sent',
+
+  AuthQrConfirmed: 'auth.qr.confirmed',
+  AuthQrRejected: 'auth.qr.rejected',
 } as const;
 
 export type KafkaTopic = (typeof KafkaTopics)[keyof typeof KafkaTopics];

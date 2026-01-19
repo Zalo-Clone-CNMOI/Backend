@@ -5,6 +5,8 @@ import { BffServiceService } from './bff-service.service';
 import { AuthModule } from './modules/auth';
 import { UsersModule } from './modules/users';
 import { SsoClientModule } from '@app/clients';
+import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
+import { ThrottlerModule, seconds } from '@nestjs/throttler';
 
 @Module({
   imports: [
@@ -19,6 +21,10 @@ import { SsoClientModule } from '@app/clients';
           'http://localhost:5001/api',
       }),
       inject: [ConfigService],
+    }),
+    ThrottlerModule.forRoot({
+      throttlers: [{ limit: 5, ttl: seconds(60) }],
+      storage: new ThrottlerStorageRedisService(),
     }),
     AuthModule,
     UsersModule,

@@ -153,6 +153,124 @@ paths:
                     type: string
         '400':
           description: Invalid OTP
+  /auth/qr/generate:
+    post:
+      tags:
+        - Auth
+      summary: Generate QR code for login
+      description: Creates a new QR login session for PC. PC should connect to WebSocket and wait for confirmation.
+      operationId: authQrGenerate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QrGenerateDto'
+      responses:
+        '201':
+          description: QR session created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QrSessionResponseDto'
+        '400':
+          description: Invalid request - socketId is required
+        '429':
+          description: Too many requests - rate limit exceeded
+  /auth/qr/status/{sessionId}:
+    get:
+      tags:
+        - Auth
+      summary: Get QR session status
+      description: Poll the status of a QR login session. Use this as fallback when WebSocket is unavailable.
+      operationId: authQrStatus
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: QR session ID
+      responses:
+        '200':
+          description: QR session status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QrStatusResponseDto'
+        '404':
+          description: Session not found or expired
+        '410':
+          description: Session expired
+  /auth/qr/confirm:
+    post:
+      tags:
+        - Auth
+      summary: Confirm QR login from mobile
+      description: Mobile user confirms QR login after scanning. Requires authentication.
+      operationId: authQrConfirm
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QrConfirmDto'
+      responses:
+        '200':
+          description: QR login confirmed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: QR login confirmed successfully
+        '400':
+          description: Invalid session ID
+        '401':
+          description: Unauthorized - mobile user must be logged in
+        '404':
+          description: Session not found or expired
+        '409':
+          description: Session already confirmed or rejected
+  /auth/qr/reject:
+    post:
+      tags:
+        - Auth
+      summary: Reject QR login from mobile
+      description: Mobile user rejects QR login after scanning.
+      operationId: authQrReject
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QrRejectDto'
+      responses:
+        '200':
+          description: QR login rejected
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: QR login rejected
+        '400':
+          description: Invalid session ID
+        '401':
+          description: Unauthorized
+        '404':
+          description: Session not found or expired
+        '409':
+          description: Session already confirmed or rejected
   /users/me:
     get:
       tags:
@@ -594,4 +712,91 @@ components:
             totalPages:
               type: integer
               description: Total number of pages
+    QrGenerateDto:
+      type: object
+      required:
+        - socketId
+      properties:
+        socketId:
+          type: string
+          description: WebSocket socket ID of the PC client
+          example: 'abc123xyz'
+        deviceInfo:
+          type: string
+          description: PC device information (browser, OS)
+          example: 'Chrome 120 on Windows 11'
+    QrSessionResponseDto:
+      type: object
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+          description: Unique session ID
+          example: '550e8400-e29b-41d4-a716-446655440000'
+        qrToken:
+          type: string
+          description: Token to be encoded in QR code
+          example: 'qr_abc123xyz789'
+        expiresAt:
+          type: string
+          format: date-time
+          description: Session expiration time
+          example: '2026-01-18T15:00:00.000Z'
+        expiresInSeconds:
+          type: integer
+          description: Seconds until expiration
+          example: 300
+    QrStatusResponseDto:
+      type: object
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+          description: Session ID
+        status:
+          type: string
+          enum: [PENDING, CONFIRMED, REJECTED, EXPIRED]
+          description: Current session status
+          example: 'PENDING'
+        accessToken:
+          type: string
+          nullable: true
+          description: Access token (only present when status is CONFIRMED)
+        refreshToken:
+          type: string
+          nullable: true
+          description: Refresh token (only present when status is CONFIRMED)
+        expiresIn:
+          type: integer
+          nullable: true
+          description: Token expiration in seconds (only present when status is CONFIRMED)
+        user:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/UserResponseDto'
+          description: User info (only present when status is CONFIRMED)
+    QrConfirmDto:
+      type: object
+      required:
+        - sessionId
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+          description: QR session ID to confirm
+          example: '550e8400-e29b-41d4-a716-446655440000'
+    QrRejectDto:
+      type: object
+      required:
+        - sessionId
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+          description: QR session ID to reject
+          example: '550e8400-e29b-41d4-a716-446655440000'
+        reason:
+          type: string
+          description: Optional rejection reason
+          example: 'User cancelled'
 

@@ -13,19 +13,26 @@ export class ResponseLoggingInterceptor implements NestInterceptor {
   constructor() {
     this.logger = new Logger(ResponseLoggingInterceptor.name);
   }
+
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const request = context.switchToHttp().getRequest();
     const startTime = Date.now();
 
     return next.handle().pipe(
-      map((data) => {
+      map((data: any) => {
         const executionTime = Date.now() - startTime;
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        const response = context.switchToHttp().getResponse();
+
         this.logger.log(
-          `Response for ${request.method} ${request.url} - Status: ${context.switchToHttp().getResponse().statusCode} - Execution Time: ${executionTime}ms`,
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+          `Response for ${request.method} ${request.url} - Status: ${response.statusCode} - Execution Time: ${executionTime}ms`,
         );
 
         return {
           success: !(data instanceof Error) && data !== null,
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           data: data,
           timestamp: new Date().toISOString(),
         };

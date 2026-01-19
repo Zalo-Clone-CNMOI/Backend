@@ -157,4 +157,12 @@ export class ChatGateway implements OnModuleInit {
   broadcastToAll(event: string, payload: unknown) {
     this.server.emit(event, payload);
   }
+
+  /**
+   * Emit event to a specific socket by ID
+   * Used for QR login to send tokens directly to PC socket
+   */
+  emitToSocket(socketId: string, event: string, payload: unknown) {
+    this.server.to(socketId).emit(event, payload);
+  }
 }

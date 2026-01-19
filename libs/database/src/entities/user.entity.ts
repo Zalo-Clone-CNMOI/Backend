@@ -1,13 +1,4 @@
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  CreateDateColumn,
-  UpdateDateColumn,
-  Index,
-  OneToMany,
-  OneToOne,
-} from 'typeorm';
+import { Entity, Column, Index, OneToMany, OneToOne } from 'typeorm';
 import { DeviceToken } from './device-token.entity';
 import { ConversationMember } from './conversation-member.entity';
 import { Friendship } from './friendship.entity';
@@ -17,12 +8,11 @@ import { PostLike } from './post-like.entity';
 import { PostComment } from './post-comment.entity';
 import { NotificationPreference } from './notification-preference.entity';
 import { NotificationLog } from './notification-log.entity';
+import { UserStatus } from '@app/constant';
+import { BaseEntity } from 'libs/shared/src';
 
 @Entity('users')
-export class User {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
+export class User extends BaseEntity {
   @Column({ type: 'varchar', length: 20, unique: true })
   @Index()
   phone: string;
@@ -49,18 +39,12 @@ export class User {
   @Column({ type: 'date', name: 'date_of_birth', nullable: true })
   dateOfBirth: Date | null;
 
-  @Column({ type: 'varchar', length: 20, default: 'active' })
+  @Column({ type: 'enum', enum: UserStatus, default: UserStatus.ACTIVE })
   @Index()
-  status: string;
+  status: UserStatus;
 
   @Column({ type: 'timestamp', name: 'last_seen_at', nullable: true })
   lastSeenAt: Date | null;
-
-  @CreateDateColumn({ name: 'created_at' })
-  createdAt: Date;
-
-  @UpdateDateColumn({ name: 'updated_at' })
-  updatedAt: Date;
 
   @OneToMany(() => DeviceToken, (deviceToken) => deviceToken.user)
   deviceTokens: DeviceToken[];

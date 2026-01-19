@@ -1,9 +1,6 @@
 import {
   Entity,
-  PrimaryGeneratedColumn,
   Column,
-  CreateDateColumn,
-  UpdateDateColumn,
   ManyToOne,
   JoinColumn,
   OneToMany,
@@ -12,12 +9,10 @@ import {
 import { User } from './user.entity';
 import { Post } from './post.entity';
 import { CommentLike } from './comment-like.entity';
+import { BaseEntity } from 'libs/shared/src';
 
 @Entity('post_comments')
-export class PostComment {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
+export class PostComment extends BaseEntity {
   @Column({ type: 'uuid', name: 'post_id' })
   postId: string;
 
@@ -38,13 +33,6 @@ export class PostComment {
   @Column({ type: 'boolean', name: 'is_deleted', default: false })
   isDeleted: boolean;
 
-  @CreateDateColumn({ name: 'created_at' })
-  @Index()
-  createdAt: Date;
-
-  @UpdateDateColumn({ name: 'updated_at' })
-  updatedAt: Date;
-
   @ManyToOne(() => Post, (post) => post.comments, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'post_id' })
   post: Post;
@@ -53,7 +41,10 @@ export class PostComment {
   @JoinColumn({ name: 'user_id' })
   user: User;
 
-  @ManyToOne(() => PostComment, (comment) => comment.replies, { onDelete: 'CASCADE', nullable: true })
+  @ManyToOne(() => PostComment, (comment) => comment.replies, {
+    onDelete: 'CASCADE',
+    nullable: true,
+  })
   @JoinColumn({ name: 'parent_comment_id' })
   parentComment: PostComment | null;
 

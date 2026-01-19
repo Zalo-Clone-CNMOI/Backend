@@ -1,24 +1,12 @@
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  CreateDateColumn,
-  UpdateDateColumn,
-  ManyToOne,
-  JoinColumn,
-  Index,
-  Unique,
-} from 'typeorm';
+import { Entity, Column, ManyToOne, JoinColumn, Index, Unique } from 'typeorm';
 import { User } from './user.entity';
+import { BaseEntity } from 'libs/shared/src';
 
 export type FriendshipStatus = 'pending' | 'accepted' | 'blocked';
 
 @Entity('friendships')
 @Unique(['requesterId', 'addresseeId'])
-export class Friendship {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
+export class Friendship extends BaseEntity {
   @Column({ type: 'uuid', name: 'requester_id' })
   requesterId: string;
 
@@ -29,18 +17,16 @@ export class Friendship {
   @Index()
   status: FriendshipStatus;
 
-  @CreateDateColumn({ name: 'created_at' })
-  createdAt: Date;
-
-  @UpdateDateColumn({ name: 'updated_at' })
-  updatedAt: Date;
-
   // Relations
-  @ManyToOne(() => User, (user) => user.sentFriendRequests, { onDelete: 'CASCADE' })
+  @ManyToOne(() => User, (user) => user.sentFriendRequests, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'requester_id' })
   requester: User;
 
-  @ManyToOne(() => User, (user) => user.receivedFriendRequests, { onDelete: 'CASCADE' })
+  @ManyToOne(() => User, (user) => user.receivedFriendRequests, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'addressee_id' })
   addressee: User;
 }

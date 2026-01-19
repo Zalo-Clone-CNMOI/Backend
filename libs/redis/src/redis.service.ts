@@ -1,0 +1,172 @@
+import { Inject, Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import type { RedisClientType } from 'redis';
+import { REDIS_CLIENT } from './redis.tokens';
+import {
+  QrLoginSession,
+  QrSessionStatus,
+  QrConfirmResult,
+} from './interfaces/qr-session.interface';
+
+@Injectable()
+export class RedisService implements OnModuleDestroy {
+  private readonly logger = new Logger(RedisService.name);
+
+  // Redis key prefixes
+  private readonly QR_SESSION_PREFIX = 'qr:session:';
+  private readonly QR_CONFIRM_LOCK_PREFIX = 'qr:confirm:';
+
+  // Default TTL: 5 minutes
+  private readonly QR_SESSION_TTL = 300;
+
+  constructor(
+    @Inject(REDIS_CLIENT)
+    private readonly redisClient: RedisClientType,
+  ) {}
+
+  async onModuleDestroy() {
+    await this.redisClient.quit();
+    this.logger.log('Redis client disconnected');
+  }
+
+  /**
+   * Store a new QR login session
+   */
+  async setQrSession(session: QrLoginSession): Promise<void> {
+    const key = this.getQrSessionKey(session.sessionId);
+    const value = JSON.stringify(session);
+
+    await this.redisClient.setEx(key, this.QR_SESSION_TTL, value);
+    this.logger.debug(`QR session stored: ${session.sessionId}`);
+  }
+
+  /**
+   * Get QR login session by sessionId
+   * Returns null if not found or expired
+   */
+  async getQrSession(sessionId: string): Promise<QrLoginSession | null> {
+    const key = this.getQrSessionKey(sessionId);
+    const value = await this.redisClient.get(key);
+
+    if (!value) {
+      return null;
+    }
+
+    const session = JSON.parse(value) as QrLoginSession;
+
+    if (session.expiresAt < Date.now()) {
+      this.logger.debug(`QR session expired (app-level): ${sessionId}`);
+      await this.deleteQrSession(sessionId);
+      return null;
+    }
+
+    return session;
+  }
+
+  /**
+   * Confirm QR session with SET NX to prevent race conditions
+   * Only the first confirmation attempt will succeed
+   */
+  async confirmQrSession(
+    sessionId: string,
+    userId: string,
+  ): Promise<QrConfirmResult> {
+    const lockKey = this.getConfirmLockKey(sessionId);
+
+    // SET NX: Only first attempt wins
+    const lockAcquired = await this.redisClient.setNX(lockKey, '1');
+
+    if (!lockAcquired) {
+      this.logger.warn(`QR session already being confirmed: ${sessionId}`);
+      return { success: false, alreadyConfirmed: true };
+    }
+
+    // Set expiry on lock key (cleanup)
+    await this.redisClient.expire(lockKey, 60);
+
+    // Get and update session
+    const session = await this.getQrSession(sessionId);
+
+    if (!session) {
+      this.logger.warn(`QR session not found for confirmation: ${sessionId}`);
+      await this.redisClient.del(lockKey);
+      return { success: false };
+    }
+
+    if (session.status !== QrSessionStatus.PENDING) {
+      this.logger.warn(
+        `QR session not in PENDING state: ${sessionId}, status: ${session.status}`,
+      );
+      await this.redisClient.del(lockKey);
+      return { success: false, alreadyConfirmed: true };
+    }
+
+    // Update session status
+    session.status = QrSessionStatus.CONFIRMED;
+    session.userId = userId;
+
+    await this.setQrSession(session);
+    this.logger.log(`QR session confirmed: ${sessionId} by user: ${userId}`);
+
+    return { success: true, session };
+  }
+
+  /**
+   * Reject QR session
+   */
+  async rejectQrSession(sessionId: string): Promise<QrLoginSession | null> {
+    const session = await this.getQrSession(sessionId);
+
+    if (!session) {
+      return null;
+    }
+
+    if (session.status !== QrSessionStatus.PENDING) {
+      this.logger.warn(`QR session not in PENDING state: ${sessionId}`);
+      return null;
+    }
+
+    session.status = QrSessionStatus.REJECTED;
+    await this.setQrSession(session);
+    this.logger.log(`QR session rejected: ${sessionId}`);
+
+    return session;
+  }
+
+  /**
+   * Delete QR session
+   */
+  async deleteQrSession(sessionId: string): Promise<void> {
+    const key = this.getQrSessionKey(sessionId);
+    await this.redisClient.del(key);
+    this.logger.debug(`QR session deleted: ${sessionId}`);
+  }
+
+  /**
+   * Generic get operation
+   */
+  async get(key: string): Promise<string | null> {
+    return this.redisClient.get(key);
+  }
+
+  /**
+   * Generic set with expiry
+   */
+  async setEx(key: string, ttl: number, value: string): Promise<void> {
+    await this.redisClient.setEx(key, ttl, value);
+  }
+
+  /**
+   * Generic delete
+   */
+  async del(key: string): Promise<void> {
+    await this.redisClient.del(key);
+  }
+
+  private getQrSessionKey(sessionId: string): string {
+    return `${this.QR_SESSION_PREFIX}${sessionId}`;
+  }
+
+  private getConfirmLockKey(sessionId: string): string {
+    return `${this.QR_CONFIRM_LOCK_PREFIX}${sessionId}`;
+  }
+}

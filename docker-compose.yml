@@ -1,3 +1,6 @@
+version: '3.8'
+name: zalo-clone
+
 services:
   zookeeper:
     image: confluentinc/cp-zookeeper:7.6.1

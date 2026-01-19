@@ -1,4 +1,3 @@
-import { dateFormatter } from '@app/helper';
 import { Injectable, Logger, NestMiddleware } from '@nestjs/common';
 import { Request, Response } from 'express';
 
@@ -11,7 +10,7 @@ export class LoggingMiddleware implements NestMiddleware {
   use(req: Request, res: Response, next: () => void) {
     const { method, originalUrl } = req;
 
-    const formattedDate = dateFormatter(new Date());
+    const formattedDate = new Date().toISOString();
     this.logger.log(`Request: ${method} ${originalUrl} at ${formattedDate}`);
     next();
   }

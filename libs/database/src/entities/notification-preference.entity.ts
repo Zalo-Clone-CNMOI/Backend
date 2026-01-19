@@ -1,19 +1,9 @@
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  CreateDateColumn,
-  UpdateDateColumn,
-  OneToOne,
-  JoinColumn,
-} from 'typeorm';
+import { Entity, Column, OneToOne, JoinColumn } from 'typeorm';
 import { User } from './user.entity';
+import { BaseEntity } from 'libs/shared/src';
 
 @Entity('notification_preferences')
-export class NotificationPreference {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
+export class NotificationPreference extends BaseEntity {
   @Column({ type: 'uuid', name: 'user_id', unique: true })
   userId: string;
 
@@ -35,13 +25,9 @@ export class NotificationPreference {
   @Column({ type: 'time', name: 'quiet_hours_end', nullable: true })
   quietHoursEnd: string | null;
 
-  @CreateDateColumn({ name: 'created_at' })
-  createdAt: Date;
-
-  @UpdateDateColumn({ name: 'updated_at' })
-  updatedAt: Date;
-
-  @OneToOne(() => User, (user) => user.notificationPreference, { onDelete: 'CASCADE' })
+  @OneToOne(() => User, (user) => user.notificationPreference, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'user_id' })
   user: User;
 }

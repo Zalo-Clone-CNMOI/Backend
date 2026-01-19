@@ -11,35 +11,53 @@
     "outDir": "./dist",
     "baseUrl": "./",
     "paths": {
-      "@libs/contracts": [
-        "libs/contracts/src"
+      "@app/clients": [
+        "libs/clients/src"
       ],
-      "@libs/contracts/*": [
-        "libs/contracts/src/*"
+      "@app/clients/*": [
+        "libs/clients/src/*"
       ],
-      "@libs/config": [
-        "libs/config/src"
+      "@app/constant": [
+        "libs/constant/src"
       ],
-      "@libs/config/*": [
-        "libs/config/src/*"
+      "@app/constant/*": [
+        "libs/constant/src/*"
       ],
-      "@libs/logger": [
-        "libs/logger/src"
+      "@app/decorator": [
+        "libs/decorator/src"
       ],
-      "@libs/logger/*": [
-        "libs/logger/src/*"
+      "@app/decorator/*": [
+        "libs/decorator/src/*"
       ],
-      "@libs/kafka": [
-        "libs/kafka/src"
+      "@app/interceptors": [
+        "libs/interceptors/src"
       ],
-      "@libs/kafka/*": [
-        "libs/kafka/src/*"
+      "@app/interceptors/*": [
+        "libs/interceptors/src/*"
       ],
-      "@libs/scylla": [
-        "libs/scylla/src"
+      "@app/middleware": [
+        "libs/middleware/src"
       ],
-      "@libs/scylla/*": [
-        "libs/scylla/src/*"
+      "@app/middleware/*": [
+        "libs/middleware/src/*"
+      ],
+      "@app/sso-client": [
+        "libs/clients/src/sso-client/src"
+      ],
+      "@app/sso-client/*": [
+        "libs/clients/src/sso-client/src/*"
+      ],
+      "@app/swagger": [
+        "libs/swagger/src"
+      ],
+      "@app/swagger/*": [
+        "libs/swagger/src/*"
+      ],
+      "@app/types": [
+        "libs/types/src"
+      ],
+      "@app/types/*": [
+        "libs/types/src/*"
       ],
       "@libs/auth": [
         "libs/auth/src"
@@ -47,17 +65,53 @@
       "@libs/auth/*": [
         "libs/auth/src/*"
       ],
-      "@libs/mvp-access": [
-        "libs/mvp-access/src"
+      "@libs/config": [
+        "libs/config/src"
       ],
-      "@libs/mvp-access/*": [
-        "libs/mvp-access/src/*"
+      "@libs/config/*": [
+        "libs/config/src/*"
+      ],
+      "@libs/contracts": [
+        "libs/contracts/src"
+      ],
+      "@libs/contracts/*": [
+        "libs/contracts/src/*"
       ],
       "@libs/database": [
         "libs/database/src"
       ],
       "@libs/database/*": [
         "libs/database/src/*"
+      ],
+      "@libs/kafka": [
+        "libs/kafka/src"
+      ],
+      "@libs/kafka/*": [
+        "libs/kafka/src/*"
+      ],
+      "@libs/logger": [
+        "libs/logger/src"
+      ],
+      "@libs/logger/*": [
+        "libs/logger/src/*"
+      ],
+      "@libs/mvp-access": [
+        "libs/mvp-access/src"
+      ],
+      "@libs/mvp-access/*": [
+        "libs/mvp-access/src/*"
+      ],
+      "@libs/redis": [
+        "libs/redis/src"
+      ],
+      "@libs/redis/*": [
+        "libs/redis/src/*"
+      ],
+      "@libs/scylla": [
+        "libs/scylla/src"
+      ],
+      "@libs/scylla/*": [
+        "libs/scylla/src/*"
       ]
     },
     "incremental": true,

@@ -2,7 +2,7 @@ import { Entity, Column, ManyToOne, JoinColumn, Index, Unique } from 'typeorm';
 import { User } from './user.entity';
 import { Post } from './post.entity';
 import { ReactionType } from '@app/constant';
-import { BaseEntity } from 'libs/shared/src';
+import { BaseEntity } from '@libs/shared';
 
 @Entity('post_likes')
 @Unique(['postId', 'userId'])

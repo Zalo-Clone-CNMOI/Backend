@@ -12,7 +12,7 @@ import {
   NotificationProvider,
   NotificationStatus,
 } from '@app/constant';
-import { BaseEntity } from 'libs/shared/src';
+import { BaseEntity } from '@libs/shared';
 
 @Entity('notification_logs')
 export class NotificationLog extends BaseEntity {

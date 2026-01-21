@@ -9,7 +9,7 @@ import {
 import { User } from './user.entity';
 import { Post } from './post.entity';
 import { CommentLike } from './comment-like.entity';
-import { BaseEntity } from 'libs/shared/src';
+import { BaseEntity } from '@libs/shared';
 
 @Entity('post_comments')
 export class PostComment extends BaseEntity {

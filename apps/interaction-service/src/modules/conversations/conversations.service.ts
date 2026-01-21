@@ -319,7 +319,7 @@ export class ConversationsService {
       );
     }
 
-    const newUserIds = dto.userIds.filter(
+    const newUserIds = dto.memberIds.filter(
       (id) =>
         !conversation.members.some((m) => m.userId === id && m.leftAt === null),
     );

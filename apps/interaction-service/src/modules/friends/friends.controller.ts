@@ -168,7 +168,7 @@ export class FriendsController {
   /**
    * Block user
    */
-  @Post('block/:userId')
+  @Post(':userId/block')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({ summary: 'Block user' })
@@ -184,7 +184,7 @@ export class FriendsController {
   /**
    * Unblock user
    */
-  @Post('unblock/:userId')
+  @Delete(':userId/block')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({ summary: 'Unblock user' })

@@ -9,8 +9,8 @@ import {
 } from 'typeorm';
 import { User } from './user.entity';
 import { Conversation } from './conversation.entity';
-import { BaseEntity } from 'libs/shared/src';
-import { ConversationRole } from '@app/constant';
+import { BaseEntity } from '@libs/shared';
+import { MemberRole } from '@app/constant';
 
 @Entity('conversation_members')
 @Unique(['conversationId', 'userId'])

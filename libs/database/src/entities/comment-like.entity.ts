@@ -1,7 +1,7 @@
 import { Entity, Column, ManyToOne, JoinColumn, Index, Unique } from 'typeorm';
 import { User } from './user.entity';
 import { PostComment } from './post-comment.entity';
-import { BaseEntity } from 'libs/shared/src';
+import { BaseEntity } from '@libs/shared';
 
 @Entity('comment_likes')
 @Unique(['commentId', 'userId'])

@@ -1,7 +1,8 @@
 import { Entity, Column, ManyToOne, JoinColumn, Index, Unique } from 'typeorm';
 import { User } from './user.entity';
-import { BaseEntity } from 'libs/shared/src';
 import { FriendshipStatus } from '@app/constant/enum';
+import { BaseEntity } from '@libs/shared';
+
 
 @Entity('friendships')
 @Unique(['requesterId', 'addresseeId'])

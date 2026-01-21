@@ -10,7 +10,7 @@ import { User } from './user.entity';
 import { ConversationMember } from './conversation-member.entity';
 import { MediaFile } from './media-file.entity';
 import { ConversationType } from '@app/constant';
-import { BaseEntity } from 'libs/shared/src';
+import { BaseEntity } from '@libs/shared';
 
 @Entity('conversations')
 export class Conversation extends BaseEntity {

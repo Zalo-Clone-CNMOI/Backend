@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsString,
   IsNotEmpty,
@@ -17,15 +17,12 @@ import { Gender } from '@app/constant';
  */
 export class RegisterDto {
   @ApiProperty({
-    description: 'Phone number (Vietnam format)',
-    example: '+84901234567',
+    description: 'Firebase ID Token after phone verification',
+    example: 'eyJhbGciOiJSUzI1NiIsImtpZCI6IjFlM...',
   })
   @IsString()
-  @IsNotEmpty({ message: 'Phone number is required' })
-  @Matches(/^(\+84|0)[3-9][0-9]{8}$/, {
-    message: 'Phone number must be a valid Vietnam phone number',
-  })
-  phone: string;
+  @IsNotEmpty({ message: 'Firebase ID token is required' })
+  firebaseIdToken: string;
 
   @ApiProperty({
     description:
@@ -52,7 +49,7 @@ export class RegisterDto {
   @MaxLength(255, { message: 'Full name must not exceed 255 characters' })
   fullName: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Email address',
     example: 'user@example.com',
     required: false,
@@ -61,7 +58,7 @@ export class RegisterDto {
   @IsEmail({}, { message: 'Invalid email format' })
   email?: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Date of birth (ISO format)',
     example: '1995-06-15',
     required: false,
@@ -70,7 +67,7 @@ export class RegisterDto {
   @IsDateString({}, { message: 'Invalid date format' })
   dateOfBirth?: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Gender',
     enum: Gender,
     example: Gender.MALE,

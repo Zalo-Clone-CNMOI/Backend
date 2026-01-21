@@ -12,7 +12,7 @@ paths:
       tags:
         - Auth
       summary: Register a new user account
-      description: Creates a new user with phone and password
+      description: Creates a new user with Firebase phone verification. Frontend sends Firebase ID token after phone authentication.
       operationId: register
       requestBody:
         required: true
@@ -392,19 +392,18 @@ components:
     RegisterDto:
       type: object
       required:
-        - phone
+        - firebaseIdToken
         - password
         - fullName
       properties:
-        phone:
+        firebaseIdToken:
           type: string
-          pattern: '^(\+84|0)[3-9][0-9]{8}$'
-          description: Phone number (Vietnam format)
-          example: '+84901234567'
+          description: Firebase ID Token after phone verification
+          example: 'eyJhbGciOiJSUzI1NiIsImtpZCI6IjFlM...'
         password:
           type: string
           minLength: 8
-          maxLength: 50
+          maxLength: 128
           pattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$'
           description: Password (min 8 chars, must contain uppercase, lowercase, number)
           example: 'SecurePass123!'

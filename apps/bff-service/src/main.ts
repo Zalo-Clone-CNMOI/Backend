@@ -2,7 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { BffServiceModule } from './bff-service.module';
-import { HttpExceptionFilter } from '@app/interceptors';
+import { TransformResponseInterceptor } from '@app/interceptors/transform-response.interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create(BffServiceModule);
@@ -10,9 +10,6 @@ async function bootstrap() {
 
   // Global prefix
   app.setGlobalPrefix('api');
-
-  // Global exception filter - MUST be before pipes
-  app.useGlobalFilters(new HttpExceptionFilter());
 
   // CORS configuration
   app.enableCors({
@@ -54,6 +51,8 @@ async function bootstrap() {
     SwaggerModule.setup('docs', app, document);
     logger.log('Swagger documentation available at /docs');
   }
+
+  app.useGlobalInterceptors(new TransformResponseInterceptor());
 
   const port = Number(process.env.PORT) || 3000;
   await app.listen(port);

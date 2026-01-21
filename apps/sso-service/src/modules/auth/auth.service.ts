@@ -17,6 +17,7 @@ import { BusinessException } from '@app/types';
 import { RedisService, QrSessionStatus } from '@libs/redis';
 import { KAFKA_CLIENT } from '@libs/kafka';
 import { KafkaTopics } from '@libs/contracts';
+import { FirebaseService } from '@libs/firebase';
 
 import {
   RegisterDto,
@@ -53,26 +54,43 @@ export class AuthService {
     @Inject(KAFKA_CLIENT)
     private readonly kafkaClient: ClientKafka,
     private readonly dataSource: DataSource,
+    private readonly firebaseService: FirebaseService,
   ) {}
 
   /**
    * Register a new user
    */
   async register(dto: RegisterDto): Promise<AuthResponseDto> {
-    this.logger.log(`Registering new user with phone: ${dto.phone}`);
+    this.logger.log('Registering new user with Firebase token');
 
-    // Check if phone already exists
+    // 1. Verify Firebase ID token
+    const firebaseUser = await this.firebaseService.verifyIdToken(
+      dto.firebaseIdToken,
+    );
+
+    if (!firebaseUser.phone_number) {
+      throw BusinessException.badRequest(
+        'Phone number not found in Firebase token',
+      );
+    }
+
+    const phone = firebaseUser.phone_number;
+    this.logger.log(`Firebase user verified: ${phone}`);
+
+    // 2. Check if phone already exists
     const existingUser = await this.userRepository.findOne({
-      where: { phone: dto.phone },
+      where: { phone },
     });
 
     if (existingUser) {
       throw BusinessException.conflict(ErrorCode.USER_PHONE_ALREADY_EXISTS);
     }
 
-    if (dto.email) {
+    // 3. Check email if provided
+    const email = dto.email || firebaseUser.email;
+    if (email) {
       const existingEmail = await this.userRepository.findOne({
-        where: { email: dto.email },
+        where: { email },
       });
 
       if (existingEmail) {
@@ -80,13 +98,13 @@ export class AuthService {
       }
     }
 
-    const passwordHash = await bcrypt.hash(dto.password, this.SALT_ROUNDS);
-
+    // 4. Create user (no password needed - Firebase handles auth)
     const user = this.userRepository.create({
-      phone: dto.phone,
-      passwordHash,
-      fullName: dto.fullName,
-      email: dto.email ?? null,
+      phone,
+      passwordHash: dto.password,
+      fullName: dto.fullName || firebaseUser.name || phone,
+      email: email ?? null,
+      avatarUrl: firebaseUser.picture ?? null,
       dateOfBirth: dto.dateOfBirth ? new Date(dto.dateOfBirth) : null,
       gender: dto.gender ?? null,
       status: UserStatus.ACTIVE,
@@ -95,6 +113,7 @@ export class AuthService {
     const savedUser = await this.userRepository.save(user);
     this.logger.log(`User registered successfully: ${savedUser.id}`);
 
+    // 5. Generate JWT tokens for our system
     const tokens = this.jwtService.generateTokenPair(
       savedUser.id,
       savedUser.phone,

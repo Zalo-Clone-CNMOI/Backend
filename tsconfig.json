@@ -89,6 +89,12 @@
       "@libs/database/*": [
         "libs/database/src/*"
       ],
+      "@libs/firebase": [
+        "libs/firebase/src"
+      ],
+      "@libs/firebase/*": [
+        "libs/firebase/src/*"
+      ],
       "@libs/kafka": [
         "libs/kafka/src"
       ],

@@ -3,7 +3,6 @@ import { User } from './user.entity';
 import { FriendshipStatus } from '@app/constant/enum';
 import { BaseEntity } from '@libs/shared';
 
-
 @Entity('friendships')
 @Unique(['requesterId', 'addresseeId'])
 export class Friendship extends BaseEntity {

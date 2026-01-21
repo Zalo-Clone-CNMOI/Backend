@@ -10,7 +10,7 @@ import {
 import { User } from './user.entity';
 import { Conversation } from './conversation.entity';
 import { BaseEntity } from '@libs/shared';
-import { MemberRole } from '@app/constant';
+import { ConversationRole } from '@app/constant';
 
 @Entity('conversation_members')
 @Unique(['conversationId', 'userId'])

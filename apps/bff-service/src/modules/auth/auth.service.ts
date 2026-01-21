@@ -28,12 +28,12 @@ export class AuthService {
    * Register a new user
    */
   async register(dto: RegisterDto): Promise<AuthResponseDto> {
-    this.logger.log(`Registering user with phone: ${dto.phone}`);
+    this.logger.log('Registering user with Firebase token');
     try {
       return this.ssoClient.register(dto);
     } catch (error) {
       this.logger.error(
-        `Registration failed for phone: ${dto.phone}`,
+        'Registration failed',
         error instanceof Error ? error.stack : '',
       );
       throw error;

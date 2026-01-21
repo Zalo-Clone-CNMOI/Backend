@@ -472,17 +472,11 @@ export interface RefreshTokenResponseDto {
  */
 export interface RegisterDto {
     /**
-     * Phone number (Vietnam format)
+     * Firebase ID Token after phone verification
      * @type {string}
      * @memberof RegisterDto
      */
-    'phone': string;
-    /**
-     * Password (min 8 chars, must contain uppercase, lowercase, number)
-     * @type {string}
-     * @memberof RegisterDto
-     */
-    'password': string;
+    'firebaseIdToken': string;
     /**
      * Full name
      * @type {string}
@@ -1113,7 +1107,7 @@ export const AuthApiAxiosParamCreator = function (configuration?: Configuration)
             };
         },
         /**
-         * Creates a new user with phone and password
+         * Creates a new user with Firebase phone verification. Frontend sends Firebase ID token after phone authentication.
          * @summary Register a new user account
          * @param {RegisterDto} registerDto 
          * @param {*} [options] Override http request option.
@@ -1299,7 +1293,7 @@ export const AuthApiFp = function(configuration?: Configuration) {
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
-         * Creates a new user with phone and password
+         * Creates a new user with Firebase phone verification. Frontend sends Firebase ID token after phone authentication.
          * @summary Register a new user account
          * @param {RegisterDto} registerDto 
          * @param {*} [options] Override http request option.
@@ -1415,7 +1409,7 @@ export const AuthApiFactory = function (configuration?: Configuration, basePath?
             return localVarFp.refreshToken(requestParameters.refreshTokenDto, options).then((request) => request(axios, basePath));
         },
         /**
-         * Creates a new user with phone and password
+         * Creates a new user with Firebase phone verification. Frontend sends Firebase ID token after phone authentication.
          * @summary Register a new user account
          * @param {AuthApiRegisterRequest} requestParameters Request parameters.
          * @param {*} [options] Override http request option.
@@ -1681,7 +1675,7 @@ export class AuthApi extends BaseAPI {
     }
 
     /**
-     * Creates a new user with phone and password
+     * Creates a new user with Firebase phone verification. Frontend sends Firebase ID token after phone authentication.
      * @summary Register a new user account
      * @param {AuthApiRegisterRequest} requestParameters Request parameters.
      * @param {*} [options] Override http request option.

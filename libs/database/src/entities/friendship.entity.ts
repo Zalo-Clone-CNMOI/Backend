@@ -1,8 +1,7 @@
 import { Entity, Column, ManyToOne, JoinColumn, Index, Unique } from 'typeorm';
 import { User } from './user.entity';
 import { BaseEntity } from 'libs/shared/src';
-
-export type FriendshipStatus = 'pending' | 'accepted' | 'blocked';
+import { FriendshipStatus } from '@app/constant/enum';
 
 @Entity('friendships')
 @Unique(['requesterId', 'addresseeId'])
@@ -13,7 +12,11 @@ export class Friendship extends BaseEntity {
   @Column({ type: 'uuid', name: 'addressee_id' })
   addresseeId: string;
 
-  @Column({ type: 'varchar', length: 20, default: 'pending' })
+  @Column({
+    type: 'enum',
+    enum: FriendshipStatus,
+    default: FriendshipStatus.PENDING,
+  })
   @Index()
   status: FriendshipStatus;
 

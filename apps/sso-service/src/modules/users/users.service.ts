@@ -215,7 +215,7 @@ export class UsersService {
         f.requesterId === currentUserId ? f.addresseeId : f.requesterId;
       const isRequester = f.requesterId === currentUserId;
       map.set(otherUserId, {
-        status: f.status as FriendshipStatus,
+        status: f.status,
         isRequester,
       });
     }

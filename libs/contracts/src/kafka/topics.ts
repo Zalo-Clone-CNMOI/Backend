@@ -15,6 +15,11 @@ export const KafkaTopics = {
 
   AuthQrConfirmed: 'auth.qr.confirmed',
   AuthQrRejected: 'auth.qr.rejected',
+
+  SendFriendRequest: 'friend.request.send',
+  RespondFriendRequest: 'friend.request.respond',
+  CancelFriendRequest: 'friend.request.cancelled',
+  FriendRemoved: 'friend.removed',
 } as const;
 
 export type KafkaTopic = (typeof KafkaTopics)[keyof typeof KafkaTopics];

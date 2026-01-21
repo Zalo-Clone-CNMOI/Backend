@@ -1,0 +1,839 @@
+openapi: 3.0.0
+info:
+  title: Interaction Service API
+  version: 1.0.0
+  description: Interaction Service for managing friends and conversations
+servers:
+  - url: http://localhost:5004/api
+    description: Local development server
+paths:
+  /friends:
+    get:
+      tags:
+        - Friends
+      summary: Get list of friends
+      operationId: getFriends
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: List of friends
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedResponseFriendResponseDto'
+  /friends/requests:
+    get:
+      tags:
+        - Friends
+      summary: Get pending friend requests (received)
+      operationId: getPendingRequests
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: List of pending requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedResponseFriendRequestResponseDto'
+    post:
+      tags:
+        - Friends
+      summary: Send friend request
+      operationId: sendFriendRequest
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendFriendRequestDto'
+      responses:
+        '201':
+          description: Friend request sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  requestId:
+                    type: string
+  /friends/requests/sent:
+    get:
+      tags:
+        - Friends
+      summary: Get sent friend requests
+      operationId: getSentRequests
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: List of sent requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedResponseSentFriendRequestResponseDto'
+  /friends/requests/{requestId}:
+    post:
+      tags:
+        - Friends
+      summary: Respond to friend request (accept/reject)
+      operationId: respondToRequest
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RespondFriendRequestDto'
+      responses:
+        '200':
+          description: Response recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+    delete:
+      tags:
+        - Friends
+      summary: Cancel sent friend request
+      operationId: cancelRequest
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Request cancelled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+  /friends/{friendId}:
+    delete:
+      tags:
+        - Friends
+      summary: Remove friend
+      operationId: removeFriend
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: friendId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Friend removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+  /friends/{userId}/block:
+    post:
+      tags:
+        - Friends
+      summary: Block user
+      operationId: blockUser
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: User blocked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+    delete:
+      tags:
+        - Friends
+      summary: Unblock user
+      operationId: unblockUser
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: User unblocked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+  /conversations:
+    get:
+      tags:
+        - Conversations
+      summary: Get conversations for current user
+      operationId: getConversations
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: List of conversations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedResponseConversationListItemDto'
+  /conversations/{conversationId}:
+    get:
+      tags:
+        - Conversations
+      summary: Get conversation details
+      operationId: getConversationById
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Conversation details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationDetailDto'
+    patch:
+      tags:
+        - Conversations
+      summary: Update conversation
+      operationId: updateConversation
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateConversationDto'
+      responses:
+        '200':
+          description: Conversation updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationDetailDto'
+  /conversations/group:
+    post:
+      tags:
+        - Conversations
+      summary: Create group conversation
+      operationId: createGroupConversation
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateGroupConversationDto'
+      responses:
+        '201':
+          description: Group created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationDetailDto'
+  /conversations/direct:
+    post:
+      tags:
+        - Conversations
+      summary: Create or get direct conversation
+      operationId: createDirectConversation
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDirectConversationDto'
+      responses:
+        '201':
+          description: Direct conversation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationDetailDto'
+  /conversations/{conversationId}/members:
+    post:
+      tags:
+        - Conversations
+      summary: Add members to conversation
+      operationId: addMembers
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddMembersDto'
+      responses:
+        '200':
+          description: Members added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationDetailDto'
+  /conversations/{conversationId}/members/{memberId}:
+    delete:
+      tags:
+        - Conversations
+      summary: Remove member from conversation
+      operationId: removeMember
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Member removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+  /conversations/{conversationId}/leave:
+    post:
+      tags:
+        - Conversations
+      summary: Leave conversation
+      operationId: leaveConversation
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Left conversation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+  /conversations/{conversationId}/members/{memberId}/role:
+    patch:
+      tags:
+        - Conversations
+      summary: Update member role
+      operationId: updateMemberRole
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMemberRoleDto'
+      responses:
+        '200':
+          description: Role updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+  /conversations/{conversationId}/settings:
+    patch:
+      tags:
+        - Conversations
+      summary: Update my settings
+      operationId: updateMySettings
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMemberSettingsDto'
+      responses:
+        '200':
+          description: Settings updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+  /conversations/{conversationId}/read:
+    post:
+      tags:
+        - Conversations
+      summary: Mark conversation as read
+      operationId: markAsRead
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Marked as read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    SendFriendRequestDto:
+      type: object
+      required:
+        - userId
+      properties:
+        userId:
+          type: string
+          format: uuid
+          description: User ID to send friend request to
+        message:
+          type: string
+          description: Optional message with the request
+    RespondFriendRequestDto:
+      type: object
+      required:
+        - action
+      properties:
+        action:
+          type: string
+          enum: [accept, reject]
+          description: Accept or reject the friend request
+    FriendResponseDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        fullName:
+          type: string
+        avatarUrl:
+          type: string
+          nullable: true
+        phone:
+          type: string
+        lastSeenAt:
+          type: string
+          format: date-time
+          nullable: true
+        friendsSince:
+          type: string
+          format: date-time
+    FriendRequestResponseDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            fullName:
+              type: string
+            avatarUrl:
+              type: string
+              nullable: true
+            phone:
+              type: string
+        message:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+    SentFriendRequestResponseDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        recipient:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            fullName:
+              type: string
+            avatarUrl:
+              type: string
+              nullable: true
+            phone:
+              type: string
+        message:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+    PaginatedResponseFriendResponseDto:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/FriendResponseDto'
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+        totalPages:
+          type: integer
+    PaginatedResponseFriendRequestResponseDto:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/FriendRequestResponseDto'
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+        totalPages:
+          type: integer
+    PaginatedResponseSentFriendRequestResponseDto:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/SentFriendRequestResponseDto'
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+        totalPages:
+          type: integer
+    CreateGroupConversationDto:
+      type: object
+      required:
+        - name
+        - memberIds
+      properties:
+        name:
+          type: string
+          maxLength: 255
+        memberIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+          maxItems: 100
+        avatarUrl:
+          type: string
+          format: uri
+    CreateDirectConversationDto:
+      type: object
+      required:
+        - participantId
+      properties:
+        participantId:
+          type: string
+          format: uuid
+    UpdateConversationDto:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 255
+        avatarUrl:
+          type: string
+          format: uri
+    AddMembersDto:
+      type: object
+      required:
+        - memberIds
+      properties:
+        memberIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+    UpdateMemberRoleDto:
+      type: object
+      required:
+        - role
+      properties:
+        role:
+          type: string
+          enum: [admin, member]
+    UpdateMemberSettingsDto:
+      type: object
+      properties:
+        nickname:
+          type: string
+        notificationEnabled:
+          type: boolean
+    ConversationMemberResponseDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        fullName:
+          type: string
+        avatarUrl:
+          type: string
+          nullable: true
+        role:
+          type: string
+        nickname:
+          type: string
+          nullable: true
+        joinedAt:
+          type: string
+          format: date-time
+    ConversationListItemDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [direct, group]
+        name:
+          type: string
+          nullable: true
+        avatarUrl:
+          type: string
+          nullable: true
+        lastMessage:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: string
+              format: uuid
+            content:
+              type: string
+            senderId:
+              type: string
+              format: uuid
+            senderName:
+              type: string
+            createdAt:
+              type: string
+              format: date-time
+        unreadCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+    ConversationDetailDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [direct, group]
+        name:
+          type: string
+          nullable: true
+        avatarUrl:
+          type: string
+          nullable: true
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConversationMemberResponseDto'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    PaginatedResponseConversationListItemDto:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConversationListItemDto'
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+        totalPages:
+          type: integer

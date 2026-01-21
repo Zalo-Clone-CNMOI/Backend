@@ -10,7 +10,7 @@ import {
 import { User } from './user.entity';
 import { Conversation } from './conversation.entity';
 import { BaseEntity } from 'libs/shared/src';
-import { MemberRole } from '@app/constant';
+import { ConversationRole } from '@app/constant';
 
 @Entity('conversation_members')
 @Unique(['conversationId', 'userId'])
@@ -23,8 +23,12 @@ export class ConversationMember extends BaseEntity {
   @Index()
   userId: string;
 
-  @Column({ type: 'varchar', length: 20, default: 'member' })
-  role: MemberRole;
+  @Column({
+    type: 'enum',
+    enum: ConversationRole,
+    default: ConversationRole.MEMBER,
+  })
+  role: ConversationRole;
 
   @Column({ type: 'varchar', length: 100, nullable: true })
   nickname: string | null;

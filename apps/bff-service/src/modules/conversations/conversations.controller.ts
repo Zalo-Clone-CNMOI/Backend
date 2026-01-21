@@ -7,10 +7,8 @@ import {
   Body,
   Param,
   Query,
-  UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { JwtAuthGuard } from '@libs/auth';
 import { ConversationsService } from './conversations.service';
 import { AccessToken } from '@app/decorator';
 import {
@@ -22,9 +20,8 @@ import {
   UpdateMemberSettingsDto,
 } from '@app/clients/interaction-client';
 
-@ApiTags('conversations')
-@ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@ApiTags('Conversations')
+@ApiBearerAuth('BearerAuth')
 @Controller('conversations')
 export class ConversationsController {
   constructor(private readonly conversationsService: ConversationsService) {}

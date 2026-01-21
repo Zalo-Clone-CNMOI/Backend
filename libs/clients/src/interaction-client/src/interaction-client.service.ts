@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { AxiosError } from 'axios';
 import { FriendsApi, ConversationsApi } from './client/generated';
+import { BaseHttpClient } from '../../base-http-client';
 import type {
   SendFriendRequestDto,
   RespondFriendRequestDto,
@@ -18,13 +18,15 @@ import type {
 } from './client/generated';
 
 @Injectable()
-export class InteractionClientService {
-  private readonly logger = new Logger(InteractionClientService.name);
+export class InteractionClientService extends BaseHttpClient {
+  protected readonly logger = new Logger(InteractionClientService.name);
 
   constructor(
     private readonly friendsApi: FriendsApi,
     private readonly conversationsApi: ConversationsApi,
-  ) {}
+  ) {
+    super();
+  }
 
   // ==================== FRIENDS METHODS ====================
 
@@ -399,25 +401,5 @@ export class InteractionClientService {
     } catch (error) {
       this.handleError('markAsRead', error);
     }
-  }
-
-  private handleError(method: string, error: unknown): never {
-    if (error instanceof AxiosError) {
-      const status = error.response?.status;
-      const responseData = error.response?.data as
-        | { message?: string; errorCode?: string }
-        | undefined;
-      const message = responseData?.message || error.message || 'Unknown error';
-      const errorCode = responseData?.errorCode;
-
-      this.logger.error(
-        `InteractionClient.${method} failed: [${status}] ${message} (${errorCode})`,
-      );
-
-      throw error;
-    }
-
-    this.logger.error(`InteractionClient.${method} unexpected error:`, error);
-    throw error;
   }
 }

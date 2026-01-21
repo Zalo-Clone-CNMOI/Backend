@@ -9,6 +9,7 @@ import { ConversationsModule } from './modules/conversations';
 import { SsoClientModule } from '@app/clients';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import { ThrottlerModule, seconds } from '@nestjs/throttler';
+import { LoggerModule } from '@libs/logger';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { ThrottlerModule, seconds } from '@nestjs/throttler';
       isGlobal: true,
       envFilePath: '.env',
     }),
+    LoggerModule,
     SsoClientModule.registerAsync({
       useFactory: (configService: ConfigService) => ({
         baseUrl:

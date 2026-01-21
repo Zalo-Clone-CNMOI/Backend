@@ -7,10 +7,8 @@ import {
   Body,
   Param,
   Query,
-  UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { JwtAuthGuard } from '@libs/auth';
 import { FriendsService } from './friends.service';
 import { AccessToken } from '@app/decorator';
 import {
@@ -18,9 +16,8 @@ import {
   RespondFriendRequestDto,
 } from '@app/clients/interaction-client';
 
-@ApiTags('friends')
-@ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@ApiTags('Friends')
+@ApiBearerAuth('BearerAuth')
 @Controller('friends')
 export class FriendsController {
   constructor(private readonly friendsService: FriendsService) {}

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { AxiosError } from 'axios';
 import { AuthApi, UsersApi } from './client/generated';
+import { BaseHttpClient } from '../../base-http-client';
 import type {
   RegisterDto,
   LoginDto,
@@ -22,13 +22,15 @@ import type {
 } from './client/generated';
 
 @Injectable()
-export class SsoClientService {
-  private readonly logger = new Logger(SsoClientService.name);
+export class SsoClientService extends BaseHttpClient {
+  protected readonly logger = new Logger(SsoClientService.name);
 
   constructor(
     private readonly authApi: AuthApi,
     private readonly usersApi: UsersApi,
-  ) {}
+  ) {
+    super();
+  }
 
   // ==================== AUTH METHODS ====================
 
@@ -280,45 +282,5 @@ export class SsoClientService {
     } catch (error) {
       this.handleError('getPublicProfile', error);
     }
-  }
-
-  // ==================== ERROR HANDLING ====================
-
-  private handleError(method: string, error: unknown): never {
-    if (error instanceof AxiosError) {
-      const status = error.response?.status;
-      const message =
-        (error.response?.data as { message?: string })?.message ||
-        error.message;
-      const errorData = error.response?.data as {
-        error?: string;
-        [key: string]: unknown;
-      };
-
-      this.logger.error(
-        `SSO Client error in ${method}: ${status} - ${message}`,
-        error.stack,
-      );
-
-      // Re-throw with structured error data
-      const structuredError = new Error(message);
-      Object.assign(structuredError, {
-        statusCode: status || 500,
-        message: message,
-        error: errorData?.error || 'Internal Server Error',
-        data: errorData,
-      });
-      throw structuredError;
-    }
-
-    // Handle non-Axios errors
-    this.logger.error(`Unexpected error in ${method}`, error);
-    const genericError = new Error('Internal server error');
-    Object.assign(genericError, {
-      statusCode: 500,
-      message: 'Internal server error',
-      error: 'Internal Server Error',
-    });
-    throw genericError;
   }
 }

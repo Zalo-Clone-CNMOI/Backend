@@ -9,7 +9,7 @@ import { PostComment } from './post-comment.entity';
 import { NotificationPreference } from './notification-preference.entity';
 import { NotificationLog } from './notification-log.entity';
 import { UserStatus } from '@app/constant';
-import { BaseEntity } from 'libs/shared/src';
+import { BaseEntity } from '@libs/shared';
 
 @Entity('users')
 export class User extends BaseEntity {

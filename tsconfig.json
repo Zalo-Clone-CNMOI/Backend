@@ -112,6 +112,12 @@
       ],
       "@libs/scylla/*": [
         "libs/scylla/src/*"
+      ],
+      "@libs/shared": [
+        "libs/shared/src"
+      ],
+      "@libs/shared/*": [
+        "libs/shared/src/*"
       ]
     },
     "incremental": true,

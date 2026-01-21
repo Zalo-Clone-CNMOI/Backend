@@ -3,7 +3,7 @@ import { User } from './user.entity';
 import { PostMedia } from './post-media.entity';
 import { PostLike } from './post-like.entity';
 import { PostComment } from './post-comment.entity';
-import { BaseEntity } from 'libs/shared/src';
+import { BaseEntity } from '@libs/shared';
 
 export type PostVisibility = 'public' | 'friends' | 'only_me';
 

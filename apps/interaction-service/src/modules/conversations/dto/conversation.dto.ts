@@ -86,14 +86,14 @@ export class UpdateConversationDto {
  */
 export class AddMembersDto {
   @ApiProperty({
-    description: 'User IDs to add',
+    description: 'Member IDs to add',
     example: ['uuid1', 'uuid2'],
   })
   @IsArray()
   @ArrayMinSize(1, { message: 'At least 1 member is required' })
   @ArrayMaxSize(50, { message: 'Maximum 50 members can be added at once' })
   @IsUUID('4', { each: true, message: 'Each member ID must be a valid UUID' })
-  userIds: string[];
+  memberIds: string[];
 }
 
 /**

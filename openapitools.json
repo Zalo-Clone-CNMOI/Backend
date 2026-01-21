@@ -16,6 +16,19 @@
           "useSingleRequestParameter": true,
           "withNodeImports": true
         }
+      },
+      "interaction-client": {
+        "generatorName": "typescript-axios",
+        "inputSpec": "libs/clients/src/interaction-client/src/utils/oas.yml",
+        "output": "libs/clients/src/interaction-client/src/client/generated",
+        "additionalProperties": {
+          "stringEnums": true,
+          "supportsES6": true,
+          "typescriptThreePlus": true,
+          "enumPropertyNaming": "original",
+          "useSingleRequestParameter": true,
+          "withNodeImports": true
+        }
       }
     }
   }

@@ -11,6 +11,11 @@ export const WsEvents = {
 
   QrConfirmed: 'qr:confirmed',
   QrRejected: 'qr:rejected',
+
+  SendFriendRequest: 'friend:request:send',
+  RespondFriendRequest: 'friend:request:respond',
+  CancelFriendRequest: 'friend:request:cancel',
+  FriendRemoved: 'friend:removed',
 } as const;
 
 export type WsEventName = (typeof WsEvents)[keyof typeof WsEvents];
@@ -69,4 +74,34 @@ export interface WsQrConfirmedPayload {
 export interface WsQrRejectedPayload {
   sessionId: string;
   reason: string;
+}
+
+// Friend Request Payloads
+export interface WsSendFriendRequestPayload {
+  requestId: string;
+  requester: {
+    id: string;
+    fullName: string;
+    avatarUrl: string | null;
+    phone: string;
+  };
+}
+
+export interface WsRespondFriendRequestPayload {
+  requestId: string;
+  status: 'accepted' | 'rejected';
+  addressee?: {
+    id: string;
+    fullName: string;
+    avatarUrl: string | null;
+  };
+}
+
+export interface WsCancelFriendRequestPayload {
+  requestId: string;
+  requesterId: string;
+}
+
+export interface WsFriendRemovedPayload {
+  userId: string;
 }

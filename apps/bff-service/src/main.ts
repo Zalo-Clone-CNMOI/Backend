@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { BffServiceModule } from './bff-service.module';
+import { HttpExceptionFilter } from '@app/interceptors';
 
 async function bootstrap() {
   const app = await NestFactory.create(BffServiceModule);
@@ -9,6 +10,9 @@ async function bootstrap() {
 
   // Global prefix
   app.setGlobalPrefix('api');
+
+  // Global exception filter - MUST be before pipes
+  app.useGlobalFilters(new HttpExceptionFilter());
 
   // CORS configuration
   app.enableCors({

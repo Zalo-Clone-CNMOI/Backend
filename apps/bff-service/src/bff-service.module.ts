@@ -4,9 +4,12 @@ import { BffServiceController } from './bff-service.controller';
 import { BffServiceService } from './bff-service.service';
 import { AuthModule } from './modules/auth';
 import { UsersModule } from './modules/users';
+import { FriendsModule } from './modules/friends';
+import { ConversationsModule } from './modules/conversations';
 import { SsoClientModule } from '@app/clients';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import { ThrottlerModule, seconds } from '@nestjs/throttler';
+import { LoggerModule } from '@libs/logger';
 
 @Module({
   imports: [
@@ -14,6 +17,7 @@ import { ThrottlerModule, seconds } from '@nestjs/throttler';
       isGlobal: true,
       envFilePath: '.env',
     }),
+    LoggerModule,
     SsoClientModule.registerAsync({
       useFactory: (configService: ConfigService) => ({
         baseUrl:
@@ -28,6 +32,8 @@ import { ThrottlerModule, seconds } from '@nestjs/throttler';
     }),
     AuthModule,
     UsersModule,
+    FriendsModule,
+    ConversationsModule,
   ],
   controllers: [BffServiceController],
   providers: [BffServiceService],

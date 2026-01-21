@@ -23,8 +23,12 @@ export class ConversationMember extends BaseEntity {
   @Index()
   userId: string;
 
-  @Column({ type: 'varchar', length: 20, default: 'member' })
-  role: MemberRole;
+  @Column({
+    type: 'enum',
+    enum: ConversationRole,
+    default: ConversationRole.MEMBER,
+  })
+  role: ConversationRole;
 
   @Column({ type: 'varchar', length: 100, nullable: true })
   nickname: string | null;

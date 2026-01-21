@@ -149,13 +149,13 @@
         "tsConfigPath": "libs/redis/tsconfig.lib.json"
       }
     },
-    "relation-service": {
+    "interaction-service": {
       "type": "application",
-      "root": "apps/relation-service",
+      "root": "apps/interaction-service",
       "entryFile": "main",
-      "sourceRoot": "apps/relation-service/src",
+      "sourceRoot": "apps/interaction-service/src",
       "compilerOptions": {
-        "tsConfigPath": "apps/relation-service/tsconfig.app.json"
+        "tsConfigPath": "apps/interaction-service/tsconfig.app.json"
       }
     },
     "scylla": {

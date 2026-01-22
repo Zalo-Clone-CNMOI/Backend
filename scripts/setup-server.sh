@@ -3,7 +3,7 @@
 # ================================================
 # EC2 Server Setup Script for Zalo Clone Backend
 # ================================================
-# Run this script on a fresh Ubuntu 22.04/24.04 EC2 instance
+# For Amazon Linux 2023 (AL2023) or Amazon Linux 2 (AL2)
 # Usage: chmod +x setup-server.sh && sudo ./setup-server.sh
 # ================================================
 
@@ -11,6 +11,7 @@ set -e
 
 echo "================================================"
 echo "🚀 Zalo Clone - EC2 Server Setup Script"
+echo "   (Amazon Linux Edition)"
 echo "================================================"
 
 # Colors for output
@@ -31,100 +32,166 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# Detect Amazon Linux version
+detect_al_version() {
+    if grep -q "Amazon Linux 2023" /etc/os-release 2>/dev/null; then
+        echo "al2023"
+    elif grep -q "Amazon Linux 2" /etc/os-release 2>/dev/null; then
+        echo "al2"
+    else
+        echo "unknown"
+    fi
+}
+
+AL_VERSION=$(detect_al_version)
+log_info "Detected Amazon Linux version: $AL_VERSION"
+
+if [ "$AL_VERSION" = "unknown" ]; then
+    log_error "This script is designed for Amazon Linux 2 or Amazon Linux 2023"
+    exit 1
+fi
+
+# Set package manager
+if [ "$AL_VERSION" = "al2023" ]; then
+    PKG_MANAGER="dnf"
+else
+    PKG_MANAGER="yum"
+fi
+
 # ================================
 # 1. System Update
 # ================================
 log_info "Updating system packages..."
-apt-get update -y
-apt-get upgrade -y
+$PKG_MANAGER update -y
 
 # ================================
 # 2. Install Essential Packages
 # ================================
 log_info "Installing essential packages..."
-apt-get install -y \
-    apt-transport-https \
-    ca-certificates \
+$PKG_MANAGER install -y \
     curl \
-    gnupg \
-    lsb-release \
-    software-properties-common \
+    wget \
     git \
     htop \
     vim \
-    wget \
     unzip \
     jq \
-    fail2ban \
-    ufw
+    tar \
+    gzip \
+    nc
 
 # ================================
 # 3. Install Docker
 # ================================
 log_info "Installing Docker..."
 
-# Remove old versions
-apt-get remove -y docker docker-engine docker.io containerd runc 2>/dev/null || true
-
-# Add Docker's official GPG key
-install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-chmod a+r /etc/apt/keyrings/docker.gpg
-
-# Set up repository
-echo \
-  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
-  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
-  tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-# Install Docker Engine
-apt-get update -y
-apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+if [ "$AL_VERSION" = "al2023" ]; then
+    # Amazon Linux 2023
+    $PKG_MANAGER install -y docker
+else
+    # Amazon Linux 2
+    amazon-linux-extras install docker -y
+fi
 
 # Start and enable Docker
 systemctl start docker
 systemctl enable docker
 
-# Add current user to docker group
-CURRENT_USER=${SUDO_USER:-$USER}
+# Add ec2-user to docker group
+CURRENT_USER=${SUDO_USER:-ec2-user}
 usermod -aG docker $CURRENT_USER
 
 log_info "Docker installed successfully!"
 docker --version
+
+# ================================
+# 4. Install Docker Compose
+# ================================
+log_info "Installing Docker Compose..."
+
+# Install Docker Compose plugin
+mkdir -p /usr/local/lib/docker/cli-plugins
+curl -SL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-$(uname -m)" -o /usr/local/lib/docker/cli-plugins/docker-compose
+chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+# Also create symlink for standalone use
+ln -sf /usr/local/lib/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose
+
+log_info "Docker Compose installed!"
 docker compose version
 
 # ================================
-# 4. Configure Firewall (UFW)
+# 5. Configure Firewall (iptables/firewalld)
 # ================================
 log_info "Configuring firewall..."
 
-# Reset UFW to default
-ufw --force reset
+if [ "$AL_VERSION" = "al2023" ]; then
+    # Amazon Linux 2023 uses firewalld
+    $PKG_MANAGER install -y firewalld
+    systemctl start firewalld
+    systemctl enable firewalld
 
-# Default policies
-ufw default deny incoming
-ufw default allow outgoing
+    # Allow SSH
+    firewall-cmd --permanent --add-service=ssh
+    # Allow HTTP and HTTPS
+    firewall-cmd --permanent --add-service=http
+    firewall-cmd --permanent --add-service=https
+    # Allow application port
+    firewall-cmd --permanent --add-port=5000/tcp
 
-# Allow SSH
-ufw allow 22/tcp
+    # Reload firewall
+    firewall-cmd --reload
+    
+    log_info "Firewall configured!"
+    firewall-cmd --list-all
+else
+    # Amazon Linux 2 uses iptables
+    $PKG_MANAGER install -y iptables-services
+    systemctl start iptables
+    systemctl enable iptables
 
-# Allow HTTP and HTTPS
-ufw allow 80/tcp
-ufw allow 443/tcp
+    # Flush existing rules
+    iptables -F
 
-# Allow application ports (adjust as needed)
-ufw allow 5000/tcp  # BFF Service
+    # Default policies
+    iptables -P INPUT DROP
+    iptables -P FORWARD DROP
+    iptables -P OUTPUT ACCEPT
 
-# Enable firewall
-ufw --force enable
+    # Allow loopback
+    iptables -A INPUT -i lo -j ACCEPT
 
-log_info "Firewall configured!"
-ufw status
+    # Allow established connections
+    iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+    # Allow SSH
+    iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+    # Allow HTTP
+    iptables -A INPUT -p tcp --dport 80 -j ACCEPT
+    # Allow HTTPS
+    iptables -A INPUT -p tcp --dport 443 -j ACCEPT
+    # Allow BFF Service
+    iptables -A INPUT -p tcp --dport 5000 -j ACCEPT
+
+    # Save rules
+    service iptables save
+
+    log_info "Firewall configured!"
+    iptables -L -n
+fi
 
 # ================================
-# 5. Configure Fail2Ban
+# 6. Install and Configure Fail2Ban
 # ================================
-log_info "Configuring Fail2Ban..."
+log_info "Installing Fail2Ban..."
+
+if [ "$AL_VERSION" = "al2023" ]; then
+    $PKG_MANAGER install -y fail2ban
+else
+    # For AL2, need to enable EPEL first
+    amazon-linux-extras install epel -y
+    $PKG_MANAGER install -y fail2ban
+fi
 
 cat > /etc/fail2ban/jail.local << 'EOF'
 [DEFAULT]
@@ -135,16 +202,18 @@ maxretry = 5
 [sshd]
 enabled = true
 port = ssh
-logpath = %(sshd_log)s
+logpath = /var/log/secure
 maxretry = 3
 bantime = 86400
 EOF
 
-systemctl restart fail2ban
+systemctl start fail2ban
 systemctl enable fail2ban
 
+log_info "Fail2Ban configured!"
+
 # ================================
-# 6. Create Application Directory
+# 7. Create Application Directory
 # ================================
 log_info "Creating application directory..."
 
@@ -153,10 +222,11 @@ mkdir -p $APP_DIR
 chown -R $CURRENT_USER:$CURRENT_USER $APP_DIR
 
 # ================================
-# 7. Setup Docker Logging
+# 8. Setup Docker Logging
 # ================================
 log_info "Configuring Docker logging..."
 
+mkdir -p /etc/docker
 cat > /etc/docker/daemon.json << 'EOF'
 {
   "log-driver": "json-file",
@@ -170,27 +240,27 @@ EOF
 systemctl restart docker
 
 # ================================
-# 8. Setup Swap (for small instances)
+# 9. Setup Swap (for small instances)
 # ================================
 log_info "Setting up swap space..."
 
 if [ ! -f /swapfile ]; then
-    fallocate -l 2G /swapfile
+    dd if=/dev/zero of=/swapfile bs=128M count=16  # 2GB swap
     chmod 600 /swapfile
     mkswap /swapfile
     swapon /swapfile
-    echo '/swapfile none swap sw 0 0' >> /etc/fstab
+    echo '/swapfile swap swap defaults 0 0' >> /etc/fstab
     log_info "Swap configured: 2GB"
 else
     log_warn "Swap already exists"
 fi
 
 # ================================
-# 9. Create Deploy User (optional)
+# 10. Create Helper Scripts
 # ================================
 log_info "Creating deployment scripts..."
 
-# Create helper scripts
+# Deploy script
 cat > $APP_DIR/deploy.sh << 'EOF'
 #!/bin/bash
 set -e
@@ -264,12 +334,17 @@ chmod +x $APP_DIR/restart.sh
 chown -R $CURRENT_USER:$CURRENT_USER $APP_DIR
 
 # ================================
-# 10. Summary
+# 11. Summary
 # ================================
 echo ""
 echo "================================================"
 echo "✅ Server Setup Complete!"
 echo "================================================"
+echo ""
+echo "📋 System Info:"
+echo "  - OS: Amazon Linux ($AL_VERSION)"
+echo "  - Package Manager: $PKG_MANAGER"
+echo "  - Docker: $(docker --version)"
 echo ""
 echo "📋 Next Steps:"
 echo "1. Upload docker-compose.prod.yml to ~/zalo-clone/"
@@ -283,7 +358,11 @@ echo "  ~/zalo-clone/status.sh   - Check system status"
 echo "  ~/zalo-clone/restart.sh  - Restart services"
 echo ""
 echo "🔐 Security:"
-echo "  - UFW firewall enabled (ports: 22, 80, 443, 5000)"
+if [ "$AL_VERSION" = "al2023" ]; then
+    echo "  - Firewalld enabled (ports: 22, 80, 443, 5000)"
+else
+    echo "  - iptables configured (ports: 22, 80, 443, 5000)"
+fi
 echo "  - Fail2Ban configured for SSH protection"
 echo ""
 echo "⚠️  IMPORTANT: Log out and log back in for docker group to take effect!"

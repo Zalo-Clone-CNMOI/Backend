@@ -12,7 +12,7 @@ set -e
 
 # Configuration (update these values)
 EC2_HOST="${EC2_HOST:-your-ec2-ip-or-hostname}"
-EC2_USER="${EC2_USER:-ubuntu}"
+EC2_USER="${EC2_USER:-ec2-user}"
 SSH_KEY="${SSH_KEY:-~/.ssh/your-key.pem}"
 REMOTE_DIR="/home/$EC2_USER/zalo-clone"
 

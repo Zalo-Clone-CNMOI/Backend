@@ -1,4 +1,5 @@
 import { DynamicModule, Module, Global } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import * as admin from 'firebase-admin';
 import { FirebaseService } from './firebase.service';
 import { FIREBASE_CONFIG, FIREBASE_APP } from './firebase.tokens';
@@ -73,6 +74,7 @@ export class FirebaseModule {
 
     return {
       module: FirebaseModule,
+      imports: [ConfigModule],
       providers: [firebaseAppProvider, FirebaseService],
       exports: [FirebaseService, FIREBASE_APP],
     };

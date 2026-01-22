@@ -1,0 +1,59 @@
+# Dependencies
+node_modules
+**/node_modules
+
+# Build output
+dist
+**/dist
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore
+
+# Logs
+logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Environment files (use docker secrets or env vars instead)
+.env
+.env.*
+!.env.example
+
+# Test files
+coverage
+.nyc_output
+test
+**/test
+**/*.spec.ts
+**/*.e2e-spec.ts
+jest*.json
+
+# Documentation
+docs
+*.md
+!README.md
+
+# LocalStack data
+.localstack
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.docker
+
+# Misc
+.eslintcache
+.prettierignore
+*.tsbuildinfo

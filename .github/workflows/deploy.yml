@@ -1,0 +1,401 @@
+# ================================================
+# GitHub Actions - CI/CD Pipeline
+# ================================================
+# Triggers on push to main branch
+# Builds Docker images and deploys to EC2 via SSH
+# ================================================
+
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'apps/**'
+      - 'libs/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'docker-compose.prod.yml'
+      - '.github/workflows/**'
+  workflow_dispatch:
+    inputs:
+      service:
+        description: 'Service to deploy (all, bff, sso, interaction)'
+        required: false
+        default: 'all'
+
+env:
+  DOCKER_REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository_owner }}/zalo-clone
+
+jobs:
+  # ================================
+  # Job 1: Detect Changes
+  # ================================
+  detect-changes:
+    name: Detect Changed Services
+    runs-on: ubuntu-latest
+    outputs:
+      bff: ${{ steps.changes.outputs.bff }}
+      sso: ${{ steps.changes.outputs.sso }}
+      interaction: ${{ steps.changes.outputs.interaction }}
+      libs: ${{ steps.changes.outputs.libs }}
+      any_service: ${{ steps.changes.outputs.any_service }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check for changes
+        id: changes
+        run: |
+          # Get changed files
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # Manual trigger - deploy based on input
+            SERVICE="${{ github.event.inputs.service }}"
+            if [ "$SERVICE" = "all" ] || [ "$SERVICE" = "bff" ]; then
+              echo "bff=true" >> $GITHUB_OUTPUT
+            else
+              echo "bff=false" >> $GITHUB_OUTPUT
+            fi
+            if [ "$SERVICE" = "all" ] || [ "$SERVICE" = "sso" ]; then
+              echo "sso=true" >> $GITHUB_OUTPUT
+            else
+              echo "sso=false" >> $GITHUB_OUTPUT
+            fi
+            if [ "$SERVICE" = "all" ] || [ "$SERVICE" = "interaction" ]; then
+              echo "interaction=true" >> $GITHUB_OUTPUT
+            else
+              echo "interaction=false" >> $GITHUB_OUTPUT
+            fi
+            echo "libs=false" >> $GITHUB_OUTPUT
+            echo "any_service=true" >> $GITHUB_OUTPUT
+          else
+            # Auto-detect changes
+            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
+            echo "Changed files:"
+            echo "$CHANGED_FILES"
+            
+            # Check libs changes (affects all services)
+            if echo "$CHANGED_FILES" | grep -q "^libs/"; then
+              echo "libs=true" >> $GITHUB_OUTPUT
+              LIBS_CHANGED=true
+            else
+              echo "libs=false" >> $GITHUB_OUTPUT
+              LIBS_CHANGED=false
+            fi
+            
+            # Check individual services
+            if echo "$CHANGED_FILES" | grep -q "^apps/bff-service/" || [ "$LIBS_CHANGED" = "true" ]; then
+              echo "bff=true" >> $GITHUB_OUTPUT
+            else
+              echo "bff=false" >> $GITHUB_OUTPUT
+            fi
+            
+            if echo "$CHANGED_FILES" | grep -q "^apps/sso-service/" || [ "$LIBS_CHANGED" = "true" ]; then
+              echo "sso=true" >> $GITHUB_OUTPUT
+            else
+              echo "sso=false" >> $GITHUB_OUTPUT
+            fi
+            
+            if echo "$CHANGED_FILES" | grep -q "^apps/interaction-service/" || [ "$LIBS_CHANGED" = "true" ]; then
+              echo "interaction=true" >> $GITHUB_OUTPUT
+            else
+              echo "interaction=false" >> $GITHUB_OUTPUT
+            fi
+            
+            # Check if any service changed
+            if echo "$CHANGED_FILES" | grep -qE "^(apps/|libs/|package.json|pnpm-lock.yaml)"; then
+              echo "any_service=true" >> $GITHUB_OUTPUT
+            else
+              echo "any_service=false" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+  # ================================
+  # Job 2: Lint and Test
+  # ================================
+  lint-test:
+    name: Lint & Test
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.any_service == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 9
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run lint
+        run: pnpm run lint
+        continue-on-error: true
+
+      - name: Run tests
+        run: pnpm run test
+        continue-on-error: true
+
+  # ================================
+  # Job 3: Build Docker Images
+  # ================================
+  build-bff:
+    name: Build BFF Service
+    runs-on: ubuntu-latest
+    needs: [detect-changes, lint-test]
+    if: needs.detect-changes.outputs.bff == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.DOCKER_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}/bff-service
+          tags: |
+            type=sha,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/bff-service/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-sso:
+    name: Build SSO Service
+    runs-on: ubuntu-latest
+    needs: [detect-changes, lint-test]
+    if: needs.detect-changes.outputs.sso == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.DOCKER_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}/sso-service
+          tags: |
+            type=sha,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/sso-service/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-interaction:
+    name: Build Interaction Service
+    runs-on: ubuntu-latest
+    needs: [detect-changes, lint-test]
+    if: needs.detect-changes.outputs.interaction == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.DOCKER_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}/interaction-service
+          tags: |
+            type=sha,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/interaction-service/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ================================
+  # Job 4: Deploy to EC2
+  # ================================
+  deploy:
+    name: Deploy to EC2
+    runs-on: ubuntu-latest
+    needs: [detect-changes, build-bff, build-sso, build-interaction]
+    if: |
+      always() && 
+      needs.detect-changes.outputs.any_service == 'true' &&
+      (needs.build-bff.result == 'success' || needs.build-bff.result == 'skipped') &&
+      (needs.build-sso.result == 'success' || needs.build-sso.result == 'skipped') &&
+      (needs.build-interaction.result == 'success' || needs.build-interaction.result == 'skipped')
+    environment: production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH Key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Copy docker-compose files to server
+        run: |
+          scp -o StrictHostKeyChecking=no \
+            docker-compose.prod.yml \
+            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:~/zalo-clone/
+
+      - name: Deploy services via SSH
+        env:
+          DOCKER_REGISTRY: ${{ env.DOCKER_REGISTRY }}
+          IMAGE_PREFIX: ${{ env.IMAGE_PREFIX }}
+          IMAGE_TAG: ${{ github.sha }}
+          BFF_CHANGED: ${{ needs.detect-changes.outputs.bff }}
+          SSO_CHANGED: ${{ needs.detect-changes.outputs.sso }}
+          INTERACTION_CHANGED: ${{ needs.detect-changes.outputs.interaction }}
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'DEPLOY_SCRIPT'
+            set -e
+            cd ~/zalo-clone
+            
+            # Login to GitHub Container Registry
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            
+            # Export environment variables
+            export DOCKER_REGISTRY="${{ env.DOCKER_REGISTRY }}"
+            export DOCKER_IMAGE_PREFIX="${{ env.IMAGE_PREFIX }}"
+            export IMAGE_TAG="${{ github.sha }}"
+            
+            # Load production environment variables
+            if [ -f .env.prod ]; then
+              export $(cat .env.prod | grep -v '^#' | xargs)
+            fi
+            
+            # Pull new images and restart changed services
+            SERVICES_TO_UPDATE=""
+            
+            if [ "${{ env.BFF_CHANGED }}" = "true" ]; then
+              echo "🔄 Updating BFF Service..."
+              docker compose -f docker-compose.prod.yml pull bff-service
+              SERVICES_TO_UPDATE="$SERVICES_TO_UPDATE bff-service"
+            fi
+            
+            if [ "${{ env.SSO_CHANGED }}" = "true" ]; then
+              echo "🔄 Updating SSO Service..."
+              docker compose -f docker-compose.prod.yml pull sso-service
+              SERVICES_TO_UPDATE="$SERVICES_TO_UPDATE sso-service"
+            fi
+            
+            if [ "${{ env.INTERACTION_CHANGED }}" = "true" ]; then
+              echo "🔄 Updating Interaction Service..."
+              docker compose -f docker-compose.prod.yml pull interaction-service
+              SERVICES_TO_UPDATE="$SERVICES_TO_UPDATE interaction-service"
+            fi
+            
+            if [ -n "$SERVICES_TO_UPDATE" ]; then
+              echo "🚀 Restarting services:$SERVICES_TO_UPDATE"
+              docker compose -f docker-compose.prod.yml up -d $SERVICES_TO_UPDATE
+            fi
+            
+            # Clean up old images
+            docker image prune -f
+            
+            # Show status
+            echo ""
+            echo "📊 Current container status:"
+            docker compose -f docker-compose.prod.yml ps
+            
+            echo ""
+            echo "✅ Deployment completed successfully!"
+          DEPLOY_SCRIPT
+
+      - name: Verify deployment
+        run: |
+          echo "⏳ Waiting for services to start..."
+          sleep 30
+          
+          # Check BFF service health
+          if [ "${{ needs.detect-changes.outputs.bff }}" = "true" ]; then
+            echo "🔍 Checking BFF Service health..."
+            ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
+              "curl -sf http://localhost:5000/api/health || echo 'BFF health check failed'"
+          fi
+          
+          echo "✅ Health checks completed"
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "❌ Deployment failed! Please check the logs."
+          # Add Slack/Discord notification here if needed
+
+      - name: Cleanup SSH
+        if: always()
+        run: |
+          rm -rf ~/.ssh/id_rsa

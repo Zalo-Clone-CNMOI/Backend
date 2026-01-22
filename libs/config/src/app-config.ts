@@ -25,6 +25,10 @@ export interface AppConfig {
   s3Bucket?: string;
   s3PresignExpiresSeconds?: number;
   s3UploadPrefix?: string;
+
+  firebaseProjectId?: string;
+  firebaseClientEmail?: string;
+  firebasePrivateKey?: string;
 }
 
 function readNumber(value: string | undefined): number | undefined {
@@ -69,5 +73,9 @@ export function loadConfig(serviceName: string): AppConfig {
     s3Bucket: process.env.S3_BUCKET,
     s3PresignExpiresSeconds: readNumber(process.env.S3_PRESIGN_EXPIRES_SECONDS),
     s3UploadPrefix: process.env.S3_UPLOAD_PREFIX,
+
+    firebaseProjectId: process.env.FIREBASE_PROJECT_ID,
+    firebaseClientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+    firebasePrivateKey: process.env.FIREBASE_PRIVATE_KEY,
   };
 }

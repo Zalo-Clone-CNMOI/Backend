@@ -1,0 +1,304 @@
+# ================================================
+# Docker Compose for Production Deployment
+# ================================================
+# Usage: docker compose -f docker-compose.prod.yml up -d
+# ================================================
+
+version: '3.8'
+name: zalo-clone-prod
+
+services:
+  # ================================
+  # Infrastructure Services
+  # ================================
+  
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.1
+    container_name: zalo_zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_logs:/var/lib/zookeeper/log
+    networks:
+      - zalo_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: zalo_kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - zalo_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:29092"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: zalo_redis
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - zalo_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: zalo_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-zaloclone}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    networks:
+      - zalo_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d zaloclone"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  scylla:
+    image: scylladb/scylla:5.4
+    container_name: zalo_scylla
+    command: ["--smp", "2", "--memory", "1G", "--overprovisioned", "1"]
+    volumes:
+      - scylla_data:/var/lib/scylla
+    networks:
+      - zalo_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "cqlsh", "-e", "describe cluster"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  # ================================
+  # Application Services
+  # ================================
+
+  bff-service:
+    image: ${DOCKER_REGISTRY:-ghcr.io}/${DOCKER_IMAGE_PREFIX:-zalo-clone}/bff-service:${IMAGE_TAG:-latest}
+    container_name: zalo_bff_service
+    build:
+      context: .
+      dockerfile: apps/bff-service/Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      # Service URLs (internal Docker network)
+      SSO_SERVICE_URL: http://sso-service:5001
+      INTERACTION_SERVICE_URL: http://interaction-service:5004
+      # JWT
+      JWT_SECRET: ${JWT_SECRET}
+      # CORS
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      # Kafka
+      KAFKA_BROKERS: kafka:29092
+      KAFKA_CLIENT_ID: bff-service
+      # Redis
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "${BFF_PORT:-5000}:5000"
+    networks:
+      - zalo_network
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  sso-service:
+    image: ${DOCKER_REGISTRY:-ghcr.io}/${DOCKER_IMAGE_PREFIX:-zalo-clone}/sso-service:${IMAGE_TAG:-latest}
+    container_name: zalo_sso_service
+    build:
+      context: .
+      dockerfile: apps/sso-service/Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: 5001
+      SERVICE_NAME: sso-service
+      # JWT
+      JWT_SECRET: ${JWT_SECRET}
+      # Database
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-zaloclone}
+      # Firebase
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID}
+      FIREBASE_CLIENT_EMAIL: ${FIREBASE_CLIENT_EMAIL}
+      FIREBASE_PRIVATE_KEY: ${FIREBASE_PRIVATE_KEY}
+      # Redis
+      REDIS_URL: redis://redis:6379
+      # CORS
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+    networks:
+      - zalo_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  interaction-service:
+    image: ${DOCKER_REGISTRY:-ghcr.io}/${DOCKER_IMAGE_PREFIX:-zalo-clone}/interaction-service:${IMAGE_TAG:-latest}
+    container_name: zalo_interaction_service
+    build:
+      context: .
+      dockerfile: apps/interaction-service/Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: 5004
+      SERVICE_NAME: interaction-service
+      # JWT
+      JWT_SECRET: ${JWT_SECRET}
+      # Database
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-zaloclone}
+      # Kafka
+      KAFKA_BROKERS: kafka:29092
+      KAFKA_CLIENT_ID: interaction-service
+      # Redis
+      REDIS_URL: redis://redis:6379
+      # Scylla
+      SCYLLA_CONTACT_POINTS: scylla
+      SCYLLA_LOCAL_DATACENTER: datacenter1
+      SCYLLA_KEYSPACE: chat
+      # CORS
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+    networks:
+      - zalo_network
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      scylla:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5004/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # ================================
+  # Reverse Proxy (Optional - Nginx)
+  # ================================
+  
+  nginx:
+    image: nginx:alpine
+    container_name: zalo_nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infra/nginx/ssl:/etc/nginx/ssl:ro
+    networks:
+      - zalo_network
+    depends_on:
+      - bff-service
+    restart: unless-stopped
+    profiles:
+      - with-nginx
+
+# ================================
+# Volumes
+# ================================
+volumes:
+  zookeeper_data:
+    driver: local
+  zookeeper_logs:
+    driver: local
+  kafka_data:
+    driver: local
+  redis_data:
+    driver: local
+  postgres_data:
+    driver: local
+  scylla_data:
+    driver: local
+
+# ================================
+# Networks
+# ================================
+networks:
+  zalo_network:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.28.0.0/16

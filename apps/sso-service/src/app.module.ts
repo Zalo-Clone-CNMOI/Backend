@@ -20,7 +20,7 @@ import { ThrottlerModule, seconds } from '@nestjs/throttler';
     UsersModule,
     ThrottlerModule.forRoot({
       throttlers: [{ limit: 5, ttl: seconds(60) }],
-      storage: new ThrottlerStorageRedisService(),
+      storage: new ThrottlerStorageRedisService(process.env.REDIS_URL || 'redis://redis:6379'),
     }),
   ],
   controllers: [HealthController],

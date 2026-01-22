@@ -69,7 +69,6 @@ $PKG_MANAGER update -y
 # ================================
 log_info "Installing essential packages..."
 $PKG_MANAGER install -y \
-    curl \
     wget \
     git \
     htop \

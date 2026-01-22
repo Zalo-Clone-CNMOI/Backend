@@ -4,14 +4,14 @@
 # Usage: docker compose -f docker-compose.prod.yml up -d
 # ================================================
 
-version: '3.8'
+version: "3.8"
 name: zalo-clone-prod
 
 services:
   # ================================
   # Infrastructure Services
   # ================================
-  
+
   zookeeper:
     image: confluentinc/cp-zookeeper:7.6.1
     container_name: zalo_zookeeper
@@ -51,7 +51,13 @@ services:
       - zalo_network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:29092"]
+      test:
+        [
+          "CMD",
+          "kafka-broker-api-versions",
+          "--bootstrap-server",
+          "localhost:29092",
+        ]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -91,10 +97,32 @@ services:
       timeout: 10s
       retries: 5
 
+  migration:
+    build:
+      context: .
+      dockerfile: Dockerfile.migration
+    container_name: zalo_migration
+    environment:
+      NODE_ENV: production
+      # Database
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      DB_NAME: ${POSTGRES_DB:-zaloclone}
+    networks:
+      - zalo_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    profiles:
+      - migration
+
   scylla:
     image: scylladb/scylla:5.4
     container_name: zalo_scylla
-    command: ["--smp", "2", "--memory", "1G", "--overprovisioned", "1"]
+    command: ["--smp", "1", "--memory", "512M", "--overprovisioned", "1"]
     volumes:
       - scylla_data:/var/lib/scylla
     networks:
@@ -143,7 +171,15 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/api/health"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:5000/api/health",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -151,10 +187,10 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.5'
+          cpus: "0.5"
           memory: 512M
         reservations:
-          cpus: '0.25'
+          cpus: "0.25"
           memory: 256M
 
   sso-service:
@@ -171,6 +207,7 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       # Database
       DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-zaloclone}
+      
       # Firebase
       FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID}
       FIREBASE_CLIENT_EMAIL: ${FIREBASE_CLIENT_EMAIL}
@@ -179,6 +216,11 @@ services:
       REDIS_URL: redis://redis:6379
       # CORS
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      DB_NAME: ${POSTGRES_DB:-zaloclone}
     networks:
       - zalo_network
     depends_on:
@@ -188,7 +230,15 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5001/api/health"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:5001/api/health",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -196,10 +246,10 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.5'
+          cpus: "0.5"
           memory: 512M
         reservations:
-          cpus: '0.25'
+          cpus: "0.25"
           memory: 256M
 
   interaction-service:
@@ -227,6 +277,11 @@ services:
       SCYLLA_KEYSPACE: chat
       # CORS
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      DB_NAME: ${POSTGRES_DB:-zaloclone}
     networks:
       - zalo_network
     depends_on:
@@ -240,7 +295,15 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5004/api/health"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:5004/api/health",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -248,16 +311,16 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.5'
+          cpus: "0.5"
           memory: 512M
         reservations:
-          cpus: '0.25'
+          cpus: "0.25"
           memory: 256M
 
   # ================================
   # Reverse Proxy (Optional - Nginx)
   # ================================
-  
+
   nginx:
     image: nginx:alpine
     container_name: zalo_nginx

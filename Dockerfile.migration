@@ -1,0 +1,23 @@
+# ===========================
+# Dockerfile for Database Migration
+# ===========================
+FROM node:20-alpine
+
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+WORKDIR /app
+
+# Copy package files
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+
+# Install dependencies (including dev for ts-node)
+RUN pnpm install --frozen-lockfile
+
+# Copy source code
+COPY tsconfig.json tsconfig.build.json nest-cli.json ./
+COPY libs ./libs
+COPY migrations ./migrations
+
+# Default command - run migrations
+CMD ["sh", "-c", "echo 'Running migrations...' && npx ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js migration:run -d libs/database/src/data-source.ts && echo 'Migration completed!'"]

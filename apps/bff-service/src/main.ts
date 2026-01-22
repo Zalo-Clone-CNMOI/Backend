@@ -30,7 +30,6 @@ async function bootstrap() {
   );
 
   // Swagger documentation
-  if (process.env.NODE_ENV !== 'production') {
     const config = new DocumentBuilder()
       .setTitle('BFF Service API')
       .setDescription(
@@ -50,7 +49,6 @@ async function bootstrap() {
     const document = SwaggerModule.createDocument(app, config);
     SwaggerModule.setup('docs', app, document);
     logger.log('Swagger documentation available at /docs');
-  }
 
   app.useGlobalInterceptors(new TransformResponseInterceptor());
 

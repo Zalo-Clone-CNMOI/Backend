@@ -10,7 +10,7 @@ import { FriendsService } from './friends.service';
       useFactory: (configService: ConfigService) => ({
         baseUrl:
           configService.get<string>('INTERACTION_SERVICE_URL') ||
-          'http://localhost:5004/api',
+          'http://interaction-service:5004/api',
       }),
       inject: [ConfigService],
     }),

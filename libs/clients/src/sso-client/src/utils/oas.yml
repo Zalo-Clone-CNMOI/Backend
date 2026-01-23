@@ -4,6 +4,8 @@ info:
   version: 1.0.0
   description: SSO Service for authentication and user management with phone-based authentication
 servers:
+  - url: http://sso-service:5001/api
+    description: Docker internal service (default)
   - url: http://localhost:5001/api
     description: Local development server
 paths:

@@ -6,6 +6,8 @@ info:
 servers:
   - url: http://localhost:5004/api
     description: Local development server
+  - url: http://interaction-service:5004/api
+    description: Docker internal service (default)
 paths:
   /friends:
     get:

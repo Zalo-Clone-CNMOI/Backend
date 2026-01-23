@@ -478,6 +478,12 @@ export interface RegisterDto {
      */
     'firebaseIdToken': string;
     /**
+     * Password (min 8 chars, must contain uppercase, lowercase, number)
+     * @type {string}
+     * @memberof RegisterDto
+     */
+    'password': string;
+    /**
      * Full name
      * @type {string}
      * @memberof RegisterDto

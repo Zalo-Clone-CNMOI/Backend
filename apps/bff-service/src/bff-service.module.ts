@@ -21,17 +21,17 @@ import { LoggerModule } from '@libs/logger';
     SsoClientModule.registerAsync({
       useFactory: (configService: ConfigService) => ({
         baseUrl:
-          configService.get<string>('SSO_API_URL') ||
-          'http://localhost:5001/api',
+          configService.get<string>('SSO_SERVICE_URL') ||
+          'http://sso-service:5001/api',
       }),
       inject: [ConfigService],
     }),
     ThrottlerModule.forRoot({
       throttlers: [{ limit: 5, ttl: seconds(60) }],
-      storage: new ThrottlerStorageRedisService(process.env.REDIS_URL || 'redis://redis:6379'),
+      storage: new ThrottlerStorageRedisService(
+        process.env.REDIS_URL || 'redis://redis:6379',
+      ),
     }),
-    AuthModule,
-    UsersModule,
     FriendsModule,
     ConversationsModule,
   ],

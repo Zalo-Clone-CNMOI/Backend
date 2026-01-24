@@ -77,25 +77,9 @@ services:
       timeout: 10s
       retries: 5
 
-  postgres:
-    image: postgres:15-alpine
-    container_name: zalo_postgres
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-zaloclone}
-      PGDATA: /var/lib/postgresql/data/pgdata
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./infra/postgres/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
-    networks:
-      - zalo_network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d zaloclone"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
+  # postgres:
+  #   Disabled - Using AWS RDS instead
+  #   RDS Endpoint: database-1.cda2o0ikkgnf.ap-southeast-1.rds.amazonaws.com:5432
 
   migration:
     build:
@@ -104,17 +88,14 @@ services:
     container_name: zalo_migration
     environment:
       NODE_ENV: production
-      # Database
-      DB_HOST: postgres
+      # Database - AWS RDS
+      DB_HOST: database-1.cda2o0ikkgnf.ap-southeast-1.rds.amazonaws.com
       DB_PORT: 5432
       DB_USERNAME: ${POSTGRES_USER:-postgres}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      DB_NAME: ${POSTGRES_DB:-zaloclone}
+      DB_NAME: ${POSTGRES_DB:-postgres}
     networks:
       - zalo_network
-    depends_on:
-      postgres:
-        condition: service_healthy
     restart: "no"
     profiles:
       - migration
@@ -210,8 +191,8 @@ services:
       INTERACTION_SERVICE_URL: http://interaction-service:5004/api
       # JWT
       JWT_SECRET: ${JWT_SECRET}
-      # Database
-      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-zaloclone}
+      # Database - AWS RDS
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@database-1.cda2o0ikkgnf.ap-southeast-1.rds.amazonaws.com:5432/${POSTGRES_DB:-postgres}
 
       # Firebase
       FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID}
@@ -221,16 +202,14 @@ services:
       REDIS_URL: redis://redis:6379
       # CORS
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
-      DB_HOST: postgres
+      DB_HOST: database-1.cda2o0ikkgnf.ap-southeast-1.rds.amazonaws.com
       DB_PORT: 5432
       DB_USERNAME: ${POSTGRES_USER:-postgres}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      DB_NAME: ${POSTGRES_DB:-zaloclone}
+      DB_NAME: ${POSTGRES_DB:-postgres}
     networks:
       - zalo_network
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
     restart: unless-stopped
@@ -273,8 +252,8 @@ services:
       INTERACTION_SERVICE_URL: http://interaction-service:5004/api
       # JWT
       JWT_SECRET: ${JWT_SECRET}
-      # Database
-      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-zaloclone}
+      # Database - AWS RDS
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@database-1.cda2o0ikkgnf.ap-southeast-1.rds.amazonaws.com:5432/${POSTGRES_DB:-postgres}
       # Kafka
       KAFKA_BROKERS: kafka:29092
       KAFKA_CLIENT_ID: interaction-service
@@ -286,17 +265,15 @@ services:
       SCYLLA_KEYSPACE: chat
       # CORS
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
-      DB_HOST: postgres
+      DB_HOST: database-1.cda2o0ikkgnf.ap-southeast-1.rds.amazonaws.com
       DB_PORT: 5432
       DB_USERNAME: ${POSTGRES_USER:-postgres}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      DB_NAME: ${POSTGRES_DB:-zaloclone}
+      DB_NAME: ${POSTGRES_DB:-postgres}
     networks:
       - zalo_network
     depends_on:
       kafka:
-        condition: service_healthy
-      postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -359,8 +336,8 @@ volumes:
     driver: local
   redis_data:
     driver: local
-  postgres_data:
-    driver: local
+  # postgres_data:  # Removed - Using AWS RDS
+  #   driver: local
   scylla_data:
     driver: local
 

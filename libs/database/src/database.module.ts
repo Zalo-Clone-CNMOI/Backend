@@ -33,6 +33,9 @@ export const entities = [
   NotificationLog,
 ];
 
+const useSsl = process.env.DB_SSL === 'true';
+
+
 @Module({
   imports: [
     TypeOrmModule.forRootAsync({
@@ -44,6 +47,7 @@ export const entities = [
         username: config.postgresUser ?? 'postgres',
         password: config.postgresPassword ?? 'postgres',
         database: config.postgresDatabase ?? 'zaloclone',
+        ssl: { rejectUnauthorized: false },
         entities,
         synchronize: config.nodeEnv === 'development', // Only sync in dev
         logging: config.nodeEnv === 'development',

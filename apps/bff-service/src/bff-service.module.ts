@@ -32,6 +32,8 @@ import { LoggerModule } from '@libs/logger';
         process.env.REDIS_URL || 'redis://redis:6379',
       ),
     }),
+    AuthModule,
+    UsersModule,
     FriendsModule,
     ConversationsModule,
   ],

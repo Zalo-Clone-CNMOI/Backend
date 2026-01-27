@@ -40,6 +40,9 @@ jobs:
       bff: ${{ steps.changes.outputs.bff }}
       sso: ${{ steps.changes.outputs.sso }}
       interaction: ${{ steps.changes.outputs.interaction }}
+      media: ${{ steps.changes.outputs.media }}
+      chat: ${{ steps.changes.outputs.chat }}
+      ws: ${{ steps.changes.outputs.ws }}
       libs: ${{ steps.changes.outputs.libs }}
       any_service: ${{ steps.changes.outputs.any_service }}
     steps:
@@ -69,6 +72,21 @@ jobs:
               echo "interaction=true" >> $GITHUB_OUTPUT
             else
               echo "interaction=false" >> $GITHUB_OUTPUT
+            fi
+            if [ "$SERVICE" = "all" ] || [ "$SERVICE" = "media" ]; then
+              echo "media=true" >> $GITHUB_OUTPUT
+            else
+              echo "media=false" >> $GITHUB_OUTPUT
+            fi
+            if [ "$SERVICE" = "all" ] || [ "$SERVICE" = "chat" ]; then
+              echo "chat=true" >> $GITHUB_OUTPUT
+            else
+              echo "chat=false" >> $GITHUB_OUTPUT
+            fi
+            if [ "$SERVICE" = "all" ] || [ "$SERVICE" = "ws" ]; then
+              echo "ws=true" >> $GITHUB_OUTPUT
+            else
+              echo "ws=false" >> $GITHUB_OUTPUT
             fi
             echo "libs=false" >> $GITHUB_OUTPUT
             echo "any_service=true" >> $GITHUB_OUTPUT
@@ -104,6 +122,24 @@ jobs:
               echo "interaction=true" >> $GITHUB_OUTPUT
             else
               echo "interaction=false" >> $GITHUB_OUTPUT
+            fi
+            
+            if echo "$CHANGED_FILES" | grep -q "^apps/media-service/" || [ "$LIBS_CHANGED" = "true" ]; then
+              echo "media=true" >> $GITHUB_OUTPUT
+            else
+              echo "media=false" >> $GITHUB_OUTPUT
+            fi
+            
+            if echo "$CHANGED_FILES" | grep -q "^apps/chat-service/" || [ "$LIBS_CHANGED" = "true" ]; then
+              echo "chat=true" >> $GITHUB_OUTPUT
+            else
+              echo "chat=false" >> $GITHUB_OUTPUT
+            fi
+            
+            if echo "$CHANGED_FILES" | grep -q "^apps/ws-gateway/" || [ "$LIBS_CHANGED" = "true" ]; then
+              echo "ws=true" >> $GITHUB_OUTPUT
+            else
+              echo "ws=false" >> $GITHUB_OUTPUT
             fi
             
             # Check if any service changed
@@ -280,19 +316,139 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  build-media:
+    name: Build Media Service
+    runs-on: ubuntu-latest
+    needs: [detect-changes, lint-test]
+    if: needs.detect-changes.outputs.media == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.DOCKER_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}/media-service
+          tags: |
+            type=sha,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/media-service/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-chat:
+    name: Build Chat Service
+    runs-on: ubuntu-latest
+    needs: [detect-changes, lint-test]
+    if: needs.detect-changes.outputs.chat == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.DOCKER_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}/chat-service
+          tags: |
+            type=sha,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/chat-service/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-ws:
+    name: Build WS Gateway
+    runs-on: ubuntu-latest
+    needs: [detect-changes, lint-test]
+    if: needs.detect-changes.outputs.ws == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.DOCKER_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}/ws-gateway
+          tags: |
+            type=sha,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/ws-gateway/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   # ================================
   # Job 4: Deploy to EC2
   # ================================
   deploy:
     name: Deploy to EC2
     runs-on: ubuntu-latest
-    needs: [detect-changes, build-bff, build-sso, build-interaction]
+    needs: [detect-changes, build-bff, build-sso, build-interaction, build-media, build-chat, build-ws]
     if: |
       always() && 
       needs.detect-changes.outputs.any_service == 'true' &&
       (needs.build-bff.result == 'success' || needs.build-bff.result == 'skipped') &&
       (needs.build-sso.result == 'success' || needs.build-sso.result == 'skipped') &&
-      (needs.build-interaction.result == 'success' || needs.build-interaction.result == 'skipped')
+      (needs.build-interaction.result == 'success' || needs.build-interaction.result == 'skipped') &&
+      (needs.build-media.result == 'success' || needs.build-media.result == 'skipped') &&
+      (needs.build-chat.result == 'success' || needs.build-chat.result == 'skipped') &&
+      (needs.build-ws.result == 'success' || needs.build-ws.result == 'skipped')
     environment: production
     steps:
       - name: Checkout code
@@ -319,6 +475,9 @@ jobs:
           BFF_CHANGED: ${{ needs.detect-changes.outputs.bff }}
           SSO_CHANGED: ${{ needs.detect-changes.outputs.sso }}
           INTERACTION_CHANGED: ${{ needs.detect-changes.outputs.interaction }}
+          MEDIA_CHANGED: ${{ needs.detect-changes.outputs.media }}
+          CHAT_CHANGED: ${{ needs.detect-changes.outputs.chat }}
+          WS_CHANGED: ${{ needs.detect-changes.outputs.ws }}
         run: |
           ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'DEPLOY_SCRIPT'
             set -e
@@ -356,6 +515,24 @@ jobs:
               echo "🔄 Updating Interaction Service..."
               docker compose -f docker-compose.prod.yml pull interaction-service
               SERVICES_TO_UPDATE="$SERVICES_TO_UPDATE interaction-service"
+            fi
+            
+            if [ "${{ env.MEDIA_CHANGED }}" = "true" ]; then
+              echo "🔄 Updating Media Service..."
+              docker compose -f docker-compose.prod.yml pull media-service
+              SERVICES_TO_UPDATE="$SERVICES_TO_UPDATE media-service"
+            fi
+            
+            if [ "${{ env.CHAT_CHANGED }}" = "true" ]; then
+              echo "🔄 Updating Chat Service..."
+              docker compose -f docker-compose.prod.yml pull chat-service
+              SERVICES_TO_UPDATE="$SERVICES_TO_UPDATE chat-service"
+            fi
+            
+            if [ "${{ env.WS_CHANGED }}" = "true" ]; then
+              echo "🔄 Updating WS Gateway..."
+              docker compose -f docker-compose.prod.yml pull ws-gateway
+              SERVICES_TO_UPDATE="$SERVICES_TO_UPDATE ws-gateway"
             fi
             
             if [ -n "$SERVICES_TO_UPDATE" ]; then

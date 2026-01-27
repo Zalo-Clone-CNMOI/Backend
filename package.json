@@ -44,6 +44,7 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./apps/be/test/jest-e2e.json",
     "typeorm": "npx ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js",
+    "seed": "npx ts-node -r tsconfig-paths/register libs/database/src/seed.ts",
     "codegen:sso": "openapi-generator-cli generate --generator-key sso-client",
     "codegen:interaction": "openapi-generator-cli generate --generator-key interaction-client",
     "migration:generate": "npm run typeorm -- -d libs/database/src/data-source.ts migration:generate ./migrations/$npm_config_name",

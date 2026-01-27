@@ -119,6 +119,12 @@
       "@libs/redis/*": [
         "libs/redis/src/*"
       ],
+      "@libs/s3": [
+        "libs/s3/src"
+      ],
+      "@libs/s3/*": [
+        "libs/s3/src/*"
+      ],
       "@libs/scylla": [
         "libs/scylla/src"
       ],

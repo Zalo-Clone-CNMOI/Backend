@@ -14,6 +14,15 @@ import { MessageRepository } from './repositories/message.repository';
           contactPoints: config.scyllaContactPoints,
           localDataCenter: config.scyllaLocalDatacenter,
           keyspace: config.scyllaKeyspace,
+          pooling: {
+            coreConnectionsPerHost: {
+              '0': 2,
+              '1': 2,
+            },
+          },
+          socketOptions: {
+            readTimeout: 5000,
+          },
         });
         await client.connect();
         return client;

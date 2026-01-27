@@ -22,11 +22,15 @@ export class MediaController {
   }
 
   @Post('upload/confirm')
-  confirmUpload(
+  async confirmUpload(
     @Body() body: ConfirmUploadRequestDto,
     @Headers('x-user-id') userId?: string,
-  ): ConfirmUploadResponseDto {
-    this.media.confirmUploaded(body.key, userId);
-    return { ok: true };
+  ): Promise<ConfirmUploadResponseDto> {
+    const result = await this.media.confirmUploaded(
+      body.key,
+      body.contentType,
+      userId,
+    );
+    return { ok: true, thumbnailKey: result.thumbnailKey };
   }
 }

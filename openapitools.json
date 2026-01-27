@@ -29,6 +29,19 @@
           "useSingleRequestParameter": true,
           "withNodeImports": true
         }
+      },
+      "chat-client": {
+        "generatorName": "typescript-axios",
+        "inputSpec": "libs/clients/src/chat-client/src/utils/oas.yml",
+        "output": "libs/clients/src/chat-client/src/client/generated",
+        "additionalProperties": {
+          "stringEnums": true,
+          "supportsES6": true,
+          "typescriptThreePlus": true,
+          "enumPropertyNaming": "original",
+          "useSingleRequestParameter": true,
+          "withNodeImports": true
+        }
       }
     }
   }

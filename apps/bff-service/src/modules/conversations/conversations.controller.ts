@@ -8,7 +8,12 @@ import {
   Param,
   Query,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { ConversationsService } from './conversations.service';
 import { AccessToken } from '@app/decorator';
 import {
@@ -28,6 +33,12 @@ export class ConversationsController {
 
   @Get()
   @ApiOperation({ summary: 'Get all conversations' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of conversations retrieved successfully',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 400, description: 'Validation error' })
   async getConversations(
     @AccessToken() token: string,
     @Query('page') page?: number,
@@ -38,6 +49,13 @@ export class ConversationsController {
 
   @Get(':conversationId')
   @ApiOperation({ summary: 'Get conversation by ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Conversation details retrieved successfully',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Access denied' })
+  @ApiResponse({ status: 404, description: 'Conversation not found' })
   async getConversationById(
     @AccessToken() token: string,
     @Param('conversationId') conversationId: string,
@@ -47,6 +65,12 @@ export class ConversationsController {
 
   @Post('group')
   @ApiOperation({ summary: 'Create group conversation' })
+  @ApiResponse({
+    status: 201,
+    description: 'Group conversation created successfully',
+  })
+  @ApiResponse({ status: 400, description: 'Validation error' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   async createGroupConversation(
     @AccessToken() token: string,
     @Body() dto: CreateGroupConversationDto,
@@ -56,6 +80,13 @@ export class ConversationsController {
 
   @Post('direct')
   @ApiOperation({ summary: 'Create or get direct conversation' })
+  @ApiResponse({
+    status: 201,
+    description: 'Direct conversation created or retrieved successfully',
+  })
+  @ApiResponse({ status: 400, description: 'Validation error' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'User not found' })
   async createDirectConversation(
     @AccessToken() token: string,
     @Body() dto: CreateDirectConversationDto,
@@ -65,6 +96,14 @@ export class ConversationsController {
 
   @Patch(':conversationId')
   @ApiOperation({ summary: 'Update conversation' })
+  @ApiResponse({
+    status: 200,
+    description: 'Conversation updated successfully',
+  })
+  @ApiResponse({ status: 400, description: 'Validation error' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  @ApiResponse({ status: 404, description: 'Conversation not found' })
   async updateConversation(
     @AccessToken() token: string,
     @Param('conversationId') conversationId: string,
@@ -79,6 +118,14 @@ export class ConversationsController {
 
   @Post(':conversationId/members')
   @ApiOperation({ summary: 'Add members to conversation' })
+  @ApiResponse({
+    status: 200,
+    description: 'Members added successfully',
+  })
+  @ApiResponse({ status: 400, description: 'Validation error' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  @ApiResponse({ status: 404, description: 'Conversation not found' })
   async addMembers(
     @AccessToken() token: string,
     @Param('conversationId') conversationId: string,
@@ -89,6 +136,13 @@ export class ConversationsController {
 
   @Delete(':conversationId/members/:memberId')
   @ApiOperation({ summary: 'Remove member from conversation' })
+  @ApiResponse({
+    status: 200,
+    description: 'Member removed successfully',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  @ApiResponse({ status: 404, description: 'Conversation or member not found' })
   async removeMember(
     @AccessToken() token: string,
     @Param('conversationId') conversationId: string,
@@ -103,6 +157,13 @@ export class ConversationsController {
 
   @Post(':conversationId/leave')
   @ApiOperation({ summary: 'Leave conversation' })
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully left conversation',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Cannot leave conversation' })
+  @ApiResponse({ status: 404, description: 'Conversation not found' })
   async leaveConversation(
     @AccessToken() token: string,
     @Param('conversationId') conversationId: string,
@@ -112,6 +173,14 @@ export class ConversationsController {
 
   @Patch(':conversationId/members/:memberId/role')
   @ApiOperation({ summary: 'Update member role' })
+  @ApiResponse({
+    status: 200,
+    description: 'Member role updated successfully',
+  })
+  @ApiResponse({ status: 400, description: 'Validation error' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  @ApiResponse({ status: 404, description: 'Conversation or member not found' })
   async updateMemberRole(
     @AccessToken() token: string,
     @Param('conversationId') conversationId: string,
@@ -128,6 +197,13 @@ export class ConversationsController {
 
   @Patch(':conversationId/settings')
   @ApiOperation({ summary: 'Update my settings' })
+  @ApiResponse({
+    status: 200,
+    description: 'Settings updated successfully',
+  })
+  @ApiResponse({ status: 400, description: 'Validation error' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Conversation not found' })
   async updateMySettings(
     @AccessToken() token: string,
     @Param('conversationId') conversationId: string,
@@ -142,6 +218,12 @@ export class ConversationsController {
 
   @Post(':conversationId/read')
   @ApiOperation({ summary: 'Mark conversation as read' })
+  @ApiResponse({
+    status: 200,
+    description: 'Conversation marked as read',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Conversation not found' })
   async markAsRead(
     @AccessToken() token: string,
     @Param('conversationId') conversationId: string,

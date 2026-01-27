@@ -3,6 +3,15 @@ export const WsEvents = {
   ChatLeave: 'chat:leave',
   ChatSend: 'chat:send',
   ChatMessage: 'chat:message',
+  ChatEdit: 'chat:edit',
+  ChatMessageUpdated: 'chat:message:updated',
+  ChatDelete: 'chat:delete',
+  ChatMessageDeleted: 'chat:message:deleted',
+  ChatReact: 'chat:react',
+  ChatUnreact: 'chat:unreact',
+  ChatReactionAdded: 'chat:reaction:added',
+  ChatReactionRemoved: 'chat:reaction:removed',
+  ChatTyping: 'chat:typing',
 
   PresenceHeartbeat: 'presence:heartbeat',
   PresenceUpdate: 'presence:update',
@@ -24,11 +33,22 @@ export interface WsChatJoinPayload {
   conversation_id: string;
 }
 
+export interface WsMessageAttachment {
+  key: string;
+  type: 'image' | 'video' | 'audio' | 'document';
+  name: string;
+  size: number;
+  content_type: string;
+  thumbnail_key?: string;
+}
+
 export interface WsChatSendPayload {
   message_id: string;
   conversation_id: string;
   body: string;
   sent_at: number;
+  attachments?: WsMessageAttachment[];
+  reply_to_message_id?: string;
 }
 
 export interface WsChatMessagePayload {
@@ -37,6 +57,63 @@ export interface WsChatMessagePayload {
   sender_id: string;
   body: string;
   created_at: number;
+  attachments?: WsMessageAttachment[];
+  reply_to_message_id?: string;
+}
+
+export interface WsChatEditPayload {
+  message_id: string;
+  conversation_id: string;
+  new_body: string;
+}
+
+export interface WsChatMessageUpdatedPayload {
+  message_id: string;
+  conversation_id: string;
+  sender_id: string;
+  body: string;
+  edited_at: number;
+}
+
+export interface WsChatDeletePayload {
+  message_id: string;
+  conversation_id: string;
+}
+
+export interface WsChatMessageDeletedPayload {
+  message_id: string;
+  conversation_id: string;
+  sender_id: string;
+  deleted_at: number;
+}
+
+export interface WsChatReactPayload {
+  message_id: string;
+  conversation_id: string;
+  reaction_type: 'like' | 'love' | 'haha' | 'wow' | 'sad' | 'angry';
+}
+
+export interface WsChatUnreactPayload {
+  message_id: string;
+  conversation_id: string;
+}
+
+export interface WsChatReactionAddedPayload {
+  message_id: string;
+  conversation_id: string;
+  user_id: string;
+  reaction_type: 'like' | 'love' | 'haha' | 'wow' | 'sad' | 'angry';
+}
+
+export interface WsChatReactionRemovedPayload {
+  message_id: string;
+  conversation_id: string;
+  user_id: string;
+}
+
+export interface WsChatTypingPayload {
+  conversation_id: string;
+  is_typing: boolean;
 }
 
 export interface WsPresenceHeartbeatPayload {

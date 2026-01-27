@@ -1,6 +1,14 @@
 export const KafkaTopics = {
   ChatMessageSend: 'chat.message.send',
   ChatMessageCreated: 'chat.message.created',
+  ChatMessageEdit: 'chat.message.edit',
+  ChatMessageUpdated: 'chat.message.updated',
+  ChatMessageDelete: 'chat.message.delete',
+  ChatMessageDeleted: 'chat.message.deleted',
+  ChatReactionAdd: 'chat.reaction.add',
+  ChatReactionAdded: 'chat.reaction.added',
+  ChatReactionRemove: 'chat.reaction.remove',
+  ChatReactionRemoved: 'chat.reaction.removed',
 
   PresenceConnect: 'presence.connect',
   PresenceDisconnect: 'presence.disconnect',
@@ -9,6 +17,7 @@ export const KafkaTopics = {
 
   MediaUploadRequested: 'media.upload.requested',
   MediaUploaded: 'media.uploaded',
+  MediaThumbnailGenerated: 'media.thumbnail.generated',
 
   NotificationRequested: 'notification.requested',
   NotificationSent: 'notification.sent',

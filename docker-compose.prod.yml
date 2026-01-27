@@ -77,10 +77,6 @@ services:
       timeout: 10s
       retries: 5
 
-  # postgres:
-  #   Disabled - Using AWS RDS instead
-  #   RDS Endpoint: database-1.cda2o0ikkgnf.ap-southeast-1.rds.amazonaws.com:5432
-
   migration:
     build:
       context: .
@@ -193,7 +189,7 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       # Database - AWS RDS
       DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@database-1.cda2o0ikkgnf.ap-southeast-1.rds.amazonaws.com:5432/${POSTGRES_DB:-postgres}
-
+      DB_SSL: "true"
       # Firebase
       FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID}
       FIREBASE_CLIENT_EMAIL: ${FIREBASE_CLIENT_EMAIL}
@@ -259,6 +255,7 @@ services:
       KAFKA_CLIENT_ID: interaction-service
       # Redis
       REDIS_URL: redis://redis:6379
+      DB_SSL: "true"
       # Scylla
       SCYLLA_CONTACT_POINTS: scylla
       SCYLLA_LOCAL_DATACENTER: datacenter1
@@ -290,6 +287,176 @@ services:
           "--spider",
           "http://localhost:5004/api/health",
         ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+
+  scylla-init:
+    image: scylladb/scylla:5.4
+    container_name: zalo_scylla_init
+    volumes:
+      - ./infra/scylla:/infra/scylla
+    command: >
+      /bin/bash -c "
+      echo 'Waiting for ScyllaDB to be ready...';
+      while ! cqlsh scylla 9042 -e 'DESCRIBE CLUSTER'; do
+        sleep 2;
+      done;
+      echo 'ScyllaDB is ready! Initializing schema...';
+      cqlsh scylla 9042 -f /infra/scylla/schema.cql;
+      echo 'Schema initialized.';
+      "
+    depends_on:
+      scylla:
+        condition: service_healthy
+    networks:
+      - zalo_network
+    restart: "no"
+    profiles:
+      - init
+
+  media-service:
+    image: ${DOCKER_REGISTRY:-ghcr.io}/${DOCKER_IMAGE_PREFIX:-zalo-clone}/media-service:${IMAGE_TAG:-latest}
+    container_name: zalo_media_service
+    build:
+      context: .
+      dockerfile: apps/media-service/Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: 3003
+      SERVICE_NAME: media-service
+      # Service URLs (internal Docker network)
+      BFF_SERVICE_URL: http://bff-service:5000/api
+      # AWS S3 (or MinIO if used locally, but for Prod assuming real S3 or compatible)
+      AWS_REGION: ap-southeast-1
+      S3_ENDPOINT: ${S3_ENDPOINT}
+      S3_BUCKET: ${S3_BUCKET}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
+      S3_FORCE_PATH_STYLE: "${S3_FORCE_PATH_STYLE:-false}"
+      S3_UPLOAD_PREFIX: ${S3_UPLOAD_PREFIX:-uploads/}
+      # Kafka
+      KAFKA_BROKERS: kafka:29092
+      KAFKA_CLIENT_ID: media-service
+    ports:
+      - "${MEDIA_PORT:-3003}:3003"
+    networks:
+      - zalo_network
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3003/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+
+  chat-service:
+    image: ${DOCKER_REGISTRY:-ghcr.io}/${DOCKER_IMAGE_PREFIX:-zalo-clone}/chat-service:${IMAGE_TAG:-latest}
+    container_name: zalo_chat_service
+    build:
+      context: .
+      dockerfile: apps/chat-service/Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: 5002
+      SERVICE_NAME: chat-service
+      # Service URLs (internal Docker network)
+      BFF_SERVICE_URL: http://bff-service:5000/api
+      # Kafka
+      KAFKA_BROKERS: kafka:29092
+      KAFKA_CLIENT_ID: chat-service
+      KAFKA_GROUP_ID: chat-service-persist
+      # Scylla
+      SCYLLA_CONTACT_POINTS: scylla
+      SCYLLA_LOCAL_DATACENTER: datacenter1
+      SCYLLA_KEYSPACE: chat
+    ports:
+      - "${CHAT_PORT:-5002}:5002"
+    networks:
+      - zalo_network
+    depends_on:
+      kafka:
+        condition: service_healthy
+      scylla:
+        condition: service_healthy
+      scylla-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5002/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+
+  ws-gateway:
+    image: ${DOCKER_REGISTRY:-ghcr.io}/${DOCKER_IMAGE_PREFIX:-zalo-clone}/ws-gateway:${IMAGE_TAG:-latest}
+    container_name: zalo_ws_gateway
+    build:
+      context: .
+      dockerfile: apps/ws-gateway/Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      SERVICE_NAME: ws-gateway
+      # Service URLs (internal Docker network)
+      BFF_SERVICE_URL: http://bff-service:5000/api
+      # JWT
+      JWT_SECRET: ${JWT_SECRET}
+      # Kafka
+      KAFKA_BROKERS: kafka:29092
+      KAFKA_CLIENT_ID: ws-gateway
+      KAFKA_GROUP_ID: ws-gateway-fanout
+      # Redis
+      REDIS_URL: redis://redis:6379
+      # Database - AWS RDS
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@database-1.cda2o0ikkgnf.ap-southeast-1.rds.amazonaws.com:5432/${POSTGRES_DB:-postgres}
+      DB_SSL: "true"
+      DB_HOST: database-1.cda2o0ikkgnf.ap-southeast-1.rds.amazonaws.com
+      DB_PORT: 5432
+      DB_USERNAME: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      DB_NAME: ${POSTGRES_DB:-postgres}
+    ports:
+      - "${WS_PORT:-3001}:3001"
+    networks:
+      - zalo_network
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3

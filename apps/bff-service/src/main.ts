@@ -30,25 +30,25 @@ async function bootstrap() {
   );
 
   // Swagger documentation
-    const config = new DocumentBuilder()
-      .setTitle('BFF Service API')
-      .setDescription(
-        'Backend for Frontend service that proxies requests to microservices',
-      )
-      .setVersion('1.0')
-      .addBearerAuth(
-        {
-          type: 'http',
-          scheme: 'bearer',
-          bearerFormat: 'JWT',
-          description: 'Enter JWT access token',
-        },
-        'BearerAuth',
-      )
-      .build();
-    const document = SwaggerModule.createDocument(app, config);
-    SwaggerModule.setup('docs', app, document);
-    logger.log('Swagger documentation available at /docs');
+  const config = new DocumentBuilder()
+    .setTitle('BFF Service API')
+    .setDescription(
+      'Backend for Frontend service that proxies requests to microservices',
+    )
+    .setVersion('1.0')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        description: 'Enter JWT access token',
+      },
+      'BearerAuth',
+    )
+    .build();
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('docs', app, document);
+  logger.log('Swagger documentation available at /docs');
 
   app.useGlobalInterceptors(new TransformResponseInterceptor());
 

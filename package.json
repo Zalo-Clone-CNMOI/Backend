@@ -46,10 +46,14 @@
     "typeorm": "npx ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js",
     "codegen:sso": "openapi-generator-cli generate --generator-key sso-client",
     "codegen:interaction": "openapi-generator-cli generate --generator-key interaction-client",
+    "codegen:chat": "openapi-generator-cli generate --generator-key chat-client",
     "migration:generate": "npm run typeorm -- -d libs/database/src/data-source.ts migration:generate ./migrations/$npm_config_name",
     "migration:up": "npm run build:all && npm run typeorm migration:run -- -d libs/database/src/data-source.ts",
     "migration:revert": "npm run typeorm -- migration:revert -d libs/database/src/data-source.ts",
-    "migration:show": "npm run typeorm -- migration:show -d libs/database/src/data-source.ts"
+    "migration:show": "npm run typeorm -- migration:show -d libs/database/src/data-source.ts",
+    "scylla:init": "docker cp infra/scylla/schema.cql zalo-clone-scylla-1:/tmp/schema.cql && docker exec -it zalo-clone-scylla-1 cqlsh -f /tmp/schema.cql",
+    "scylla:reset": "docker exec -it zalo-clone-scylla-1 cqlsh -e \"DROP KEYSPACE IF EXISTS chat;\" && pnpm run scylla:init",
+    "scylla:status": "docker exec -it zalo-clone-scylla-1 cqlsh -e \"DESCRIBE KEYSPACE chat;\""
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.758.0",
@@ -88,6 +92,7 @@
     "redis": "^4.7.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
+    "sharp": "^0.34.5",
     "socket.io": "^4.8.1",
     "typeorm": "^0.3.28",
     "uuid": "^11.0.3"

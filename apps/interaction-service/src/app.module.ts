@@ -22,7 +22,9 @@ import { FriendsModule } from './modules/friends';
     FriendsModule,
     ThrottlerModule.forRoot({
       throttlers: [{ limit: 5, ttl: seconds(60) }],
-      storage: new ThrottlerStorageRedisService(process.env.REDIS_URL || 'redis://redis:6379'),
+      storage: new ThrottlerStorageRedisService(
+        process.env.REDIS_URL || 'redis://redis:6379',
+      ),
     }),
   ],
   controllers: [HealthController],

@@ -39,7 +39,7 @@ export class SendFriendRequestDto {
 export class RespondFriendRequestDto {
   @ApiProperty({
     description: 'Accept or reject the friend request',
-    example: 'accept',
+    example: RespondFriendRequestDtoActionEnum.accept,
     enum: RespondFriendRequestDtoActionEnum,
   })
   @IsEnum(RespondFriendRequestDtoActionEnum)

@@ -12,13 +12,13 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ConversationsService } from './conversations.service';
 import { AccessToken } from '@app/decorator';
 import {
-  CreateGroupConversationDto,
-  CreateDirectConversationDto,
-  UpdateConversationDto,
   AddMembersDto,
+  CreateDirectConversationDto,
+  CreateGroupConversationDto,
+  UpdateConversationDto,
   UpdateMemberRoleDto,
   UpdateMemberSettingsDto,
-} from '@app/clients/interaction-client';
+} from './dto';
 
 @ApiTags('Conversations')
 @ApiBearerAuth('BearerAuth')

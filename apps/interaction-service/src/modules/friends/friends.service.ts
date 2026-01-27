@@ -17,6 +17,7 @@ import {
   FriendResponseDto,
   FriendRequestResponseDto,
   SentFriendRequestResponseDto,
+  RespondFriendRequestDtoActionEnum,
 } from './dto';
 import { KAFKA_CLIENT } from '@libs/kafka';
 import { ClientKafka } from '@nestjs/microservices';
@@ -247,7 +248,7 @@ export class FriendsService {
       throw BusinessException.badRequest(ErrorCode.FRIEND_REQUEST_NOT_FOUND);
     }
 
-    if (dto.action === 'accept') {
+    if (dto.action === RespondFriendRequestDtoActionEnum.accept) {
       request.status = FriendshipStatus.ACCEPTED;
       await this.friendshipRepository.save(request);
       this.logger.log(`Friend request accepted: ${request.id}`);

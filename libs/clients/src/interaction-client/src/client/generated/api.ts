@@ -677,8 +677,9 @@ export interface UpdateMemberRoleDto {
     * @enum {string}
     */
 export enum UpdateMemberRoleDtoRoleEnum {
-    admin = 'admin',
-    member = 'member'
+    OWNER = 'owner',
+    ADMIN = 'admin',
+    MEMBER = 'member',
 }
 
 /**

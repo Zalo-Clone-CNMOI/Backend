@@ -11,10 +11,7 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { FriendsService } from './friends.service';
 import { AccessToken } from '@app/decorator';
-import {
-  SendFriendRequestDto,
-  RespondFriendRequestDto,
-} from '@app/clients/interaction-client';
+import { RespondFriendRequestDto, SendFriendRequestDto } from './dto';
 
 @ApiTags('Friends')
 @ApiBearerAuth('BearerAuth')

@@ -10,7 +10,7 @@ import {
 import {
   ErrorCode,
   ConversationType,
-  ConversationRole,
+  UpdateMemberRoleDtoRoleEnum,
   UserStatus,
 } from '@app/constant';
 import {
@@ -158,8 +158,8 @@ export class ConversationsService {
         userId: memberId,
         role:
           memberId === userId
-            ? ConversationRole.OWNER
-            : ConversationRole.MEMBER,
+            ? UpdateMemberRoleDtoRoleEnum.OWNER
+            : UpdateMemberRoleDtoRoleEnum.MEMBER,
       }),
     );
 
@@ -180,7 +180,7 @@ export class ConversationsService {
     userId: string,
     dto: CreateDirectConversationDto,
   ): Promise<ConversationDetailDto> {
-    const { userId: targetUserId } = dto;
+    const { participantId: targetUserId } = dto;
 
     if (userId === targetUserId) {
       throw BusinessException.badRequest(ErrorCode.BAD_REQUEST);
@@ -228,7 +228,7 @@ export class ConversationsService {
       this.memberRepository.create({
         conversationId: savedConversation.id,
         userId: memberId,
-        role: ConversationRole.MEMBER,
+        role: UpdateMemberRoleDtoRoleEnum.MEMBER,
       }),
     );
 
@@ -268,7 +268,7 @@ export class ConversationsService {
       throw BusinessException.forbidden(ErrorCode.CONVERSATION_NOT_MEMBER);
     }
 
-    if (myMembership.role === ConversationRole.MEMBER) {
+    if (myMembership.role === UpdateMemberRoleDtoRoleEnum.MEMBER) {
       throw BusinessException.forbidden(
         ErrorCode.CONVERSATION_PERMISSION_DENIED,
       );
@@ -313,7 +313,7 @@ export class ConversationsService {
       throw BusinessException.forbidden(ErrorCode.CONVERSATION_NOT_MEMBER);
     }
 
-    if (myMembership.role === ConversationRole.MEMBER) {
+    if (myMembership.role === UpdateMemberRoleDtoRoleEnum.MEMBER) {
       throw BusinessException.forbidden(
         ErrorCode.CONVERSATION_PERMISSION_DENIED,
       );
@@ -340,7 +340,7 @@ export class ConversationsService {
       this.memberRepository.create({
         conversationId,
         userId: memberId,
-        role: ConversationRole.MEMBER,
+        role: UpdateMemberRoleDtoRoleEnum.MEMBER,
       }),
     );
 
@@ -391,21 +391,21 @@ export class ConversationsService {
     }
 
     if (userId !== memberId) {
-      if (myMembership.role === ConversationRole.MEMBER) {
+      if (myMembership.role === UpdateMemberRoleDtoRoleEnum.MEMBER) {
         throw BusinessException.forbidden(
           ErrorCode.CONVERSATION_PERMISSION_DENIED,
         );
       }
 
-      if (targetMembership.role === ConversationRole.OWNER) {
+      if (targetMembership.role === UpdateMemberRoleDtoRoleEnum.OWNER) {
         throw BusinessException.forbidden(
           ErrorCode.CONVERSATION_PERMISSION_DENIED,
         );
       }
 
       if (
-        myMembership.role === ConversationRole.ADMIN &&
-        targetMembership.role === ConversationRole.ADMIN
+        myMembership.role === UpdateMemberRoleDtoRoleEnum.ADMIN &&
+        targetMembership.role === UpdateMemberRoleDtoRoleEnum.ADMIN
       ) {
         throw BusinessException.forbidden(
           ErrorCode.CONVERSATION_PERMISSION_DENIED,
@@ -456,17 +456,18 @@ export class ConversationsService {
     const activeMembers = conversation.members.filter((m) => m.leftAt === null);
 
     if (
-      myMembership.role === ConversationRole.OWNER &&
+      myMembership.role === UpdateMemberRoleDtoRoleEnum.OWNER &&
       activeMembers.length > 1
     ) {
       // Find another admin or longest member to transfer ownership
       const newOwner =
         activeMembers.find(
-          (m) => m.userId !== userId && m.role === ConversationRole.ADMIN,
+          (m) =>
+            m.userId !== userId && m.role === UpdateMemberRoleDtoRoleEnum.ADMIN,
         ) || activeMembers.find((m) => m.userId !== userId);
 
       if (newOwner) {
-        newOwner.role = ConversationRole.OWNER;
+        newOwner.role = UpdateMemberRoleDtoRoleEnum.OWNER;
         await this.memberRepository.save(newOwner);
       }
     }
@@ -506,7 +507,10 @@ export class ConversationsService {
       (m) => m.userId === userId && m.leftAt === null,
     );
 
-    if (!myMembership || myMembership.role !== ConversationRole.OWNER) {
+    if (
+      !myMembership ||
+      myMembership.role !== UpdateMemberRoleDtoRoleEnum.OWNER
+    ) {
       throw BusinessException.forbidden(
         ErrorCode.CONVERSATION_PERMISSION_DENIED,
       );

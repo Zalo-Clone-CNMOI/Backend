@@ -1,16 +1,12 @@
 # ================================================
-# GitHub Actions - CI/CD Pipeline
-# ================================================
-# Triggers on push to main branch
-# Builds Docker images and deploys to EC2 via SSH
+# GitHub Actions - CI/CD Pipeline (Production)
 # ================================================
 
 name: CI/CD Pipeline
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
     paths:
       - 'apps/**'
       - 'libs/**'
@@ -18,10 +14,11 @@ on:
       - 'pnpm-lock.yaml'
       - 'docker-compose.prod.yml'
       - '.github/workflows/**'
+
   workflow_dispatch:
     inputs:
       service:
-        description: 'Service to deploy (all, bff, sso, interaction)'
+        description: 'Service to deploy (all, bff, sso, interaction, media, chat, ws)'
         required: false
         default: 'all'
 
@@ -29,550 +26,200 @@ env:
   DOCKER_REGISTRY: ghcr.io
   IMAGE_PREFIX: ${{ github.repository_owner }}/zalo-clone
 
+# ================================================
+# JOB 1: Detect Changes
+# ================================================
 jobs:
-  # ================================
-  # Job 1: Detect Changes
-  # ================================
   detect-changes:
-    name: Detect Changed Services
     runs-on: ubuntu-latest
     outputs:
-      bff: ${{ steps.changes.outputs.bff }}
-      sso: ${{ steps.changes.outputs.sso }}
-      interaction: ${{ steps.changes.outputs.interaction }}
-      media: ${{ steps.changes.outputs.media }}
-      chat: ${{ steps.changes.outputs.chat }}
-      ws: ${{ steps.changes.outputs.ws }}
-      libs: ${{ steps.changes.outputs.libs }}
-      any_service: ${{ steps.changes.outputs.any_service }}
+      bff: ${{ steps.detect.outputs.bff }}
+      sso: ${{ steps.detect.outputs.sso }}
+      interaction: ${{ steps.detect.outputs.interaction }}
+      media: ${{ steps.detect.outputs.media }}
+      chat: ${{ steps.detect.outputs.chat }}
+      ws: ${{ steps.detect.outputs.ws }}
+      any_service: ${{ steps.detect.outputs.any_service }}
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 2
 
-      - name: Check for changes
-        id: changes
+      - id: detect
         run: |
-          # Get changed files
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            # Manual trigger - deploy based on input
             SERVICE="${{ github.event.inputs.service }}"
-            if [ "$SERVICE" = "all" ] || [ "$SERVICE" = "bff" ]; then
-              echo "bff=true" >> $GITHUB_OUTPUT
-            else
-              echo "bff=false" >> $GITHUB_OUTPUT
-            fi
-            if [ "$SERVICE" = "all" ] || [ "$SERVICE" = "sso" ]; then
-              echo "sso=true" >> $GITHUB_OUTPUT
-            else
-              echo "sso=false" >> $GITHUB_OUTPUT
-            fi
-            if [ "$SERVICE" = "all" ] || [ "$SERVICE" = "interaction" ]; then
-              echo "interaction=true" >> $GITHUB_OUTPUT
-            else
-              echo "interaction=false" >> $GITHUB_OUTPUT
-            fi
-            if [ "$SERVICE" = "all" ] || [ "$SERVICE" = "media" ]; then
-              echo "media=true" >> $GITHUB_OUTPUT
-            else
-              echo "media=false" >> $GITHUB_OUTPUT
-            fi
-            if [ "$SERVICE" = "all" ] || [ "$SERVICE" = "chat" ]; then
-              echo "chat=true" >> $GITHUB_OUTPUT
-            else
-              echo "chat=false" >> $GITHUB_OUTPUT
-            fi
-            if [ "$SERVICE" = "all" ] || [ "$SERVICE" = "ws" ]; then
-              echo "ws=true" >> $GITHUB_OUTPUT
-            else
-              echo "ws=false" >> $GITHUB_OUTPUT
-            fi
-            echo "libs=false" >> $GITHUB_OUTPUT
+            for s in bff sso interaction media chat ws; do
+              if [ "$SERVICE" = "all" ] || [ "$SERVICE" = "$s" ]; then
+                echo "$s=true" >> $GITHUB_OUTPUT
+              else
+                echo "$s=false" >> $GITHUB_OUTPUT
+              fi
+            done
             echo "any_service=true" >> $GITHUB_OUTPUT
-          else
-            # Auto-detect changes
-            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
-            echo "Changed files:"
-            echo "$CHANGED_FILES"
-            
-            # Check libs changes (affects all services)
-            if echo "$CHANGED_FILES" | grep -q "^libs/"; then
-              echo "libs=true" >> $GITHUB_OUTPUT
-              LIBS_CHANGED=true
-            else
-              echo "libs=false" >> $GITHUB_OUTPUT
-              LIBS_CHANGED=false
-            fi
-            
-            # Check individual services
-            if echo "$CHANGED_FILES" | grep -q "^apps/bff-service/" || [ "$LIBS_CHANGED" = "true" ]; then
-              echo "bff=true" >> $GITHUB_OUTPUT
-            else
-              echo "bff=false" >> $GITHUB_OUTPUT
-            fi
-            
-            if echo "$CHANGED_FILES" | grep -q "^apps/sso-service/" || [ "$LIBS_CHANGED" = "true" ]; then
-              echo "sso=true" >> $GITHUB_OUTPUT
-            else
-              echo "sso=false" >> $GITHUB_OUTPUT
-            fi
-            
-            if echo "$CHANGED_FILES" | grep -q "^apps/interaction-service/" || [ "$LIBS_CHANGED" = "true" ]; then
-              echo "interaction=true" >> $GITHUB_OUTPUT
-            else
-              echo "interaction=false" >> $GITHUB_OUTPUT
-            fi
-            
-            if echo "$CHANGED_FILES" | grep -q "^apps/media-service/" || [ "$LIBS_CHANGED" = "true" ]; then
-              echo "media=true" >> $GITHUB_OUTPUT
-            else
-              echo "media=false" >> $GITHUB_OUTPUT
-            fi
-            
-            if echo "$CHANGED_FILES" | grep -q "^apps/chat-service/" || [ "$LIBS_CHANGED" = "true" ]; then
-              echo "chat=true" >> $GITHUB_OUTPUT
-            else
-              echo "chat=false" >> $GITHUB_OUTPUT
-            fi
-            
-            if echo "$CHANGED_FILES" | grep -q "^apps/ws-gateway/" || [ "$LIBS_CHANGED" = "true" ]; then
-              echo "ws=true" >> $GITHUB_OUTPUT
-            else
-              echo "ws=false" >> $GITHUB_OUTPUT
-            fi
-            
-            # Check if any service changed
-            if echo "$CHANGED_FILES" | grep -qE "^(apps/|libs/|package.json|pnpm-lock.yaml)"; then
-              echo "any_service=true" >> $GITHUB_OUTPUT
-            else
-              echo "any_service=false" >> $GITHUB_OUTPUT
-            fi
+            exit 0
           fi
 
-  # ================================
-  # Job 2: Lint and Test
-  # ================================
+          CHANGED=$(git diff --name-only HEAD~1 HEAD)
+
+          libs_changed=false
+          echo "$CHANGED" | grep -q "^libs/" && libs_changed=true
+
+          for s in bff sso interaction media chat ws; do
+            path="apps/${s}-service/"
+            [ "$s" = "ws" ] && path="apps/ws-gateway/"
+            if echo "$CHANGED" | grep -q "^$path" || [ "$libs_changed" = true ]; then
+              echo "$s=true" >> $GITHUB_OUTPUT
+            else
+              echo "$s=false" >> $GITHUB_OUTPUT
+            fi
+          done
+
+          if echo "$CHANGED" | grep -qE "^(apps/|libs/|package.json|pnpm-lock.yaml)"; then
+            echo "any_service=true" >> $GITHUB_OUTPUT
+          else
+            echo "any_service=false" >> $GITHUB_OUTPUT
+          fi
+
+# ================================================
+# JOB 2: Lint & Test (FIXED PNPM CACHE)
+# ================================================
   lint-test:
-    name: Lint & Test
     runs-on: ubuntu-latest
     needs: detect-changes
     if: needs.detect-changes.outputs.any_service == 'true'
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
 
-      - name: Setup Node.js
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js + pnpm cache
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: 20
+          cache: pnpm
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v2
+      - uses: pnpm/action-setup@v2
         with:
           version: 9
+          run_install: false
 
-      - name: Get pnpm store directory
-        shell: bash
-        run: |
-          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run lint
+      - run: pnpm run test
 
-      - name: Setup pnpm cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Run lint
-        run: pnpm run lint
-        continue-on-error: true
-
-      - name: Run tests
-        run: pnpm run test
-        continue-on-error: true
-
-  # ================================
-  # Job 3: Build Docker Images
-  # ================================
-  build-bff:
-    name: Build BFF Service
+# ================================================
+# JOB 3: Build & Push Docker Images (Matrix)
+# ================================================
+  build:
     runs-on: ubuntu-latest
     needs: [detect-changes, lint-test]
-    if: needs.detect-changes.outputs.bff == 'true'
+
+    strategy:
+      matrix:
+        include:
+          - name: bff
+            service: bff-service
+            enabled: ${{ needs.detect-changes.outputs.bff }}
+          - name: sso
+            service: sso-service
+            enabled: ${{ needs.detect-changes.outputs.sso }}
+          - name: interaction
+            service: interaction-service
+            enabled: ${{ needs.detect-changes.outputs.interaction }}
+          - name: media
+            service: media-service
+            enabled: ${{ needs.detect-changes.outputs.media }}
+          - name: chat
+            service: chat-service
+            enabled: ${{ needs.detect-changes.outputs.chat }}
+          - name: ws
+            service: ws-gateway
+            enabled: ${{ needs.detect-changes.outputs.ws }}
+
+    if: matrix.enabled == 'true'
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v3
 
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
+      - uses: docker/login-action@v3
         with:
-          registry: ${{ env.DOCKER_REGISTRY }}
+          registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Generate image metadata
+      - uses: docker/metadata-action@v5
         id: meta
-        uses: docker/metadata-action@v5
         with:
-          images: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}/bff-service
+          images: ghcr.io/${{ env.IMAGE_PREFIX }}/${{ matrix.service }}
           tags: |
-            type=sha,prefix=
+            type=sha
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v5
         with:
           context: .
-          file: apps/bff-service/Dockerfile
+          file: apps/${{ matrix.service }}/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  build-sso:
-    name: Build SSO Service
-    runs-on: ubuntu-latest
-    needs: [detect-changes, lint-test]
-    if: needs.detect-changes.outputs.sso == 'true'
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.DOCKER_REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Generate image metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}/sso-service
-          tags: |
-            type=sha,prefix=
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: apps/sso-service/Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  build-interaction:
-    name: Build Interaction Service
-    runs-on: ubuntu-latest
-    needs: [detect-changes, lint-test]
-    if: needs.detect-changes.outputs.interaction == 'true'
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.DOCKER_REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Generate image metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}/interaction-service
-          tags: |
-            type=sha,prefix=
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: apps/interaction-service/Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  build-media:
-    name: Build Media Service
-    runs-on: ubuntu-latest
-    needs: [detect-changes, lint-test]
-    if: needs.detect-changes.outputs.media == 'true'
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.DOCKER_REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Generate image metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}/media-service
-          tags: |
-            type=sha,prefix=
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: apps/media-service/Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  build-chat:
-    name: Build Chat Service
-    runs-on: ubuntu-latest
-    needs: [detect-changes, lint-test]
-    if: needs.detect-changes.outputs.chat == 'true'
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.DOCKER_REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Generate image metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}/chat-service
-          tags: |
-            type=sha,prefix=
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: apps/chat-service/Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  build-ws:
-    name: Build WS Gateway
-    runs-on: ubuntu-latest
-    needs: [detect-changes, lint-test]
-    if: needs.detect-changes.outputs.ws == 'true'
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.DOCKER_REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Generate image metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}/ws-gateway
-          tags: |
-            type=sha,prefix=
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: apps/ws-gateway/Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  # ================================
-  # Job 4: Deploy to EC2
-  # ================================
+# ================================================
+# JOB 4: Deploy + Rollback
+# ================================================
   deploy:
-    name: Deploy to EC2
     runs-on: ubuntu-latest
-    needs: [detect-changes, build-bff, build-sso, build-interaction, build-media, build-chat, build-ws]
-    if: |
-      always() && 
-      needs.detect-changes.outputs.any_service == 'true' &&
-      (needs.build-bff.result == 'success' || needs.build-bff.result == 'skipped') &&
-      (needs.build-sso.result == 'success' || needs.build-sso.result == 'skipped') &&
-      (needs.build-interaction.result == 'success' || needs.build-interaction.result == 'skipped') &&
-      (needs.build-media.result == 'success' || needs.build-media.result == 'skipped') &&
-      (needs.build-chat.result == 'success' || needs.build-chat.result == 'skipped') &&
-      (needs.build-ws.result == 'success' || needs.build-ws.result == 'skipped')
+    needs: [detect-changes, build]
+    if: needs.detect-changes.outputs.any_service == 'true'
     environment: production
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
 
-      - name: Setup SSH Key
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Copy docker-compose files to server
+      - name: Deploy with rollback support
         run: |
-          scp -o StrictHostKeyChecking=no \
-            docker-compose.prod.yml \
-            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:~/zalo-clone/
-
-      - name: Deploy services via SSH
-        env:
-          DOCKER_REGISTRY: ${{ env.DOCKER_REGISTRY }}
-          IMAGE_PREFIX: ${{ env.IMAGE_PREFIX }}
-          IMAGE_TAG: ${{ github.sha }}
-          BFF_CHANGED: ${{ needs.detect-changes.outputs.bff }}
-          SSO_CHANGED: ${{ needs.detect-changes.outputs.sso }}
-          INTERACTION_CHANGED: ${{ needs.detect-changes.outputs.interaction }}
-          MEDIA_CHANGED: ${{ needs.detect-changes.outputs.media }}
-          CHAT_CHANGED: ${{ needs.detect-changes.outputs.chat }}
-          WS_CHANGED: ${{ needs.detect-changes.outputs.ws }}
-        run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'DEPLOY_SCRIPT'
+          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
             set -e
             cd ~/zalo-clone
-            
-            # Login to GitHub Container Registry
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            
-            # Export environment variables
-            export DOCKER_REGISTRY="${{ env.DOCKER_REGISTRY }}"
-            export DOCKER_IMAGE_PREFIX="${{ env.IMAGE_PREFIX }}"
-            export IMAGE_TAG="${{ github.sha }}"
-            
-            # Load production environment variables
-            if [ -f .env.prod ]; then
-              export $(cat .env.prod | grep -v '^#' | xargs)
-            fi
-            
-            # Pull new images and restart changed services
-            SERVICES_TO_UPDATE=""
-            
-            if [ "${{ env.BFF_CHANGED }}" = "true" ]; then
-              echo "🔄 Updating BFF Service..."
-              docker compose -f docker-compose.prod.yml pull bff-service
-              SERVICES_TO_UPDATE="$SERVICES_TO_UPDATE bff-service"
-            fi
-            
-            if [ "${{ env.SSO_CHANGED }}" = "true" ]; then
-              echo "🔄 Updating SSO Service..."
-              docker compose -f docker-compose.prod.yml pull sso-service
-              SERVICES_TO_UPDATE="$SERVICES_TO_UPDATE sso-service"
-            fi
-            
-            if [ "${{ env.INTERACTION_CHANGED }}" = "true" ]; then
-              echo "🔄 Updating Interaction Service..."
-              docker compose -f docker-compose.prod.yml pull interaction-service
-              SERVICES_TO_UPDATE="$SERVICES_TO_UPDATE interaction-service"
-            fi
-            
-            if [ "${{ env.MEDIA_CHANGED }}" = "true" ]; then
-              echo "🔄 Updating Media Service..."
-              docker compose -f docker-compose.prod.yml pull media-service
-              SERVICES_TO_UPDATE="$SERVICES_TO_UPDATE media-service"
-            fi
-            
-            if [ "${{ env.CHAT_CHANGED }}" = "true" ]; then
-              echo "🔄 Updating Chat Service..."
-              docker compose -f docker-compose.prod.yml pull chat-service
-              SERVICES_TO_UPDATE="$SERVICES_TO_UPDATE chat-service"
-            fi
-            
-            if [ "${{ env.WS_CHANGED }}" = "true" ]; then
-              echo "🔄 Updating WS Gateway..."
-              docker compose -f docker-compose.prod.yml pull ws-gateway
-              SERVICES_TO_UPDATE="$SERVICES_TO_UPDATE ws-gateway"
-            fi
-            
-            if [ -n "$SERVICES_TO_UPDATE" ]; then
-              echo "🚀 Restarting services:$SERVICES_TO_UPDATE"
-              docker compose -f docker-compose.prod.yml up -d $SERVICES_TO_UPDATE
-            fi
-            
-            # Clean up old images
+            mkdir -p .rollback
+
+            docker login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
+
+            deploy_service () {
+              NAME=$1
+              CONTAINER=$2
+
+              CURRENT=$(docker inspect $CONTAINER --format '{{ .Config.Image }}' 2>/dev/null || true)
+              echo "$CURRENT" > .rollback/$CONTAINER.prev
+
+              echo "🚀 Deploying $CONTAINER"
+              if ! docker compose -f docker-compose.prod.yml pull $CONTAINER ||
+                 ! docker compose -f docker-compose.prod.yml up -d --no-deps $CONTAINER; then
+
+                echo "❌ Deploy failed, rolling back $CONTAINER"
+                OLD=$(cat .rollback/$CONTAINER.prev)
+                docker pull $OLD
+                docker compose -f docker-compose.prod.yml up -d --no-deps $CONTAINER
+              fi
+            }
+
+            [ "${{ needs.detect-changes.outputs.bff }}" = "true" ] && deploy_service bff bff-service
+            [ "${{ needs.detect-changes.outputs.sso }}" = "true" ] && deploy_service sso sso-service
+            [ "${{ needs.detect-changes.outputs.interaction }}" = "true" ] && deploy_service interaction interaction-service
+            [ "${{ needs.detect-changes.outputs.media }}" = "true" ] && deploy_service media media-service
+            [ "${{ needs.detect-changes.outputs.chat }}" = "true" ] && deploy_service chat chat-service
+            [ "${{ needs.detect-changes.outputs.ws }}" = "true" ] && deploy_service ws ws-gateway
+
             docker image prune -f
-            
-            # Show status
-            echo ""
-            echo "📊 Current container status:"
-            docker compose -f docker-compose.prod.yml ps
-            
-            echo ""
-            echo "✅ Deployment completed successfully!"
-          DEPLOY_SCRIPT
-
-      - name: Verify deployment
-        run: |
-          echo "⏳ Waiting for services to start..."
-          sleep 30
-          
-          # Check BFF service health
-          if [ "${{ needs.detect-changes.outputs.bff }}" = "true" ]; then
-            echo "🔍 Checking BFF Service health..."
-            ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
-              "curl -sf http://localhost:5000/api/health || echo 'BFF health check failed'"
-          fi
-          
-          echo "✅ Health checks completed"
-
-      - name: Notify on failure
-        if: failure()
-        run: |
-          echo "❌ Deployment failed! Please check the logs."
-          # Add Slack/Discord notification here if needed
-
-      - name: Cleanup SSH
-        if: always()
-        run: |
-          rm -rf ~/.ssh/id_rsa
+          EOF

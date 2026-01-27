@@ -31,8 +31,6 @@ export class S3Module {
           useFactory: () => {
             const s3Client = new S3Client({
               region: config.region ?? 'ap-southeast-1',
-              endpoint: config.endpoint,
-              forcePathStyle: config.forcePathStyle ?? false,
               credentials: config.accessKeyId
                 ? {
                     accessKeyId: config.accessKeyId,

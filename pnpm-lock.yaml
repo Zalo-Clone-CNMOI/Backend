@@ -214,6 +214,18 @@ importers:
         specifier: ^8.20.0
         version: 8.52.0(eslint@9.39.2)(typescript@5.9.3)
 
+  apps/bff-service: {}
+
+  apps/chat-service: {}
+
+  apps/interaction-service: {}
+
+  apps/media-service: {}
+
+  apps/sso-service: {}
+
+  apps/ws-gateway: {}
+
 packages:
 
   '@angular-devkit/core@19.2.17':

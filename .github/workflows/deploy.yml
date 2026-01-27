@@ -1,12 +1,18 @@
 # ================================================
 # GitHub Actions - CI/CD Pipeline (Production)
 # ================================================
+# Production-grade pipeline with:
+# - SSH connectivity validation (fail fast)
+# - Deployment safety with rollback
+# - Post-deployment health verification
+# - Clear failure semantics
+# ================================================
 
 name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
       - 'apps/**'
       - 'libs/**'
@@ -25,6 +31,10 @@ on:
 env:
   DOCKER_REGISTRY: ghcr.io
   IMAGE_PREFIX: ${{ github.repository_owner }}/zalo-clone
+  EC2_HOST: ${{ secrets.EC2_HOST }}
+  EC2_USER: ${{ secrets.EC2_USER }}
+  EC2_SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 # ================================================
 # JOB 1: Detect Changes
@@ -83,7 +93,7 @@ jobs:
           fi
 
 # ================================================
-# JOB 2: Lint & Test (FIXED PNPM CACHE)
+# JOB 2: Lint & Test
 # ================================================
   lint-test:
     runs-on: ubuntu-latest
@@ -93,16 +103,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js + pnpm cache
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 9
+
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: pnpm
-
-      - uses: pnpm/action-setup@v2
-        with:
-          version: 9
-          run_install: false
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm run lint
@@ -116,6 +125,7 @@ jobs:
     needs: [detect-changes, lint-test]
 
     strategy:
+      fail-fast: false
       matrix:
         include:
           - name: bff
@@ -148,7 +158,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ env.GH_TOKEN }}
 
       - uses: docker/metadata-action@v5
         id: meta
@@ -169,7 +179,7 @@ jobs:
           cache-to: type=gha,mode=max
 
 # ================================================
-# JOB 4: Deploy + Rollback
+# JOB 4: Deploy to Production (with fail-fast and health checks)
 # ================================================
   deploy:
     runs-on: ubuntu-latest
@@ -180,46 +190,269 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup SSH
+      # ------------------------------------------
+      # STEP 1: Setup SSH Key
+      # ------------------------------------------
+      - name: Setup SSH Key
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          echo "${{ env.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+          ssh-keyscan -H ${{ env.EC2_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
 
-      - name: Deploy with rollback support
+      # ------------------------------------------
+      # STEP 2: Validate SSH Connectivity (FAIL FAST)
+      # ------------------------------------------
+      - name: Validate SSH Connectivity
+        id: ssh_check
         run: |
-          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
-            set -e
-            cd ~/zalo-clone
+          echo "🔌 Testing SSH connectivity to ${{ env.EC2_HOST }}..."
+
+          if ! ssh -o BatchMode=yes \
+                   -o ConnectTimeout=10 \
+                   -o StrictHostKeyChecking=no \
+                   ${{ env.EC2_USER }}@${{ env.EC2_HOST }} \
+                   "echo '✅ SSH connection successful'"; then
+            echo "❌ FATAL: Cannot connect to EC2 instance"
+            echo "   - Check EC2_HOST, EC2_USER, EC2_SSH_PRIVATE_KEY secrets"
+            echo "   - Verify security group allows SSH from GitHub Actions"
+            echo "   - Verify EC2 instance is running"
+            exit 1
+          fi
+
+          echo "✅ SSH connectivity validated"
+
+      # ------------------------------------------
+      # STEP 3: Copy docker-compose to server
+      # ------------------------------------------
+      - name: Copy docker-compose to server
+        run: |
+          scp -o BatchMode=yes \
+              -o ConnectTimeout=10 \
+              docker-compose.prod.yml \
+              ${{ env.EC2_USER }}@${{ env.EC2_HOST }}:~/Backend/
+
+      # ------------------------------------------
+      # STEP 4: Deploy Services with Rollback Support
+      # ------------------------------------------
+      - name: Deploy Services
+        id: deploy
+        env:
+          BFF_CHANGED: ${{ needs.detect-changes.outputs.bff }}
+          SSO_CHANGED: ${{ needs.detect-changes.outputs.sso }}
+          INTERACTION_CHANGED: ${{ needs.detect-changes.outputs.interaction }}
+          MEDIA_CHANGED: ${{ needs.detect-changes.outputs.media }}
+          CHAT_CHANGED: ${{ needs.detect-changes.outputs.chat }}
+          WS_CHANGED: ${{ needs.detect-changes.outputs.ws }}
+        run: |
+          DEPLOY_FAILED=false
+
+          ssh -o BatchMode=yes \
+              -o ConnectTimeout=10 \
+              ${{ env.EC2_USER }}@${{ env.EC2_HOST }} << 'DEPLOY_SCRIPT'
+            set -euo pipefail
+
+            cd ~/Backend
             mkdir -p .rollback
 
-            docker login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
+            echo "🔐 Authenticating with GitHub Container Registry..."
+            echo "${{ env.GH_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            deploy_service () {
-              NAME=$1
-              CONTAINER=$2
+            # Load environment variables
+            if [ -f .env.prod ]; then
+              set -a
+              source .env.prod
+              set +a
+            fi
 
-              CURRENT=$(docker inspect $CONTAINER --format '{{ .Config.Image }}' 2>/dev/null || true)
-              echo "$CURRENT" > .rollback/$CONTAINER.prev
+            DEPLOYMENT_FAILED=false
+            FAILED_SERVICES=""
 
-              echo "🚀 Deploying $CONTAINER"
-              if ! docker compose -f docker-compose.prod.yml pull $CONTAINER ||
-                 ! docker compose -f docker-compose.prod.yml up -d --no-deps $CONTAINER; then
+            deploy_service() {
+              local SERVICE_NAME=$1
+              local CONTAINER_NAME=$2
 
-                echo "❌ Deploy failed, rolling back $CONTAINER"
-                OLD=$(cat .rollback/$CONTAINER.prev)
-                docker pull $OLD
-                docker compose -f docker-compose.prod.yml up -d --no-deps $CONTAINER
+              echo ""
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+              echo "🚀 Deploying: $CONTAINER_NAME"
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+              # Save current image for rollback
+              CURRENT_IMAGE=$(docker inspect "$CONTAINER_NAME" --format '{{ .Config.Image }}' 2>/dev/null || echo "none")
+              echo "$CURRENT_IMAGE" > ".rollback/${CONTAINER_NAME}.prev"
+              echo "� Current image: $CURRENT_IMAGE"
+
+              # Pull new image
+              echo "📥 Pulling new image..."
+              if ! docker compose -f docker-compose.prod.yml pull "$CONTAINER_NAME"; then
+                echo "❌ FAILED: docker compose pull $CONTAINER_NAME"
+                DEPLOYMENT_FAILED=true
+                FAILED_SERVICES="$FAILED_SERVICES $CONTAINER_NAME"
+                return 1
               fi
+
+              # Deploy new container
+              echo "🔄 Starting new container..."
+              if ! docker compose -f docker-compose.prod.yml up -d --no-deps "$CONTAINER_NAME"; then
+                echo "❌ FAILED: docker compose up $CONTAINER_NAME"
+
+                # Attempt rollback
+                if [ "$CURRENT_IMAGE" != "none" ]; then
+                  echo "⏪ Attempting rollback to $CURRENT_IMAGE..."
+                  docker pull "$CURRENT_IMAGE" 2>/dev/null || true
+                  docker compose -f docker-compose.prod.yml up -d --no-deps "$CONTAINER_NAME" 2>/dev/null || true
+                  echo "⚠️  Rollback attempted (may or may not have succeeded)"
+                fi
+
+                DEPLOYMENT_FAILED=true
+                FAILED_SERVICES="$FAILED_SERVICES $CONTAINER_NAME"
+                return 1
+              fi
+
+              echo "✅ Successfully deployed: $CONTAINER_NAME"
+              return 0
             }
 
-            [ "${{ needs.detect-changes.outputs.bff }}" = "true" ] && deploy_service bff bff-service
-            [ "${{ needs.detect-changes.outputs.sso }}" = "true" ] && deploy_service sso sso-service
-            [ "${{ needs.detect-changes.outputs.interaction }}" = "true" ] && deploy_service interaction interaction-service
-            [ "${{ needs.detect-changes.outputs.media }}" = "true" ] && deploy_service media media-service
-            [ "${{ needs.detect-changes.outputs.chat }}" = "true" ] && deploy_service chat chat-service
-            [ "${{ needs.detect-changes.outputs.ws }}" = "true" ] && deploy_service ws ws-gateway
+            # Deploy changed services
+            [ "${{ env.BFF_CHANGED }}" = "true" ] && deploy_service bff bff-service || true
+            [ "${{ env.SSO_CHANGED }}" = "true" ] && deploy_service sso sso-service || true
+            [ "${{ env.INTERACTION_CHANGED }}" = "true" ] && deploy_service interaction interaction-service || true
+            [ "${{ env.MEDIA_CHANGED }}" = "true" ] && deploy_service media media-service || true
+            [ "${{ env.CHAT_CHANGED }}" = "true" ] && deploy_service chat chat-service || true
+            [ "${{ env.WS_CHANGED }}" = "true" ] && deploy_service ws ws-gateway || true
 
+            # Clean up old images
+            echo ""
+            echo "🧹 Cleaning up old images..."
             docker image prune -f
-          EOF
+
+            # Report deployment status
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            if [ "$DEPLOYMENT_FAILED" = "true" ]; then
+              echo "❌ DEPLOYMENT FAILED"
+              echo "   Failed services:$FAILED_SERVICES"
+              exit 1
+            else
+              echo "✅ ALL DEPLOYMENTS SUCCESSFUL"
+            fi
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          DEPLOY_SCRIPT
+
+          if [ $? -ne 0 ]; then
+            echo "DEPLOY_FAILED=true" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+      # ------------------------------------------
+      # STEP 5: Post-Deployment Health Verification
+      # ------------------------------------------
+      - name: Wait for containers to initialize
+        run: |
+          echo "⏳ Waiting 30 seconds for containers to initialize..."
+          sleep 30
+
+      - name: Verify Container Health
+        run: |
+          echo "🔍 Verifying container health..."
+
+          HEALTH_CHECK_FAILED=false
+
+          ssh -o BatchMode=yes \
+              -o ConnectTimeout=10 \
+              ${{ env.EC2_USER }}@${{ env.EC2_HOST }} << 'HEALTH_SCRIPT'
+            set -euo pipefail
+            cd ~/Backend
+
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "📊 CONTAINER STATUS"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+            docker compose -f docker-compose.prod.yml ps --format "table {{.Name}}\t{{.Status}}\t{{.Health}}"
+
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "🔍 HEALTH CHECK RESULTS"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+            UNHEALTHY_CONTAINERS=""
+            EXITED_CONTAINERS=""
+
+            # Check for unhealthy containers
+            UNHEALTHY=$(docker compose -f docker-compose.prod.yml ps --format json | jq -r 'select(.Health == "unhealthy") | .Name' 2>/dev/null || true)
+            if [ -n "$UNHEALTHY" ]; then
+              UNHEALTHY_CONTAINERS="$UNHEALTHY"
+              echo "❌ UNHEALTHY containers detected:"
+              echo "$UNHEALTHY" | while read -r container; do
+                echo "   - $container"
+              done
+            fi
+
+            # Check for exited containers
+            EXITED=$(docker compose -f docker-compose.prod.yml ps --format json | jq -r 'select(.State == "exited") | .Name' 2>/dev/null || true)
+            if [ -n "$EXITED" ]; then
+              EXITED_CONTAINERS="$EXITED"
+              echo "❌ EXITED containers detected:"
+              echo "$EXITED" | while read -r container; do
+                echo "   - $container"
+                echo "   Last logs:"
+                docker logs --tail 20 "$container" 2>&1 | sed 's/^/     /'
+              done
+            fi
+
+            # Final verdict
+            echo ""
+            if [ -n "$UNHEALTHY_CONTAINERS" ] || [ -n "$EXITED_CONTAINERS" ]; then
+              echo "❌ HEALTH CHECK FAILED"
+              echo "   Some containers are unhealthy or exited."
+              echo "   Please check the logs above for details."
+              exit 1
+            else
+              echo "✅ ALL CONTAINERS HEALTHY"
+            fi
+          HEALTH_SCRIPT
+
+          if [ $? -ne 0 ]; then
+            echo "❌ Health check failed!"
+            exit 1
+          fi
+
+          echo "✅ Health verification completed successfully"
+
+      # ------------------------------------------
+      # STEP 6: Cleanup SSH Key
+      # ------------------------------------------
+      - name: Cleanup SSH
+        if: always()
+        run: |
+          rm -rf ~/.ssh/id_rsa
+
+      # ------------------------------------------
+      # STEP 7: Report Deployment Status
+      # ------------------------------------------
+      - name: Report Success
+        if: success()
+        run: |
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✅ DEPLOYMENT COMPLETED SUCCESSFULLY"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Commit: ${{ github.sha }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Triggered by: ${{ github.actor }}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      - name: Report Failure
+        if: failure()
+        run: |
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "❌ DEPLOYMENT FAILED"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Commit: ${{ github.sha }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Triggered by: ${{ github.actor }}"
+          echo ""
+          echo "Please check the logs above for details."
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

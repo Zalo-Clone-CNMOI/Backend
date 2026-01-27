@@ -46,11 +46,10 @@ const useSsl = process.env.DB_SSL === 'true';
         username: config.postgresUser ?? 'postgres',
         password: config.postgresPassword ?? 'postgres',
         database: config.postgresDatabase ?? 'zaloclone',
-        ssl: useSsl
-          ? {
+        ssl: 
+            {
               rejectUnauthorized: false,
-            }
-          : false,
+            },
         entities,
         synchronize: config.nodeEnv === 'development', // Only sync in dev
         logging: config.nodeEnv === 'development',

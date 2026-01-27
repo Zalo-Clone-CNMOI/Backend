@@ -12,11 +12,10 @@ export const AppDataSource = new DataSource({
   username: process.env.DB_USERNAME || 'postgres',
   password: process.env.DB_PASSWORD || 'postgres',
   database: process.env.DB_NAME || 'zaloclone',
-  ssl: useSsl
-    ? {
+  ssl: 
+      {
         rejectUnauthorized: false,
-      }
-    : false,
+      },
   synchronize: false,
   logging: process.env.NODE_ENV !== 'production',
   entities: ['libs/database/src/entities/*.entity.ts'],

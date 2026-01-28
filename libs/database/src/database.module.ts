@@ -33,7 +33,7 @@ export const entities = [
   NotificationLog,
 ];
 
-const useSsl = process.env.DB_SSL === 'true';
+// const useSsl = process.env.DB_SSL === 'true';
 
 @Module({
   imports: [

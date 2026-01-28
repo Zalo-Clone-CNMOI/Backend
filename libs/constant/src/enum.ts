@@ -22,7 +22,7 @@ export enum ConversationType {
   GROUP = 'group',
 }
 
-export enum ConversationRole {
+export enum UpdateMemberRoleDtoRoleEnum {
   OWNER = 'owner',
   ADMIN = 'admin',
   MEMBER = 'member',

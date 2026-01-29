@@ -54,7 +54,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
 
       - id: detect
         name: Detect changes
@@ -97,22 +97,26 @@ jobs:
           # ==========================================
           # AUTO RUN (push to main)
           # ==========================================
-          CHANGED=$(git diff --name-only HEAD~1 HEAD)
+          echo "🔍 Detecting changes based on commit range..."
+          # Nếu là push event, so sánh từ commit trước đó đến commit hiện tại
+          if [ "${{ github.event_name }}" == "push" ]; then
+            # Xử lý trường hợp push lần đầu hoặc force push (before có thể là all zeros)
+            if [ "${{ github.event.before }}" == "0000000000000000000000000000000000000000" ]; then
+               # Fallback cho trường hợp không có history
+               CHANGED=$(git diff --name-only HEAD~1 HEAD)
+            else
+               # So sánh range từ lần push trước đến hiện tại
+               CHANGED=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }})
+            fi
+          else
+            # Fallback mặc định
+            CHANGED=$(git diff --name-only HEAD~1 HEAD)
+          fi
+
           echo "Changed files:"
           echo "$CHANGED"
 
           any=false
-
-          for s in bff sso interaction media chat ws; do
-            if echo "$CHANGED" | grep -q "^apps/$s/"; then
-              echo "$s=true" >> $GITHUB_OUTPUT
-              any=true
-            else
-              echo "$s=false" >> $GITHUB_OUTPUT
-            fi
-          done
-
-          echo "any_service=$any" >> $GITHUB_OUTPUT
 
   # ================================================
   # JOB 2: Lint & Test

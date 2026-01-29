@@ -13,3 +13,13 @@ export interface MediaUploadedEvent {
   uploaded_at: number;
   trace_id?: string;
 }
+
+export interface MediaThumbnailGeneratedEvent {
+  original_key: string;
+  thumbnail_key: string;
+  bucket: string;
+  width: number;
+  height: number;
+  generated_at: number;
+  trace_id?: string;
+}

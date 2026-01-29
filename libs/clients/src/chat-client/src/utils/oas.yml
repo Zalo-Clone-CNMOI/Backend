@@ -1,0 +1,305 @@
+openapi: 3.0.0
+info:
+  title: Chat Service API
+  version: 1.0.0
+  description: Chat Service for message management with ScyllaDB persistence
+servers:
+  - url: http://chat-service:5002/api
+    description: Docker internal service (default)
+  - url: http://localhost:5002/api
+    description: Local development server
+paths:
+  /v1/messages/{conversationId}:
+    get:
+      tags:
+        - Messages
+      summary: Get messages for a conversation with cursor pagination
+      operationId: getMessages
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          description: Conversation ID
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          required: false
+          description: Number of messages (max 100)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: cursor
+          in: query
+          required: false
+          description: Pagination cursor (base64 encoded timestamp)
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageListResponseDto'
+        '400':
+          description: Invalid conversation ID
+        '401':
+          description: Unauthorized
+
+  /v1/messages/{conversationId}/{createdAt}/{messageId}:
+    get:
+      tags:
+        - Messages
+      summary: Get a single message by ID
+      operationId: getMessage
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          description: Conversation ID
+          schema:
+            type: string
+            format: uuid
+        - name: createdAt
+          in: path
+          required: true
+          description: Message created_at timestamp (epoch ms)
+          schema:
+            type: string
+        - name: messageId
+          in: path
+          required: true
+          description: Message ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Message details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponseDto'
+        '404':
+          description: Message not found
+        '401':
+          description: Unauthorized
+
+  /v1/messages/{messageId}/reactions:
+    get:
+      tags:
+        - Messages
+      summary: Get reactions for a message
+      operationId: getReactions
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          description: Message ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Message reactions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageReactionsResponseDto'
+        '401':
+          description: Unauthorized
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    AttachmentType:
+      type: string
+      enum:
+        - image
+        - video
+        - audio
+        - document
+
+    ReactionType:
+      type: string
+      enum:
+        - like
+        - love
+        - haha
+        - wow
+        - sad
+        - angry
+
+    AttachmentResponseDto:
+      type: object
+      required:
+        - key
+        - type
+        - name
+        - size
+        - contentType
+        - url
+      properties:
+        key:
+          type: string
+          description: S3 key
+        type:
+          $ref: '#/components/schemas/AttachmentType'
+        name:
+          type: string
+          description: Original file name
+        size:
+          type: integer
+          description: File size in bytes
+        contentType:
+          type: string
+          description: Content type (MIME)
+        thumbnailKey:
+          type: string
+          description: Thumbnail S3 key for images/videos
+        url:
+          type: string
+          description: CDN URL for the file
+        thumbnailUrl:
+          type: string
+          description: Thumbnail CDN URL
+
+    MessageReactionDto:
+      type: object
+      required:
+        - userId
+        - reactionType
+        - createdAt
+      properties:
+        userId:
+          type: string
+          description: User ID who reacted
+        reactionType:
+          $ref: '#/components/schemas/ReactionType'
+        createdAt:
+          type: integer
+          format: int64
+          description: Created at timestamp (epoch ms)
+
+    MessageResponseDto:
+      type: object
+      required:
+        - messageId
+        - conversationId
+        - senderId
+        - body
+        - createdAt
+        - isDeleted
+      properties:
+        messageId:
+          type: string
+          format: uuid
+          description: Message ID
+        conversationId:
+          type: string
+          format: uuid
+          description: Conversation ID
+        senderId:
+          type: string
+          format: uuid
+          description: Sender user ID
+        body:
+          type: string
+          description: Message body text
+        createdAt:
+          type: integer
+          format: int64
+          description: Created at timestamp (epoch ms)
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttachmentResponseDto'
+          description: Message attachments
+        replyToMessageId:
+          type: string
+          format: uuid
+          description: ID of the message being replied to
+        editedAt:
+          type: integer
+          format: int64
+          description: Edited at timestamp (epoch ms)
+        deletedAt:
+          type: integer
+          format: int64
+          description: Deleted at timestamp (epoch ms)
+        isDeleted:
+          type: boolean
+          description: Whether message is soft deleted
+
+    MessageListResponseDto:
+      type: object
+      required:
+        - items
+        - nextCursor
+        - hasMore
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MessageResponseDto'
+          description: List of messages
+        nextCursor:
+          type: string
+          nullable: true
+          description: Cursor for next page
+        hasMore:
+          type: boolean
+          description: Whether there are more messages
+
+    ReactionSummaryDto:
+      type: object
+      required:
+        - type
+        - count
+        - userIds
+      properties:
+        type:
+          type: string
+          description: Reaction type
+        count:
+          type: integer
+          description: Count of this reaction type
+        userIds:
+          type: array
+          items:
+            type: string
+          description: User IDs who used this reaction
+
+    MessageReactionsResponseDto:
+      type: object
+      required:
+        - messageId
+        - reactions
+        - summary
+      properties:
+        messageId:
+          type: string
+          format: uuid
+          description: Message ID
+        reactions:
+          type: array
+          items:
+            $ref: '#/components/schemas/MessageReactionDto'
+          description: All reactions on the message
+        summary:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReactionSummaryDto'
+          description: Summary of reactions by type
+
+security:
+  - BearerAuth: []

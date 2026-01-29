@@ -20,6 +20,14 @@ import {
   type WsChatSendPayload,
   type WsChatAckPayload,
   type WsPresenceHeartbeatPayload,
+  type WsChatEditPayload,
+  type WsChatDeletePayload,
+  type WsChatReactPayload,
+  type WsChatUnreactPayload,
+  type ChatMessageEditCommand,
+  type ChatMessageDeleteCommand,
+  type ChatReactionAddCommand,
+  type ChatReactionRemoveCommand,
 } from '@libs/contracts';
 import { KAFKA_CLIENT } from '@libs/kafka';
 
@@ -144,6 +152,127 @@ export class ChatGateway implements OnModuleInit {
       ts: body.ts,
     };
     void this.kafka.emit(KafkaTopics.PresenceHeartbeat, cmd);
+  }
+
+  @UseGuards(WsAuthGuard)
+  @SubscribeMessage(WsEvents.ChatEdit)
+  handleEdit(
+    @ConnectedSocket() socket: AuthedSocket,
+    @MessageBody() body: WsChatEditPayload,
+  ) {
+    const userId = String(socket.data.userId);
+    if (!canUserAccessConversation(userId, body.conversation_id)) {
+      socket.emit(WsEvents.ChatAck, {
+        message_id: body.message_id,
+        status: 'rejected',
+        reason: 'not_member',
+      } satisfies WsChatAckPayload);
+      return;
+    }
+
+    const cmd: ChatMessageEditCommand = {
+      message_id: body.message_id,
+      conversation_id: body.conversation_id,
+      sender_id: userId,
+      new_body: body.new_body,
+      edited_at: Date.now(),
+    };
+    void this.kafka.emit(KafkaTopics.ChatMessageEdit, cmd);
+
+    socket.emit(WsEvents.ChatAck, {
+      message_id: body.message_id,
+      status: 'accepted',
+    } satisfies WsChatAckPayload);
+  }
+
+  @UseGuards(WsAuthGuard)
+  @SubscribeMessage(WsEvents.ChatDelete)
+  handleDelete(
+    @ConnectedSocket() socket: AuthedSocket,
+    @MessageBody() body: WsChatDeletePayload,
+  ) {
+    const userId = String(socket.data.userId);
+    if (!canUserAccessConversation(userId, body.conversation_id)) {
+      socket.emit(WsEvents.ChatAck, {
+        message_id: body.message_id,
+        status: 'rejected',
+        reason: 'not_member',
+      } satisfies WsChatAckPayload);
+      return;
+    }
+
+    const cmd: ChatMessageDeleteCommand = {
+      message_id: body.message_id,
+      conversation_id: body.conversation_id,
+      sender_id: userId,
+      deleted_at: Date.now(),
+    };
+    void this.kafka.emit(KafkaTopics.ChatMessageDelete, cmd);
+
+    socket.emit(WsEvents.ChatAck, {
+      message_id: body.message_id,
+      status: 'accepted',
+    } satisfies WsChatAckPayload);
+  }
+
+  @UseGuards(WsAuthGuard)
+  @SubscribeMessage(WsEvents.ChatReact)
+  handleReact(
+    @ConnectedSocket() socket: AuthedSocket,
+    @MessageBody() body: WsChatReactPayload,
+  ) {
+    const userId = String(socket.data.userId);
+    if (!canUserAccessConversation(userId, body.conversation_id)) {
+      socket.emit(WsEvents.ChatAck, {
+        message_id: body.message_id,
+        status: 'rejected',
+        reason: 'not_member',
+      } satisfies WsChatAckPayload);
+      return;
+    }
+
+    const cmd: ChatReactionAddCommand = {
+      message_id: body.message_id,
+      conversation_id: body.conversation_id,
+      user_id: userId,
+      reaction_type: body.reaction_type,
+      created_at: Date.now(),
+    };
+    void this.kafka.emit(KafkaTopics.ChatReactionAdd, cmd);
+
+    socket.emit(WsEvents.ChatAck, {
+      message_id: body.message_id,
+      status: 'accepted',
+    } satisfies WsChatAckPayload);
+  }
+
+  @UseGuards(WsAuthGuard)
+  @SubscribeMessage(WsEvents.ChatUnreact)
+  handleUnreact(
+    @ConnectedSocket() socket: AuthedSocket,
+    @MessageBody() body: WsChatUnreactPayload,
+  ) {
+    const userId = String(socket.data.userId);
+    if (!canUserAccessConversation(userId, body.conversation_id)) {
+      socket.emit(WsEvents.ChatAck, {
+        message_id: body.message_id,
+        status: 'rejected',
+        reason: 'not_member',
+      } satisfies WsChatAckPayload);
+      return;
+    }
+
+    const cmd: ChatReactionRemoveCommand = {
+      message_id: body.message_id,
+      conversation_id: body.conversation_id,
+      user_id: userId,
+    };
+    void this.kafka.emit(KafkaTopics.ChatReactionRemove, cmd);
+
+    socket.emit(WsEvents.ChatAck, {
+      message_id: body.message_id,
+      status: 'accepted',
+    } satisfies WsChatAckPayload);
   }
 
   broadcastToConversation(

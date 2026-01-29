@@ -1,0 +1,8 @@
+{
+  "chat.tools.terminal.autoApprove": {
+    "/^cd \"c:\\\\Users\\\\Admin\\\\Main\\\\Desktop\\\\HKI 2026-2027\\\\CNM\\\\Backend\" ; pnpm rebuild sharp$/": {
+      "approve": true,
+      "matchCommandLine": true
+    }
+  }
+}

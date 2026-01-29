@@ -23,14 +23,10 @@ CREATE TABLE IF NOT EXISTS messages_by_conversation (
     message_id text,
     sender_id text,
     body text,
-    message_type text,          -- text, image, video, file, sticker, audio
-    media_url text,             -- URL của media nếu có
-    media_metadata text,        -- JSON: {"thumbnail_url": "", "width": 0, "height": 0, "duration": 0, "file_name": ""}
+    attachments text,           -- JSON array of attachments
     reply_to_message_id text,   -- ID của tin nhắn được reply
-    forwarded_from text,        -- ID của tin nhắn gốc nếu forward
-    is_deleted boolean,
-    deleted_at bigint,
     edited_at bigint,
+    deleted_at bigint,
     PRIMARY KEY ((conversation_id), created_at, message_id)
 ) WITH CLUSTERING ORDER BY (created_at ASC, message_id ASC)
   AND default_time_to_live = 0
@@ -55,14 +51,13 @@ CREATE TABLE IF NOT EXISTS idempotency_by_message_id (
 
 -- Table: message_reactions
 -- Lưu trữ reactions của tin nhắn
--- Query pattern: Lấy tất cả reactions của 1 message trong conversation
+-- Query pattern: Lấy tất cả reactions của 1 message
 CREATE TABLE IF NOT EXISTS message_reactions (
-    conversation_id text,
     message_id text,
     user_id text,
-    reaction_type text,         -- like, love, haha, wow, sad, angry, thumbsup
+    reaction_type text,         -- like, love, haha, wow, sad, angry
     created_at bigint,
-    PRIMARY KEY ((conversation_id, message_id), user_id)
+    PRIMARY KEY (message_id, user_id)
 );
 
 -- =============================================================================

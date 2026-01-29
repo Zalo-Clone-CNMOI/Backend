@@ -1,0 +1,85 @@
+import {
+  Controller,
+  Get,
+  Param,
+  Query,
+  ParseUUIDPipe,
+  NotFoundException,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiParam,
+  ApiQuery,
+} from '@nestjs/swagger';
+import { MessagesService } from './messages.service';
+import {
+  GetMessagesQueryDto,
+  MessageListResponseDto,
+  MessageResponseDto,
+  MessageReactionsResponseDto,
+} from './dto';
+
+@ApiTags('Messages')
+@Controller('v1/messages')
+export class MessagesController {
+  constructor(private readonly messagesService: MessagesService) {}
+
+  @Get(':conversationId')
+  @ApiOperation({
+    summary: 'Get messages for a conversation with cursor pagination',
+  })
+  @ApiParam({ name: 'conversationId', description: 'Conversation ID' })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Number of messages (max 100)',
+  })
+  @ApiQuery({
+    name: 'cursor',
+    required: false,
+    description: 'Pagination cursor',
+  })
+  @ApiResponse({ status: 200, type: MessageListResponseDto })
+  async getMessages(
+    @Param('conversationId', ParseUUIDPipe) conversationId: string,
+    @Query() query: GetMessagesQueryDto,
+  ): Promise<MessageListResponseDto> {
+    return this.messagesService.getMessages(conversationId, query);
+  }
+
+  @Get(':conversationId/:createdAt/:messageId')
+  @ApiOperation({ summary: 'Get a single message by ID' })
+  @ApiParam({ name: 'conversationId', description: 'Conversation ID' })
+  @ApiParam({ name: 'createdAt', description: 'Message created_at timestamp' })
+  @ApiParam({ name: 'messageId', description: 'Message ID' })
+  @ApiResponse({ status: 200, type: MessageResponseDto })
+  async getMessage(
+    @Param('conversationId', ParseUUIDPipe) conversationId: string,
+    @Param('createdAt') createdAt: string,
+    @Param('messageId', ParseUUIDPipe) messageId: string,
+  ): Promise<MessageResponseDto> {
+    const message = await this.messagesService.getMessage(
+      conversationId,
+      parseInt(createdAt, 10),
+      messageId,
+    );
+
+    if (!message) {
+      throw new NotFoundException('Message not found');
+    }
+
+    return message;
+  }
+
+  @Get(':messageId/reactions')
+  @ApiOperation({ summary: 'Get reactions for a message' })
+  @ApiParam({ name: 'messageId', description: 'Message ID' })
+  @ApiResponse({ status: 200, type: MessageReactionsResponseDto })
+  async getReactions(
+    @Param('messageId', ParseUUIDPipe) messageId: string,
+  ): Promise<MessageReactionsResponseDto> {
+    return this.messagesService.getMessageReactions(messageId);
+  }
+}

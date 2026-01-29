@@ -1,401 +1,462 @@
 # ================================================
-# GitHub Actions - CI/CD Pipeline
+# GitHub Actions - CI/CD Pipeline (Production)
 # ================================================
-# Triggers on push to main branch
-# Builds Docker images and deploys to EC2 via SSH
+# Production-grade pipeline with:
+# - SSH connectivity validation (fail fast)
+# - Deployment safety with rollback
+# - Post-deployment health verification
+# - Clear failure semantics
 # ================================================
 
 name: CI/CD Pipeline
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
-      - 'apps/**'
-      - 'libs/**'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
-      - 'docker-compose.prod.yml'
-      - '.github/workflows/**'
+      - "apps/**"
+      - "libs/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "docker-compose.prod.yml"
+      - ".github/workflows/**"
+
   workflow_dispatch:
     inputs:
       service:
-        description: 'Service to deploy (all, bff, sso, interaction)'
+        description: "Service to deploy (all, bff, sso, interaction, media, chat, ws)"
         required: false
-        default: 'all'
+        default: "all"
 
 env:
   DOCKER_REGISTRY: ghcr.io
   IMAGE_PREFIX: ${{ github.repository_owner }}/zalo-clone
+  EC2_HOST: ${{ secrets.EC2_HOST }}
+  EC2_USER: ${{ secrets.EC2_USER }}
+  EC2_SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+# ================================================
+# JOB 1: Detect Changes
+# ================================================
 jobs:
-  # ================================
-  # Job 1: Detect Changes
-  # ================================
   detect-changes:
-    name: Detect Changed Services
     runs-on: ubuntu-latest
     outputs:
-      bff: ${{ steps.changes.outputs.bff }}
-      sso: ${{ steps.changes.outputs.sso }}
-      interaction: ${{ steps.changes.outputs.interaction }}
-      libs: ${{ steps.changes.outputs.libs }}
-      any_service: ${{ steps.changes.outputs.any_service }}
+      bff: ${{ steps.detect.outputs.bff }}
+      sso: ${{ steps.detect.outputs.sso }}
+      interaction: ${{ steps.detect.outputs.interaction }}
+      media: ${{ steps.detect.outputs.media }}
+      chat: ${{ steps.detect.outputs.chat }}
+      ws: ${{ steps.detect.outputs.ws }}
+      any_service: ${{ steps.detect.outputs.any_service }}
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 2
 
-      - name: Check for changes
-        id: changes
+      - id: detect
         run: |
-          # Get changed files
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            # Manual trigger - deploy based on input
             SERVICE="${{ github.event.inputs.service }}"
-            if [ "$SERVICE" = "all" ] || [ "$SERVICE" = "bff" ]; then
-              echo "bff=true" >> $GITHUB_OUTPUT
-            else
-              echo "bff=false" >> $GITHUB_OUTPUT
-            fi
-            if [ "$SERVICE" = "all" ] || [ "$SERVICE" = "sso" ]; then
-              echo "sso=true" >> $GITHUB_OUTPUT
-            else
-              echo "sso=false" >> $GITHUB_OUTPUT
-            fi
-            if [ "$SERVICE" = "all" ] || [ "$SERVICE" = "interaction" ]; then
-              echo "interaction=true" >> $GITHUB_OUTPUT
-            else
-              echo "interaction=false" >> $GITHUB_OUTPUT
-            fi
-            echo "libs=false" >> $GITHUB_OUTPUT
+            for s in bff sso interaction media chat ws; do
+              if [ "$SERVICE" = "all" ] || [ "$SERVICE" = "$s" ]; then
+                echo "$s=true" >> $GITHUB_OUTPUT
+              else
+                echo "$s=false" >> $GITHUB_OUTPUT
+              fi
+            done
             echo "any_service=true" >> $GITHUB_OUTPUT
-          else
-            # Auto-detect changes
-            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
-            echo "Changed files:"
-            echo "$CHANGED_FILES"
-            
-            # Check libs changes (affects all services)
-            if echo "$CHANGED_FILES" | grep -q "^libs/"; then
-              echo "libs=true" >> $GITHUB_OUTPUT
-              LIBS_CHANGED=true
-            else
-              echo "libs=false" >> $GITHUB_OUTPUT
-              LIBS_CHANGED=false
-            fi
-            
-            # Check individual services
-            if echo "$CHANGED_FILES" | grep -q "^apps/bff-service/" || [ "$LIBS_CHANGED" = "true" ]; then
-              echo "bff=true" >> $GITHUB_OUTPUT
-            else
-              echo "bff=false" >> $GITHUB_OUTPUT
-            fi
-            
-            if echo "$CHANGED_FILES" | grep -q "^apps/sso-service/" || [ "$LIBS_CHANGED" = "true" ]; then
-              echo "sso=true" >> $GITHUB_OUTPUT
-            else
-              echo "sso=false" >> $GITHUB_OUTPUT
-            fi
-            
-            if echo "$CHANGED_FILES" | grep -q "^apps/interaction-service/" || [ "$LIBS_CHANGED" = "true" ]; then
-              echo "interaction=true" >> $GITHUB_OUTPUT
-            else
-              echo "interaction=false" >> $GITHUB_OUTPUT
-            fi
-            
-            # Check if any service changed
-            if echo "$CHANGED_FILES" | grep -qE "^(apps/|libs/|package.json|pnpm-lock.yaml)"; then
-              echo "any_service=true" >> $GITHUB_OUTPUT
-            else
-              echo "any_service=false" >> $GITHUB_OUTPUT
-            fi
+            exit 0
           fi
 
-  # ================================
-  # Job 2: Lint and Test
-  # ================================
+          CHANGED=$(git diff --name-only HEAD~1 HEAD)
+
+          libs_changed=false
+          echo "$CHANGED" | grep -q "^libs/" && libs_changed=true
+
+          for s in bff sso interaction media chat ws; do
+            path="apps/${s}-service/"
+            [ "$s" = "ws" ] && path="apps/ws-gateway/"
+            if echo "$CHANGED" | grep -q "^$path" || [ "$libs_changed" = true ]; then
+              echo "$s=true" >> $GITHUB_OUTPUT
+            else
+              echo "$s=false" >> $GITHUB_OUTPUT
+            fi
+          done
+
+          if echo "$CHANGED" | grep -qE "^(apps/|libs/|package.json|pnpm-lock.yaml)"; then
+            echo "any_service=true" >> $GITHUB_OUTPUT
+          else
+            echo "any_service=false" >> $GITHUB_OUTPUT
+          fi
+
+  # ================================================
+  # JOB 2: Lint & Test
+  # ================================================
   lint-test:
-    name: Lint & Test
     runs-on: ubuntu-latest
     needs: detect-changes
     if: needs.detect-changes.outputs.any_service == 'true'
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 9
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: 20
+          cache: pnpm
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 9
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run lint
+      - run: pnpm run test
 
-      - name: Get pnpm store directory
-        shell: bash
+  # ================================================
+  # JOB 3: Build & Push Docker Images (Matrix)
+  # ================================================
+  build:
+    runs-on: ubuntu-latest
+    needs: [detect-changes, lint-test]
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: bff
+            service: bff-service
+            enabled: ${{ needs.detect-changes.outputs.bff }}
+          - name: sso
+            service: sso-service
+            enabled: ${{ needs.detect-changes.outputs.sso }}
+          - name: interaction
+            service: interaction-service
+            enabled: ${{ needs.detect-changes.outputs.interaction }}
+          - name: media
+            service: media-service
+            enabled: ${{ needs.detect-changes.outputs.media }}
+          - name: chat
+            service: chat-service
+            enabled: ${{ needs.detect-changes.outputs.chat }}
+          - name: ws
+            service: ws-gateway
+            enabled: ${{ needs.detect-changes.outputs.ws }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Skip job if service not enabled
+        if: matrix.enabled != 'true'
         run: |
-          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+          echo "Service ${{ matrix.service }} not enabled for build. Skipping job."
+          exit 0
 
-      - name: Setup pnpm cache
-        uses: actions/cache@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
         with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Run lint
-        run: pnpm run lint
-        continue-on-error: true
-
-      - name: Run tests
-        run: pnpm run test
-        continue-on-error: true
-
-  # ================================
-  # Job 3: Build Docker Images
-  # ================================
-  build-bff:
-    name: Build BFF Service
-    runs-on: ubuntu-latest
-    needs: [detect-changes, lint-test]
-    if: needs.detect-changes.outputs.bff == 'true'
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.DOCKER_REGISTRY }}
+          registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ env.GH_TOKEN }}
 
-      - name: Generate image metadata
+      - uses: docker/metadata-action@v5
         id: meta
-        uses: docker/metadata-action@v5
         with:
-          images: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}/bff-service
+          images: ghcr.io/${{ env.IMAGE_PREFIX }}/${{ matrix.service }}
           tags: |
-            type=sha,prefix=
+            type=sha
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v5
         with:
           context: .
-          file: apps/bff-service/Dockerfile
+          file: apps/${{ matrix.service }}/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  build-sso:
-    name: Build SSO Service
-    runs-on: ubuntu-latest
-    needs: [detect-changes, lint-test]
-    if: needs.detect-changes.outputs.sso == 'true'
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.DOCKER_REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Generate image metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}/sso-service
-          tags: |
-            type=sha,prefix=
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: apps/sso-service/Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  build-interaction:
-    name: Build Interaction Service
-    runs-on: ubuntu-latest
-    needs: [detect-changes, lint-test]
-    if: needs.detect-changes.outputs.interaction == 'true'
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.DOCKER_REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Generate image metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}/interaction-service
-          tags: |
-            type=sha,prefix=
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: apps/interaction-service/Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  # ================================
-  # Job 4: Deploy to EC2
-  # ================================
+  # ================================================
+  # JOB 4: Deploy to Production (with fail-fast and health checks)
+  # ================================================
   deploy:
-    name: Deploy to EC2
     runs-on: ubuntu-latest
-    needs: [detect-changes, build-bff, build-sso, build-interaction]
-    if: |
-      always() && 
-      needs.detect-changes.outputs.any_service == 'true' &&
-      (needs.build-bff.result == 'success' || needs.build-bff.result == 'skipped') &&
-      (needs.build-sso.result == 'success' || needs.build-sso.result == 'skipped') &&
-      (needs.build-interaction.result == 'success' || needs.build-interaction.result == 'skipped')
+    needs: [detect-changes, build]
+    if: needs.detect-changes.outputs.any_service == 'true'
     environment: production
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
 
+    steps:
+      - uses: actions/checkout@v4
+
+      # ------------------------------------------
+      # STEP 1: Setup SSH Key
+      # ------------------------------------------
       - name: Setup SSH Key
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          echo "${{ env.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+          ssh-keyscan -H ${{ env.EC2_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
 
-      - name: Copy docker-compose files to server
+      # ------------------------------------------
+      # STEP 2: Validate SSH Connectivity (FAIL FAST)
+      # ------------------------------------------
+      - name: Validate SSH Connectivity
+        id: ssh_check
         run: |
-          scp -o StrictHostKeyChecking=no \
-            docker-compose.prod.yml \
-            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:~/zalo-clone/
+          echo "🔌 Testing SSH connectivity to ${{ env.EC2_HOST }}..."
 
-      - name: Deploy services via SSH
+          if ! ssh -o BatchMode=yes \
+                   -o ConnectTimeout=10 \
+                   -o StrictHostKeyChecking=no \
+                   ${{ env.EC2_USER }}@${{ env.EC2_HOST }} \
+                   "echo '✅ SSH connection successful'"; then
+            echo "❌ FATAL: Cannot connect to EC2 instance"
+            echo "   - Check EC2_HOST, EC2_USER, EC2_SSH_PRIVATE_KEY secrets"
+            echo "   - Verify security group allows SSH from GitHub Actions"
+            echo "   - Verify EC2 instance is running"
+            exit 1
+          fi
+
+          echo "✅ SSH connectivity validated"
+
+      # ------------------------------------------
+      # STEP 3: Copy docker-compose to server
+      # ------------------------------------------
+      - name: Copy docker-compose to server
+        run: |
+          scp -o BatchMode=yes \
+              -o ConnectTimeout=10 \
+              docker-compose.prod.yml \
+              ${{ env.EC2_USER }}@${{ env.EC2_HOST }}:~/Backend/
+
+      # ------------------------------------------
+      # STEP 4: Deploy Services with Rollback Support
+      # ------------------------------------------
+      - name: Deploy Services
+        id: deploy
         env:
-          DOCKER_REGISTRY: ${{ env.DOCKER_REGISTRY }}
-          IMAGE_PREFIX: ${{ env.IMAGE_PREFIX }}
-          IMAGE_TAG: ${{ github.sha }}
           BFF_CHANGED: ${{ needs.detect-changes.outputs.bff }}
           SSO_CHANGED: ${{ needs.detect-changes.outputs.sso }}
           INTERACTION_CHANGED: ${{ needs.detect-changes.outputs.interaction }}
+          MEDIA_CHANGED: ${{ needs.detect-changes.outputs.media }}
+          CHAT_CHANGED: ${{ needs.detect-changes.outputs.chat }}
+          WS_CHANGED: ${{ needs.detect-changes.outputs.ws }}
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'DEPLOY_SCRIPT'
-            set -e
-            cd ~/zalo-clone
-            
-            # Login to GitHub Container Registry
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            
-            # Export environment variables
-            export DOCKER_REGISTRY="${{ env.DOCKER_REGISTRY }}"
-            export DOCKER_IMAGE_PREFIX="${{ env.IMAGE_PREFIX }}"
-            export IMAGE_TAG="${{ github.sha }}"
-            
-            # Load production environment variables
+          DEPLOY_FAILED=false
+
+          ssh -o BatchMode=yes \
+              -o ConnectTimeout=10 \
+              ${{ env.EC2_USER }}@${{ env.EC2_HOST }} << 'DEPLOY_SCRIPT'
+            set -euo pipefail
+
+            cd ~/Backend
+            mkdir -p .rollback
+
+            echo "🔐 Authenticating with GitHub Container Registry..."
+            echo "${{ env.GH_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            # Load environment variables
             if [ -f .env.prod ]; then
-              export $(cat .env.prod | grep -v '^#' | xargs)
+              set -a
+              source .env.prod
+              set +a
             fi
-            
-            # Pull new images and restart changed services
-            SERVICES_TO_UPDATE=""
-            
-            if [ "${{ env.BFF_CHANGED }}" = "true" ]; then
-              echo "🔄 Updating BFF Service..."
-              docker compose -f docker-compose.prod.yml pull bff-service
-              SERVICES_TO_UPDATE="$SERVICES_TO_UPDATE bff-service"
-            fi
-            
-            if [ "${{ env.SSO_CHANGED }}" = "true" ]; then
-              echo "🔄 Updating SSO Service..."
-              docker compose -f docker-compose.prod.yml pull sso-service
-              SERVICES_TO_UPDATE="$SERVICES_TO_UPDATE sso-service"
-            fi
-            
-            if [ "${{ env.INTERACTION_CHANGED }}" = "true" ]; then
-              echo "🔄 Updating Interaction Service..."
-              docker compose -f docker-compose.prod.yml pull interaction-service
-              SERVICES_TO_UPDATE="$SERVICES_TO_UPDATE interaction-service"
-            fi
-            
-            if [ -n "$SERVICES_TO_UPDATE" ]; then
-              echo "🚀 Restarting services:$SERVICES_TO_UPDATE"
-              docker compose -f docker-compose.prod.yml up -d $SERVICES_TO_UPDATE
-            fi
-            
+
+            DEPLOYMENT_FAILED=false
+            FAILED_SERVICES=""
+
+            deploy_service() {
+              local SERVICE_NAME=$1
+              local CONTAINER_NAME=$2
+
+              echo ""
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+              echo "🚀 Deploying: $CONTAINER_NAME"
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+              # Save current image for rollback
+              CURRENT_IMAGE=$(docker inspect "$CONTAINER_NAME" --format '{{ .Config.Image }}' 2>/dev/null || echo "none")
+              echo "$CURRENT_IMAGE" > ".rollback/${CONTAINER_NAME}.prev"
+              echo "� Current image: $CURRENT_IMAGE"
+
+              # Pull new image
+              echo "📥 Pulling new image..."
+              if ! docker compose -f docker-compose.prod.yml pull "$CONTAINER_NAME"; then
+                echo "❌ FAILED: docker compose pull $CONTAINER_NAME"
+                DEPLOYMENT_FAILED=true
+                FAILED_SERVICES="$FAILED_SERVICES $CONTAINER_NAME"
+                return 1
+              fi
+
+              # Deploy new container
+              echo "🔄 Starting new container..."
+              if ! docker compose -f docker-compose.prod.yml up -d --no-deps "$CONTAINER_NAME"; then
+                echo "❌ FAILED: docker compose up $CONTAINER_NAME"
+
+                # Attempt rollback
+                if [ "$CURRENT_IMAGE" != "none" ]; then
+                  echo "⏪ Attempting rollback to $CURRENT_IMAGE..."
+                  docker pull "$CURRENT_IMAGE" 2>/dev/null || true
+                  docker compose -f docker-compose.prod.yml up -d --no-deps "$CONTAINER_NAME" 2>/dev/null || true
+                  echo "⚠️  Rollback attempted (may or may not have succeeded)"
+                fi
+
+                DEPLOYMENT_FAILED=true
+                FAILED_SERVICES="$FAILED_SERVICES $CONTAINER_NAME"
+                return 1
+              fi
+
+              echo "✅ Successfully deployed: $CONTAINER_NAME"
+              return 0
+            }
+
+            # Deploy changed services
+            [ "${{ env.BFF_CHANGED }}" = "true" ] && deploy_service bff bff-service || true
+            [ "${{ env.SSO_CHANGED }}" = "true" ] && deploy_service sso sso-service || true
+            [ "${{ env.INTERACTION_CHANGED }}" = "true" ] && deploy_service interaction interaction-service || true
+            [ "${{ env.MEDIA_CHANGED }}" = "true" ] && deploy_service media media-service || true
+            [ "${{ env.CHAT_CHANGED }}" = "true" ] && deploy_service chat chat-service || true
+            [ "${{ env.WS_CHANGED }}" = "true" ] && deploy_service ws ws-gateway || true
+
             # Clean up old images
+            echo ""
+            echo "🧹 Cleaning up old images..."
             docker image prune -f
-            
-            # Show status
+
+            # Report deployment status
             echo ""
-            echo "📊 Current container status:"
-            docker compose -f docker-compose.prod.yml ps
-            
-            echo ""
-            echo "✅ Deployment completed successfully!"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            if [ "$DEPLOYMENT_FAILED" = "true" ]; then
+              echo "❌ DEPLOYMENT FAILED"
+              echo "   Failed services:$FAILED_SERVICES"
+              exit 1
+            else
+              echo "✅ ALL DEPLOYMENTS SUCCESSFUL"
+            fi
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           DEPLOY_SCRIPT
 
-      - name: Verify deployment
-        run: |
-          echo "⏳ Waiting for services to start..."
-          sleep 30
-          
-          # Check BFF service health
-          if [ "${{ needs.detect-changes.outputs.bff }}" = "true" ]; then
-            echo "🔍 Checking BFF Service health..."
-            ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
-              "curl -sf http://localhost:5000/api/health || echo 'BFF health check failed'"
+          if [ $? -ne 0 ]; then
+            echo "DEPLOY_FAILED=true" >> $GITHUB_OUTPUT
+            exit 1
           fi
-          
-          echo "✅ Health checks completed"
 
-      - name: Notify on failure
-        if: failure()
+      # ------------------------------------------
+      # STEP 5: Post-Deployment Health Verification
+      # ------------------------------------------
+      - name: Wait for containers to initialize
         run: |
-          echo "❌ Deployment failed! Please check the logs."
-          # Add Slack/Discord notification here if needed
+          echo "⏳ Waiting 30 seconds for containers to initialize..."
+          sleep 30
 
+      - name: Verify Container Health
+        run: |
+          echo "🔍 Verifying container health..."
+
+          HEALTH_CHECK_FAILED=false
+
+          ssh -o BatchMode=yes \
+              -o ConnectTimeout=10 \
+              ${{ env.EC2_USER }}@${{ env.EC2_HOST }} << 'HEALTH_SCRIPT'
+            set -euo pipefail
+            cd ~/Backend
+
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "📊 CONTAINER STATUS"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+            docker compose -f docker-compose.prod.yml ps --format "table {{.Name}}\t{{.Status}}\t{{.Health}}"
+
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "🔍 HEALTH CHECK RESULTS"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+            UNHEALTHY_CONTAINERS=""
+            EXITED_CONTAINERS=""
+
+            # Check for unhealthy containers
+            UNHEALTHY=$(docker compose -f docker-compose.prod.yml ps --format json | jq -r 'select(.Health == "unhealthy") | .Name' 2>/dev/null || true)
+            if [ -n "$UNHEALTHY" ]; then
+              UNHEALTHY_CONTAINERS="$UNHEALTHY"
+              echo "❌ UNHEALTHY containers detected:"
+              echo "$UNHEALTHY" | while read -r container; do
+                echo "   - $container"
+              done
+            fi
+
+            # Check for exited containers
+            EXITED=$(docker compose -f docker-compose.prod.yml ps --format json | jq -r 'select(.State == "exited") | .Name' 2>/dev/null || true)
+            if [ -n "$EXITED" ]; then
+              EXITED_CONTAINERS="$EXITED"
+              echo "❌ EXITED containers detected:"
+              echo "$EXITED" | while read -r container; do
+                echo "   - $container"
+                echo "   Last logs:"
+                docker logs --tail 20 "$container" 2>&1 | sed 's/^/     /'
+              done
+            fi
+
+            # Final verdict
+            echo ""
+            if [ -n "$UNHEALTHY_CONTAINERS" ] || [ -n "$EXITED_CONTAINERS" ]; then
+              echo "❌ HEALTH CHECK FAILED"
+              echo "   Some containers are unhealthy or exited."
+              echo "   Please check the logs above for details."
+              exit 1
+            else
+              echo "✅ ALL CONTAINERS HEALTHY"
+            fi
+          HEALTH_SCRIPT
+
+          if [ $? -ne 0 ]; then
+            echo "❌ Health check failed!"
+            exit 1
+          fi
+
+          echo "✅ Health verification completed successfully"
+
+      # ------------------------------------------
+      # STEP 6: Cleanup SSH Key
+      # ------------------------------------------
       - name: Cleanup SSH
         if: always()
         run: |
           rm -rf ~/.ssh/id_rsa
+
+      # ------------------------------------------
+      # STEP 7: Report Deployment Status
+      # ------------------------------------------
+      - name: Report Success
+        if: success()
+        run: |
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✅ DEPLOYMENT COMPLETED SUCCESSFULLY"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Commit: ${{ github.sha }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Triggered by: ${{ github.actor }}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      - name: Report Failure
+        if: failure()
+        run: |
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "❌ DEPLOYMENT FAILED"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Commit: ${{ github.sha }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Triggered by: ${{ github.actor }}"
+          echo ""
+          echo "Please check the logs above for details."
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

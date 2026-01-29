@@ -1,4 +1,6 @@
 import { NestFactory } from '@nestjs/core';
+import { ValidationPipe, Logger } from '@nestjs/common';
+import { MicroserviceOptions } from '@nestjs/microservices';
 import { AppModule } from './app.module';
 import { loadConfig } from '@libs/config';
 import { createKafkaMicroserviceOptions } from '@libs/kafka';
@@ -7,12 +9,35 @@ async function bootstrap() {
   process.env.SERVICE_NAME ??= 'chat-service';
   process.env.KAFKA_GROUP_ID ??= 'chat-service-persist';
 
+  const logger = new Logger('Bootstrap');
   const config = loadConfig(process.env.SERVICE_NAME);
-  const app = await NestFactory.createMicroservice(
-    AppModule,
+
+  const app = await NestFactory.create(AppModule);
+
+  app.connectMicroservice<MicroserviceOptions>(
     createKafkaMicroserviceOptions(config),
   );
-  await app.listen();
+
+  app.setGlobalPrefix('api');
+
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+      transformOptions: {
+        enableImplicitConversion: true,
+      },
+    }),
+  );
+
+  await app.startAllMicroservices();
+
+  const port = Number(process.env.PORT ?? 5002);
+  await app.listen(port);
+
+  logger.log(`Chat Service running on port ${port}`);
+  logger.log(`Kafka microservice connected`);
 }
 
 void bootstrap();

@@ -303,16 +303,26 @@ services:
   scylla-init:
     image: scylladb/scylla:5.4
     container_name: zalo_scylla_init
+    # Đảm bảo tắt profile để nó luôn chạy (như đã fix ở bước trước)
+    # profiles:
+    #   - init
     volumes:
       - ./infra/scylla:/infra/scylla
+    environment:
+      # Lưu ý: Hostname phải trùng tên service 'scylla', không dùng 'sc'
+      - SCYLLA_CONTACT_POINTS=${SCYLLA_CONTACT_POINTS:-scylla}
+      - SCYLLA_LOCAL_DATACENTER=${SCYLLA_LOCAL_DATACENTER:-datacenter1}
+      - SCYLLA_KEYSPACE=${SCYLLA_KEYSPACE:-chat}
     command: >
       /bin/bash -c "
-      echo 'Waiting for ScyllaDB to be ready...';
-      while ! cqlsh scylla 9042 -e 'DESCRIBE CLUSTER'; do
-        sleep 2;
+      echo 'Waiting for ScyllaDB at $${SCYLLA_CONTACT_POINTS} to be ready...';
+      # Dùng biến môi trường thay vì hardcode tên host
+      while ! cqlsh $${SCYLLA_CONTACT_POINTS} 9042 -e 'DESCRIBE CLUSTER'; do
+        echo 'ScyllaDB not ready yet... sleeping';
+        sleep 5;
       done;
       echo 'ScyllaDB is ready! Initializing schema...';
-      cqlsh scylla 9042 -f /infra/scylla/schema.cql;
+      cqlsh $${SCYLLA_CONTACT_POINTS} 9042 -f /infra/scylla/schema.cql;
       echo 'Schema initialized.';
       "
     depends_on:
@@ -321,7 +331,7 @@ services:
     networks:
       - zalo_network
     restart: "no"
-    
+
   media-service:
     image: ${DOCKER_REGISTRY:-ghcr.io}/${DOCKER_IMAGE_PREFIX:-zalo-clone}/media-service:${IMAGE_TAG:-latest}
     container_name: zalo_media_service
@@ -335,7 +345,7 @@ services:
       # Service URLs (internal Docker network)
       BFF_SERVICE_URL: http://bff-service:5000/api
       # AWS S3 (or MinIO if used locally, but for Prod assuming real S3 or compatible)
-      AWS_REGION: ap-southeast-1
+      AWS_REGION: ca-central-1
       S3_BUCKET: ${S3_BUCKET}
       S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
       S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
@@ -351,7 +361,15 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3003/api/health"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:3003/api/health",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -398,7 +416,15 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5002/api/health"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:5002/api/health",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -451,7 +477,15 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/api/health"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:3001/api/health",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3

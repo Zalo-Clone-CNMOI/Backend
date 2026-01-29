@@ -98,10 +98,12 @@ export class AuthService {
       }
     }
 
+    const passwordHash = await bcrypt.hash(dto.password, this.SALT_ROUNDS);
+
     // 4. Create user (no password needed - Firebase handles auth)
     const user = this.userRepository.create({
       phone,
-      passwordHash: dto.password,
+      passwordHash,
       fullName: dto.fullName || firebaseUser.name || phone,
       email: email ?? null,
       avatarUrl: firebaseUser.picture ?? null,

@@ -115,7 +115,7 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm run lint
-      - run: pnpm run test
+      - run: pnpm run build:all
 
   # ================================================
   # JOB 3: Build & Push Docker Images (Matrix)

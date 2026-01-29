@@ -46,10 +46,9 @@ export const entities = [
         username: config.postgresUser ?? 'postgres',
         password: config.postgresPassword ?? 'postgres',
         database: config.postgresDatabase ?? 'zaloclone',
-        ssl: 
-            {
-              rejectUnauthorized: false,
-            },
+        ssl: {
+          rejectUnauthorized: false,
+        },
         entities,
         synchronize: config.nodeEnv === 'development', // Only sync in dev
         logging: config.nodeEnv === 'development',

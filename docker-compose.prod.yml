@@ -303,20 +303,20 @@ services:
   scylla-init:
     image: scylladb/scylla:5.4
     container_name: zalo_scylla_init
-    # Đảm bảo tắt profile để nó luôn chạy (như đã fix ở bước trước)
-    # profiles:
-    #   - init
     volumes:
       - ./infra/scylla:/infra/scylla
     environment:
-      # Lưu ý: Hostname phải trùng tên service 'scylla', không dùng 'sc'
       - SCYLLA_CONTACT_POINTS=${SCYLLA_CONTACT_POINTS:-scylla}
       - SCYLLA_LOCAL_DATACENTER=${SCYLLA_LOCAL_DATACENTER:-datacenter1}
       - SCYLLA_KEYSPACE=${SCYLLA_KEYSPACE:-chat}
+
+    # QUAN TRỌNG: Dòng này ghi đè logic khởi động mặc định của Image
+    entrypoint: ["/bin/bash", "-c"]
+
+    # Command bây giờ chỉ chứa nội dung script (không cần /bin/bash -c ở đầu nữa)
     command: >
-      /bin/bash -c "
+      "
       echo 'Waiting for ScyllaDB at $${SCYLLA_CONTACT_POINTS} to be ready...';
-      # Dùng biến môi trường thay vì hardcode tên host
       while ! cqlsh $${SCYLLA_CONTACT_POINTS} 9042 -e 'DESCRIBE CLUSTER'; do
         echo 'ScyllaDB not ready yet... sleeping';
         sleep 5;

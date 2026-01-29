@@ -57,9 +57,31 @@ jobs:
           fetch-depth: 2
 
       - id: detect
+        name: Detect changes
         run: |
+          echo "🔍 Start detecting changes..."
+
+          # ==========================================
+          # FORCE RUN (manual override)
+          # ==========================================
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.force }}" = "true" ]; then
+            echo "⚠️ FORCE DEPLOY ENABLED – skipping change detection"
+
+            for s in bff sso interaction media chat ws; do
+              echo "$s=true" >> $GITHUB_OUTPUT
+            done
+
+            echo "any_service=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # ==========================================
+          # MANUAL RUN (select service)
+          # ==========================================
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             SERVICE="${{ github.event.inputs.service }}"
+            echo "🚀 Manual deploy service: $SERVICE"
+
             for s in bff sso interaction media chat ws; do
               if [ "$SERVICE" = "all" ] || [ "$SERVICE" = "$s" ]; then
                 echo "$s=true" >> $GITHUB_OUTPUT
@@ -67,30 +89,30 @@ jobs:
                 echo "$s=false" >> $GITHUB_OUTPUT
               fi
             done
+
             echo "any_service=true" >> $GITHUB_OUTPUT
             exit 0
           fi
 
+          # ==========================================
+          # AUTO RUN (push to main)
+          # ==========================================
           CHANGED=$(git diff --name-only HEAD~1 HEAD)
+          echo "Changed files:"
+          echo "$CHANGED"
 
-          libs_changed=false
-          echo "$CHANGED" | grep -q "^libs/" && libs_changed=true
+          any=false
 
           for s in bff sso interaction media chat ws; do
-            path="apps/${s}-service/"
-            [ "$s" = "ws" ] && path="apps/ws-gateway/"
-            if echo "$CHANGED" | grep -q "^$path" || [ "$libs_changed" = true ]; then
+            if echo "$CHANGED" | grep -q "^apps/$s/"; then
               echo "$s=true" >> $GITHUB_OUTPUT
+              any=true
             else
               echo "$s=false" >> $GITHUB_OUTPUT
             fi
           done
 
-          if echo "$CHANGED" | grep -qE "^(apps/|libs/|package.json|pnpm-lock.yaml)"; then
-            echo "any_service=true" >> $GITHUB_OUTPUT
-          else
-            echo "any_service=false" >> $GITHUB_OUTPUT
-          fi
+          echo "any_service=$any" >> $GITHUB_OUTPUT
 
   # ================================================
   # JOB 2: Lint & Test

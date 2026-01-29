@@ -27,6 +27,10 @@ on:
         description: "Service to deploy (all, bff, sso, interaction, media, chat, ws)"
         required: false
         default: "all"
+        
+permissions:
+  contents: read
+  packages: write
 
 env:
   DOCKER_REGISTRY: ghcr.io

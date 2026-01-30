@@ -123,41 +123,16 @@ export class LogoutDto {
 }
 
 /**
- * Forgot password request DTO
- */
-export class ForgotPasswordDto {
-  @ApiProperty({
-    description: 'Phone number',
-    example: '+84901234567',
-  })
-  @IsString()
-  @IsNotEmpty({ message: 'Phone number is required' })
-  @Matches(/^(\+84|0)[3-9][0-9]{8}$/, {
-    message: 'Phone number must be a valid Vietnam phone number',
-  })
-  phone: string;
-}
-
-/**
  * Reset password request DTO
  */
 export class ResetPasswordDto {
   @ApiProperty({
-    description: 'Phone number',
-    example: '+84901234567',
+    description: 'Firebase ID Token after phone verification',
+    example: 'eyJhbGciOiJSUzI1NiIsImtpZCI6IjFlM...',
   })
   @IsString()
-  @IsNotEmpty({ message: 'Phone number is required' })
-  phone: string;
-
-  @ApiProperty({
-    description: 'OTP code',
-    example: '123456',
-  })
-  @IsString()
-  @IsNotEmpty({ message: 'OTP is required' })
-  @Matches(/^\d{6}$/, { message: 'OTP must be 6 digits' })
-  otp: string;
+  @IsNotEmpty({ message: 'Firebase ID token is required' })
+  firebaseIdToken: string;
 
   @ApiProperty({
     description: 'New password',

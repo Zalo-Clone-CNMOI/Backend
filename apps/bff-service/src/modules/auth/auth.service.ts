@@ -4,7 +4,6 @@ import {
   LoginDto,
   RefreshTokenDto,
   LogoutDto,
-  ForgotPasswordDto,
   ResetPasswordDto,
   QrGenerateDto,
   QrConfirmDto,
@@ -68,18 +67,10 @@ export class AuthService {
   }
 
   /**
-   * Request password reset OTP
-   */
-  async forgotPassword(dto: ForgotPasswordDto): Promise<{ message: string }> {
-    this.logger.log(`Password reset requested for: ${dto.phone}`);
-    return this.ssoClient.forgotPassword(dto);
-  }
-
-  /**
-   * Reset password with OTP
+   * Reset password with Firebase token
    */
   async resetPassword(dto: ResetPasswordDto): Promise<{ message: string }> {
-    this.logger.log(`Password reset for: ${dto.phone}`);
+    this.logger.log(`Password reset with Firebase token`);
     return this.ssoClient.resetPassword(dto);
   }
 

@@ -107,35 +107,12 @@ paths:
                     example: Logged out successfully
         '401':
           description: Unauthorized
-  /auth/forgot-password:
-    post:
-      tags:
-        - Auth
-      summary: Request password reset OTP
-      description: Sends an OTP to the user's phone if it exists
-      operationId: forgotPassword
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ForgotPasswordDto'
-      responses:
-        '200':
-          description: OTP sent if phone exists
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
   /auth/reset-password:
     post:
       tags:
         - Auth
-      summary: Reset password with OTP
-      description: Resets the user password after verifying OTP
+      summary: Reset password with Firebase token
+      description: Resets the user password after verifying Firebase token
       operationId: resetPassword
       requestBody:
         required: true
@@ -154,7 +131,7 @@ paths:
                   message:
                     type: string
         '400':
-          description: Invalid OTP
+          description: Invalid Firebase token
   /auth/qr/generate:
     post:
       tags:
@@ -460,32 +437,16 @@ components:
           type: string
           description: Device ID to remove from notifications
           example: 'device-uuid-xyz'
-    ForgotPasswordDto:
-      type: object
-      required:
-        - phone
-      properties:
-        phone:
-          type: string
-          pattern: '^(\+84|0)[3-9][0-9]{8}$'
-          description: Phone number
-          example: '+84901234567'
     ResetPasswordDto:
       type: object
       required:
-        - phone
-        - otp
+        - firebaseIdToken
         - newPassword
       properties:
-        phone:
+        firebaseIdToken:
           type: string
-          description: Phone number
-          example: '+84901234567'
-        otp:
-          type: string
-          pattern: '^\d{6}$'
-          description: OTP code
-          example: '123456'
+          description: Firebase ID Token after phone verification
+          example: 'eyJhbGciOiJSUzI1NiIsImtpZCI6IjFlM...'
         newPassword:
           type: string
           minLength: 8

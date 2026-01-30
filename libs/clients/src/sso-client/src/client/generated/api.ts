@@ -74,32 +74,6 @@ export interface AuthResponseDto {
 /**
  * 
  * @export
- * @interface ForgotPassword200Response
- */
-export interface ForgotPassword200Response {
-    /**
-     * 
-     * @type {string}
-     * @memberof ForgotPassword200Response
-     */
-    'message'?: string;
-}
-/**
- * 
- * @export
- * @interface ForgotPasswordDto
- */
-export interface ForgotPasswordDto {
-    /**
-     * Phone number
-     * @type {string}
-     * @memberof ForgotPasswordDto
-     */
-    'phone': string;
-}
-/**
- * 
- * @export
  * @interface LoginDto
  */
 export interface LoginDto {
@@ -522,21 +496,28 @@ export enum RegisterDtoGenderEnum {
 /**
  * 
  * @export
+ * @interface ResetPassword200Response
+ */
+export interface ResetPassword200Response {
+    /**
+     * 
+     * @type {string}
+     * @memberof ResetPassword200Response
+     */
+    'message'?: string;
+}
+/**
+ * 
+ * @export
  * @interface ResetPasswordDto
  */
 export interface ResetPasswordDto {
     /**
-     * Phone number
+     * Firebase ID Token after phone verification
      * @type {string}
      * @memberof ResetPasswordDto
      */
-    'phone': string;
-    /**
-     * OTP code
-     * @type {string}
-     * @memberof ResetPasswordDto
-     */
-    'otp': string;
+    'firebaseIdToken': string;
     /**
      * New password
      * @type {string}
@@ -965,42 +946,6 @@ export const AuthApiAxiosParamCreator = function (configuration?: Configuration)
             };
         },
         /**
-         * Sends an OTP to the user\'s phone if it exists
-         * @summary Request password reset OTP
-         * @param {ForgotPasswordDto} forgotPasswordDto 
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        forgotPassword: async (forgotPasswordDto: ForgotPasswordDto, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
-            // verify required parameter 'forgotPasswordDto' is not null or undefined
-            assertParamExists('forgotPassword', 'forgotPasswordDto', forgotPasswordDto)
-            const localVarPath = `/auth/forgot-password`;
-            // use dummy base URL string because the URL constructor only accepts absolute URLs.
-            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
-            let baseOptions;
-            if (configuration) {
-                baseOptions = configuration.baseOptions;
-            }
-
-            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
-            const localVarHeaderParameter = {} as any;
-            const localVarQueryParameter = {} as any;
-
-
-    
-            localVarHeaderParameter['Content-Type'] = 'application/json';
-
-            setSearchParams(localVarUrlObj, localVarQueryParameter);
-            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
-            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
-            localVarRequestOptions.data = serializeDataIfNeeded(forgotPasswordDto, localVarRequestOptions, configuration)
-
-            return {
-                url: toPathString(localVarUrlObj),
-                options: localVarRequestOptions,
-            };
-        },
-        /**
          * Returns access and refresh tokens upon successful authentication
          * @summary Login with phone and password
          * @param {LoginDto} loginDto 
@@ -1149,8 +1094,8 @@ export const AuthApiAxiosParamCreator = function (configuration?: Configuration)
             };
         },
         /**
-         * Resets the user password after verifying OTP
-         * @summary Reset password with OTP
+         * Resets the user password after verifying Firebase token
+         * @summary Reset password with Firebase token
          * @param {ResetPasswordDto} resetPasswordDto 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -1247,19 +1192,6 @@ export const AuthApiFp = function(configuration?: Configuration) {
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
-         * Sends an OTP to the user\'s phone if it exists
-         * @summary Request password reset OTP
-         * @param {ForgotPasswordDto} forgotPasswordDto 
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        async forgotPassword(forgotPasswordDto: ForgotPasswordDto, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ForgotPassword200Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.forgotPassword(forgotPasswordDto, options);
-            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['AuthApi.forgotPassword']?.[localVarOperationServerIndex]?.url;
-            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
-        },
-        /**
          * Returns access and refresh tokens upon successful authentication
          * @summary Login with phone and password
          * @param {LoginDto} loginDto 
@@ -1312,13 +1244,13 @@ export const AuthApiFp = function(configuration?: Configuration) {
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
-         * Resets the user password after verifying OTP
-         * @summary Reset password with OTP
+         * Resets the user password after verifying Firebase token
+         * @summary Reset password with Firebase token
          * @param {ResetPasswordDto} resetPasswordDto 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async resetPassword(resetPasswordDto: ResetPasswordDto, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ForgotPassword200Response>> {
+        async resetPassword(resetPasswordDto: ResetPasswordDto, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ResetPassword200Response>> {
             const localVarAxiosArgs = await localVarAxiosParamCreator.resetPassword(resetPasswordDto, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['AuthApi.resetPassword']?.[localVarOperationServerIndex]?.url;
@@ -1375,16 +1307,6 @@ export const AuthApiFactory = function (configuration?: Configuration, basePath?
             return localVarFp.authQrStatus(requestParameters.sessionId, options).then((request) => request(axios, basePath));
         },
         /**
-         * Sends an OTP to the user\'s phone if it exists
-         * @summary Request password reset OTP
-         * @param {AuthApiForgotPasswordRequest} requestParameters Request parameters.
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        forgotPassword(requestParameters: AuthApiForgotPasswordRequest, options?: RawAxiosRequestConfig): AxiosPromise<ForgotPassword200Response> {
-            return localVarFp.forgotPassword(requestParameters.forgotPasswordDto, options).then((request) => request(axios, basePath));
-        },
-        /**
          * Returns access and refresh tokens upon successful authentication
          * @summary Login with phone and password
          * @param {AuthApiLoginRequest} requestParameters Request parameters.
@@ -1425,13 +1347,13 @@ export const AuthApiFactory = function (configuration?: Configuration, basePath?
             return localVarFp.register(requestParameters.registerDto, options).then((request) => request(axios, basePath));
         },
         /**
-         * Resets the user password after verifying OTP
-         * @summary Reset password with OTP
+         * Resets the user password after verifying Firebase token
+         * @summary Reset password with Firebase token
          * @param {AuthApiResetPasswordRequest} requestParameters Request parameters.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        resetPassword(requestParameters: AuthApiResetPasswordRequest, options?: RawAxiosRequestConfig): AxiosPromise<ForgotPassword200Response> {
+        resetPassword(requestParameters: AuthApiResetPasswordRequest, options?: RawAxiosRequestConfig): AxiosPromise<ResetPassword200Response> {
             return localVarFp.resetPassword(requestParameters.resetPasswordDto, options).then((request) => request(axios, basePath));
         },
     };
@@ -1491,20 +1413,6 @@ export interface AuthApiAuthQrStatusRequest {
      * @memberof AuthApiAuthQrStatus
      */
     readonly sessionId: string
-}
-
-/**
- * Request parameters for forgotPassword operation in AuthApi.
- * @export
- * @interface AuthApiForgotPasswordRequest
- */
-export interface AuthApiForgotPasswordRequest {
-    /**
-     * 
-     * @type {ForgotPasswordDto}
-     * @memberof AuthApiForgotPassword
-     */
-    readonly forgotPasswordDto: ForgotPasswordDto
 }
 
 /**
@@ -1633,18 +1541,6 @@ export class AuthApi extends BaseAPI {
     }
 
     /**
-     * Sends an OTP to the user\'s phone if it exists
-     * @summary Request password reset OTP
-     * @param {AuthApiForgotPasswordRequest} requestParameters Request parameters.
-     * @param {*} [options] Override http request option.
-     * @throws {RequiredError}
-     * @memberof AuthApi
-     */
-    public forgotPassword(requestParameters: AuthApiForgotPasswordRequest, options?: RawAxiosRequestConfig) {
-        return AuthApiFp(this.configuration).forgotPassword(requestParameters.forgotPasswordDto, options).then((request) => request(this.axios, this.basePath));
-    }
-
-    /**
      * Returns access and refresh tokens upon successful authentication
      * @summary Login with phone and password
      * @param {AuthApiLoginRequest} requestParameters Request parameters.
@@ -1693,8 +1589,8 @@ export class AuthApi extends BaseAPI {
     }
 
     /**
-     * Resets the user password after verifying OTP
-     * @summary Reset password with OTP
+     * Resets the user password after verifying Firebase token
+     * @summary Reset password with Firebase token
      * @param {AuthApiResetPasswordRequest} requestParameters Request parameters.
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}

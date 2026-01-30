@@ -16,7 +16,6 @@ import {
   RegisterDto,
   LoginDto,
   RefreshTokenDto,
-  ForgotPasswordDto,
   ResetPasswordDto,
   LogoutDto,
   AuthResponseDto,
@@ -113,34 +112,17 @@ export class AuthController {
   }
 
   /**
-   * Request password reset - sends OTP to phone
-   */
-  @Public()
-  @Post('forgot-password')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperationDecorator({
-    summary: 'Request password reset OTP',
-    description: "Sends an OTP to the user's phone if it exists",
-  })
-  @ApiResponse({ status: 200, description: 'OTP sent if phone exists' })
-  async forgotPassword(
-    @Body() dto: ForgotPasswordDto,
-  ): Promise<{ message: string }> {
-    return this.authService.forgotPassword(dto);
-  }
-
-  /**
-   * Reset password with OTP verification
+   * Reset password with Firebase token verification
    */
   @Public()
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
   @ApiOperationDecorator({
-    summary: 'Reset password with OTP',
-    description: 'Resets the user password after verifying OTP',
+    summary: 'Reset password with Firebase token',
+    description: 'Resets the user password after verifying Firebase token',
   })
   @ApiResponse({ status: 200, description: 'Password reset successful' })
-  @ApiResponse({ status: 400, description: 'Invalid OTP' })
+  @ApiResponse({ status: 400, description: 'Invalid Firebase token' })
   async resetPassword(
     @Body() dto: ResetPasswordDto,
   ): Promise<{ message: string }> {

@@ -23,7 +23,6 @@ import {
   RegisterDto,
   LoginDto,
   RefreshTokenDto,
-  ForgotPasswordDto,
   ResetPasswordDto,
   LogoutDto,
   QrGenerateDto,
@@ -57,16 +56,15 @@ export class AuthService {
     private readonly firebaseService: FirebaseService,
   ) {}
 
-  /**
-   * Register a new user
-   */
-  async register(dto: RegisterDto): Promise<AuthResponseDto> {
-    this.logger.log('Registering new user with Firebase token');
-
-    // 1. Verify Firebase ID token
-    const firebaseUser = await this.firebaseService.verifyIdToken(
-      dto.firebaseIdToken,
-    );
+  private async getFirebaseUserFromToken(firebaseToken: string): Promise<{
+    uid: string;
+    phone_number?: string;
+    email?: string;
+    name?: string;
+    picture?: string;
+  }> {
+    const firebaseUser =
+      await this.firebaseService.verifyIdToken(firebaseToken);
 
     if (!firebaseUser.phone_number) {
       throw BusinessException.badRequest(
@@ -74,12 +72,23 @@ export class AuthService {
       );
     }
 
-    const phone = firebaseUser.phone_number;
-    this.logger.log(`Firebase user verified: ${phone}`);
+    return firebaseUser;
+  }
+  /**
+   * Register a new user
+   */
+  async register(dto: RegisterDto): Promise<AuthResponseDto> {
+    this.logger.log('Registering new user with Firebase token');
+
+    // 1. Verify Firebase ID token
+    const firebaseUser = await this.getFirebaseUserFromToken(
+      dto.firebaseIdToken,
+    );
+    this.logger.log(`Firebase user verified: ${firebaseUser.phone_number}`);
 
     // 2. Check if phone already exists
     const existingUser = await this.userRepository.findOne({
-      where: { phone },
+      where: { phone: firebaseUser.phone_number },
     });
 
     if (existingUser) {
@@ -102,9 +111,9 @@ export class AuthService {
 
     // 4. Create user (no password needed - Firebase handles auth)
     const user = this.userRepository.create({
-      phone,
+      phone: firebaseUser.phone_number,
       passwordHash,
-      fullName: dto.fullName || firebaseUser.name || phone,
+      fullName: dto.fullName || firebaseUser.name || firebaseUser.phone_number,
       email: email ?? null,
       avatarUrl: firebaseUser.picture ?? null,
       dateOfBirth: dto.dateOfBirth ? new Date(dto.dateOfBirth) : null,
@@ -115,7 +124,6 @@ export class AuthService {
     const savedUser = await this.userRepository.save(user);
     this.logger.log(`User registered successfully: ${savedUser.id}`);
 
-    // 5. Generate JWT tokens for our system
     const tokens = this.jwtService.generateTokenPair(
       savedUser.id,
       savedUser.phone,
@@ -211,38 +219,26 @@ export class AuthService {
     }
   }
 
-  async forgotPassword(dto: ForgotPasswordDto): Promise<{ message: string }> {
-    this.logger.log(`Password reset requested for: ${dto.phone}`);
-
-    const user = await this.userRepository.findOne({
-      where: { phone: dto.phone },
-    });
-
-    if (!user) {
-      return { message: 'If the phone number exists, an OTP has been sent' };
-    }
-
-    this.logger.log(`OTP would be sent to ${dto.phone}`);
-    return { message: 'If the phone number exists, an OTP has been sent' };
-  }
-
   /**
-   * Reset password with OTP verification
+   * Reset password with Firebase token verification
    */
   async resetPassword(dto: ResetPasswordDto): Promise<{ message: string }> {
-    this.logger.log(`Password reset attempt for: ${dto.phone}`);
+    this.logger.log('Password reset attempt with Firebase token');
+
+    // Verify Firebase ID token
+    const firebaseUser = await this.getFirebaseUserFromToken(
+      dto.firebaseIdToken,
+    );
+    this.logger.log(`Firebase user verified: ${firebaseUser.phone_number}`);
 
     const user = await this.userRepository.findOne({
-      where: { phone: dto.phone },
+      where: { phone: firebaseUser.phone_number },
     });
 
     if (!user) {
-      throw BusinessException.badRequest(ErrorCode.AUTH_OTP_INVALID);
+      throw BusinessException.badRequest(ErrorCode.AUTH_INVALID_CREDENTIALS);
     }
 
-    if (dto.otp !== '123456') {
-      throw BusinessException.badRequest(ErrorCode.AUTH_OTP_INVALID);
-    }
     const passwordHash = await bcrypt.hash(dto.newPassword, this.SALT_ROUNDS);
 
     await this.userRepository.update(user.id, { passwordHash });

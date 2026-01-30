@@ -6,7 +6,6 @@ import type {
   LoginDto,
   RefreshTokenDto,
   LogoutDto,
-  ForgotPasswordDto,
   ResetPasswordDto,
   AuthResponseDto,
   RefreshTokenResponseDto,
@@ -95,21 +94,7 @@ export class SsoClientService extends BaseHttpClient {
   }
 
   /**
-   * Request password reset OTP
-   */
-  async forgotPassword(dto: ForgotPasswordDto): Promise<{ message: string }> {
-    try {
-      const response = await this.authApi.forgotPassword({
-        forgotPasswordDto: dto,
-      });
-      return { message: response.data.message || 'OTP sent successfully' };
-    } catch (error) {
-      this.handleError('forgotPassword', error);
-    }
-  }
-
-  /**
-   * Reset password with OTP
+   * Reset password with Firebase token
    */
   async resetPassword(dto: ResetPasswordDto): Promise<{ message: string }> {
     try {

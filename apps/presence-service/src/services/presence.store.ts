@@ -17,7 +17,6 @@ interface PresenceEntry {
 export class PresenceStore {
   // Reasonable defaults (you asked for it): heartbeat 15s, TTL 60s
   private readonly ttlMs = Number(process.env.PRESENCE_TTL_MS ?? 60_000);
-
   private readonly bySocketId = new Map<string, PresenceEntry>();
 
   upsertOnline(

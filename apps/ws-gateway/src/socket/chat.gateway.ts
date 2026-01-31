@@ -56,26 +56,25 @@ export class ChatGateway implements OnModuleInit {
       (socket.handshake.auth?.token as string | undefined);
 
     if (!authHeader) {
-      socket.disconnect(true);
+      socket.data.userId = undefined;
       return;
     }
 
-    const token = authHeader.startsWith('Bearer ')
-      ? authHeader.slice(7)
-      : authHeader;
     try {
-      const user = this.jwtService.verifyToken(token);
+      const user = this.jwtService.verifyToken(
+        authHeader.startsWith('Bearer ') ? authHeader.slice(7) : authHeader,
+      );
+
       socket.data.userId = user.userId;
       void socket.join(`user:${user.userId}`);
 
-      const cmd: PresenceConnectCommand = {
+      this.kafka.emit(KafkaTopics.PresenceConnect, {
         user_id: user.userId,
         socket_id: socket.id,
         connected_at: Date.now(),
-      };
-      void this.kafka.emit(KafkaTopics.PresenceConnect, cmd);
+      });
     } catch {
-      socket.disconnect(true);
+      socket.data.userId = undefined;
     }
   }
 

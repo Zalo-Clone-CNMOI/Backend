@@ -12,6 +12,11 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule);
 
+  app.enableCors({
+    origin: true,
+    credentials: true,
+  });
+
   app.connectMicroservice(createKafkaMicroserviceOptions(config));
   await app.startAllMicroservices();
 
@@ -19,10 +24,19 @@ async function bootstrap() {
     const adapter = new RedisIoAdapter(app);
     await adapter.connectToRedis();
     app.useWebSocketAdapter(adapter);
+    console.log(
+      `✅ Redis Adapter initialized with URL: ${process.env.REDIS_URL}`,
+    );
+  } else {
+    console.warn(
+      '⚠️ NO REDIS URL FOUND - Socket will run in Memory mode (Not reliable for Cluster)',
+    );
   }
 
   const port = Number(process.env.PORT ?? 3001);
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
+
+  console.log(`🚀 Application is running on: ${await app.getUrl()}`);
 }
 
 void bootstrap();

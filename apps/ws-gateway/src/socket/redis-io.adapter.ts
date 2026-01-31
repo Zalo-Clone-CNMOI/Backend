@@ -2,7 +2,7 @@ import { IoAdapter } from '@nestjs/platform-socket.io';
 import type { INestApplicationContext } from '@nestjs/common';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { createClient, type RedisClientType } from 'redis';
-import type { Server } from 'socket.io';
+import type { Server, ServerOptions } from 'socket.io';
 
 export class RedisIoAdapter extends IoAdapter {
   private adapterConstructor?: Parameters<Server['adapter']>[0];
@@ -27,8 +27,17 @@ export class RedisIoAdapter extends IoAdapter {
     ) as unknown as Parameters<Server['adapter']>[0];
   }
 
-  override createIOServer(port: number, options?: any): any {
-    const server = super.createIOServer(port, options) as Server;
+  override createIOServer(port: number, options?: ServerOptions): Server {
+    const server = super.createIOServer(port, {
+      ...options,
+      cors: {
+        origin: true,
+        methods: ['GET', 'POST'],
+        credentials: true,
+      },
+      transports: ['websocket', 'polling'],
+    }) as Server;
+
     if (this.adapterConstructor) {
       server.adapter(this.adapterConstructor);
     }

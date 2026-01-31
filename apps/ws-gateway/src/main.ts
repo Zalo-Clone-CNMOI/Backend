@@ -4,6 +4,7 @@ import { RedisIoAdapter } from './socket/redis-io.adapter';
 import { loadConfig } from '@libs/config';
 import { createKafkaMicroserviceOptions } from '@libs/kafka';
 
+
 async function bootstrap() {
   process.env.SERVICE_NAME ??= 'ws-gateway';
   process.env.KAFKA_GROUP_ID ??= 'ws-gateway-fanout';
@@ -17,10 +18,8 @@ async function bootstrap() {
     credentials: true,
   });
 
-  app.connectMicroservice(createKafkaMicroserviceOptions(config));
-  await app.startAllMicroservices();
-
   if (process.env.REDIS_URL) {
+    console.log('🔧 Setting up Redis Adapter...');
     const adapter = new RedisIoAdapter(app);
     await adapter.connectToRedis();
     app.useWebSocketAdapter(adapter);
@@ -33,10 +32,15 @@ async function bootstrap() {
     );
   }
 
+  app.connectMicroservice(createKafkaMicroserviceOptions(config));
+  await app.startAllMicroservices();
+  console.log('✅ Kafka microservices started');
+
   const port = Number(process.env.PORT ?? 3001);
   await app.listen(port, '0.0.0.0');
 
   console.log(`🚀 Application is running on: ${await app.getUrl()}`);
+  console.log(`📡 WebSocket server running on port ${port}`);
 }
 
 void bootstrap();

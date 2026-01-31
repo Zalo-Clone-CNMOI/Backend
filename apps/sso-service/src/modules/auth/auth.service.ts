@@ -369,7 +369,7 @@ export class AuthService {
   async confirmQrSession(
     userId: string,
     dto: QrConfirmDto,
-  ): Promise<{ message: string }> {
+  ): Promise<{ message: string; data: unknown }> {
     this.logger.log(
       `Confirming QR session: ${dto.sessionId} by user: ${userId}`,
     );
@@ -418,7 +418,7 @@ export class AuthService {
         `QR session confirmed and Kafka event emitted: ${dto.sessionId}`,
       );
 
-      return { message: 'QR login confirmed successfully' };
+      return { message: 'QR login confirmed successfully', data: result };
     } catch (error) {
       throw new BadRequestException(
         'Failed to confirm QR session. Please try again.',

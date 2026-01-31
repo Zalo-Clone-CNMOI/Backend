@@ -13,7 +13,6 @@ import { canUserAccessConversation } from '@libs/mvp-access';
 import {
   KafkaTopics,
   WsEvents,
-  type PresenceConnectCommand,
   type PresenceDisconnectCommand,
   type PresenceHeartbeatCommand,
   type WsChatJoinPayload,
@@ -81,6 +80,8 @@ export class ChatGateway implements OnModuleInit {
   handleDisconnect(socket: AuthedSocket) {
     const userId = socket.data.userId;
     if (!userId) return;
+
+    console.log('[WS DISCONNECT]', socket.id);
 
     const cmd: PresenceDisconnectCommand = {
       user_id: userId,
@@ -290,7 +291,11 @@ export class ChatGateway implements OnModuleInit {
    * Emit event to a specific socket by ID
    * Used for QR login to send tokens directly to PC socket
    */
-  emitToSocket(socketId: string, event: string, payload: unknown) {
+  async emitToSocket(socketId: string, event: string, payload: unknown) {
+    const sockets = await this.server.in(socketId).fetchSockets();
+
+    console.log('Socket exists (cluster)?', sockets.length > 0);
+
     this.server.to(socketId).emit(event, payload);
   }
 }

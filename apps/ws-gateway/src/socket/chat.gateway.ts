@@ -294,7 +294,21 @@ export class ChatGateway implements OnModuleInit {
   async emitToSocket(socketId: string, event: string, payload: unknown) {
     const sockets = await this.server.in(socketId).fetchSockets();
 
-    console.log('Socket exists (cluster)?', sockets.length > 0);
+    console.log(
+      '[ChatGateway.emitToSocket] Target socket/room:',
+      socketId,
+      'Event:',
+      event,
+      'Sockets found:',
+      sockets.length,
+    );
+
+    if (sockets.length === 0) {
+      console.warn(
+        '[ChatGateway.emitToSocket] No sockets found for id/room:',
+        socketId,
+      );
+    }
 
     this.server.to(socketId).emit(event, payload);
   }

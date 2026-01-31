@@ -310,6 +310,6 @@ export class ChatGateway implements OnModuleInit {
       );
     }
 
-    this.server.to(socketId).emit(event, payload);
+    this.server.volatile.to(socketId).emit(event, payload);
   }
 }

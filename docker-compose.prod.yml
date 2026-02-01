@@ -196,6 +196,9 @@ services:
       FIREBASE_PRIVATE_KEY: ${FIREBASE_PRIVATE_KEY}
       # Redis
       REDIS_URL: redis://redis:6379
+      # Kafka
+      KAFKA_BROKERS: kafka:29092
+      KAFKA_CLIENT_ID: sso-service
       # CORS
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
       DB_HOST: database-1.cda2o0ikkgnf.ap-southeast-1.rds.amazonaws.com
@@ -206,6 +209,8 @@ services:
     networks:
       - zalo_network
     depends_on:
+      kafka:
+        condition: service_healthy
       redis:
         condition: service_healthy
     restart: unless-stopped

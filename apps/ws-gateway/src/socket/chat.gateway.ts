@@ -50,11 +50,17 @@ export class ChatGateway implements OnModuleInit {
   }
 
   handleConnection(socket: AuthedSocket) {
+    console.log('[ChatGateway.handleConnection] 🔌 New connection:', socket.id);
+
     const authHeader =
       socket.handshake.headers['authorization'] ??
       (socket.handshake.auth?.token as string | undefined);
 
     if (!authHeader) {
+      console.log(
+        '[ChatGateway.handleConnection] ⚠️ No auth token, socket:',
+        socket.id,
+      );
       socket.data.userId = undefined;
       return;
     }
@@ -67,12 +73,22 @@ export class ChatGateway implements OnModuleInit {
       socket.data.userId = user.userId;
       void socket.join(`user:${user.userId}`);
 
+      console.log(
+        '[ChatGateway.handleConnection] ✅ Authenticated:',
+        JSON.stringify({ socketId: socket.id, userId: user.userId }),
+      );
+
       this.kafka.emit(KafkaTopics.PresenceConnect, {
         user_id: user.userId,
         socket_id: socket.id,
         connected_at: Date.now(),
       });
-    } catch {
+    } catch (err) {
+      console.log(
+        '[ChatGateway.handleConnection] ❌ Auth failed:',
+        socket.id,
+        err,
+      );
       socket.data.userId = undefined;
     }
   }
@@ -292,10 +308,34 @@ export class ChatGateway implements OnModuleInit {
    * Used for QR login to send tokens directly to PC socket
    */
   async emitToSocket(socketId: string, event: string, payload: unknown) {
+    console.log(
+      '[ChatGateway.emitToSocket] 📤 Attempting to emit:',
+      JSON.stringify({
+        socketId,
+        event,
+        payloadKeys: Object.keys(payload as object),
+      }),
+    );
+
+    console.log(
+      '[ChatGateway.emitToSocket] 📊 Server adapter:',
+      this.server.adapter?.constructor?.name,
+    );
+
+    const allSockets = await this.server.fetchSockets();
+    console.log(
+      '[ChatGateway.emitToSocket] 📊 Total connected sockets:',
+      allSockets.length,
+    );
+    console.log(
+      '[ChatGateway.emitToSocket] 📊 All socket IDs:',
+      allSockets.map((s) => s.id),
+    );
+
     const sockets = await this.server.in(socketId).fetchSockets();
 
     console.log(
-      '[ChatGateway.emitToSocket] Target socket/room:',
+      '[ChatGateway.emitToSocket] 🎯 Target socket/room:',
       socketId,
       'Event:',
       event,
@@ -304,12 +344,30 @@ export class ChatGateway implements OnModuleInit {
     );
 
     if (sockets.length === 0) {
-      console.warn(
-        '[ChatGateway.emitToSocket] No sockets found for id/room:',
+      console.error(
+        '[ChatGateway.emitToSocket] ❌ No sockets found for id/room:',
         socketId,
+      );
+      console.error(
+        '[ChatGateway.emitToSocket] ⚠️ This socket may be connected to a different instance (Redis adapter issue).',
+      );
+    } else {
+      console.log(
+        '[ChatGateway.emitToSocket] ✅ Found socket(s):',
+        sockets.map((s) => ({ id: s.id, rooms: Array.from(s.rooms) })),
       );
     }
 
-    this.server.volatile.to(socketId).emit(event, payload);
+    const emitResult = this.server.to(socketId).emit(event, payload);
+    console.log(
+      '[ChatGateway.emitToSocket] 📡 Emit executed. Result:',
+      typeof emitResult,
+    );
+
+    const roomEmitResult = this.server.to(`${socketId}`).emit(event, payload);
+    console.log(
+      '[ChatGateway.emitToSocket] 📡 Room emit executed. Result:',
+      typeof roomEmitResult,
+    );
   }
 }

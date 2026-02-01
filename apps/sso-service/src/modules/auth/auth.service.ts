@@ -403,7 +403,7 @@ export class AuthService {
 
         const tokens = this.jwtService.generateTokenPair(user.id, user.phone);
 
-        this.kafkaClient.emit(KafkaTopics.AuthQrConfirmed, {
+        const kafkaPayload = {
           sessionId: session.sessionId,
           socketId: session.socketId,
           userId: user.id,
@@ -411,7 +411,20 @@ export class AuthService {
           refreshToken: tokens.refreshToken,
           expiresIn: tokens.expiresIn,
           user: this.toUserResponse(user),
-        });
+        };
+
+        this.logger.log(
+          `[QR Confirm] 📤 Emitting to Kafka topic: ${KafkaTopics.AuthQrConfirmed}`,
+        );
+        this.logger.log(
+          `[QR Confirm] 📦 Payload: ${JSON.stringify({ sessionId: kafkaPayload.sessionId, socketId: kafkaPayload.socketId, userId: kafkaPayload.userId })}`,
+        );
+
+        this.kafkaClient.emit(KafkaTopics.AuthQrConfirmed, kafkaPayload);
+
+        this.logger.log(
+          `[QR Confirm] ✅ Kafka emit completed for session: ${session.sessionId}`,
+        );
       });
 
       this.logger.log(

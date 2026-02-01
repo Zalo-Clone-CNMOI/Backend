@@ -19,23 +19,40 @@ async function bootstrap() {
   });
 
   const redisUrl = process.env.REDIS_URL;
+  const adapter = new RedisIoAdapter(app);
+
   if (redisUrl) {
     console.log(
-      '[Bootstrap] REDIS_URL detected. Initializing RedisIoAdapter with URL:',
+      '[Bootstrap] 🔌 REDIS_URL detected. Initializing RedisIoAdapter with URL:',
       redisUrl,
     );
 
-    const adapter = new RedisIoAdapter(app);
     await adapter.connectToRedis();
+
+    const status = adapter.getConnectionStatus();
+    console.log('[Bootstrap] ✅ RedisIoAdapter.connectToRedis completed.');
     console.log(
-      '[Bootstrap] RedisIoAdapter.connectToRedis completed. Registering WebSocket adapter.',
+      '[Bootstrap] 📊 Connection Status:',
+      JSON.stringify(status, null, 2),
     );
-    app.useWebSocketAdapter(adapter);
+
+    if (!status.isRedisConnected || !status.hasAdapter) {
+      console.error(
+        '[Bootstrap] ❌ CRITICAL WARNING: Redis adapter failed to initialize properly!',
+      );
+      console.error(
+        '[Bootstrap] ⚠️ Socket.IO will fall back to in-memory mode - not suitable for production!',
+      );
+    }
   } else {
     console.warn(
-      '[Bootstrap] REDIS_URL is not set. WebSocket will run with in-memory adapter (NOT suitable for clustered / multi-instance deployment).',
+      '[Bootstrap] ⚠️ REDIS_URL is not set. WebSocket will run with in-memory adapter (NOT suitable for clustered / multi-instance deployment).',
     );
   }
+
+  console.log('[Bootstrap] 🔧 Registering WebSocket adapter...');
+  app.useWebSocketAdapter(adapter);
+  console.log('[Bootstrap] ✅ WebSocket adapter registered.');
 
   console.log('[Bootstrap] Connecting Kafka microservice(s)...');
   app.connectMicroservice(createKafkaMicroserviceOptions(config));

@@ -20,33 +20,10 @@ import { ChatGateway } from '../socket/chat.gateway';
 
 @Controller()
 export class KafkaFanoutConsumer {
-  constructor(private readonly gateway: ChatGateway) {
-    console.log(
-      '[KafkaFanoutConsumer] 🔌 Kafka consumer initialized. Subscribed topics:',
-      [
-        KafkaTopics.ChatMessageCreated,
-        KafkaTopics.PresenceUpdated,
-        KafkaTopics.AuthQrConfirmed,
-        KafkaTopics.AuthQrRejected,
-        KafkaTopics.SendFriendRequest,
-        KafkaTopics.RespondFriendRequest,
-        KafkaTopics.CancelFriendRequest,
-        KafkaTopics.FriendRemoved,
-        KafkaTopics.ChatMessageUpdated,
-        KafkaTopics.ChatMessageDeleted,
-        KafkaTopics.ChatReactionAdded,
-        KafkaTopics.ChatReactionRemoved,
-      ],
-    );
-  }
+  constructor(private readonly gateway: ChatGateway) {}
 
   @EventPattern(KafkaTopics.ChatMessageCreated)
   onMessageCreated(@Payload() payload: ChatMessageCreatedEvent) {
-    console.log(
-      '[KafkaFanoutConsumer.onMessageCreated] 🎯 RECEIVED:',
-      payload.message_id,
-    );
-
     this.gateway.broadcastToConversation(
       payload.conversation_id,
       WsEvents.ChatMessage,
@@ -72,20 +49,6 @@ export class KafkaFanoutConsumer {
    */
   @EventPattern(KafkaTopics.AuthQrConfirmed)
   onQrConfirmed(@Payload() payload: AuthQrConfirmedEvent) {
-    console.log(
-      '[KafkaFanoutConsumer.onQrConfirmed] 🎯 RECEIVED Kafka event:',
-      JSON.stringify({
-        socketId: payload.socketId,
-        sessionId: payload.sessionId,
-        hasAccessToken: !!payload.accessToken,
-        hasUser: !!payload.user,
-      }),
-    );
-
-    console.log(
-      '[KafkaFanoutConsumer.onQrConfirmed] 📤 Calling gateway.emitToSocket...',
-    );
-
     void this.gateway.emitToSocket(payload.socketId, WsEvents.QrConfirmed, {
       sessionId: payload.sessionId,
       accessToken: payload.accessToken,
@@ -93,10 +56,6 @@ export class KafkaFanoutConsumer {
       expiresIn: payload.expiresIn,
       user: payload.user,
     });
-
-    console.log(
-      '[KafkaFanoutConsumer.onQrConfirmed] ✅ emitToSocket call completed',
-    );
   }
 
   /**
@@ -105,14 +64,6 @@ export class KafkaFanoutConsumer {
    */
   @EventPattern(KafkaTopics.AuthQrRejected)
   onQrRejected(@Payload() payload: AuthQrRejectedEvent) {
-    console.log(
-      '[KafkaFanoutConsumer.onQrRejected] 🎯 RECEIVED Kafka event:',
-      JSON.stringify({
-        socketId: payload.socketId,
-        sessionId: payload.sessionId,
-      }),
-    );
-
     void this.gateway.emitToSocket(payload.socketId, WsEvents.QrRejected, {
       sessionId: payload.sessionId,
       reason: payload.reason,

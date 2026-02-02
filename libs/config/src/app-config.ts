@@ -21,6 +21,9 @@ export interface AppConfig {
 
   redisUrl?: string;
 
+  // CORS configuration
+  allowedOrigins: string[];
+
   awsRegion?: string;
   s3Bucket?: string;
   s3PresignExpiresSeconds?: number;
@@ -45,6 +48,12 @@ export function loadConfig(serviceName: string): AppConfig {
     .map((v) => v.trim())
     .filter(Boolean);
 
+  const allowedOrigins = process.env.CORS_ORIGIN
+    ? process.env.CORS_ORIGIN.split(',')
+        .map((v) => v.trim())
+        .filter(Boolean)
+    : ['http://localhost:3000']; // Default for development
+
   return {
     nodeEnv,
     serviceName,
@@ -68,6 +77,9 @@ export function loadConfig(serviceName: string): AppConfig {
     postgresPassword: process.env.DB_PASSWORD ?? 'postgres',
     postgresDatabase: process.env.DB_NAME ?? 'zaloclone',
     redisUrl: process.env.REDIS_URL,
+
+    // CORS configuration
+    allowedOrigins,
 
     awsRegion: process.env.AWS_REGION,
     s3Bucket: process.env.S3_BUCKET,

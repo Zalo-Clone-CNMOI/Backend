@@ -17,8 +17,7 @@ export class IpFilterMiddleware implements NestMiddleware {
 
     // const allowedIps = ['127.0.0.1', '103.15.50.145'];
     const allowedOrigins =
-      process.env.ALLOWED_ORIGINS?.split(',').map((o) => normalizeOrigin(o)) ||
-      [];
+      process.env.CORS_ORIGIN?.split(',').map((o) => normalizeOrigin(o)) || [];
 
     // Check IP (nếu cần)
     // const isIpAllowed = allowedIps.includes(cleanedIp);

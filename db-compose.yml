@@ -1,0 +1,61 @@
+version: "3.8"
+name: app-compose-prod
+
+services:
+  scylla-init:
+    image: scylladb/scylla:5.4
+    container_name: zalo_scylla_init
+    volumes:
+      - ./infra/scylla:/infra/scylla
+    environment:
+      - SCYLLA_CONTACT_POINTS=${SCYLLA_CONTACT_POINTS:-scylla}
+      - SCYLLA_LOCAL_DATACENTER=${SCYLLA_LOCAL_DATACENTER:-datacenter1}
+      - SCYLLA_KEYSPACE=${SCYLLA_KEYSPACE:-chat}
+
+    entrypoint: ["/bin/bash", "-c"]
+
+    command: >
+      "
+      echo 'Waiting for ScyllaDB at $${SCYLLA_CONTACT_POINTS} to be ready...';
+      while ! cqlsh $${SCYLLA_CONTACT_POINTS} 9042 -e 'DESCRIBE CLUSTER'; do
+        echo 'ScyllaDB not ready yet... sleeping';
+        sleep 5;
+      done;
+      echo 'ScyllaDB is ready! Initializing schema...';
+      cqlsh $${SCYLLA_CONTACT_POINTS} 9042 -f /infra/scylla/schema.cql;
+      echo 'Schema initialized.';
+      "
+    depends_on:
+      scylla:
+        condition: service_healthy
+    networks:
+      - zalo_network
+    restart: "no"
+
+  scylla:
+    image: scylladb/scylla:5.4
+    container_name: zalo_scylla
+    command: ["--smp", "1", "--memory", "512M", "--overprovisioned", "1"]
+    volumes:
+      - scylla_data:/var/lib/scylla
+    networks:
+      - zalo_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "cqlsh", "-e", "describe cluster"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60sư
+
+volumes:
+  scylla_data:
+    driver: local
+
+networks:
+  zalo_network:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.28.0.0/16

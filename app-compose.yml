@@ -172,7 +172,7 @@ services:
         reservations:
           cpus: "0.25"
           memory: 256M
-          
+
   media-service:
     image: ${DOCKER_REGISTRY:-ghcr.io}/${DOCKER_IMAGE_PREFIX:-zalo-clone}/media-service:${IMAGE_TAG:-latest}
     container_name: zalo_media_service
@@ -331,6 +331,7 @@ services:
 
 networks:
   zalo_network:
+    external: true
     driver: bridge
     ipam:
       driver: default

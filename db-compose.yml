@@ -46,7 +46,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 10
-      start_period: 60sư
+      start_period: 60s
 
 volumes:
   scylla_data:

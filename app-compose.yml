@@ -1,8 +1,6 @@
-version: "3.8"
 name: app-compose-prod
 
 services:
-
   bff-service:
     image: ${DOCKER_REGISTRY:-ghcr.io}/${DOCKER_IMAGE_PREFIX:-zalo-clone}/bff-service:${IMAGE_TAG:-latest}
     container_name: zalo_bff_service
@@ -24,11 +22,6 @@ services:
       - "${BFF_PORT:-5000}:5000"
     networks:
       - zalo_network
-    depends_on:
-      kafka:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test:
@@ -83,11 +76,6 @@ services:
       DB_NAME: ${POSTGRES_DB:-postgres}
     networks:
       - zalo_network
-    depends_on:
-      kafka:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test:
@@ -142,13 +130,6 @@ services:
       DB_NAME: ${POSTGRES_DB:-postgres}
     networks:
       - zalo_network
-    depends_on:
-      kafka:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      scylla:
-        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test:
@@ -194,9 +175,6 @@ services:
       - "${MEDIA_PORT:-3003}:3003"
     networks:
       - zalo_network
-    depends_on:
-      kafka:
-        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test:
@@ -242,13 +220,6 @@ services:
       - "${CHAT_PORT:-5002}:5002"
     networks:
       - zalo_network
-    depends_on:
-      kafka:
-        condition: service_healthy
-      scylla:
-        condition: service_healthy
-      scylla-init:
-        condition: service_completed_successfully
     restart: unless-stopped
     healthcheck:
       test:
@@ -300,11 +271,6 @@ services:
       - "${WS_PORT:-3001}:3001"
     networks:
       - zalo_network
-    depends_on:
-      kafka:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test:
@@ -332,8 +298,3 @@ services:
 networks:
   zalo_network:
     external: true
-    driver: bridge
-    ipam:
-      driver: default
-      config:
-        - subnet: 172.28.0.0/16

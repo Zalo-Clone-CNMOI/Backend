@@ -97,9 +97,6 @@ services:
       - ./infra/nginx/ssl:/etc/nginx/ssl:ro
     networks:
       - zalo_network
-    depends_on:
-      - bff-service
-      - ws-gateway
     restart: unless-stopped
     profiles:
       - with-nginx

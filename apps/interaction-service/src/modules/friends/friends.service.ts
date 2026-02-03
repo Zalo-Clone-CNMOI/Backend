@@ -10,6 +10,7 @@ import {
   PaginationMeta,
   PaginationQuery,
 } from '@app/types';
+import { CacheService } from '@libs/redis';
 
 import {
   SendFriendRequestDto,
@@ -35,6 +36,7 @@ export class FriendsService {
     private readonly friendshipRepository: Repository<Friendship>,
     @Inject(KAFKA_CLIENT)
     private readonly kafkaClient: ClientKafka,
+    private readonly cacheService: CacheService,
   ) {}
 
   /**
@@ -196,7 +198,6 @@ export class FriendsService {
       }
     }
 
-    // Create friend request
     const friendRequest = this.friendshipRepository.create({
       requesterId: userId,
       addresseeId: targetUserId,
@@ -206,7 +207,6 @@ export class FriendsService {
     const saved = await this.friendshipRepository.save(friendRequest);
     this.logger.log(`Friend request sent: ${userId} -> ${targetUserId}`);
 
-    // Get requester info for notification
     const requester = await this.userRepository.findOne({
       where: { id: userId },
       select: ['id', 'fullName', 'avatarUrl', 'phone'],
@@ -253,6 +253,11 @@ export class FriendsService {
       await this.friendshipRepository.save(request);
       this.logger.log(`Friend request accepted: ${request.id}`);
 
+      await this.cacheService.invalidateFriendLists([
+        request.requesterId,
+        request.addresseeId,
+      ]);
+
       // Get addressee info for notification
       const addressee = await this.userRepository.findOne({
         where: { id: userId },
@@ -276,7 +281,6 @@ export class FriendsService {
       await this.friendshipRepository.remove(request);
       this.logger.log(`Friend request rejected: ${request.id}`);
 
-      // Emit rejection event
       this.kafkaClient.emit('friend.request.respond', {
         requestId: request.id,
         requesterId: request.requesterId,
@@ -310,7 +314,6 @@ export class FriendsService {
     await this.friendshipRepository.remove(request);
     this.logger.log(`Friend request cancelled: ${requestId}`);
 
-    // Notify addressee about cancellation
     this.kafkaClient.emit('friend.request.cancelled', {
       requestId: request.id,
       requesterId: userId,
@@ -348,6 +351,8 @@ export class FriendsService {
 
     await this.friendshipRepository.remove(friendship);
     this.logger.log(`Friend removed: ${userId} <-> ${friendId}`);
+
+    await this.cacheService.invalidateFriendLists([userId, friendId]);
 
     // Notify the other user
     this.kafkaClient.emit('friend.removed', {

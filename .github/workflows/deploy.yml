@@ -19,6 +19,9 @@ on:
       - "package.json"
       - "pnpm-lock.yaml"
       - "docker-compose.prod.yml"
+      - "infra-compose.yml"
+      - "db-compose.yml"
+      - "app-compose.yml"
       - ".github/workflows/**"
 
   workflow_dispatch:
@@ -27,7 +30,7 @@ on:
         description: "Service to deploy (all, bff, sso, interaction, media, chat, ws)"
         required: false
         default: "all"
-        
+
 permissions:
   contents: read
   packages: write
@@ -257,13 +260,16 @@ jobs:
           echo "✅ SSH connectivity validated"
 
       # ------------------------------------------
-      # STEP 3: Copy docker-compose to server
+      # STEP 3: Copy docker-compose files to server
       # ------------------------------------------
-      - name: Copy docker-compose to server
+      - name: Copy docker-compose files to server
         run: |
           scp -o BatchMode=yes \
               -o ConnectTimeout=10 \
               docker-compose.prod.yml \
+              infra-compose.yml \
+              db-compose.yml \
+              app-compose.yml \
               ${{ env.EC2_USER }}@${{ env.EC2_HOST }}:~/Backend/
 
       # ------------------------------------------
@@ -291,6 +297,10 @@ jobs:
 
             echo "🔐 Authenticating with GitHub Container Registry..."
             echo "${{ env.GH_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            # Create external network if it doesn't exist
+            echo "🌐 Ensuring external network exists..."
+            docker network create zalo_network 2>/dev/null || echo "Network already exists or creation failed (probably already exists)"
 
             # Load environment variables
             if [ -f .env.prod ]; then
@@ -348,12 +358,12 @@ jobs:
             }
 
             # Deploy changed services
-            [ "${{ env.BFF_CHANGED }}" = "true" ] && deploy_service bff bff-service || true
-            [ "${{ env.SSO_CHANGED }}" = "true" ] && deploy_service sso sso-service || true
-            [ "${{ env.INTERACTION_CHANGED }}" = "true" ] && deploy_service interaction interaction-service || true
-            [ "${{ env.MEDIA_CHANGED }}" = "true" ] && deploy_service media media-service || true
-            [ "${{ env.CHAT_CHANGED }}" = "true" ] && deploy_service chat chat-service || true
-            [ "${{ env.WS_CHANGED }}" = "true" ] && deploy_service ws ws-gateway || true
+            [ "${{ env.BFF_CHANGED }}" = "true" ] && deploy_service bff-service bff-service || true
+            [ "${{ env.SSO_CHANGED }}" = "true" ] && deploy_service sso-service sso-service || true
+            [ "${{ env.INTERACTION_CHANGED }}" = "true" ] && deploy_service interaction-service interaction-service || true
+            [ "${{ env.MEDIA_CHANGED }}" = "true" ] && deploy_service media-service media-service || true
+            [ "${{ env.CHAT_CHANGED }}" = "true" ] && deploy_service chat-service chat-service || true
+            [ "${{ env.WS_CHANGED }}" = "true" ] && deploy_service ws-gateway ws-gateway || true
 
             # Clean up old images
             echo ""
@@ -403,7 +413,16 @@ jobs:
             echo "📊 CONTAINER STATUS"
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-            docker compose -f docker-compose.prod.yml ps --format "table {{.Name}}\t{{.Status}}\t{{.Health}}"
+            echo "🏗️ Infrastructure Services:"
+            docker compose -f infra-compose.yml ps --format "table {{.Name}}\t{{.Status}}\t{{.Health}}" 2>/dev/null || echo "No infrastructure services found"
+            
+            echo ""
+            echo "💾 Database Services:"
+            docker compose -f db-compose.yml ps --format "table {{.Name}}\t{{.Status}}\t{{.Health}}" 2>/dev/null || echo "No database services found"
+            
+            echo ""
+            echo "🚀 Application Services:"
+            docker compose -f app-compose.yml ps --format "table {{.Name}}\t{{.Status}}\t{{.Health}}" 2>/dev/null || echo "No application services found"
 
             echo ""
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -413,27 +432,40 @@ jobs:
             UNHEALTHY_CONTAINERS=""
             EXITED_CONTAINERS=""
 
-            # Check for unhealthy containers
-            UNHEALTHY=$(docker compose -f docker-compose.prod.yml ps --format json | jq -r 'select(.Health == "unhealthy") | .Name' 2>/dev/null || true)
-            if [ -n "$UNHEALTHY" ]; then
-              UNHEALTHY_CONTAINERS="$UNHEALTHY"
-              echo "❌ UNHEALTHY containers detected:"
-              echo "$UNHEALTHY" | while read -r container; do
-                echo "   - $container"
-              done
-            fi
+            # Function to check containers from a compose file
+            check_compose_file() {
+              local compose_file=$1
+              local service_type=$2
+              
+              if [ -f "$compose_file" ]; then
+                # Check for unhealthy containers
+                UNHEALTHY=$(docker compose -f "$compose_file" ps --format json 2>/dev/null | jq -r 'select(.Health == "unhealthy") | .Name' 2>/dev/null || true)
+                if [ -n "$UNHEALTHY" ]; then
+                  UNHEALTHY_CONTAINERS="$UNHEALTHY_CONTAINERS $UNHEALTHY"
+                  echo "❌ UNHEALTHY $service_type containers detected:"
+                  echo "$UNHEALTHY" | while read -r container; do
+                    echo "   - $container"
+                  done
+                fi
 
-            # Check for exited containers
-            EXITED=$(docker compose -f docker-compose.prod.yml ps --format json | jq -r 'select(.State == "exited") | .Name' 2>/dev/null || true)
-            if [ -n "$EXITED" ]; then
-              EXITED_CONTAINERS="$EXITED"
-              echo "❌ EXITED containers detected:"
-              echo "$EXITED" | while read -r container; do
-                echo "   - $container"
-                echo "   Last logs:"
-                docker logs --tail 20 "$container" 2>&1 | sed 's/^/     /'
-              done
-            fi
+                # Check for exited containers
+                EXITED=$(docker compose -f "$compose_file" ps --format json 2>/dev/null | jq -r 'select(.State == "exited") | .Name' 2>/dev/null || true)
+                if [ -n "$EXITED" ]; then
+                  EXITED_CONTAINERS="$EXITED_CONTAINERS $EXITED"
+                  echo "❌ EXITED $service_type containers detected:"
+                  echo "$EXITED" | while read -r container; do
+                    echo "   - $container"
+                    echo "   Last logs:"
+                    docker logs --tail 20 "$container" 2>&1 | sed 's/^/     /'
+                  done
+                fi
+              fi
+            }
+
+            # Check all compose files
+            check_compose_file "infra-compose.yml" "infrastructure"
+            check_compose_file "db-compose.yml" "database"
+            check_compose_file "app-compose.yml" "application"
 
             # Final verdict
             echo ""

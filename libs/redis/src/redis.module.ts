@@ -3,6 +3,7 @@ import { createClient, RedisClientType } from 'redis';
 import { APP_CONFIG, AppConfig } from '@libs/config';
 import { REDIS_CLIENT } from './redis.tokens';
 import { RedisService } from './redis.service';
+import { CacheService } from './cache.service';
 
 @Global()
 @Module({})
@@ -36,8 +37,9 @@ export class RedisModule {
           },
         },
         RedisService,
+        CacheService,
       ],
-      exports: [REDIS_CLIENT, RedisService],
+      exports: [REDIS_CLIENT, RedisService, CacheService],
     };
   }
 }

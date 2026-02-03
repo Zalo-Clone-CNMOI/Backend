@@ -19,6 +19,7 @@ import {
   PaginationMeta,
   PaginationQuery,
 } from '@app/types';
+import { CacheService } from '@libs/redis';
 
 import {
   CreateGroupConversationDto,
@@ -43,6 +44,7 @@ export class ConversationsService {
     private readonly conversationRepository: Repository<Conversation>,
     @InjectRepository(ConversationMember)
     private readonly memberRepository: Repository<ConversationMember>,
+    private readonly cacheService: CacheService,
   ) {}
 
   /**
@@ -106,6 +108,23 @@ export class ConversationsService {
     userId: string,
     conversationId: string,
   ): Promise<ConversationDetailDto> {
+    const cached =
+      await this.cacheService.getConversationDetail<ConversationDetailDto>(
+        conversationId,
+      );
+    if (cached) {
+      const isMember = await this.memberRepository.findOne({
+        where: { conversationId, userId, leftAt: IsNull() },
+      });
+      if (isMember) {
+        this.logger.debug(`Conversation detail cache HIT: ${conversationId}`);
+        return cached;
+      }
+      await this.cacheService.invalidateConversation(conversationId);
+    }
+
+    this.logger.debug(`Conversation detail cache MISS: ${conversationId}`);
+
     const conversation = await this.conversationRepository.findOne({
       where: { id: conversationId },
       relations: ['members', 'members.user'],
@@ -123,7 +142,11 @@ export class ConversationsService {
       throw BusinessException.forbidden(ErrorCode.CONVERSATION_NOT_MEMBER);
     }
 
-    return this.toDetailResponse(conversation, myMembership);
+    const detail = this.toDetailResponse(conversation, myMembership);
+
+    await this.cacheService.setConversationDetail(conversationId, detail);
+
+    return detail;
   }
 
   /**
@@ -281,6 +304,11 @@ export class ConversationsService {
 
     this.logger.log(`Conversation updated: ${conversationId} by ${userId}`);
 
+    const memberIds = conversation.members
+      .filter((m) => m.leftAt === null)
+      .map((m) => m.userId);
+    await this.cacheService.invalidateConversation(conversationId, memberIds);
+
     return this.getConversationById(userId, conversationId);
   }
 
@@ -348,6 +376,17 @@ export class ConversationsService {
 
     this.logger.log(
       `Members added to conversation ${conversationId}: ${newUserIds.join(', ')}`,
+    );
+
+    const allMemberIds = [
+      ...conversation.members
+        .filter((m) => m.leftAt === null)
+        .map((m) => m.userId),
+      ...newUserIds,
+    ];
+    await this.cacheService.invalidateConversation(
+      conversationId,
+      allMemberIds,
     );
 
     return this.getConversationById(userId, conversationId);
@@ -419,7 +458,13 @@ export class ConversationsService {
     this.logger.log(
       `Member ${memberId} removed from conversation ${conversationId}`,
     );
-
+    const affectedUserIds = conversation.members
+      .filter((m) => m.leftAt === null || m.userId === memberId)
+      .map((m) => m.userId);
+    await this.cacheService.invalidateConversation(
+      conversationId,
+      affectedUserIds,
+    );
     return { message: 'Member removed successfully' };
   }
 
@@ -447,19 +492,16 @@ export class ConversationsService {
       throw BusinessException.forbidden(ErrorCode.CONVERSATION_NOT_MEMBER);
     }
 
-    // Cannot leave direct conversation
     if (conversation.type === ConversationType.DIRECT) {
       throw BusinessException.badRequest(ErrorCode.CONVERSATION_CANNOT_LEAVE);
     }
 
-    // If owner, need to transfer ownership first (or check if last member)
     const activeMembers = conversation.members.filter((m) => m.leftAt === null);
 
     if (
       myMembership.role === UpdateMemberRoleDtoRoleEnum.OWNER &&
       activeMembers.length > 1
     ) {
-      // Find another admin or longest member to transfer ownership
       const newOwner =
         activeMembers.find(
           (m) =>
@@ -477,7 +519,8 @@ export class ConversationsService {
     await this.memberRepository.save(myMembership);
 
     this.logger.log(`User ${userId} left conversation ${conversationId}`);
-
+    await this.cacheService.invalidateConversationList(userId);
+    await this.cacheService.invalidateConversation(conversationId);
     return { message: 'Left conversation successfully' };
   }
 

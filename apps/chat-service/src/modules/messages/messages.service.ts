@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { MessageRepository } from '@libs/scylla';
+import { CacheService } from '@libs/redis';
 import type {
   PersistedMessage,
   MessageAttachment,
@@ -21,7 +22,10 @@ export class MessagesService {
   private readonly logger = new Logger(MessagesService.name);
   private readonly cdnBaseUrl: string;
 
-  constructor(private readonly messageRepository: MessageRepository) {
+  constructor(
+    private readonly messageRepository: MessageRepository,
+    private readonly cacheService: CacheService,
+  ) {
     this.cdnBaseUrl =
       process.env.CDN_BASE_URL ??
       process.env.S3_ENDPOINT ??
@@ -32,9 +36,24 @@ export class MessagesService {
     conversationId: string,
     query: GetMessagesQueryDto,
   ): Promise<MessageListResponseDto> {
+    const isFirstPage = !query.cursor;
+    const limit = query.limit ?? 50;
+
+    if (isFirstPage && limit <= 50) {
+      const cached =
+        await this.cacheService.getRecentMessages<MessageListResponseDto>(
+          conversationId,
+        );
+      if (cached) {
+        this.logger.debug(`Recent messages cache HIT: ${conversationId}`);
+        return cached;
+      }
+      this.logger.debug(`Recent messages cache MISS: ${conversationId}`);
+    }
+
     const options: CursorPaginationOptions = {
       cursor: query.cursor,
-      limit: query.limit ?? 50,
+      limit,
     };
 
     const result: CursorPaginatedResult<PersistedMessage> =
@@ -42,11 +61,17 @@ export class MessagesService {
 
     const items = result.items.map((msg) => this.toMessageResponse(msg));
 
-    return {
+    const response: MessageListResponseDto = {
       items,
       nextCursor: result.next_cursor,
       hasMore: result.has_more,
     };
+
+    if (isFirstPage && limit <= 50) {
+      await this.cacheService.setRecentMessages(conversationId, response);
+    }
+
+    return response;
   }
 
   async getMessage(

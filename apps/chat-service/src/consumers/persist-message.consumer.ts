@@ -14,6 +14,7 @@ import {
   type ChatReactionRemovedEvent,
 } from '@libs/contracts';
 import { MessageRepository } from '@libs/scylla';
+import { CacheService } from '@libs/redis';
 import { ChatPublisher } from '../services/chat.publisher';
 
 @Controller()
@@ -23,6 +24,7 @@ export class PersistMessageConsumer {
   constructor(
     private readonly repo: MessageRepository,
     private readonly publisher: ChatPublisher,
+    private readonly cacheService: CacheService,
   ) {}
 
   @EventPattern(KafkaTopics.ChatMessageSend)
@@ -61,6 +63,8 @@ export class PersistMessageConsumer {
 
     this.publisher.emit(KafkaTopics.ChatMessageCreated, event);
     this.logger.log(`Message persisted: ${payload.message_id}`);
+
+    await this.cacheService.invalidateRecentMessages(payload.conversation_id);
   }
 
   @EventPattern(KafkaTopics.ChatMessageEdit)
@@ -86,6 +90,8 @@ export class PersistMessageConsumer {
 
     this.publisher.emit(KafkaTopics.ChatMessageUpdated, event);
     this.logger.log(`Message edited: ${payload.message_id}`);
+
+    await this.cacheService.invalidateRecentMessages(payload.conversation_id);
   }
 
   @EventPattern(KafkaTopics.ChatMessageDelete)
@@ -109,6 +115,8 @@ export class PersistMessageConsumer {
 
     this.publisher.emit(KafkaTopics.ChatMessageDeleted, event);
     this.logger.log(`Message deleted: ${payload.message_id}`);
+
+    await this.cacheService.invalidateRecentMessages(payload.conversation_id);
   }
 
   @EventPattern(KafkaTopics.ChatReactionAdd)

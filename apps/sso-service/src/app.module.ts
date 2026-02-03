@@ -4,6 +4,7 @@ import { ConfigModule } from '@libs/config';
 import { LoggerModule } from '@libs/logger';
 import { DatabaseModule } from '@libs/database';
 import { AuthModule as SharedAuthModule, JwtAuthGuard } from '@libs/auth';
+import { RedisModule } from '@libs/redis';
 import { HealthController } from './health.controller';
 import { AuthModule } from './modules/auth';
 import { UsersModule } from './modules/users';
@@ -15,6 +16,7 @@ import { ThrottlerModule, seconds } from '@nestjs/throttler';
     ConfigModule,
     LoggerModule,
     DatabaseModule,
+    RedisModule.forRootAsync(),
     SharedAuthModule,
     AuthModule,
     UsersModule,

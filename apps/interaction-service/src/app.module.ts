@@ -7,6 +7,7 @@ import { ConfigModule } from '@libs/config';
 import { LoggerModule } from '@libs/logger';
 import { DatabaseModule } from '@libs/database';
 import { AuthModule as SharedAuthModule, JwtAuthGuard } from '@libs/auth';
+import { RedisModule } from '@libs/redis';
 
 import { HealthController } from './health.controller';
 import { ConversationsModule } from './modules/conversations';
@@ -17,6 +18,7 @@ import { FriendsModule } from './modules/friends';
     ConfigModule,
     LoggerModule,
     DatabaseModule,
+    RedisModule.forRootAsync(),
     SharedAuthModule,
     ConversationsModule,
     FriendsModule,

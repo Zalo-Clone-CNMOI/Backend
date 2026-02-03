@@ -9,6 +9,7 @@ import {
   PaginatedResponse,
   PaginationMeta,
 } from '@app/types';
+import { CacheService } from '@libs/redis';
 
 import {
   UpdateProfileDto,
@@ -27,12 +28,23 @@ export class UsersService {
     private readonly userRepository: Repository<User>,
     @InjectRepository(Friendship)
     private readonly friendshipRepository: Repository<Friendship>,
+    private readonly cacheService: CacheService,
   ) {}
 
   /**
    * Get current user profile
    */
   async getMyProfile(userId: string): Promise<UserProfileResponseDto> {
+    // Try cache first
+    const cached =
+      await this.cacheService.getUserProfile<UserProfileResponseDto>(userId);
+    if (cached) {
+      this.logger.debug(`User profile cache HIT: ${userId}`);
+      return cached;
+    }
+
+    this.logger.debug(`User profile cache MISS: ${userId}`);
+
     const user = await this.userRepository.findOne({
       where: { id: userId },
     });
@@ -41,7 +53,12 @@ export class UsersService {
       throw BusinessException.notFound(ErrorCode.USER_NOT_FOUND);
     }
 
-    return this.toProfileResponse(user);
+    const profile = this.toProfileResponse(user);
+
+    // Cache for future requests
+    await this.cacheService.setUserProfile(userId, profile);
+
+    return profile;
   }
 
   /**
@@ -88,7 +105,13 @@ export class UsersService {
 
     this.logger.log(`User profile updated: ${userId}`);
 
-    return this.toProfileResponse(updatedUser!);
+    const profile = this.toProfileResponse(updatedUser!);
+
+    // Invalidate cache (will be repopulated on next read)
+    await this.cacheService.invalidateUser(userId);
+    this.logger.debug(`User cache invalidated after profile update: ${userId}`);
+
+    return profile;
   }
 
   /**
@@ -98,6 +121,31 @@ export class UsersService {
     userId: string,
     currentUserId: string,
   ): Promise<PublicUserResponseDto> {
+    // Try cache first
+    const cached =
+      await this.cacheService.getUserPublic<PublicUserResponseDto>(userId);
+    if (cached) {
+      this.logger.debug(`User public profile cache HIT: ${userId}`);
+      // Still need to check blocking status (not cached)
+      const isBlocked = await this.friendshipRepository.findOne({
+        where: [
+          {
+            requesterId: userId,
+            addresseeId: currentUserId,
+            status: FriendshipStatus.BLOCKED,
+          },
+        ],
+      });
+
+      if (isBlocked) {
+        throw BusinessException.notFound(ErrorCode.USER_NOT_FOUND);
+      }
+
+      return cached;
+    }
+
+    this.logger.debug(`User public profile cache MISS: ${userId}`);
+
     const user = await this.userRepository.findOne({
       where: { id: userId },
     });
@@ -125,7 +173,12 @@ export class UsersService {
       throw BusinessException.notFound(ErrorCode.USER_NOT_FOUND);
     }
 
-    return this.toPublicResponse(user);
+    const publicProfile = this.toPublicResponse(user);
+
+    // Cache for future requests
+    await this.cacheService.setUserPublic(userId, publicProfile);
+
+    return publicProfile;
   }
 
   /**

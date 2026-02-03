@@ -127,22 +127,6 @@ If this report is missing → the task is NOT DONE.
 
 ---
 
-### REST API Flow (BFF Pattern) - STRICT
-
-For HTTP endpoints, strict adherence to the **OpenAPI Codegen** flow is required:
-
-1.  **Backend Service (`apps/*-service`)**:
-    - Implement Controller, Service, DTOs.
-    - MUST use `@nestjs/swagger` decorators (`@ApiOperation`, `@ApiResponse`, `@ApiProperty`).
-2.  **Update Client SDK (`libs/clients`)**:
-    - Update `oas.yml` (manual or extracted).
-    - Run `pnpm run codegen:<service>`.
-    - Verify generated methods in `libs/clients`.
-3.  **BFF Integration (`apps/bff-service`)**:
-    - Inject generated Client Service (e.g., `SsoClientService`).
-    - Implement BFF Controller to proxy/aggregate.
-    - Apply DTO validation.
-
 ### Shared Libraries
 
 Use path aliases only:

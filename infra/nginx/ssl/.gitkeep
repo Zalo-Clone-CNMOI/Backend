@@ -1,0 +1,43 @@
+# SSL Certificate Directory
+
+This directory should contain your SSL/TLS certificates for HTTPS.
+
+## Development/Testing
+
+Run the generation script:
+
+**Windows:**
+
+```powershell
+cd infra\nginx
+.\generate-ssl.ps1
+```
+
+**Linux/Mac:**
+
+```bash
+cd infra/nginx
+bash generate-ssl.sh
+```
+
+This will create:
+
+- `cert.pem` - SSL certificate
+- `key.pem` - Private key
+
+## Production
+
+For production, place your proper SSL certificates here:
+
+- `cert.pem` or `fullchain.pem` - Your SSL certificate
+- `key.pem` or `privkey.pem` - Your private key
+
+Or use Let's Encrypt and mount the certificates directly in docker-compose.yml.
+
+## Security
+
+**⚠️ IMPORTANT:**
+
+- Never commit `key.pem` to version control
+- Use `.gitignore` to exclude SSL files
+- Self-signed certificates are for development only

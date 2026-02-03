@@ -99,6 +99,7 @@ services:
       - zalo_network
     depends_on:
       - bff-service
+      - ws-gateway
     restart: unless-stopped
     profiles:
       - with-nginx

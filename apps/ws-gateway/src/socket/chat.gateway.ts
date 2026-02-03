@@ -72,7 +72,7 @@ export class ChatGateway implements OnModuleInit {
         socket_id: socket.id,
         connected_at: Date.now(),
       });
-    } catch (err) {
+    } catch {
       socket.data.userId = undefined;
     }
   }

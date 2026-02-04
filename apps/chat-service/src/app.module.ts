@@ -4,6 +4,8 @@ import { LoggerModule } from '@libs/logger';
 import { KafkaModule } from '@libs/kafka';
 import { ScyllaModule } from '@libs/scylla';
 import { RedisModule } from '@libs/redis';
+import { DatabaseModule } from '@libs/database';
+import { ConversationMembershipModule } from '@libs/mvp-access';
 import { PersistMessageConsumer } from './consumers/persist-message.consumer';
 import { ChatPublisher } from './services/chat.publisher';
 import { MessagesModule } from './modules/messages';
@@ -12,9 +14,11 @@ import { MessagesModule } from './modules/messages';
   imports: [
     ConfigModule,
     LoggerModule,
+    DatabaseModule,
     KafkaModule,
     ScyllaModule,
     RedisModule.forRootAsync(),
+    ConversationMembershipModule,
     MessagesModule,
   ],
   controllers: [PersistMessageConsumer],

@@ -1,15 +1,57 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import { Public } from '@app/decorator';
+import { HealthCheckService, HealthCheckResult } from '@libs/shared';
 
 @ApiTags('Health')
 @Controller('health')
 export class HealthController {
+  constructor(
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
+    private readonly healthCheckService: HealthCheckService,
+  ) {}
+
   @Public()
   @Get()
-  @ApiOperation({ summary: 'Health check' })
-  @ApiResponse({ status: 200, description: 'Service is healthy' })
-  check(): { status: string; service: string } {
-    return { status: 'ok', service: 'interaction-service' };
+  @ApiOperation({ summary: 'Deep health check with dependency validation' })
+  @ApiResponse({
+    status: 200,
+    description: 'Service health status with dependency checks',
+  })
+  async check(): Promise<HealthCheckResult> {
+    return await this.healthCheckService.executeHealthChecks(
+      'interaction-service',
+      [
+        {
+          name: 'postgres',
+          check: async () =>
+            this.healthCheckService.checkPostgres(this.dataSource),
+        },
+        {
+          name: 'self',
+          check: async () => await Promise.resolve({ status: 'up' }),
+        },
+      ],
+    );
+  }
+
+  @Public()
+  @Get('ready')
+  @ApiOperation({ summary: 'Kubernetes readiness probe' })
+  @ApiResponse({ status: 200, description: 'Service is ready' })
+  ready(): { ready: boolean } {
+    // Service is ready if database connection is established
+    return { ready: this.dataSource.isInitialized };
+  }
+
+  @Public()
+  @Get('live')
+  @ApiOperation({ summary: 'Kubernetes liveness probe' })
+  @ApiResponse({ status: 200, description: 'Service is alive' })
+  live(): { alive: boolean } {
+    return { alive: true };
   }
 }

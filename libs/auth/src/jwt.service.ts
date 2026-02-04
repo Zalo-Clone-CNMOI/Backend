@@ -16,15 +16,29 @@ export class JwtService {
   private readonly logger = new Logger(JwtService.name);
 
   private get accessSecret(): string {
-    return (
-      process.env.JWT_ACCESS_SECRET ??
-      process.env.JWT_SECRET ??
-      'dev-access-secret'
-    );
+    const secret = process.env.JWT_ACCESS_SECRET ?? process.env.JWT_SECRET;
+
+    if (!secret) {
+      throw new Error(
+        'JWT_ACCESS_SECRET or JWT_SECRET environment variable is required. ' +
+          'Set JWT_ACCESS_SECRET for production use.',
+      );
+    }
+
+    return secret;
   }
 
   private get refreshSecret(): string {
-    return process.env.JWT_REFRESH_SECRET ?? 'dev-refresh-secret';
+    const secret = process.env.JWT_REFRESH_SECRET;
+
+    if (!secret) {
+      throw new Error(
+        'JWT_REFRESH_SECRET environment variable is required. ' +
+          'Generate a secure secret for production use.',
+      );
+    }
+
+    return secret;
   }
 
   private get accessExpiresIn(): string {

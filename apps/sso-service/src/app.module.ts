@@ -5,6 +5,7 @@ import { LoggerModule } from '@libs/logger';
 import { DatabaseModule } from '@libs/database';
 import { AuthModule as SharedAuthModule, JwtAuthGuard } from '@libs/auth';
 import { RedisModule } from '@libs/redis';
+import { HealthCheckService } from '@libs/shared';
 import { HealthController } from './health.controller';
 import { AuthModule } from './modules/auth';
 import { UsersModule } from './modules/users';
@@ -30,6 +31,7 @@ import { ThrottlerModule, seconds } from '@nestjs/throttler';
   controllers: [HealthController],
 
   providers: [
+    HealthCheckService,
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,

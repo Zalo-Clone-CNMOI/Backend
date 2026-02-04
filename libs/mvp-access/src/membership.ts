@@ -1,22 +1,92 @@
-type ConversationId = string;
-type UserId = string;
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, IsNull } from 'typeorm';
+import { ConversationMember } from '@libs/database/entities';
 
-// MVP hardcode: replace with Relationship Service later.
-const conversationMembers: Record<ConversationId, UserId[]> = {
-  // Example conversation with two users
-  '00000000-0000-0000-0000-000000000001': ['user-a', 'user-b'],
-};
+@Injectable()
+export class ConversationMembershipService {
+  constructor(
+    @InjectRepository(ConversationMember)
+    private readonly memberRepository: Repository<ConversationMember>,
+  ) {}
 
-export function canUserAccessConversation(
-  userId: string,
-  conversationId: string,
-): boolean {
-  const members = conversationMembers[conversationId] ?? [];
-  return members.includes(userId);
+  /**
+   * Check if a user has access to a conversation
+   * User has access if they are an active member (leftAt is null)
+   */
+  async canUserAccessConversation(
+    userId: string,
+    conversationId: string,
+  ): Promise<boolean> {
+    const member = await this.memberRepository.findOne({
+      where: {
+        userId,
+        conversationId,
+        leftAt: IsNull(),
+      },
+    });
+
+    return member !== null;
+  }
+
+  /**
+   * List all conversations for a user
+   * Returns only active memberships (leftAt is null)
+   */
+  async listConversationsForUser(userId: string): Promise<string[]> {
+    const memberships = await this.memberRepository.find({
+      where: {
+        userId,
+        leftAt: IsNull(),
+      },
+      select: ['conversationId'],
+    });
+
+    return memberships.map((m) => m.conversationId);
+  }
+
+  /**
+   * Batch check user access for multiple conversations
+   * More efficient than calling canUserAccessConversation multiple times
+   */
+  async canUserAccessConversations(
+    userId: string,
+    conversationIds: string[],
+  ): Promise<Map<string, boolean>> {
+    if (conversationIds.length === 0) {
+      return new Map();
+    }
+
+    const memberships = await this.memberRepository.find({
+      where: {
+        userId,
+        leftAt: IsNull(),
+      },
+      select: ['conversationId'],
+    });
+
+    const accessibleConversations = new Set(
+      memberships.map((m) => m.conversationId),
+    );
+
+    return new Map(
+      conversationIds.map((id) => [id, accessibleConversations.has(id)]),
+    );
+  }
 }
 
-export function listConversationsForUser(userId: string): string[] {
-  return Object.entries(conversationMembers)
-    .filter(([, members]) => members.includes(userId))
-    .map(([conversationId]) => conversationId);
+export function canUserAccessConversation(): boolean {
+  console.warn(
+    'DEPRECATED: canUserAccessConversation() function uses hardcoded data. ' +
+      'Use ConversationMembershipService.canUserAccessConversation() instead.',
+  );
+  return false;
+}
+
+export function listConversationsForUser(): string[] {
+  console.warn(
+    'DEPRECATED: listConversationsForUser() function uses hardcoded data. ' +
+      'Use ConversationMembershipService.listConversationsForUser() instead.',
+  );
+  return [];
 }

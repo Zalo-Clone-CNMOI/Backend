@@ -15,6 +15,7 @@ import {
 } from '@libs/contracts';
 import { MessageRepository } from '@libs/scylla';
 import { CacheService } from '@libs/redis';
+import { ConversationMembershipService } from '@libs/mvp-access';
 import { ChatPublisher } from '../services/chat.publisher';
 
 @Controller()
@@ -25,11 +26,24 @@ export class PersistMessageConsumer {
     private readonly repo: MessageRepository,
     private readonly publisher: ChatPublisher,
     private readonly cacheService: CacheService,
+    private readonly membershipService: ConversationMembershipService,
   ) {}
 
   @EventPattern(KafkaTopics.ChatMessageSend)
   async onSend(@Payload() payload: ChatMessageSendCommand) {
     const createdAt = Date.now();
+
+    // Authorization: Verify sender is member of conversation
+    const canAccess = await this.membershipService.canUserAccessConversation(
+      payload.sender_id,
+      payload.conversation_id,
+    );
+    if (!canAccess) {
+      this.logger.warn(
+        `Unauthorized message attempt: user ${payload.sender_id} -> conversation ${payload.conversation_id}`,
+      );
+      return;
+    }
 
     const seen = await this.repo.wasMessageSeen(payload.message_id);
     if (seen) return;

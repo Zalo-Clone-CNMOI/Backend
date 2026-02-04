@@ -9,7 +9,7 @@ import { Inject, OnModuleInit, UseGuards } from '@nestjs/common';
 import type { Server, Socket } from 'socket.io';
 import { ClientKafka } from '@nestjs/microservices';
 import { JwtService, WsAuthGuard } from '@libs/auth';
-import { canUserAccessConversation } from '@libs/mvp-access';
+import { ConversationMembershipService } from '@libs/mvp-access';
 import {
   KafkaTopics,
   WsEvents,
@@ -43,6 +43,7 @@ export class ChatGateway implements OnModuleInit {
   constructor(
     @Inject(KAFKA_CLIENT) private readonly kafka: ClientKafka,
     private readonly jwtService: JwtService,
+    private readonly membershipService: ConversationMembershipService,
   ) {}
 
   async onModuleInit() {
@@ -91,12 +92,16 @@ export class ChatGateway implements OnModuleInit {
 
   @UseGuards(WsAuthGuard)
   @SubscribeMessage(WsEvents.ChatJoin)
-  handleJoin(
+  async handleJoin(
     @ConnectedSocket() socket: AuthedSocket,
     @MessageBody() body: WsChatJoinPayload,
   ) {
     const userId = String(socket.data.userId);
-    if (!canUserAccessConversation(userId, body.conversation_id)) {
+    const canAccess = await this.membershipService.canUserAccessConversation(
+      userId,
+      body.conversation_id,
+    );
+    if (!canAccess) {
       socket.emit(WsEvents.ChatAck, {
         message_id: '',
         status: 'rejected',
@@ -109,12 +114,16 @@ export class ChatGateway implements OnModuleInit {
 
   @UseGuards(WsAuthGuard)
   @SubscribeMessage(WsEvents.ChatSend)
-  handleSend(
+  async handleSend(
     @ConnectedSocket() socket: AuthedSocket,
     @MessageBody() body: WsChatSendPayload,
   ) {
     const userId = String(socket.data.userId);
-    if (!canUserAccessConversation(userId, body.conversation_id)) {
+    const canAccess = await this.membershipService.canUserAccessConversation(
+      userId,
+      body.conversation_id,
+    );
+    if (!canAccess) {
       socket.emit(WsEvents.ChatAck, {
         message_id: body.message_id,
         status: 'rejected',
@@ -154,12 +163,16 @@ export class ChatGateway implements OnModuleInit {
 
   @UseGuards(WsAuthGuard)
   @SubscribeMessage(WsEvents.ChatEdit)
-  handleEdit(
+  async handleEdit(
     @ConnectedSocket() socket: AuthedSocket,
     @MessageBody() body: WsChatEditPayload,
   ) {
     const userId = String(socket.data.userId);
-    if (!canUserAccessConversation(userId, body.conversation_id)) {
+    const canAccess = await this.membershipService.canUserAccessConversation(
+      userId,
+      body.conversation_id,
+    );
+    if (!canAccess) {
       socket.emit(WsEvents.ChatAck, {
         message_id: body.message_id,
         status: 'rejected',
@@ -185,12 +198,16 @@ export class ChatGateway implements OnModuleInit {
 
   @UseGuards(WsAuthGuard)
   @SubscribeMessage(WsEvents.ChatDelete)
-  handleDelete(
+  async handleDelete(
     @ConnectedSocket() socket: AuthedSocket,
     @MessageBody() body: WsChatDeletePayload,
   ) {
     const userId = String(socket.data.userId);
-    if (!canUserAccessConversation(userId, body.conversation_id)) {
+    const canAccess = await this.membershipService.canUserAccessConversation(
+      userId,
+      body.conversation_id,
+    );
+    if (!canAccess) {
       socket.emit(WsEvents.ChatAck, {
         message_id: body.message_id,
         status: 'rejected',
@@ -215,12 +232,16 @@ export class ChatGateway implements OnModuleInit {
 
   @UseGuards(WsAuthGuard)
   @SubscribeMessage(WsEvents.ChatReact)
-  handleReact(
+  async handleReact(
     @ConnectedSocket() socket: AuthedSocket,
     @MessageBody() body: WsChatReactPayload,
   ) {
     const userId = String(socket.data.userId);
-    if (!canUserAccessConversation(userId, body.conversation_id)) {
+    const canAccess = await this.membershipService.canUserAccessConversation(
+      userId,
+      body.conversation_id,
+    );
+    if (!canAccess) {
       socket.emit(WsEvents.ChatAck, {
         message_id: body.message_id,
         status: 'rejected',
@@ -246,12 +267,16 @@ export class ChatGateway implements OnModuleInit {
 
   @UseGuards(WsAuthGuard)
   @SubscribeMessage(WsEvents.ChatUnreact)
-  handleUnreact(
+  async handleUnreact(
     @ConnectedSocket() socket: AuthedSocket,
     @MessageBody() body: WsChatUnreactPayload,
   ) {
     const userId = String(socket.data.userId);
-    if (!canUserAccessConversation(userId, body.conversation_id)) {
+    const canAccess = await this.membershipService.canUserAccessConversation(
+      userId,
+      body.conversation_id,
+    );
+    if (!canAccess) {
       socket.emit(WsEvents.ChatAck, {
         message_id: body.message_id,
         status: 'rejected',

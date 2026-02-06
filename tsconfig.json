@@ -107,6 +107,12 @@
       "@libs/logger/*": [
         "libs/logger/src/*"
       ],
+      "@libs/metrics": [
+        "libs/metrics/src"
+      ],
+      "@libs/metrics/*": [
+        "libs/metrics/src/*"
+      ],
       "@libs/mvp-access": [
         "libs/mvp-access/src"
       ],

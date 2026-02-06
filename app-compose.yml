@@ -295,6 +295,50 @@ services:
           cpus: "0.25"
           memory: 256M
 
+  presence-service:
+    image: ${DOCKER_REGISTRY:-ghcr.io}/${DOCKER_IMAGE_PREFIX:-zalo-clone}/presence-service:${IMAGE_TAG:-latest}
+    container_name: zalo_presence_service
+    build:
+      context: .
+      dockerfile: apps/presence-service/Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: 3002
+      SERVICE_NAME: presence-service
+      KAFKA_BROKERS: kafka:29092
+      KAFKA_CLIENT_ID: presence-service
+      KAFKA_GROUP_ID: presence-service-group
+      REDIS_URL: redis://redis:6379
+      PRESENCE_TTL_MS: 60000
+      PRESENCE_CLEANUP_MS: 5000
+    ports:
+      - "${PRESENCE_PORT:-3002}:3002"
+    networks:
+      - zalo_network
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:3002/metrics",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.3"
+          memory: 256M
+        reservations:
+          cpus: "0.15"
+          memory: 128M
+
 networks:
   zalo_network:
     external: true

@@ -106,7 +106,7 @@ export class MediaService implements OnModuleInit {
     const stream = response.Body as Readable;
 
     for await (const chunk of stream) {
-      chunks.push(Buffer.from(chunk));
+      chunks.push(Buffer.from(chunk) as Buffer);
     }
 
     const originalBuffer = Buffer.concat(chunks);

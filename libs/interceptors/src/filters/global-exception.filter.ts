@@ -54,7 +54,9 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         if (Array.isArray(responseObj.message)) {
           errorCode = ErrorCode.VALIDATION_ERROR;
           message = 'Validation failed';
-          details = this.formatValidationErrors(responseObj.message);
+          details = this.formatValidationErrors(
+            responseObj.message as string[],
+          );
         }
       } else {
         message = exception.message;

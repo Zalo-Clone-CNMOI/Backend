@@ -432,10 +432,10 @@ export class AuthService {
       );
 
       return { message: 'QR login confirmed successfully', data: result };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new BadRequestException(
         'Failed to confirm QR session. Please try again.',
-        error,
+        error instanceof Error ? error.message : undefined,
       );
     }
   }

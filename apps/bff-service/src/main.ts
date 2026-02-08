@@ -58,4 +58,4 @@ async function bootstrap() {
   logger.log(`Health check available at http://localhost:${port}/api/health`);
 }
 
-bootstrap();
+void bootstrap();

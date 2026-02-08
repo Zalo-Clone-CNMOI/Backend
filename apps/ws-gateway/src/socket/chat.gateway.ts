@@ -13,6 +13,7 @@ import { ConversationMembershipService } from '@libs/mvp-access';
 import {
   KafkaTopics,
   WsEvents,
+  type PresenceConnectCommand,
   type PresenceDisconnectCommand,
   type PresenceHeartbeatCommand,
   type WsChatJoinPayload,
@@ -29,6 +30,7 @@ import {
   type ChatReactionRemoveCommand,
 } from '@libs/contracts';
 import { KAFKA_CLIENT } from '@libs/kafka';
+import { v4 as uuidv4 } from 'uuid';
 
 type SocketData = { userId?: string };
 type AuthedSocket = Socket<any, any, any, SocketData>;
@@ -68,11 +70,15 @@ export class ChatGateway implements OnModuleInit {
       socket.data.userId = user.userId;
       void socket.join(`user:${user.userId}`);
 
-      this.kafka.emit(KafkaTopics.PresenceConnect, {
+      const cmd: PresenceConnectCommand = {
+        event_id: uuidv4(),
+        emitted_at: Date.now(),
         user_id: user.userId,
         socket_id: socket.id,
         connected_at: Date.now(),
-      });
+        trace_id: socket.id,
+      };
+      this.kafka.emit(KafkaTopics.PresenceConnect, cmd);
     } catch {
       socket.data.userId = undefined;
     }
@@ -83,9 +89,12 @@ export class ChatGateway implements OnModuleInit {
     if (!userId) return;
 
     const cmd: PresenceDisconnectCommand = {
+      event_id: uuidv4(),
+      emitted_at: Date.now(),
       user_id: userId,
       socket_id: socket.id,
       disconnected_at: Date.now(),
+      trace_id: socket.id,
     };
     void this.kafka.emit(KafkaTopics.PresenceDisconnect, cmd);
   }
@@ -154,9 +163,12 @@ export class ChatGateway implements OnModuleInit {
   ) {
     const userId = String(socket.data.userId);
     const cmd: PresenceHeartbeatCommand = {
+      event_id: uuidv4(),
+      emitted_at: Date.now(),
       user_id: userId,
       socket_id: socket.id,
       ts: body.ts,
+      trace_id: socket.id,
     };
     void this.kafka.emit(KafkaTopics.PresenceHeartbeat, cmd);
   }

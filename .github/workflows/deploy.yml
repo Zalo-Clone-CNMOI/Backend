@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
     inputs:
       service:
-        description: "Service to deploy (all, bff, sso, interaction, media, chat, ws)"
+        description: "Service to deploy (all, bff, sso, interaction, media, chat, ws, presence)"
         required: false
         default: "all"
 
@@ -42,6 +42,7 @@ jobs:
       media: ${{ steps.detect.outputs.media }}
       chat: ${{ steps.detect.outputs.chat }}
       ws: ${{ steps.detect.outputs.ws }}
+      presence: ${{ steps.detect.outputs.presence }}
       any_service: ${{ steps.detect.outputs.any_service }}
 
     steps:
@@ -53,7 +54,7 @@ jobs:
         name: Detect changes
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.force }}" = "true" ]; then
-            for s in bff sso interaction media chat ws; do
+            for s in bff sso interaction media chat ws presence; do
               echo "$s=true" >> $GITHUB_OUTPUT
             done
             echo "any_service=true" >> $GITHUB_OUTPUT
@@ -62,7 +63,7 @@ jobs:
 
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             SERVICE="${{ github.event.inputs.service }}"
-            for s in bff sso interaction media chat ws; do
+            for s in bff sso interaction media chat ws presence; do
               if [ "$SERVICE" = "all" ] || [ "$SERVICE" = "$s" ]; then
                 echo "$s=true" >> $GITHUB_OUTPUT
               else
@@ -84,7 +85,7 @@ jobs:
           fi
 
           any=false
-          for s in bff sso interaction media chat ws; do
+          for s in bff sso interaction media chat ws presence; do
             if echo "$CHANGED" | grep -qE "apps/$s-service|apps/$s-gateway|libs/|package.json|pnpm-lock.yaml|app-compose.yml"; then
               echo "$s=true" >> $GITHUB_OUTPUT
               any=true
@@ -136,6 +137,9 @@ jobs:
           - name: ws
             service: ws-gateway
             enabled: ${{ needs.detect-changes.outputs.ws }}
+          - name: presence
+            service: presence-service
+            enabled: ${{ needs.detect-changes.outputs.presence }}
 
     steps:
       - uses: actions/checkout@v4
@@ -197,6 +201,7 @@ jobs:
           MEDIA_CHANGED: ${{ needs.detect-changes.outputs.media }}
           CHAT_CHANGED: ${{ needs.detect-changes.outputs.chat }}
           WS_CHANGED: ${{ needs.detect-changes.outputs.ws }}
+          PRESENCE_CHANGED: ${{ needs.detect-changes.outputs.presence }}
         run: |
           ssh -o BatchMode=yes -o ConnectTimeout=10 ${{ env.EC2_USER }}@${{ env.EC2_HOST }} << 'DEPLOY_SCRIPT'
             set -euo pipefail
@@ -269,6 +274,7 @@ jobs:
             [ "${{ env.MEDIA_CHANGED }}" = "true" ] && deploy_service media-service app-compose.yml || true
             [ "${{ env.CHAT_CHANGED }}" = "true" ] && deploy_service chat-service app-compose.yml || true
             [ "${{ env.WS_CHANGED }}" = "true" ] && deploy_service ws-gateway app-compose.yml || true
+            [ "${{ env.PRESENCE_CHANGED }}" = "true" ] && deploy_service presence-service app-compose.yml || true
 
             docker image prune -f
 

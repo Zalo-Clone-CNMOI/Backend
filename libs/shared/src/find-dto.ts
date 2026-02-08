@@ -10,7 +10,7 @@ export class FindDTO {
   })
   @IsOptional()
   @IsInt()
-  @Transform((params) => parseInt(params.value, 10))
+  @Transform((params) => parseInt(params.value as string, 10))
   @Min(0)
   page?: number = 1;
 
@@ -21,7 +21,7 @@ export class FindDTO {
   })
   @IsOptional()
   @IsInt()
-  @Transform((params) => parseInt(params.value, 10))
+  @Transform((params) => parseInt(params.value as string, 10))
   @Min(1)
   limit?: number = 10;
 }

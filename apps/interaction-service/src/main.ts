@@ -49,4 +49,4 @@ async function bootstrap() {
   logger.log(`Interaction Service running on port ${port}`);
 }
 
-bootstrap();
+void bootstrap();

@@ -17,10 +17,7 @@ import {
   ApiOperation,
 } from '@nestjs/swagger';
 import { DeviceTokensService } from './device-tokens.service';
-import type {
-  RegisterDeviceTokenDto,
-  DeviceTokenResponseDto,
-} from '@app/clients/sso-client/src/client/generated';
+import { DeviceTokenResponseDto, RegisterDeviceTokenDto } from '@app/clients';
 
 @ApiTags('Device Tokens')
 @ApiBearerAuth('BearerAuth')

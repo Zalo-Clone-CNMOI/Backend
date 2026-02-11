@@ -1,9 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { SsoClientService } from '@app/clients';
-import type {
-  RegisterDeviceTokenDto,
+import {
+  SsoClientService,
   DeviceTokenResponseDto,
-} from '@app/clients/sso-client/src/client/generated';
+  RegisterDeviceTokenDto,
+} from '@app/clients';
 
 @Injectable()
 export class DeviceTokensService {

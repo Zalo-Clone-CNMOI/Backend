@@ -5,6 +5,11 @@ import { Repository } from 'typeorm';
 import { User, Friendship } from '@libs/database/entities';
 import { ErrorCode, FriendshipStatus, UserStatus } from '@app/constant';
 import {
+  type NotificationRequestedEvent,
+  NotificationType,
+  KafkaTopics,
+} from '@libs/contracts';
+import {
   BusinessException,
   PaginatedResponse,
   PaginationMeta,
@@ -224,6 +229,26 @@ export class FriendsService {
       },
     });
 
+    // Emit notification to addressee
+    const notification: NotificationRequestedEvent = {
+      channel: 'push',
+      user_id: targetUserId,
+      title: 'New friend request',
+      body: `${requester?.fullName || 'Someone'} sent you a friend request`,
+      type: NotificationType.FriendRequest,
+      data: {
+        request_id: saved.id,
+        requester_id: userId,
+      },
+      rich: {
+        image_url: requester?.avatarUrl || undefined,
+        priority: 'normal',
+        category: 'friend_request',
+      },
+      requested_at: Date.now(),
+    };
+    this.kafkaClient.emit(KafkaTopics.NotificationRequested, notification);
+
     return { message: 'Friend request sent successfully', requestId: saved.id };
   }
 
@@ -275,6 +300,29 @@ export class FriendsService {
           avatarUrl: addressee?.avatarUrl,
         },
       });
+
+      // Emit notification to requester that their request was accepted
+      const acceptNotification: NotificationRequestedEvent = {
+        channel: 'push',
+        user_id: request.requesterId,
+        title: 'Friend request accepted',
+        body: `${addressee?.fullName || 'Someone'} accepted your friend request`,
+        type: NotificationType.FriendAccepted,
+        data: {
+          request_id: request.id,
+          friend_id: userId,
+        },
+        rich: {
+          image_url: addressee?.avatarUrl || undefined,
+          priority: 'normal',
+          category: 'friend_accepted',
+        },
+        requested_at: Date.now(),
+      };
+      this.kafkaClient.emit(
+        KafkaTopics.NotificationRequested,
+        acceptNotification,
+      );
 
       return { message: 'Friend request accepted' };
     } else {

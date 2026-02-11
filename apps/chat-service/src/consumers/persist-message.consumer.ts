@@ -1,5 +1,7 @@
 import { Controller, Logger } from '@nestjs/common';
 import { EventPattern, Payload } from '@nestjs/microservices';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import {
   KafkaTopics,
   type ChatMessageSendCommand,
@@ -12,11 +14,18 @@ import {
   type ChatReactionAddedEvent,
   type ChatReactionRemoveCommand,
   type ChatReactionRemovedEvent,
+  type NotificationRequestedEvent,
+  NotificationType,
 } from '@libs/contracts';
 import { MessageRepository } from '@libs/scylla';
 import { CacheService } from '@libs/redis';
 import { ConversationMembershipService } from '@libs/mvp-access';
+import { User, ConversationMember } from '@libs/database';
 import { ChatPublisher } from '../services/chat.publisher';
+import {
+  getConversationMemberIds,
+  getUserDisplayName,
+} from '../utils/notification.helper';
 
 @Controller()
 export class PersistMessageConsumer {
@@ -27,6 +36,10 @@ export class PersistMessageConsumer {
     private readonly publisher: ChatPublisher,
     private readonly cacheService: CacheService,
     private readonly membershipService: ConversationMembershipService,
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
+    @InjectRepository(ConversationMember)
+    private readonly conversationMemberRepo: Repository<ConversationMember>,
   ) {}
 
   @EventPattern(KafkaTopics.ChatMessageSend)
@@ -77,6 +90,15 @@ export class PersistMessageConsumer {
 
     this.publisher.emit(KafkaTopics.ChatMessageCreated, event);
     this.logger.log(`Message persisted: ${payload.message_id}`);
+
+    // Emit notification for conversation members (excluding sender)
+    void this.emitMessageNotification(
+      payload.conversation_id,
+      payload.sender_id,
+      payload.body,
+      payload.message_id,
+      payload.trace_id,
+    );
 
     await this.cacheService.invalidateRecentMessages(payload.conversation_id);
   }
@@ -181,5 +203,72 @@ export class PersistMessageConsumer {
 
     this.publisher.emit(KafkaTopics.ChatReactionRemoved, event);
     this.logger.log(`Reaction removed from ${payload.message_id}`);
+  }
+  /**
+   * Emit notification for new message to all conversation members except sender
+   */
+  private async emitMessageNotification(
+    conversationId: string,
+    senderId: string,
+    messageBody: string,
+    messageId: string,
+    traceId?: string,
+  ): Promise<void> {
+    try {
+      // Get all conversation members except sender
+      const recipientIds = await getConversationMemberIds(
+        this.conversationMemberRepo,
+        conversationId,
+      );
+      const recipients = recipientIds.filter((id) => id !== senderId);
+
+      if (recipients.length === 0) {
+        return;
+      }
+
+      // Get sender name for notification title
+      const senderName = await getUserDisplayName(this.userRepo, senderId);
+
+      // Truncate message body for preview
+      const preview =
+        messageBody.length > 100
+          ? `${messageBody.substring(0, 100)}...`
+          : messageBody;
+
+      // Emit notification for each recipient
+      for (const recipientId of recipients) {
+        const notification: NotificationRequestedEvent = {
+          channel: 'push',
+          user_id: recipientId,
+          title: senderName || 'New message',
+          body: preview,
+          type: NotificationType.ChatMessage,
+          data: {
+            conversation_id: conversationId,
+            message_id: messageId,
+            sender_id: senderId,
+          },
+          rich: {
+            priority: 'high',
+            thread_id: conversationId,
+            category: 'message',
+          },
+          requested_at: Date.now(),
+          trace_id: traceId,
+        };
+
+        this.publisher.emit(KafkaTopics.NotificationRequested, notification);
+      }
+
+      this.logger.debug(
+        `Notification emitted for ${recipients.length} recipients (message: ${messageId})`,
+      );
+    } catch (error) {
+      // Don't fail message persistence if notification fails
+      this.logger.error(
+        `Failed to emit message notification: ${messageId}`,
+        error instanceof Error ? error.stack : error,
+      );
+    }
   }
 }

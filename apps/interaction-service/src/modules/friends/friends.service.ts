@@ -227,6 +227,7 @@ export class FriendsService {
         avatarUrl: requester?.avatarUrl,
         phone: requester?.phone,
       },
+      trace_id: `friend-req:${saved.id}`,
     });
 
     // Emit notification to addressee
@@ -246,6 +247,7 @@ export class FriendsService {
         category: 'friend_request',
       },
       requested_at: Date.now(),
+      trace_id: `friend-req:${saved.id}`,
     };
     this.kafkaClient.emit(KafkaTopics.NotificationRequested, notification);
 
@@ -299,6 +301,7 @@ export class FriendsService {
           fullName: addressee?.fullName,
           avatarUrl: addressee?.avatarUrl,
         },
+        trace_id: `friend-accept:${request.id}`,
       });
 
       // Emit notification to requester that their request was accepted
@@ -318,6 +321,7 @@ export class FriendsService {
           category: 'friend_accepted',
         },
         requested_at: Date.now(),
+        trace_id: `friend-accept:${request.id}`,
       };
       this.kafkaClient.emit(
         KafkaTopics.NotificationRequested,
@@ -334,6 +338,7 @@ export class FriendsService {
         requesterId: request.requesterId,
         addresseeId: request.addresseeId,
         status: 'rejected',
+        trace_id: `friend-reject:${request.id}`,
       });
 
       return { message: 'Friend request rejected' };
@@ -366,6 +371,7 @@ export class FriendsService {
       requestId: request.id,
       requesterId: userId,
       addresseeId: request.addresseeId,
+      trace_id: `friend-cancel:${requestId}`,
     });
 
     return { message: 'Friend request cancelled' };
@@ -406,6 +412,7 @@ export class FriendsService {
     this.kafkaClient.emit('friend.removed', {
       userId,
       friendId,
+      trace_id: `friend-remove:${userId}:${friendId}`,
     });
 
     return { message: 'Friend removed successfully' };

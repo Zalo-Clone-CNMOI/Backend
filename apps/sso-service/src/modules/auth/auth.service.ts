@@ -411,6 +411,7 @@ export class AuthService {
           refreshToken: tokens.refreshToken,
           expiresIn: tokens.expiresIn,
           user: this.toUserResponse(user),
+          trace_id: `qr-confirm:${session.sessionId}`,
         };
 
         this.logger.log(
@@ -463,6 +464,7 @@ export class AuthService {
       sessionId: session.sessionId,
       socketId: session.socketId,
       reason: dto.reason || 'User rejected the QR login',
+      trace_id: `qr-reject:${session.sessionId}`,
     });
 
     this.logger.log(

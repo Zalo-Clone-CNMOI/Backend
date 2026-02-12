@@ -31,5 +31,5 @@ export async function getUserDisplayName(
     select: ['fullName'],
   });
 
-  return user?.fullName ?? null;
+  return user?.fullName ?? 'Unknown User';
 }

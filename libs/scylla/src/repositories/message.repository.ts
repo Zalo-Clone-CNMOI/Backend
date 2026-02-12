@@ -154,14 +154,44 @@ export class MessageRepository {
       ],
       { prepare: true },
     );
+
+    await this.client.execute(
+      `UPDATE message_reaction_stats 
+       SET reaction_counts = reaction_counts + ? 
+       WHERE message_id = ?`,
+      [{ [reaction.reaction_type]: 1 }, reaction.message_id],
+      { prepare: true },
+    );
   }
 
   async removeReaction(messageId: string, userId: string): Promise<void> {
+    const result = await this.client.execute(
+      `SELECT reaction_type FROM message_reactions WHERE message_id = ? AND user_id = ?`,
+      [messageId, userId],
+      { prepare: true },
+    );
+
     await this.client.execute(
       `DELETE FROM message_reactions WHERE message_id = ? AND user_id = ?`,
       [messageId, userId],
       { prepare: true },
     );
+
+    if (result.rowLength > 0) {
+      const decrements: Record<string, number> = {};
+      for (const row of result.rows) {
+        const reactionType = row.get('reaction_type') as string;
+        decrements[reactionType] = (decrements[reactionType] || 0) - 1;
+      }
+
+      await this.client.execute(
+        `UPDATE message_reaction_stats 
+         SET reaction_counts = reaction_counts + ? 
+         WHERE message_id = ?`,
+        [decrements, messageId],
+        { prepare: true },
+      );
+    }
   }
 
   async getReactions(messageId: string): Promise<MessageReaction[]> {
@@ -182,22 +212,43 @@ export class MessageRepository {
   async getReactionsByUser(
     messageId: string,
     userId: string,
-  ): Promise<MessageReaction | null> {
+  ): Promise<MessageReaction[]> {
     const result = await this.client.execute(
       `SELECT * FROM message_reactions WHERE message_id = ? AND user_id = ?`,
       [messageId, userId],
       { prepare: true },
     );
 
-    if (result.rowLength === 0) return null;
-
-    const row: types.Row = result.rows[0];
-    return {
+    return result.rows.map((row: types.Row) => ({
       message_id: row.get('message_id') as string,
       user_id: row.get('user_id') as string,
       reaction_type: row.get('reaction_type') as ReactionType,
       created_at: Number(row.get('created_at')),
-    };
+    }));
+  }
+
+  async getReactionStats(
+    messageId: string,
+  ): Promise<Record<string, number> | null> {
+    const result = await this.client.execute(
+      `SELECT reaction_counts FROM message_reaction_stats WHERE message_id = ?`,
+      [messageId],
+      { prepare: true },
+    );
+
+    if (result.rowLength === 0) return null;
+
+    const row: types.Row = result.rows[0];
+    const counts = row.get('reaction_counts') as Map<string, number>;
+
+    const stats: Record<string, number> = {};
+    if (counts) {
+      counts.forEach((value, key) => {
+        stats[key] = value;
+      });
+    }
+
+    return stats;
   }
 
   private rowToMessage(row: types.Row): PersistedMessage {

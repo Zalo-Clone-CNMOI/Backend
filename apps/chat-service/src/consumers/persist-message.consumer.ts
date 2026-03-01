@@ -12,9 +12,7 @@ import {
   type ChatReactionAddedEvent,
   type ChatReactionRemoveCommand,
   type ChatReactionRemovedEvent,
-  type NotificationRequestedEvent,
   type AiModerationRequestEvent,
-  NotificationType,
 } from '@libs/contracts';
 import { MessageRepository } from '@libs/scylla';
 import { CacheService } from '@libs/redis';
@@ -34,41 +32,35 @@ export class PersistMessageConsumer {
 
   @EventPattern(KafkaTopics.ChatMessageSend)
   async onSend(@Payload() payload: ChatMessageSendCommand) {
-    const createdAt = Date.now();
+    const traceId = payload.trace_id ?? payload.message_id;
+    const startTime = Date.now();
+    const createdAt = startTime;
 
-    // Authorization: Verify sender is member of conversation
-    const canAccess = await this.membershipService.canUserAccessConversation(
-      payload.sender_id,
-      payload.conversation_id,
-    );
-    if (!canAccess) {
-      this.logger.warn(
-        `Unauthorized message attempt: user ${payload.sender_id} -> conversation ${payload.conversation_id}`,
+    try {
+      // Authorization: Verify sender is member of conversation
+      const canAccess = await this.membershipService.canUserAccessConversation(
+        payload.sender_id,
+        payload.conversation_id,
       );
-      return;
-    }
+      if (!canAccess) {
+        this.logger.warn(
+          `Unauthorized message attempt: user ${payload.sender_id} -> conversation ${payload.conversation_id}`,
+        );
+        return;
+      }
 
-    const seen = await this.repo.wasMessageSeen(payload.message_id);
-    if (seen) return;
+      const seen = await this.repo.wasMessageSeen(payload.message_id);
+      if (seen) return;
 
-    await this.repo.insertMessage({
-      message_id: payload.message_id,
-      conversation_id: payload.conversation_id,
-      sender_id: payload.sender_id,
-      body: payload.body,
-      created_at: createdAt,
-      attachments: payload.attachments,
-      reply_to_message_id: payload.reply_to_message_id,
-    });
-
-    await this.repo.markMessageSeen(
-      payload.message_id,
-      payload.conversation_id,
-      createdAt,
-    );
-
-    this.publisher.emit(KafkaTopics.ChatMessageCreated, event);
-    this.logger.log(`Message persisted: ${payload.message_id}`);
+      await this.repo.insertMessage({
+        message_id: payload.message_id,
+        conversation_id: payload.conversation_id,
+        sender_id: payload.sender_id,
+        body: payload.body,
+        created_at: createdAt,
+        attachments: payload.attachments,
+        reply_to_message_id: payload.reply_to_message_id,
+      });
 
       await this.repo.markMessageSeen(
         payload.message_id,
@@ -118,20 +110,7 @@ export class PersistMessageConsumer {
         }
       })();
 
-      void (async () => {
-        try {
-          await this.emitMessageNotification(
-            payload.conversation_id,
-            payload.sender_id,
-            payload.body,
-            payload.message_id,
-            traceId,
-          );
-        } catch (err) {
-          this.logger.error(`[${traceId}] Notification emit failed`, err);
-        }
-      })();
-
+      // ── Cache invalidation ───────────────────────────────────────────
       void (async () => {
         try {
           await this.cacheService.invalidateRecentMessages(
@@ -141,9 +120,6 @@ export class PersistMessageConsumer {
           this.logger.error(`[${traceId}] Cache invalidation failed`, err);
         }
       })();
-      this.logger.debug(`[${traceId}] Cache invalidated`, {
-        conversationId: payload.conversation_id,
-      });
 
       this.logger.log(`[${traceId}] ChatMessageSend completed`, {
         duration: Date.now() - startTime,

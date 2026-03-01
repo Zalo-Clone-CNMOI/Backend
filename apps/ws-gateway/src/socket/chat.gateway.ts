@@ -9,28 +9,22 @@ import { Inject, OnModuleInit, UseGuards } from '@nestjs/common';
 import type { Server, Socket } from 'socket.io';
 import { ClientKafka } from '@nestjs/microservices';
 import { JwtService, WsAuthGuard } from '@libs/auth';
-import { ConversationMembershipService } from '@libs/mvp-access';
 import {
-  KafkaTopics,
   WsEvents,
-  type PresenceConnectCommand,
-  type PresenceDisconnectCommand,
-  type PresenceHeartbeatCommand,
   type WsChatJoinPayload,
   type WsChatSendPayload,
-  type WsChatAckPayload,
   type WsPresenceHeartbeatPayload,
   type WsChatEditPayload,
   type WsChatDeletePayload,
   type WsChatReactPayload,
   type WsChatUnreactPayload,
-  type ChatMessageEditCommand,
-  type ChatMessageDeleteCommand,
-  type ChatReactionAddCommand,
-  type ChatReactionRemoveCommand,
+  type WsAiSmartReplyRequestPayload,
+  type WsAiSummaryRequestPayload,
+  type WsAiTranslateRequestPayload,
+  type WsAiDocumentQueryRequestPayload,
 } from '@libs/contracts';
 import { KAFKA_CLIENT } from '@libs/kafka';
-import { v4 as uuidv4 } from 'uuid';
+import { ChatHandler, PresenceHandler, AiHandler } from './handlers';
 
 type SocketData = { userId?: string };
 type AuthedSocket = Socket<any, any, any, SocketData>;
@@ -45,7 +39,9 @@ export class ChatGateway implements OnModuleInit {
   constructor(
     @Inject(KAFKA_CLIENT) private readonly kafka: ClientKafka,
     private readonly jwtService: JwtService,
-    private readonly membershipService: ConversationMembershipService,
+    private readonly chatHandler: ChatHandler,
+    private readonly presenceHandler: PresenceHandler,
+    private readonly aiHandler: AiHandler,
   ) {}
 
   async onModuleInit() {
@@ -70,15 +66,7 @@ export class ChatGateway implements OnModuleInit {
       socket.data.userId = user.userId;
       void socket.join(`user:${user.userId}`);
 
-      const cmd: PresenceConnectCommand = {
-        event_id: uuidv4(),
-        emitted_at: Date.now(),
-        user_id: user.userId,
-        socket_id: socket.id,
-        connected_at: Date.now(),
-        trace_id: socket.id,
-      };
-      this.kafka.emit(KafkaTopics.PresenceConnect, cmd);
+      this.presenceHandler.handleConnect(socket, user.userId);
     } catch {
       socket.data.userId = undefined;
     }
@@ -88,16 +76,10 @@ export class ChatGateway implements OnModuleInit {
     const userId = socket.data.userId;
     if (!userId) return;
 
-    const cmd: PresenceDisconnectCommand = {
-      event_id: uuidv4(),
-      emitted_at: Date.now(),
-      user_id: userId,
-      socket_id: socket.id,
-      disconnected_at: Date.now(),
-      trace_id: socket.id,
-    };
-    void this.kafka.emit(KafkaTopics.PresenceDisconnect, cmd);
+    this.presenceHandler.handleDisconnect(socket, userId);
   }
+
+  // ── Chat Event Handlers ──────────────────────────────────────────────
 
   @UseGuards(WsAuthGuard)
   @SubscribeMessage(WsEvents.ChatJoin)
@@ -105,20 +87,7 @@ export class ChatGateway implements OnModuleInit {
     @ConnectedSocket() socket: AuthedSocket,
     @MessageBody() body: WsChatJoinPayload,
   ) {
-    const userId = String(socket.data.userId);
-    const canAccess = await this.membershipService.canUserAccessConversation(
-      userId,
-      body.conversation_id,
-    );
-    if (!canAccess) {
-      socket.emit(WsEvents.ChatAck, {
-        message_id: '',
-        status: 'rejected',
-        reason: 'not_member',
-      } satisfies WsChatAckPayload);
-      return;
-    }
-    void socket.join(`conv:${body.conversation_id}`);
+    return this.chatHandler.handleJoin(socket, body.conversation_id);
   }
 
   @UseGuards(WsAuthGuard)
@@ -127,50 +96,7 @@ export class ChatGateway implements OnModuleInit {
     @ConnectedSocket() socket: AuthedSocket,
     @MessageBody() body: WsChatSendPayload,
   ) {
-    const userId = String(socket.data.userId);
-    const canAccess = await this.membershipService.canUserAccessConversation(
-      userId,
-      body.conversation_id,
-    );
-    if (!canAccess) {
-      socket.emit(WsEvents.ChatAck, {
-        message_id: body.message_id,
-        status: 'rejected',
-        reason: 'not_member',
-      } satisfies WsChatAckPayload);
-      return;
-    }
-
-    void this.kafka.emit(KafkaTopics.ChatMessageSend, {
-      message_id: body.message_id,
-      conversation_id: body.conversation_id,
-      sender_id: userId,
-      body: body.body,
-      sent_at: body.sent_at,
-    });
-
-    socket.emit(WsEvents.ChatAck, {
-      message_id: body.message_id,
-      status: 'accepted',
-    } satisfies WsChatAckPayload);
-  }
-
-  @UseGuards(WsAuthGuard)
-  @SubscribeMessage(WsEvents.PresenceHeartbeat)
-  handleHeartbeat(
-    @ConnectedSocket() socket: AuthedSocket,
-    @MessageBody() body: WsPresenceHeartbeatPayload,
-  ) {
-    const userId = String(socket.data.userId);
-    const cmd: PresenceHeartbeatCommand = {
-      event_id: uuidv4(),
-      emitted_at: Date.now(),
-      user_id: userId,
-      socket_id: socket.id,
-      ts: body.ts,
-      trace_id: socket.id,
-    };
-    void this.kafka.emit(KafkaTopics.PresenceHeartbeat, cmd);
+    return this.chatHandler.handleSend(socket, body);
   }
 
   @UseGuards(WsAuthGuard)
@@ -179,33 +105,7 @@ export class ChatGateway implements OnModuleInit {
     @ConnectedSocket() socket: AuthedSocket,
     @MessageBody() body: WsChatEditPayload,
   ) {
-    const userId = String(socket.data.userId);
-    const canAccess = await this.membershipService.canUserAccessConversation(
-      userId,
-      body.conversation_id,
-    );
-    if (!canAccess) {
-      socket.emit(WsEvents.ChatAck, {
-        message_id: body.message_id,
-        status: 'rejected',
-        reason: 'not_member',
-      } satisfies WsChatAckPayload);
-      return;
-    }
-
-    const cmd: ChatMessageEditCommand = {
-      message_id: body.message_id,
-      conversation_id: body.conversation_id,
-      sender_id: userId,
-      new_body: body.new_body,
-      edited_at: Date.now(),
-    };
-    void this.kafka.emit(KafkaTopics.ChatMessageEdit, cmd);
-
-    socket.emit(WsEvents.ChatAck, {
-      message_id: body.message_id,
-      status: 'accepted',
-    } satisfies WsChatAckPayload);
+    return this.chatHandler.handleEdit(socket, body);
   }
 
   @UseGuards(WsAuthGuard)
@@ -214,32 +114,7 @@ export class ChatGateway implements OnModuleInit {
     @ConnectedSocket() socket: AuthedSocket,
     @MessageBody() body: WsChatDeletePayload,
   ) {
-    const userId = String(socket.data.userId);
-    const canAccess = await this.membershipService.canUserAccessConversation(
-      userId,
-      body.conversation_id,
-    );
-    if (!canAccess) {
-      socket.emit(WsEvents.ChatAck, {
-        message_id: body.message_id,
-        status: 'rejected',
-        reason: 'not_member',
-      } satisfies WsChatAckPayload);
-      return;
-    }
-
-    const cmd: ChatMessageDeleteCommand = {
-      message_id: body.message_id,
-      conversation_id: body.conversation_id,
-      sender_id: userId,
-      deleted_at: Date.now(),
-    };
-    void this.kafka.emit(KafkaTopics.ChatMessageDelete, cmd);
-
-    socket.emit(WsEvents.ChatAck, {
-      message_id: body.message_id,
-      status: 'accepted',
-    } satisfies WsChatAckPayload);
+    return this.chatHandler.handleDelete(socket, body);
   }
 
   @UseGuards(WsAuthGuard)
@@ -248,33 +123,7 @@ export class ChatGateway implements OnModuleInit {
     @ConnectedSocket() socket: AuthedSocket,
     @MessageBody() body: WsChatReactPayload,
   ) {
-    const userId = String(socket.data.userId);
-    const canAccess = await this.membershipService.canUserAccessConversation(
-      userId,
-      body.conversation_id,
-    );
-    if (!canAccess) {
-      socket.emit(WsEvents.ChatAck, {
-        message_id: body.message_id,
-        status: 'rejected',
-        reason: 'not_member',
-      } satisfies WsChatAckPayload);
-      return;
-    }
-
-    const cmd: ChatReactionAddCommand = {
-      message_id: body.message_id,
-      conversation_id: body.conversation_id,
-      user_id: userId,
-      reaction_type: body.reaction_type,
-      created_at: Date.now(),
-    };
-    void this.kafka.emit(KafkaTopics.ChatReactionAdd, cmd);
-
-    socket.emit(WsEvents.ChatAck, {
-      message_id: body.message_id,
-      status: 'accepted',
-    } satisfies WsChatAckPayload);
+    return this.chatHandler.handleReact(socket, body);
   }
 
   @UseGuards(WsAuthGuard)
@@ -283,32 +132,59 @@ export class ChatGateway implements OnModuleInit {
     @ConnectedSocket() socket: AuthedSocket,
     @MessageBody() body: WsChatUnreactPayload,
   ) {
-    const userId = String(socket.data.userId);
-    const canAccess = await this.membershipService.canUserAccessConversation(
-      userId,
-      body.conversation_id,
-    );
-    if (!canAccess) {
-      socket.emit(WsEvents.ChatAck, {
-        message_id: body.message_id,
-        status: 'rejected',
-        reason: 'not_member',
-      } satisfies WsChatAckPayload);
-      return;
-    }
-
-    const cmd: ChatReactionRemoveCommand = {
-      message_id: body.message_id,
-      conversation_id: body.conversation_id,
-      user_id: userId,
-    };
-    void this.kafka.emit(KafkaTopics.ChatReactionRemove, cmd);
-
-    socket.emit(WsEvents.ChatAck, {
-      message_id: body.message_id,
-      status: 'accepted',
-    } satisfies WsChatAckPayload);
+    return this.chatHandler.handleUnreact(socket, body);
   }
+
+  // ── Presence Event Handlers ──────────────────────────────────────────
+
+  @UseGuards(WsAuthGuard)
+  @SubscribeMessage(WsEvents.PresenceHeartbeat)
+  handleHeartbeat(
+    @ConnectedSocket() socket: AuthedSocket,
+    @MessageBody() body: WsPresenceHeartbeatPayload,
+  ) {
+    return this.presenceHandler.handleHeartbeat(socket, body);
+  }
+
+  // ── AI Event Handlers ────────────────────────────────────────────────
+
+  @UseGuards(WsAuthGuard)
+  @SubscribeMessage(WsEvents.AiSmartReplyRequest)
+  handleAiSmartReply(
+    @ConnectedSocket() socket: AuthedSocket,
+    @MessageBody() body: WsAiSmartReplyRequestPayload,
+  ) {
+    return this.aiHandler.handleSmartReply(socket, body);
+  }
+
+  @UseGuards(WsAuthGuard)
+  @SubscribeMessage(WsEvents.AiSummaryRequest)
+  handleAiSummary(
+    @ConnectedSocket() socket: AuthedSocket,
+    @MessageBody() body: WsAiSummaryRequestPayload,
+  ) {
+    return this.aiHandler.handleSummary(socket, body);
+  }
+
+  @UseGuards(WsAuthGuard)
+  @SubscribeMessage(WsEvents.AiTranslateRequest)
+  handleAiTranslate(
+    @ConnectedSocket() socket: AuthedSocket,
+    @MessageBody() body: WsAiTranslateRequestPayload,
+  ) {
+    return this.aiHandler.handleTranslate(socket, body);
+  }
+
+  @UseGuards(WsAuthGuard)
+  @SubscribeMessage(WsEvents.AiDocumentQueryRequest)
+  handleAiDocumentQuery(
+    @ConnectedSocket() socket: AuthedSocket,
+    @MessageBody() body: WsAiDocumentQueryRequestPayload,
+  ) {
+    return this.aiHandler.handleDocumentQuery(socket, body);
+  }
+
+  // ── Broadcast Utilities ──────────────────────────────────────────────
 
   broadcastToConversation(
     conversationId: string,
@@ -323,16 +199,17 @@ export class ChatGateway implements OnModuleInit {
   }
 
   /**
-   * Emit event to a specific socket by ID
-   * Used for QR login to send tokens directly to PC socket
+   * Emit event to a specific socket by socketId (used for QR auth).
    */
-  async emitToSocket(socketId: string, event: string, payload: unknown) {
-    const sockets = await this.server.in(socketId).fetchSockets();
-
-    if (sockets.length === 0) {
-      console.warn('[ChatGateway.emitToSocket] Socket not found:', socketId);
-    }
-
+  emitToSocket(socketId: string, event: string, payload: unknown) {
     this.server.to(socketId).emit(event, payload);
+  }
+
+  /**
+   * Emit event to a specific user by userId.
+   * Uses the `user:{userId}` room that all authenticated sockets join.
+   */
+  emitToUser(userId: string, event: string, payload: unknown) {
+    this.server.to(`user:${userId}`).emit(event, payload);
   }
 }

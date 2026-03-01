@@ -229,6 +229,15 @@
       "compilerOptions": {
         "tsConfigPath": "apps/ws-gateway/tsconfig.app.json"
       }
+    },
+    "ai-core-service": {
+      "type": "application",
+      "root": "apps/ai-core-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/ai-core-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/ai-core-service/tsconfig.app.json"
+      }
     }
   },
   "compilerOptions": {

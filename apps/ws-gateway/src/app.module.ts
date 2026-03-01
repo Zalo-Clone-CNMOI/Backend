@@ -5,8 +5,17 @@ import { KafkaModule } from '@libs/kafka';
 import { AuthModule } from '@libs/auth';
 import { DatabaseModule } from '@libs/database';
 import { ConversationMembershipModule } from '@libs/mvp-access';
+import { ScyllaModule } from '@libs/scylla';
+import { RedisModule } from '@libs/redis';
 import { ChatGateway } from './socket/chat.gateway';
-import { KafkaFanoutConsumer } from './transport/kafka-fanout.consumer';
+import { ChatHandler, PresenceHandler, AiHandler } from './socket/handlers';
+import {
+  ChatFanoutConsumer,
+  PresenceFanoutConsumer,
+  AuthFanoutConsumer,
+  FriendFanoutConsumer,
+  AiFanoutConsumer,
+} from './transport/fanout';
 
 @Module({
   imports: [
@@ -15,9 +24,17 @@ import { KafkaFanoutConsumer } from './transport/kafka-fanout.consumer';
     AuthModule,
     DatabaseModule,
     ConversationMembershipModule,
+    ScyllaModule,
+    RedisModule.forRootAsync(),
     KafkaModule,
   ],
-  controllers: [KafkaFanoutConsumer],
-  providers: [ChatGateway],
+  controllers: [
+    ChatFanoutConsumer,
+    PresenceFanoutConsumer,
+    AuthFanoutConsumer,
+    FriendFanoutConsumer,
+    AiFanoutConsumer,
+  ],
+  providers: [ChatGateway, ChatHandler, PresenceHandler, AiHandler],
 })
 export class AppModule {}

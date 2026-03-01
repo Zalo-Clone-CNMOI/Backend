@@ -96,3 +96,37 @@ export enum PresenceStatus {
 
 export type MediaFileStatus = 'pending' | 'uploaded' | 'deleted';
 export type MemberRole = 'owner' | 'admin' | 'member';
+
+// ── AI Core Enums ────────────────────────────────────────────────────
+
+export enum AiFeature {
+  MODERATION = 'moderation',
+  SMART_REPLY = 'smart_reply',
+  SUMMARY = 'summary',
+  TRANSLATION = 'translation',
+  DOCUMENT_ANALYSIS = 'document_analysis',
+}
+
+export enum ModerationLabel {
+  CLEAN = 'clean',
+  SPAM = 'spam',
+  TOXIC = 'toxic',
+  HARASSMENT = 'harassment',
+  HATE_SPEECH = 'hate_speech',
+  SEXUAL = 'sexual',
+  VIOLENCE = 'violence',
+  SELF_HARM = 'self_harm',
+}
+
+export enum DocumentStatus {
+  PENDING = 'pending',
+  PROCESSING = 'processing',
+  COMPLETED = 'completed',
+  FAILED = 'failed',
+}
+
+export enum AiProvider {
+  OPENAI = 'openai',
+  GEMINI = 'gemini',
+  ANTHROPIC = 'anthropic',
+}

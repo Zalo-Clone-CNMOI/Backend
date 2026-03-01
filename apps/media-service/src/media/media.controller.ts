@@ -30,6 +30,7 @@ export class MediaController {
       body.key,
       body.contentType,
       userId,
+      body.conversationId,
     );
     return { ok: true, thumbnailKey: result.thumbnailKey };
   }

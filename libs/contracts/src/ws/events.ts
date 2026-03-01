@@ -25,6 +25,19 @@ export const WsEvents = {
   RespondFriendRequest: 'friend:request:respond',
   CancelFriendRequest: 'friend:request:cancel',
   FriendRemoved: 'friend:removed',
+
+  // ── AI Events ──────────────────────────────────────────────────────
+  AiSmartReplyRequest: 'ai:smart-reply:request',
+  AiSmartReplyResult: 'ai:smart-reply:result',
+  AiSummaryRequest: 'ai:summary:request',
+  AiSummaryResult: 'ai:summary:result',
+  AiTranslateRequest: 'ai:translate:request',
+  AiTranslateResult: 'ai:translate:result',
+  AiModerationResult: 'ai:moderation:result',
+  AiDocumentQueryRequest: 'ai:document:query:request',
+  AiDocumentQueryResult: 'ai:document:query:result',
+  AiStreamChunk: 'ai:stream:chunk',
+  AiStreamComplete: 'ai:stream:complete',
 } as const;
 
 export type WsEventName = (typeof WsEvents)[keyof typeof WsEvents];
@@ -181,4 +194,95 @@ export interface WsCancelFriendRequestPayload {
 
 export interface WsFriendRemovedPayload {
   userId: string;
+}
+
+// ── AI WebSocket Payloads ──────────────────────────────────────────────
+
+export interface WsAiSmartReplyRequestPayload {
+  conversation_id: string;
+  last_message_id: string;
+  last_message_body: string;
+  context_count?: number;
+}
+
+export interface WsAiSmartReplyResultPayload {
+  conversation_id: string;
+  suggestions: string[];
+}
+
+export interface WsAiSummaryRequestPayload {
+  conversation_id: string;
+  message_count?: number;
+}
+
+export interface WsAiSummaryResultPayload {
+  conversation_id: string;
+  summary: string;
+  message_range: {
+    from_message_id: string;
+    to_message_id: string;
+    count: number;
+  };
+  cached: boolean;
+}
+
+export interface WsAiTranslateRequestPayload {
+  message_id: string;
+  conversation_id: string;
+  body: string;
+  source_language?: string;
+  target_language: string;
+}
+
+export interface WsAiTranslateResultPayload {
+  message_id: string;
+  conversation_id: string;
+  original_body: string;
+  translated_body: string;
+  source_language: string;
+  target_language: string;
+  cached: boolean;
+}
+
+export interface WsAiModerationResultPayload {
+  message_id: string;
+  conversation_id: string;
+  is_flagged: boolean;
+  labels: string[];
+  confidence: number;
+}
+
+export interface WsAiDocumentQueryRequestPayload {
+  document_id: string;
+  conversation_id: string;
+  query: string;
+  top_k?: number;
+}
+
+export interface WsAiDocumentQueryResultPayload {
+  document_id: string;
+  conversation_id: string;
+  query: string;
+  answer: string;
+  sources: Array<{
+    chunk_index: number;
+    content_preview: string;
+    similarity_score: number;
+  }>;
+}
+
+export interface WsAiStreamChunkPayload {
+  stream_id: string;
+  conversation_id: string;
+  feature: string;
+  chunk_index: number;
+  content: string;
+  is_final: boolean;
+}
+
+export interface WsAiStreamCompletePayload {
+  stream_id: string;
+  conversation_id: string;
+  feature: string;
+  total_chunks: number;
 }

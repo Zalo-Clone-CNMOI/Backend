@@ -9,6 +9,7 @@ import {
   type MediaUploadRequestedEvent,
   type MediaUploadedEvent,
   type MediaThumbnailGeneratedEvent,
+  type AiDocumentUploadEvent,
 } from '@libs/contracts';
 import type {
   PresignUploadRequestDto,
@@ -16,6 +17,7 @@ import type {
 } from './dto/presign-upload.dto';
 import * as sharp from 'sharp';
 import { Readable } from 'stream';
+import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class MediaService implements OnModuleInit {
@@ -60,6 +62,7 @@ export class MediaService implements OnModuleInit {
     key: string,
     contentType: string,
     userId?: string,
+    conversationId?: string,
   ): Promise<{ thumbnailKey?: string }> {
     const event: MediaUploadedEvent = {
       key,
@@ -69,6 +72,24 @@ export class MediaService implements OnModuleInit {
     };
 
     void this.kafka.emit(KafkaTopics.MediaUploaded, event);
+
+    if (conversationId && userId && this.isDocument(contentType)) {
+      const docEvent: AiDocumentUploadEvent = {
+        document_id: uuidv4(),
+        conversation_id: conversationId,
+        user_id: userId,
+        file_key: key,
+        file_name: key.split('/').pop() ?? key,
+        file_size: 0,
+        content_type: contentType,
+        uploaded_at: Date.now(),
+        trace_id: userId,
+      };
+      void this.kafka.emit(KafkaTopics.AiDocumentUpload, docEvent);
+      this.logger.log(
+        `AiDocumentUpload emitted for key=${key}, doc_id=${docEvent.document_id}`,
+      );
+    }
 
     if (this.isImage(contentType)) {
       try {
@@ -88,6 +109,19 @@ export class MediaService implements OnModuleInit {
       !contentType.includes('gif') &&
       !contentType.includes('svg')
     );
+  }
+
+  private isDocument(contentType: string): boolean {
+    const documentTypes = [
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
+      'application/msword', // .doc
+      'text/plain',
+      'text/csv',
+      'text/markdown',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+    ];
+    return documentTypes.includes(contentType);
   }
 
   private async generateImageThumbnail(originalKey: string): Promise<string> {

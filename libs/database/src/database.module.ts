@@ -15,6 +15,10 @@ import {
   CommentLike,
   NotificationPreference,
   NotificationLog,
+  AiModerationLog,
+  AiUsageLog,
+  DocumentMetadata,
+  DocumentChunk,
 } from './entities';
 
 export const entities = [
@@ -31,6 +35,10 @@ export const entities = [
   CommentLike,
   NotificationPreference,
   NotificationLog,
+  AiModerationLog,
+  AiUsageLog,
+  DocumentMetadata,
+  DocumentChunk,
 ];
 
 // const useSsl = process.env.DB_SSL === 'true';

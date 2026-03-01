@@ -29,6 +29,22 @@ export const KafkaTopics = {
   RespondFriendRequest: 'friend.request.respond',
   CancelFriendRequest: 'friend.request.cancelled',
   FriendRemoved: 'friend.removed',
+
+  // ── AI Core Topics ──────────────────────────────────────────────────
+  AiModerationRequest: 'ai.moderation.request',
+  AiModerationResult: 'ai.moderation.result',
+  AiSmartReplyRequest: 'ai.smart-reply.request',
+  AiSmartReplyResult: 'ai.smart-reply.result',
+  AiSummaryRequest: 'ai.summary.request',
+  AiSummaryResult: 'ai.summary.result',
+  AiTranslateRequest: 'ai.translate.request',
+  AiTranslateResult: 'ai.translate.result',
+  AiDocumentUpload: 'ai.document.upload',
+  AiDocumentProcessed: 'ai.document.processed',
+  AiDocumentQuery: 'ai.document.query',
+  AiDocumentQueryResult: 'ai.document.query.result',
+  AiStreamChunk: 'ai.stream.chunk',
+  AiStreamComplete: 'ai.stream.complete',
 } as const;
 
 export type KafkaTopic = (typeof KafkaTopics)[keyof typeof KafkaTopics];

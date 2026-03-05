@@ -1,4 +1,4 @@
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { User, ConversationMember } from '@libs/database';
 
 /**
@@ -11,7 +11,7 @@ export async function getConversationMemberIds(
   const members = await conversationMemberRepo.find({
     where: {
       conversationId,
-      leftAt: undefined, // Only active members
+      leftAt: IsNull(), // Only active members
     },
     select: ['userId'],
   });

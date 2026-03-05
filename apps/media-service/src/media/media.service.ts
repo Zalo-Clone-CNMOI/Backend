@@ -68,7 +68,7 @@ export class MediaService implements OnModuleInit {
       trace_id: userId,
     };
 
-    void this.kafka.emit(KafkaTopics.MediaUploaded, event);
+    this.kafka.emit(KafkaTopics.MediaUploaded, event);
 
     if (this.isImage(contentType)) {
       try {
@@ -139,7 +139,7 @@ export class MediaService implements OnModuleInit {
       generated_at: Date.now(),
     };
 
-    void this.kafka.emit(KafkaTopics.MediaThumbnailGenerated, thumbnailEvent);
+    this.kafka.emit(KafkaTopics.MediaThumbnailGenerated, thumbnailEvent);
 
     this.logger.log(`Generated thumbnail: ${thumbnailKey}`);
 

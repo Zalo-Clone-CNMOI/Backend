@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { DeviceToken } from '@libs/database/entities';
 import { RegisterDeviceTokenDto, DeviceTokenResponseDto } from './dto';
 
@@ -135,26 +135,13 @@ export class DeviceTokensService {
   /**
    * Get active device tokens for multiple users (batch query)
    */
-  async getActiveTokensForUsers(
-    userIds: string[],
-  ): Promise<Map<string, string[]>> {
+  async getActiveTokensForUsers(userIds: string[]): Promise<DeviceToken[]> {
     const tokens = await this.deviceTokenRepository.find({
-      where: { isActive: true },
+      where: { userId: In(userIds), isActive: true },
       select: ['userId', 'token'],
     });
 
-    const result = new Map<string, string[]>();
-
-    for (const token of tokens) {
-      if (userIds.includes(token.userId)) {
-        if (!result.has(token.userId)) {
-          result.set(token.userId, []);
-        }
-        result.get(token.userId)!.push(token.token);
-      }
-    }
-
-    return result;
+    return tokens;
   }
 
   private toResponseDto(token: DeviceToken): DeviceTokenResponseDto {

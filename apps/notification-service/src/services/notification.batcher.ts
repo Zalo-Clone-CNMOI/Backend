@@ -71,17 +71,21 @@ export class NotificationBatcher implements OnModuleDestroy {
     }
   }
 
-  /**
-   * Flush the batch for a given user and return all collected notifications
-   */
+  private static readonly FLUSH_SCRIPT = `
+    local items = redis.call('LRANGE', KEYS[1], 0, -1)
+    redis.call('DEL', KEYS[1])
+    return items
+  `;
+
   async flushBatch(userId: string): Promise<NotificationRequestedEvent[]> {
     const key = this.getBatchKey(userId);
     this.clearTimer(userId);
 
     try {
-      // Atomically get all and delete
-      const items = await this.redis.lRange(key, 0, -1);
-      await this.redis.del(key);
+      const items = (await this.redis.eval(NotificationBatcher.FLUSH_SCRIPT, {
+        keys: [key],
+        arguments: [],
+      })) as string[];
 
       if (items.length === 0) return [];
 

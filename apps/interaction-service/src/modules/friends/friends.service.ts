@@ -217,7 +217,7 @@ export class FriendsService {
       select: ['id', 'fullName', 'avatarUrl', 'phone'],
     });
 
-    this.kafkaClient.emit('friend.request.send', {
+    this.kafkaClient.emit(KafkaTopics.SendFriendRequest, {
       requestId: saved.id,
       requesterId: userId,
       addresseeId: targetUserId,
@@ -291,7 +291,7 @@ export class FriendsService {
         select: ['id', 'fullName', 'avatarUrl'],
       });
 
-      this.kafkaClient.emit('friend.request.respond', {
+      this.kafkaClient.emit(KafkaTopics.RespondFriendRequest, {
         requestId: request.id,
         requesterId: request.requesterId,
         addresseeId: request.addresseeId,
@@ -333,7 +333,7 @@ export class FriendsService {
       await this.friendshipRepository.remove(request);
       this.logger.log(`Friend request rejected: ${request.id}`);
 
-      this.kafkaClient.emit('friend.request.respond', {
+      this.kafkaClient.emit(KafkaTopics.RespondFriendRequest, {
         requestId: request.id,
         requesterId: request.requesterId,
         addresseeId: request.addresseeId,
@@ -367,7 +367,7 @@ export class FriendsService {
     await this.friendshipRepository.remove(request);
     this.logger.log(`Friend request cancelled: ${requestId}`);
 
-    this.kafkaClient.emit('friend.request.cancelled', {
+    this.kafkaClient.emit(KafkaTopics.CancelFriendRequest, {
       requestId: request.id,
       requesterId: userId,
       addresseeId: request.addresseeId,
@@ -409,7 +409,7 @@ export class FriendsService {
     await this.cacheService.invalidateFriendLists([userId, friendId]);
 
     // Notify the other user
-    this.kafkaClient.emit('friend.removed', {
+    this.kafkaClient.emit(KafkaTopics.FriendRemoved, {
       userId,
       friendId,
       trace_id: `friend-remove:${userId}:${friendId}`,

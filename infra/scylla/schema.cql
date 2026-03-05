@@ -61,12 +61,17 @@ CREATE TABLE IF NOT EXISTS message_reactions (
     PRIMARY KEY (message_id, user_id, reaction_type)
 );
 
--- Table: message_reaction_stats
+-- Table: message_reaction_counts
 -- Lưu trữ tổng hợp số lượng reactions theo type cho mỗi message
--- Query pattern: Lấy nhanh tổng số reactions của message
-CREATE TABLE IF NOT EXISTS message_reaction_stats (
-    message_id text PRIMARY KEY,
-    reaction_counts map<text, int>  -- {'like': 5, 'love': 3, ...}
+-- Dùng counter type để đảm bảo atomic increment/decrement (tránh race condition)
+-- Query pattern: Lấy nhanh tổng số reactions của message theo từng loại
+-- NOTE: Counter tables cannot mix counter and non-counter columns.
+--       Use UPDATE ... SET count = count + 1 (never INSERT).
+CREATE TABLE IF NOT EXISTS message_reaction_counts (
+    message_id    text,
+    reaction_type text,
+    count         counter,
+    PRIMARY KEY (message_id, reaction_type)
 );
 
 -- =============================================================================

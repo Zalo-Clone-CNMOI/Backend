@@ -105,12 +105,12 @@ export class PersistMessageConsumer {
         trace_id: traceId,
       };
 
-      void this.publisher.emit(KafkaTopics.ChatMessageCreated, event);
+      await this.publisher.emit(KafkaTopics.ChatMessageCreated, event);
       this.logger.log(`[${traceId}] ChatMessageCreated event emitted`, {
         messageId: payload.message_id,
       });
 
-      void (async () => {
+      await (async () => {
         try {
           await this.emitMessageNotification(
             payload.conversation_id,
@@ -124,7 +124,7 @@ export class PersistMessageConsumer {
         }
       })();
 
-      void (async () => {
+      await (async () => {
         try {
           await this.cacheService.invalidateRecentMessages(
             payload.conversation_id,
@@ -179,13 +179,13 @@ export class PersistMessageConsumer {
         trace_id: traceId,
       };
 
-      void this.publisher.emit(KafkaTopics.ChatMessageUpdated, event);
+      await this.publisher.emit(KafkaTopics.ChatMessageUpdated, event);
       this.logger.log(`[${traceId}] ChatMessageUpdated event emitted`, {
         messageId: payload.message_id,
         duration: Date.now() - startTime,
       });
 
-      void (async () => {
+      await (async () => {
         try {
           await this.cacheService.invalidateRecentMessages(
             payload.conversation_id,
@@ -230,13 +230,13 @@ export class PersistMessageConsumer {
         trace_id: traceId,
       };
 
-      void this.publisher.emit(KafkaTopics.ChatMessageDeleted, event);
+      await this.publisher.emit(KafkaTopics.ChatMessageDeleted, event);
       this.logger.log(`[${traceId}] ChatMessageDeleted event emitted`, {
         messageId: payload.message_id,
         duration: Date.now() - startTime,
       });
 
-      void (async () => {
+      await (async () => {
         try {
           await this.cacheService.invalidateRecentMessages(
             payload.conversation_id,
@@ -284,7 +284,7 @@ export class PersistMessageConsumer {
         trace_id: traceId,
       };
 
-      void this.publisher.emit(KafkaTopics.ChatReactionAdded, event);
+      await this.publisher.emit(KafkaTopics.ChatReactionAdded, event);
       this.logger.log(`[${traceId}] ChatReactionAdded event emitted`, {
         duration: Date.now() - startTime,
       });
@@ -318,7 +318,7 @@ export class PersistMessageConsumer {
         trace_id: traceId,
       };
 
-      void this.publisher.emit(KafkaTopics.ChatReactionRemoved, event);
+      await this.publisher.emit(KafkaTopics.ChatReactionRemoved, event);
       this.logger.log(`[${traceId}] ChatReactionRemoved event emitted`, {
         duration: Date.now() - startTime,
       });
@@ -388,7 +388,7 @@ export class PersistMessageConsumer {
           requested_at: Date.now(),
           trace_id: notificationTraceId,
         };
-        void this.publisher
+        await this.publisher
           .emit(KafkaTopics.NotificationRequested, notification)
           .catch((err) =>
             this.logger.error(

@@ -25,7 +25,13 @@ export class NotificationConsumer implements OnModuleInit {
       this.logger.debug(
         `Batch ready for user ${userId}: ${notifications.length} notifications`,
       );
-      void this.processBatchedNotifications(notifications);
+      void this.processBatchedNotifications(notifications).catch((error) => {
+        this.logger.error(
+          `Failed to process batched notifications for user ${userId}`,
+          error instanceof Error ? error.stack : error,
+        );
+        this.metrics.recordFailed(notifications.length);
+      });
     };
   }
 

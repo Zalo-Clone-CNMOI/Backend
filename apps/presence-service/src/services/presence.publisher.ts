@@ -1,7 +1,6 @@
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ClientKafka } from '@nestjs/microservices';
 import { KAFKA_CLIENT } from '@libs/kafka';
-import { ChatPublisher } from 'apps/chat-service/src/services/chat.publisher';
 import {
   timeout,
   retry,
@@ -13,7 +12,7 @@ import {
 
 @Injectable()
 export class PresencePublisher implements OnModuleInit {
-  private readonly logger = new Logger(ChatPublisher.name);
+  private readonly logger = new Logger(PresencePublisher.name);
 
   constructor(@Inject(KAFKA_CLIENT) private readonly kafka: ClientKafka) {}
 

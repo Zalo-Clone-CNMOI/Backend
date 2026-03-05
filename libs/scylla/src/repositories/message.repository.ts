@@ -155,11 +155,12 @@ export class MessageRepository {
       { prepare: true },
     );
 
+    // Counter table: atomic increment — no race conditions
     await this.client.execute(
-      `UPDATE message_reaction_stats 
-       SET reaction_counts = reaction_counts + ? 
-       WHERE message_id = ?`,
-      [{ [reaction.reaction_type]: 1 }, reaction.message_id],
+      `UPDATE message_reaction_counts 
+       SET count = count + 1 
+       WHERE message_id = ? AND reaction_type = ?`,
+      [reaction.message_id, reaction.reaction_type],
       { prepare: true },
     );
   }
@@ -178,19 +179,21 @@ export class MessageRepository {
     );
 
     if (result.rowLength > 0) {
-      const decrements: Record<string, number> = {};
+      // Counter table: one atomic decrement per reaction_type row
+      const decrementPromises: Promise<types.ResultSet>[] = [];
       for (const row of result.rows) {
         const reactionType = row.get('reaction_type') as string;
-        decrements[reactionType] = (decrements[reactionType] || 0) - 1;
+        decrementPromises.push(
+          this.client.execute(
+            `UPDATE message_reaction_counts 
+             SET count = count - 1 
+             WHERE message_id = ? AND reaction_type = ?`,
+            [messageId, reactionType],
+            { prepare: true },
+          ),
+        );
       }
-
-      await this.client.execute(
-        `UPDATE message_reaction_stats 
-         SET reaction_counts = reaction_counts + ? 
-         WHERE message_id = ?`,
-        [decrements, messageId],
-        { prepare: true },
-      );
+      await Promise.all(decrementPromises);
     }
   }
 
@@ -231,21 +234,22 @@ export class MessageRepository {
     messageId: string,
   ): Promise<Record<string, number> | null> {
     const result = await this.client.execute(
-      `SELECT reaction_counts FROM message_reaction_stats WHERE message_id = ?`,
+      `SELECT reaction_type, count FROM message_reaction_counts WHERE message_id = ?`,
       [messageId],
       { prepare: true },
     );
 
     if (result.rowLength === 0) return null;
 
-    const row: types.Row = result.rows[0];
-    const counts = row.get('reaction_counts') as Map<string, number>;
-
     const stats: Record<string, number> = {};
-    if (counts) {
-      counts.forEach((value, key) => {
-        stats[key] = value;
-      });
+    for (const row of result.rows) {
+      const reactionType = row.get('reaction_type') as string;
+      // ScyllaDB counters are returned as Long; coerce to JS number
+      const count = row.get('count') as { toNumber?: () => number } | number;
+      stats[reactionType] =
+        typeof count === 'object' && count !== null && 'toNumber' in count
+          ? (count as { toNumber: () => number }).toNumber()
+          : Number(count);
     }
 
     return stats;

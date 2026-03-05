@@ -7,6 +7,7 @@ import { UsersModule } from './modules/users';
 import { FriendsModule } from './modules/friends';
 import { ConversationsModule } from './modules/conversations';
 import { MessagesModule } from './modules/messages';
+import { DeviceTokensModule } from './modules/device-tokens/device-tokens.module';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import { ThrottlerModule, seconds } from '@nestjs/throttler';
 import { LoggerModule } from '@libs/logger';
@@ -29,6 +30,7 @@ import { LoggerModule } from '@libs/logger';
     FriendsModule,
     ConversationsModule,
     MessagesModule,
+    DeviceTokensModule,
   ],
   controllers: [BffServiceController],
   providers: [BffServiceService],

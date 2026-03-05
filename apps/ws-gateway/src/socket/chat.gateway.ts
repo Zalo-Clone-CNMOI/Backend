@@ -147,6 +147,9 @@ export class ChatGateway implements OnModuleInit {
       sender_id: userId,
       body: body.body,
       sent_at: body.sent_at,
+      attachments: body.attachments,
+      reply_to_message_id: body.reply_to_message_id,
+      trace_id: `ws:${socket.id}:${body.message_id}`,
     });
 
     socket.emit(WsEvents.ChatAck, {
@@ -199,6 +202,7 @@ export class ChatGateway implements OnModuleInit {
       sender_id: userId,
       new_body: body.new_body,
       edited_at: Date.now(),
+      trace_id: `ws:${socket.id}:${body.message_id}`,
     };
     void this.kafka.emit(KafkaTopics.ChatMessageEdit, cmd);
 
@@ -233,6 +237,7 @@ export class ChatGateway implements OnModuleInit {
       conversation_id: body.conversation_id,
       sender_id: userId,
       deleted_at: Date.now(),
+      trace_id: `ws:${socket.id}:${body.message_id}`,
     };
     void this.kafka.emit(KafkaTopics.ChatMessageDelete, cmd);
 
@@ -268,6 +273,7 @@ export class ChatGateway implements OnModuleInit {
       user_id: userId,
       reaction_type: body.reaction_type,
       created_at: Date.now(),
+      trace_id: `ws:${socket.id}:${body.message_id}`,
     };
     void this.kafka.emit(KafkaTopics.ChatReactionAdd, cmd);
 
@@ -301,6 +307,7 @@ export class ChatGateway implements OnModuleInit {
       message_id: body.message_id,
       conversation_id: body.conversation_id,
       user_id: userId,
+      trace_id: `ws:${socket.id}:${body.message_id}`,
     };
     void this.kafka.emit(KafkaTopics.ChatReactionRemove, cmd);
 

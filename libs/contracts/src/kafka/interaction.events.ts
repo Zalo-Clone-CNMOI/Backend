@@ -8,6 +8,7 @@ export interface FriendRequestSentEvent {
     avatarUrl: string | null;
     phone: string;
   };
+  trace_id?: string;
 }
 
 export interface FriendRequestRespondedEvent {
@@ -20,15 +21,18 @@ export interface FriendRequestRespondedEvent {
     fullName: string;
     avatarUrl: string | null;
   };
+  trace_id?: string;
 }
 
 export interface FriendRequestCancelledEvent {
   requestId: string;
   requesterId: string;
   addresseeId: string;
+  trace_id?: string;
 }
 
 export interface FriendRemovedEvent {
   userId: string;
   friendId: string;
+  trace_id?: string;
 }

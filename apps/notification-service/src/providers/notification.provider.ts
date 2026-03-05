@@ -1,14 +1,22 @@
+// ── DI Token ───────────────────────────────────────────────────────────
+export const NOTIFICATION_PROVIDER = Symbol('NOTIFICATION_PROVIDER');
+
+// ── Interfaces ─────────────────────────────────────────────────────────
 export interface SendNotificationInput {
   userId: string;
   title: string;
   body: string;
   data?: Record<string, string>;
+  imageUrl?: string;
+  priority?: 'normal' | 'high';
 }
 
 export interface SendNotificationResult {
-  ok: true;
+  ok: boolean;
+  successCount: number;
+  failureCount: number;
 }
 
-export abstract class NotificationProvider {
-  abstract send(input: SendNotificationInput): Promise<SendNotificationResult>;
+export interface INotificationProvider {
+  send(input: SendNotificationInput): Promise<SendNotificationResult>;
 }

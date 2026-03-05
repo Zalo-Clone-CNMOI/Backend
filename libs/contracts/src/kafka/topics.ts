@@ -20,7 +20,9 @@ export const KafkaTopics = {
   MediaThumbnailGenerated: 'media.thumbnail.generated',
 
   NotificationRequested: 'notification.requested',
+  NotificationBatch: 'notification.batch',
   NotificationSent: 'notification.sent',
+  NotificationFailed: 'notification.failed',
 
   AuthQrConfirmed: 'auth.qr.confirmed',
   AuthQrRejected: 'auth.qr.rejected',

@@ -5,6 +5,11 @@ import { Repository } from 'typeorm';
 import { User, Friendship } from '@libs/database/entities';
 import { ErrorCode, FriendshipStatus, UserStatus } from '@app/constant';
 import {
+  type NotificationRequestedEvent,
+  NotificationType,
+  KafkaTopics,
+} from '@libs/contracts';
+import {
   BusinessException,
   PaginatedResponse,
   PaginationMeta,
@@ -212,7 +217,7 @@ export class FriendsService {
       select: ['id', 'fullName', 'avatarUrl', 'phone'],
     });
 
-    this.kafkaClient.emit('friend.request.send', {
+    this.kafkaClient.emit(KafkaTopics.SendFriendRequest, {
       requestId: saved.id,
       requesterId: userId,
       addresseeId: targetUserId,
@@ -222,7 +227,29 @@ export class FriendsService {
         avatarUrl: requester?.avatarUrl,
         phone: requester?.phone,
       },
+      trace_id: `friend-req:${saved.id}`,
     });
+
+    // Emit notification to addressee
+    const notification: NotificationRequestedEvent = {
+      channel: 'push',
+      user_id: targetUserId,
+      title: 'New friend request',
+      body: `${requester?.fullName || 'Someone'} sent you a friend request`,
+      type: NotificationType.FriendRequest,
+      data: {
+        request_id: saved.id,
+        requester_id: userId,
+      },
+      rich: {
+        image_url: requester?.avatarUrl || undefined,
+        priority: 'normal',
+        category: 'friend_request',
+      },
+      requested_at: Date.now(),
+      trace_id: `friend-req:${saved.id}`,
+    };
+    this.kafkaClient.emit(KafkaTopics.NotificationRequested, notification);
 
     return { message: 'Friend request sent successfully', requestId: saved.id };
   }
@@ -264,7 +291,7 @@ export class FriendsService {
         select: ['id', 'fullName', 'avatarUrl'],
       });
 
-      this.kafkaClient.emit('friend.request.respond', {
+      this.kafkaClient.emit(KafkaTopics.RespondFriendRequest, {
         requestId: request.id,
         requesterId: request.requesterId,
         addresseeId: request.addresseeId,
@@ -274,18 +301,44 @@ export class FriendsService {
           fullName: addressee?.fullName,
           avatarUrl: addressee?.avatarUrl,
         },
+        trace_id: `friend-accept:${request.id}`,
       });
+
+      // Emit notification to requester that their request was accepted
+      const acceptNotification: NotificationRequestedEvent = {
+        channel: 'push',
+        user_id: request.requesterId,
+        title: 'Friend request accepted',
+        body: `${addressee?.fullName || 'Someone'} accepted your friend request`,
+        type: NotificationType.FriendAccepted,
+        data: {
+          request_id: request.id,
+          friend_id: userId,
+        },
+        rich: {
+          image_url: addressee?.avatarUrl || undefined,
+          priority: 'normal',
+          category: 'friend_accepted',
+        },
+        requested_at: Date.now(),
+        trace_id: `friend-accept:${request.id}`,
+      };
+      this.kafkaClient.emit(
+        KafkaTopics.NotificationRequested,
+        acceptNotification,
+      );
 
       return { message: 'Friend request accepted' };
     } else {
       await this.friendshipRepository.remove(request);
       this.logger.log(`Friend request rejected: ${request.id}`);
 
-      this.kafkaClient.emit('friend.request.respond', {
+      this.kafkaClient.emit(KafkaTopics.RespondFriendRequest, {
         requestId: request.id,
         requesterId: request.requesterId,
         addresseeId: request.addresseeId,
         status: 'rejected',
+        trace_id: `friend-reject:${request.id}`,
       });
 
       return { message: 'Friend request rejected' };
@@ -314,10 +367,11 @@ export class FriendsService {
     await this.friendshipRepository.remove(request);
     this.logger.log(`Friend request cancelled: ${requestId}`);
 
-    this.kafkaClient.emit('friend.request.cancelled', {
+    this.kafkaClient.emit(KafkaTopics.CancelFriendRequest, {
       requestId: request.id,
       requesterId: userId,
       addresseeId: request.addresseeId,
+      trace_id: `friend-cancel:${requestId}`,
     });
 
     return { message: 'Friend request cancelled' };
@@ -355,9 +409,10 @@ export class FriendsService {
     await this.cacheService.invalidateFriendLists([userId, friendId]);
 
     // Notify the other user
-    this.kafkaClient.emit('friend.removed', {
+    this.kafkaClient.emit(KafkaTopics.FriendRemoved, {
       userId,
       friendId,
+      trace_id: `friend-remove:${userId}:${friendId}`,
     });
 
     return { message: 'Friend removed successfully' };

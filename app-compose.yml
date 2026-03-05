@@ -339,6 +339,58 @@ services:
           cpus: "0.15"
           memory: 128M
 
+  notification-service:
+    image: ${DOCKER_REGISTRY:-ghcr.io}/${DOCKER_IMAGE_PREFIX:-zalo-clone}/notification-service:${IMAGE_TAG:-latest}
+    container_name: zalo_notification_service
+    build:
+      context: .
+      dockerfile: apps/notification-service/Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: 3004
+      SERVICE_NAME: notification-service
+      KAFKA_BROKERS: kafka:29092
+      KAFKA_CLIENT_ID: notification-service
+      KAFKA_GROUP_ID: notification-service-group
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@database-1.cda2o0ikkgnf.ap-southeast-1.rds.amazonaws.com:5432/${POSTGRES_DB:-postgres}
+      DB_SSL: "true"
+      DB_HOST: database-1.cda2o0ikkgnf.ap-southeast-1.rds.amazonaws.com
+      DB_PORT: 5432
+      DB_USERNAME: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      DB_NAME: ${POSTGRES_DB:-postgres}
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID}
+      FIREBASE_CLIENT_EMAIL: ${FIREBASE_CLIENT_EMAIL}
+      FIREBASE_PRIVATE_KEY: ${FIREBASE_PRIVATE_KEY}
+    ports:
+      - "${NOTIFICATION_PORT:-3004}:3004"
+    networks:
+      - zalo_network
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:3004/metrics",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.3"
+          memory: 256M
+        reservations:
+          cpus: "0.15"
+          memory: 128M
+
 networks:
   zalo_network:
     external: true

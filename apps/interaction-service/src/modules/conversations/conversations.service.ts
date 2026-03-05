@@ -1,6 +1,13 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, IsNull } from 'typeorm';
+import { ClientKafka } from '@nestjs/microservices';
+import { KAFKA_CLIENT } from '@libs/kafka';
+import {
+  type NotificationRequestedEvent,
+  NotificationType,
+  KafkaTopics,
+} from '@libs/contracts';
 
 import {
   User,
@@ -45,6 +52,8 @@ export class ConversationsService {
     @InjectRepository(ConversationMember)
     private readonly memberRepository: Repository<ConversationMember>,
     private readonly cacheService: CacheService,
+    @Inject(KAFKA_CLIENT)
+    private readonly kafkaClient: ClientKafka,
   ) {}
 
   /**
@@ -377,6 +386,34 @@ export class ConversationsService {
     this.logger.log(
       `Members added to conversation ${conversationId}: ${newUserIds.join(', ')}`,
     );
+
+    // Emit notifications to newly added members
+    const adderUser = await this.userRepository.findOne({
+      where: { id: userId },
+      select: ['fullName'],
+    });
+
+    for (const newUserId of newUserIds) {
+      const notification: NotificationRequestedEvent = {
+        channel: 'push',
+        user_id: newUserId,
+        title: 'Added to group',
+        body: `${adderUser?.fullName || 'Someone'} added you to ${conversation.name || 'a group'}`,
+        type: NotificationType.System,
+        data: {
+          conversation_id: conversationId,
+          added_by: userId,
+        },
+        rich: {
+          image_url: conversation.avatarUrl || undefined,
+          priority: 'normal',
+          category: 'group_invite',
+          thread_id: conversationId,
+        },
+        requested_at: Date.now(),
+      };
+      this.kafkaClient.emit(KafkaTopics.NotificationRequested, notification);
+    }
 
     const allMemberIds = [
       ...conversation.members

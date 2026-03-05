@@ -11,6 +11,14 @@ export interface DecodedFirebaseToken {
   picture?: string;
 }
 
+// ── FCM Types ────────────────────────────────────────────────────────────
+
+export interface FcmSendResult {
+  successCount: number;
+  failureCount: number;
+  invalidTokens: string[];
+}
+
 @Injectable()
 export class FirebaseService {
   private readonly logger = new Logger(FirebaseService.name);
@@ -80,6 +88,145 @@ export class FirebaseService {
       this.logger.log(`Firebase user deleted: ${uid}`);
     } catch (error) {
       this.logger.error(`Failed to delete Firebase user: ${uid}`, error);
+      throw error;
+    }
+  }
+  /**
+   * Get the FCM messaging instance
+   */
+  private get messaging(): admin.messaging.Messaging {
+    return this.firebaseApp.messaging();
+  }
+
+  /**
+   * Send a single push notification to one device token
+   */
+  async sendToDevice(
+    token: string,
+    notification: admin.messaging.Notification,
+    data?: Record<string, string>,
+    options?: Partial<admin.messaging.AndroidConfig>,
+  ): Promise<string> {
+    const message: admin.messaging.Message = {
+      token,
+      notification,
+      data,
+      android: options,
+    };
+    try {
+      const messageId = await this.messaging.send(message);
+      this.logger.debug(`FCM message sent: ${messageId}`);
+      return messageId;
+    } catch (error) {
+      this.logger.error(
+        `FCM sendToDevice failed for token ${token.slice(0, 10)}...`,
+        error,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Send push notification to multiple device tokens using sendEach.
+   * Returns success/failure counts and invalid tokens for cleanup.
+   */
+  async sendMulticast(
+    tokens: string[],
+    notification: admin.messaging.Notification,
+    data?: Record<string, string>,
+    android?: Partial<admin.messaging.AndroidConfig>,
+  ): Promise<FcmSendResult> {
+    if (tokens.length === 0) {
+      return { successCount: 0, failureCount: 0, invalidTokens: [] };
+    }
+
+    const messages: admin.messaging.Message[] = tokens.map((token) => ({
+      token,
+      notification,
+      data,
+      android,
+    }));
+
+    try {
+      const response = await this.messaging.sendEach(messages);
+      const invalidTokens: string[] = [];
+
+      response.responses.forEach((resp, idx) => {
+        if (
+          !resp.success &&
+          resp.error &&
+          (resp.error.code === 'messaging/invalid-registration-token' ||
+            resp.error.code === 'messaging/registration-token-not-registered')
+        ) {
+          invalidTokens.push(tokens[idx]);
+        }
+      });
+
+      if (invalidTokens.length > 0) {
+        this.logger.warn(
+          `FCM sendMulticast: ${invalidTokens.length} invalid tokens detected`,
+        );
+      }
+
+      return {
+        successCount: response.successCount,
+        failureCount: response.failureCount,
+        invalidTokens,
+      };
+    } catch (error) {
+      this.logger.error('FCM sendMulticast failed', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send to a Firebase topic
+   */
+  async sendToTopic(
+    topic: string,
+    notification: admin.messaging.Notification,
+    data?: Record<string, string>,
+  ): Promise<string> {
+    try {
+      const messageId = await this.messaging.send({
+        topic,
+        notification,
+        data,
+      });
+      this.logger.debug(`FCM topic message sent to ${topic}: ${messageId}`);
+      return messageId;
+    } catch (error) {
+      this.logger.error(`FCM sendToTopic failed for topic ${topic}`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Subscribe tokens to a topic
+   */
+  async subscribeToTopic(
+    tokens: string[],
+    topic: string,
+  ): Promise<admin.messaging.MessagingTopicManagementResponse> {
+    try {
+      return await this.messaging.subscribeToTopic(tokens, topic);
+    } catch (error) {
+      this.logger.error(`FCM subscribeToTopic failed for ${topic}`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Unsubscribe tokens from a topic
+   */
+  async unsubscribeFromTopic(
+    tokens: string[],
+    topic: string,
+  ): Promise<admin.messaging.MessagingTopicManagementResponse> {
+    try {
+      return await this.messaging.unsubscribeFromTopic(tokens, topic);
+    } catch (error) {
+      this.logger.error(`FCM unsubscribeFromTopic failed for ${topic}`, error);
       throw error;
     }
   }

@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { AuthApi, UsersApi } from './client/generated';
+import { AuthApi, UsersApi, DeviceTokensApi } from './client/generated';
 import { BaseHttpClient } from '../../base-http-client';
 import type {
   RegisterDto,
@@ -18,6 +18,8 @@ import type {
   QrStatusResponseDto,
   QrConfirmDto,
   QrRejectDto,
+  RegisterDeviceTokenDto,
+  DeviceTokenResponseDto,
 } from './client/generated';
 
 @Injectable()
@@ -27,6 +29,7 @@ export class SsoClientService extends BaseHttpClient {
   constructor(
     private readonly authApi: AuthApi,
     private readonly usersApi: UsersApi,
+    private readonly deviceTokensApi: DeviceTokensApi,
   ) {
     super();
   }
@@ -266,6 +269,86 @@ export class SsoClientService extends BaseHttpClient {
       return response.data;
     } catch (error) {
       this.handleError('getPublicProfile', error);
+    }
+  }
+
+  // ==================== DEVICE TOKEN METHODS ====================
+
+  /**
+   * Register or update device token
+   */
+  async registerDeviceToken(
+    accessToken: string,
+    dto: RegisterDeviceTokenDto,
+  ): Promise<DeviceTokenResponseDto> {
+    try {
+      const response = await this.deviceTokensApi.registerDeviceToken(
+        { registerDeviceTokenDto: dto },
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        },
+      );
+      return response.data;
+    } catch (error) {
+      this.handleError('registerDeviceToken', error);
+    }
+  }
+
+  /**
+   * Get all device tokens for current user
+   */
+  async getUserDeviceTokens(
+    accessToken: string,
+  ): Promise<DeviceTokenResponseDto[]> {
+    try {
+      const response = await this.deviceTokensApi.getUserDeviceTokens({
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+      return response.data;
+    } catch (error) {
+      this.handleError('getUserDeviceTokens', error);
+    }
+  }
+
+  /**
+   * Delete a specific device token
+   */
+  async deleteDeviceToken(
+    accessToken: string,
+    tokenId: string,
+  ): Promise<{ success: boolean }> {
+    try {
+      const response = await this.deviceTokensApi.deleteDeviceToken(
+        { tokenId },
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        },
+      );
+      return { success: response.data.success ?? true };
+    } catch (error) {
+      this.handleError('deleteDeviceToken', error);
+    }
+  }
+
+  /**
+   * Delete all device tokens for current user
+   */
+  async deleteAllDeviceTokens(accessToken: string): Promise<{ count: number }> {
+    try {
+      const response = await this.deviceTokensApi.deleteAllDeviceTokens({
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+      return { count: response.data.count ?? 0 };
+    } catch (error) {
+      this.handleError('deleteAllDeviceTokens', error);
     }
   }
 }

@@ -1,7 +1,7 @@
 import { Module, DynamicModule } from '@nestjs/common';
 import { HttpModule } from '@nestjs/axios';
 import { SsoClientService } from './sso-client.service';
-import { AuthApi, UsersApi } from './client/generated';
+import { AuthApi, UsersApi, DeviceTokensApi } from './client/generated';
 import {
   SsoClientConfig,
   SsoClientAsyncConfig,
@@ -22,9 +22,10 @@ export class SsoClientModule {
         },
         injectApiProviderAsync(AuthApi),
         injectApiProviderAsync(UsersApi),
+        injectApiProviderAsync(DeviceTokensApi),
         SsoClientService,
       ],
-      exports: [SsoClientService, AuthApi, UsersApi],
+      exports: [SsoClientService, AuthApi, UsersApi, DeviceTokensApi],
     };
   }
 
@@ -41,9 +42,10 @@ export class SsoClientModule {
         },
         injectApiProviderAsync(AuthApi),
         injectApiProviderAsync(UsersApi),
+        injectApiProviderAsync(DeviceTokensApi),
         SsoClientService,
       ],
-      exports: [SsoClientService, AuthApi, UsersApi],
+      exports: [SsoClientService, AuthApi, UsersApi, DeviceTokensApi],
     };
   }
 }

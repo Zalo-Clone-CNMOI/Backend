@@ -9,6 +9,7 @@ import { HealthCheckService } from '@libs/shared';
 import { HealthController } from './health.controller';
 import { AuthModule } from './modules/auth';
 import { UsersModule } from './modules/users';
+import { DeviceTokensModule } from './modules/device-tokens';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis/src/throttler-storage-redis.service';
 import { ThrottlerModule, seconds } from '@nestjs/throttler';
 
@@ -21,6 +22,7 @@ import { ThrottlerModule, seconds } from '@nestjs/throttler';
     SharedAuthModule,
     AuthModule,
     UsersModule,
+    DeviceTokensModule,
     ThrottlerModule.forRoot({
       throttlers: [{ limit: 5, ttl: seconds(60) }],
       storage: new ThrottlerStorageRedisService(

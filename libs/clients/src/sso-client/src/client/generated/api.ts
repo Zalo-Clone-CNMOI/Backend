@@ -74,6 +74,92 @@ export interface AuthResponseDto {
 /**
  * 
  * @export
+ * @interface DeleteAllDeviceTokens200Response
+ */
+export interface DeleteAllDeviceTokens200Response {
+    /**
+     * 
+     * @type {number}
+     * @memberof DeleteAllDeviceTokens200Response
+     */
+    'count'?: number;
+}
+/**
+ * 
+ * @export
+ * @interface DeleteDeviceToken200Response
+ */
+export interface DeleteDeviceToken200Response {
+    /**
+     * 
+     * @type {boolean}
+     * @memberof DeleteDeviceToken200Response
+     */
+    'success'?: boolean;
+}
+/**
+ * 
+ * @export
+ * @interface DeviceTokenResponseDto
+ */
+export interface DeviceTokenResponseDto {
+    /**
+     * Token ID
+     * @type {string}
+     * @memberof DeviceTokenResponseDto
+     */
+    'id'?: string;
+    /**
+     * FCM device token
+     * @type {string}
+     * @memberof DeviceTokenResponseDto
+     */
+    'token'?: string;
+    /**
+     * Device platform
+     * @type {string}
+     * @memberof DeviceTokenResponseDto
+     */
+    'platform'?: DeviceTokenResponseDtoPlatformEnum;
+    /**
+     * Device identifier
+     * @type {string}
+     * @memberof DeviceTokenResponseDto
+     */
+    'deviceId'?: string | null;
+    /**
+     * Whether the token is active
+     * @type {boolean}
+     * @memberof DeviceTokenResponseDto
+     */
+    'isActive'?: boolean;
+    /**
+     * Creation timestamp
+     * @type {string}
+     * @memberof DeviceTokenResponseDto
+     */
+    'createdAt'?: string;
+    /**
+     * Last update timestamp
+     * @type {string}
+     * @memberof DeviceTokenResponseDto
+     */
+    'updatedAt'?: string;
+}
+
+/**
+    * @export
+    * @enum {string}
+    */
+export enum DeviceTokenResponseDtoPlatformEnum {
+    ios = 'ios',
+    android = 'android',
+    web = 'web'
+}
+
+/**
+ * 
+ * @export
  * @interface LoginDto
  */
 export interface LoginDto {
@@ -439,6 +525,42 @@ export interface RefreshTokenResponseDto {
      */
     'expiresIn'?: number;
 }
+/**
+ * 
+ * @export
+ * @interface RegisterDeviceTokenDto
+ */
+export interface RegisterDeviceTokenDto {
+    /**
+     * FCM device token
+     * @type {string}
+     * @memberof RegisterDeviceTokenDto
+     */
+    'token': string;
+    /**
+     * Device platform
+     * @type {string}
+     * @memberof RegisterDeviceTokenDto
+     */
+    'platform': RegisterDeviceTokenDtoPlatformEnum;
+    /**
+     * Unique device identifier (optional)
+     * @type {string}
+     * @memberof RegisterDeviceTokenDto
+     */
+    'deviceId'?: string;
+}
+
+/**
+    * @export
+    * @enum {string}
+    */
+export enum RegisterDeviceTokenDtoPlatformEnum {
+    ios = 'ios',
+    android = 'android',
+    web = 'web'
+}
+
 /**
  * 
  * @export
@@ -1598,6 +1720,353 @@ export class AuthApi extends BaseAPI {
      */
     public resetPassword(requestParameters: AuthApiResetPasswordRequest, options?: RawAxiosRequestConfig) {
         return AuthApiFp(this.configuration).resetPassword(requestParameters.resetPasswordDto, options).then((request) => request(this.axios, this.basePath));
+    }
+}
+
+
+
+/**
+ * DeviceTokensApi - axios parameter creator
+ * @export
+ */
+export const DeviceTokensApiAxiosParamCreator = function (configuration?: Configuration) {
+    return {
+        /**
+         * Remove all device tokens for the current user
+         * @summary Delete all device tokens
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        deleteAllDeviceTokens: async (options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            const localVarPath = `/device-tokens`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'DELETE', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication BearerAuth required
+            // http bearer authentication required
+            await setBearerAuthToObject(localVarHeaderParameter, configuration)
+
+
+    
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * Remove a specific device token from the system
+         * @summary Delete device token
+         * @param {string} tokenId Device token ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        deleteDeviceToken: async (tokenId: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'tokenId' is not null or undefined
+            assertParamExists('deleteDeviceToken', 'tokenId', tokenId)
+            const localVarPath = `/device-tokens/{tokenId}`
+                .replace(`{${"tokenId"}}`, encodeURIComponent(String(tokenId)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'DELETE', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication BearerAuth required
+            // http bearer authentication required
+            await setBearerAuthToObject(localVarHeaderParameter, configuration)
+
+
+    
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * Retrieve all active device tokens for the current user
+         * @summary Get all device tokens
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        getUserDeviceTokens: async (options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            const localVarPath = `/device-tokens`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication BearerAuth required
+            // http bearer authentication required
+            await setBearerAuthToObject(localVarHeaderParameter, configuration)
+
+
+    
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * Register a new FCM device token or update an existing one for push notifications
+         * @summary Register or update device token
+         * @param {RegisterDeviceTokenDto} registerDeviceTokenDto 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        registerDeviceToken: async (registerDeviceTokenDto: RegisterDeviceTokenDto, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'registerDeviceTokenDto' is not null or undefined
+            assertParamExists('registerDeviceToken', 'registerDeviceTokenDto', registerDeviceTokenDto)
+            const localVarPath = `/device-tokens`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication BearerAuth required
+            // http bearer authentication required
+            await setBearerAuthToObject(localVarHeaderParameter, configuration)
+
+
+    
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(registerDeviceTokenDto, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+    }
+};
+
+/**
+ * DeviceTokensApi - functional programming interface
+ * @export
+ */
+export const DeviceTokensApiFp = function(configuration?: Configuration) {
+    const localVarAxiosParamCreator = DeviceTokensApiAxiosParamCreator(configuration)
+    return {
+        /**
+         * Remove all device tokens for the current user
+         * @summary Delete all device tokens
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async deleteAllDeviceTokens(options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<DeleteAllDeviceTokens200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.deleteAllDeviceTokens(options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['DeviceTokensApi.deleteAllDeviceTokens']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * Remove a specific device token from the system
+         * @summary Delete device token
+         * @param {string} tokenId Device token ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async deleteDeviceToken(tokenId: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<DeleteDeviceToken200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.deleteDeviceToken(tokenId, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['DeviceTokensApi.deleteDeviceToken']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * Retrieve all active device tokens for the current user
+         * @summary Get all device tokens
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async getUserDeviceTokens(options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<Array<DeviceTokenResponseDto>>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.getUserDeviceTokens(options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['DeviceTokensApi.getUserDeviceTokens']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * Register a new FCM device token or update an existing one for push notifications
+         * @summary Register or update device token
+         * @param {RegisterDeviceTokenDto} registerDeviceTokenDto 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async registerDeviceToken(registerDeviceTokenDto: RegisterDeviceTokenDto, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<DeviceTokenResponseDto>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.registerDeviceToken(registerDeviceTokenDto, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['DeviceTokensApi.registerDeviceToken']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+    }
+};
+
+/**
+ * DeviceTokensApi - factory interface
+ * @export
+ */
+export const DeviceTokensApiFactory = function (configuration?: Configuration, basePath?: string, axios?: AxiosInstance) {
+    const localVarFp = DeviceTokensApiFp(configuration)
+    return {
+        /**
+         * Remove all device tokens for the current user
+         * @summary Delete all device tokens
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        deleteAllDeviceTokens(options?: RawAxiosRequestConfig): AxiosPromise<DeleteAllDeviceTokens200Response> {
+            return localVarFp.deleteAllDeviceTokens(options).then((request) => request(axios, basePath));
+        },
+        /**
+         * Remove a specific device token from the system
+         * @summary Delete device token
+         * @param {DeviceTokensApiDeleteDeviceTokenRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        deleteDeviceToken(requestParameters: DeviceTokensApiDeleteDeviceTokenRequest, options?: RawAxiosRequestConfig): AxiosPromise<DeleteDeviceToken200Response> {
+            return localVarFp.deleteDeviceToken(requestParameters.tokenId, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * Retrieve all active device tokens for the current user
+         * @summary Get all device tokens
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        getUserDeviceTokens(options?: RawAxiosRequestConfig): AxiosPromise<Array<DeviceTokenResponseDto>> {
+            return localVarFp.getUserDeviceTokens(options).then((request) => request(axios, basePath));
+        },
+        /**
+         * Register a new FCM device token or update an existing one for push notifications
+         * @summary Register or update device token
+         * @param {DeviceTokensApiRegisterDeviceTokenRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        registerDeviceToken(requestParameters: DeviceTokensApiRegisterDeviceTokenRequest, options?: RawAxiosRequestConfig): AxiosPromise<DeviceTokenResponseDto> {
+            return localVarFp.registerDeviceToken(requestParameters.registerDeviceTokenDto, options).then((request) => request(axios, basePath));
+        },
+    };
+};
+
+/**
+ * Request parameters for deleteDeviceToken operation in DeviceTokensApi.
+ * @export
+ * @interface DeviceTokensApiDeleteDeviceTokenRequest
+ */
+export interface DeviceTokensApiDeleteDeviceTokenRequest {
+    /**
+     * Device token ID
+     * @type {string}
+     * @memberof DeviceTokensApiDeleteDeviceToken
+     */
+    readonly tokenId: string
+}
+
+/**
+ * Request parameters for registerDeviceToken operation in DeviceTokensApi.
+ * @export
+ * @interface DeviceTokensApiRegisterDeviceTokenRequest
+ */
+export interface DeviceTokensApiRegisterDeviceTokenRequest {
+    /**
+     * 
+     * @type {RegisterDeviceTokenDto}
+     * @memberof DeviceTokensApiRegisterDeviceToken
+     */
+    readonly registerDeviceTokenDto: RegisterDeviceTokenDto
+}
+
+/**
+ * DeviceTokensApi - object-oriented interface
+ * @export
+ * @class DeviceTokensApi
+ * @extends {BaseAPI}
+ */
+export class DeviceTokensApi extends BaseAPI {
+    /**
+     * Remove all device tokens for the current user
+     * @summary Delete all device tokens
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof DeviceTokensApi
+     */
+    public deleteAllDeviceTokens(options?: RawAxiosRequestConfig) {
+        return DeviceTokensApiFp(this.configuration).deleteAllDeviceTokens(options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Remove a specific device token from the system
+     * @summary Delete device token
+     * @param {DeviceTokensApiDeleteDeviceTokenRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof DeviceTokensApi
+     */
+    public deleteDeviceToken(requestParameters: DeviceTokensApiDeleteDeviceTokenRequest, options?: RawAxiosRequestConfig) {
+        return DeviceTokensApiFp(this.configuration).deleteDeviceToken(requestParameters.tokenId, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Retrieve all active device tokens for the current user
+     * @summary Get all device tokens
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof DeviceTokensApi
+     */
+    public getUserDeviceTokens(options?: RawAxiosRequestConfig) {
+        return DeviceTokensApiFp(this.configuration).getUserDeviceTokens(options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Register a new FCM device token or update an existing one for push notifications
+     * @summary Register or update device token
+     * @param {DeviceTokensApiRegisterDeviceTokenRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof DeviceTokensApi
+     */
+    public registerDeviceToken(requestParameters: DeviceTokensApiRegisterDeviceTokenRequest, options?: RawAxiosRequestConfig) {
+        return DeviceTokensApiFp(this.configuration).registerDeviceToken(requestParameters.registerDeviceTokenDto, options).then((request) => request(this.axios, this.basePath));
     }
 }
 

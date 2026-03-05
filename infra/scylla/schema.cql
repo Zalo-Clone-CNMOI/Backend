@@ -52,12 +52,26 @@ CREATE TABLE IF NOT EXISTS idempotency_by_message_id (
 -- Table: message_reactions
 -- Lưu trữ reactions của tin nhắn
 -- Query pattern: Lấy tất cả reactions của 1 message
+-- NOTE: Primary key changed to allow multiple reactions per user
 CREATE TABLE IF NOT EXISTS message_reactions (
     message_id text,
     user_id text,
     reaction_type text,         -- like, love, haha, wow, sad, angry
     created_at bigint,
-    PRIMARY KEY (message_id, user_id)
+    PRIMARY KEY (message_id, user_id, reaction_type)
+);
+
+-- Table: message_reaction_counts
+-- Lưu trữ tổng hợp số lượng reactions theo type cho mỗi message
+-- Dùng counter type để đảm bảo atomic increment/decrement (tránh race condition)
+-- Query pattern: Lấy nhanh tổng số reactions của message theo từng loại
+-- NOTE: Counter tables cannot mix counter and non-counter columns.
+--       Use UPDATE ... SET count = count + 1 (never INSERT).
+CREATE TABLE IF NOT EXISTS message_reaction_counts (
+    message_id    text,
+    reaction_type text,
+    count         counter,
+    PRIMARY KEY (message_id, reaction_type)
 );
 
 -- =============================================================================

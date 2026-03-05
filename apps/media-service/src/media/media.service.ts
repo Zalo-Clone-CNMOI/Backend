@@ -71,7 +71,7 @@ export class MediaService implements OnModuleInit {
       trace_id: userId,
     };
 
-    void this.kafka.emit(KafkaTopics.MediaUploaded, event);
+    this.kafka.emit(KafkaTopics.MediaUploaded, event);
 
     if (conversationId && userId && this.isDocument(contentType)) {
       const docEvent: AiDocumentUploadEvent = {
@@ -173,7 +173,7 @@ export class MediaService implements OnModuleInit {
       generated_at: Date.now(),
     };
 
-    void this.kafka.emit(KafkaTopics.MediaThumbnailGenerated, thumbnailEvent);
+    this.kafka.emit(KafkaTopics.MediaThumbnailGenerated, thumbnailEvent);
 
     this.logger.log(`Generated thumbnail: ${thumbnailKey}`);
 

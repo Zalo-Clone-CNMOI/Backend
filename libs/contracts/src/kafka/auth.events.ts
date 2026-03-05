@@ -14,10 +14,12 @@ export interface AuthQrConfirmedEvent {
   refreshToken: string;
   expiresIn: number;
   user: QrUserInfo;
+  trace_id?: string;
 }
 
 export interface AuthQrRejectedEvent {
   sessionId: string;
   socketId: string;
   reason: string;
+  trace_id?: string;
 }

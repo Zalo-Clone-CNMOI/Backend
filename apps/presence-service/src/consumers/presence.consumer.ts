@@ -28,7 +28,7 @@ export class PresenceConsumer implements OnModuleInit {
         try {
           const expired = await this.store.cleanupExpired(Date.now());
           for (const event of expired) {
-            this.publisher.emit(KafkaTopics.PresenceUpdated, event);
+            await this.publisher.emit(KafkaTopics.PresenceUpdated, event);
           }
         } catch (error) {
           this.logger.error(
@@ -62,7 +62,7 @@ export class PresenceConsumer implements OnModuleInit {
       );
 
       if (result.event) {
-        this.publisher.emit(KafkaTopics.PresenceUpdated, result.event);
+        await this.publisher.emit(KafkaTopics.PresenceUpdated, result.event);
         this.logger.log(
           `[ONLINE] user=${user_id} socket_count=${result.socketCount} trace=${trace_id}`,
         );
@@ -135,7 +135,7 @@ export class PresenceConsumer implements OnModuleInit {
 
       // Only emit if user status changed (1+ -> 0 sockets)
       if (result.event) {
-        this.publisher.emit(KafkaTopics.PresenceUpdated, result.event);
+        await this.publisher.emit(KafkaTopics.PresenceUpdated, result.event);
         this.logger.log(
           `[OFFLINE] user=${user_id} reason=logical_disconnect trace=${trace_id}`,
         );

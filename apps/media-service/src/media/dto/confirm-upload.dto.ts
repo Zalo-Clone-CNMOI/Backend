@@ -1,6 +1,7 @@
 export interface ConfirmUploadRequestDto {
   key: string;
   contentType: string;
+  conversationId?: string;
 }
 
 export interface ConfirmUploadResponseDto {

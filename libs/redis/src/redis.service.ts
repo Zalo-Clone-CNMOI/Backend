@@ -162,6 +162,28 @@ export class RedisService implements OnModuleDestroy {
     await this.redisClient.del(key);
   }
 
+  /**
+   * Increment a key by a given amount (atomic)
+   */
+  async incrBy(key: string, increment: number): Promise<number> {
+    return this.redisClient.incrBy(key, increment);
+  }
+
+  /**
+   * Get remaining TTL of a key in seconds
+   * Returns -2 if key does not exist, -1 if no TTL set
+   */
+  async ttl(key: string): Promise<number> {
+    return this.redisClient.ttl(key);
+  }
+
+  /**
+   * Set a timeout on a key (seconds)
+   */
+  async expire(key: string, seconds: number): Promise<boolean> {
+    return this.redisClient.expire(key, seconds);
+  }
+
   private getQrSessionKey(sessionId: string): string {
     return `${this.QR_SESSION_PREFIX}${sessionId}`;
   }

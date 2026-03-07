@@ -16,6 +16,7 @@ import {
   type ChatReactionRemovedEvent,
   type NotificationRequestedEvent,
   NotificationType,
+  AiModerationRequestEvent,
 } from '@libs/contracts';
 import { MessageRepository } from '@libs/scylla';
 import { CacheService } from '@libs/redis';
@@ -110,21 +111,34 @@ export class PersistMessageConsumer {
         messageId: payload.message_id,
       });
 
-      await (async () => {
+      // ── AI Moderation: auto-moderate every new message ──────────────
+      void (async () => {
         try {
-          await this.emitMessageNotification(
-            payload.conversation_id,
-            payload.sender_id,
-            payload.body,
-            payload.message_id,
-            traceId,
+          const moderationEvent: AiModerationRequestEvent = {
+            message_id: payload.message_id,
+            conversation_id: payload.conversation_id,
+            sender_id: payload.sender_id,
+            body: payload.body,
+            requested_at: Date.now(),
+            trace_id: traceId,
+          };
+          await this.publisher.emit(
+            KafkaTopics.AiModerationRequest,
+            moderationEvent,
+          );
+          this.logger.debug(
+            `[${traceId}] AiModerationRequest emitted for message: ${payload.message_id}`,
           );
         } catch (err) {
-          this.logger.error(`[${traceId}] Notification emit failed`, err);
+          this.logger.error(
+            `[${traceId}] AiModerationRequest emit failed`,
+            err,
+          );
         }
       })();
 
-      await (async () => {
+      // ── Cache invalidation ───────────────────────────────────────────
+      void (async () => {
         try {
           await this.cacheService.invalidateRecentMessages(
             payload.conversation_id,

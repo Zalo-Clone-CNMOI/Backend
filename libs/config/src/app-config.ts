@@ -32,6 +32,20 @@ export interface AppConfig {
   firebaseProjectId?: string;
   firebaseClientEmail?: string;
   firebasePrivateKey?: string;
+
+  // AI Core Service configuration
+  openaiApiKey?: string;
+  geminiApiKey?: string;
+  anthropicApiKey?: string;
+  aiDefaultModel?: string;
+  aiEmbeddingModel?: string;
+  aiDailyTokenBudget?: number;
+  aiEnablePiiSanitization?: boolean;
+  aiEnableConversationCache?: boolean;
+  aiMaxDocumentSizeMb?: number;
+  aiMaxDocumentPages?: number;
+  aiStreamBufferSize?: number;
+  aiModerationEnsemble?: boolean;
 }
 
 function readNumber(value: string | undefined): number | undefined {
@@ -89,5 +103,22 @@ export function loadConfig(serviceName: string): AppConfig {
     firebaseProjectId: process.env.FIREBASE_PROJECT_ID,
     firebaseClientEmail: process.env.FIREBASE_CLIENT_EMAIL,
     firebasePrivateKey: process.env.FIREBASE_PRIVATE_KEY,
+
+    // AI Core Service
+    openaiApiKey: process.env.OPENAI_API_KEY,
+    geminiApiKey: process.env.GEMINI_API_KEY,
+    anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+    aiDefaultModel: process.env.AI_DEFAULT_MODEL ?? 'gpt-4o-mini',
+    aiEmbeddingModel:
+      process.env.AI_EMBEDDING_MODEL ?? 'text-embedding-3-small',
+    aiDailyTokenBudget:
+      readNumber(process.env.AI_DAILY_TOKEN_BUDGET) ?? 1_000_000,
+    aiEnablePiiSanitization: process.env.AI_ENABLE_PII_SANITIZATION !== 'false',
+    aiEnableConversationCache:
+      process.env.AI_ENABLE_CONVERSATION_CACHE !== 'false',
+    aiMaxDocumentSizeMb: readNumber(process.env.AI_MAX_DOCUMENT_SIZE_MB) ?? 10,
+    aiMaxDocumentPages: readNumber(process.env.AI_MAX_DOCUMENT_PAGES) ?? 200,
+    aiStreamBufferSize: readNumber(process.env.AI_STREAM_BUFFER_SIZE) ?? 50,
+    aiModerationEnsemble: process.env.AI_MODERATION_ENSEMBLE === 'true',
   };
 }

@@ -1,5 +1,9 @@
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
+import {
+  GetObjectCommand,
+  HeadObjectCommand,
+  PutObjectCommand,
+} from '@aws-sdk/client-s3';
 import { ClientKafka } from '@nestjs/microservices';
 import { KAFKA_CLIENT } from '@libs/kafka';
 import { S3Service, S3_CLIENT, S3_CONFIG, type S3Config } from '@libs/s3';
@@ -74,13 +78,25 @@ export class MediaService implements OnModuleInit {
     this.kafka.emit(KafkaTopics.MediaUploaded, event);
 
     if (conversationId && userId && this.isDocument(contentType)) {
+      let fileSize = 0;
+      try {
+        const headResult = await this.s3.send(
+          new HeadObjectCommand({ Bucket: this.s3Config.bucket, Key: key }),
+        );
+        fileSize = headResult.ContentLength ?? 0;
+      } catch (err) {
+        this.logger.warn(
+          `Could not fetch file size via HEAD for bucket=${this.s3Config.bucket}, key=${key}: ${String(err)}`,
+        );
+      }
+
       const docEvent: AiDocumentUploadEvent = {
         document_id: uuidv4(),
         conversation_id: conversationId,
         user_id: userId,
         file_key: key,
         file_name: key.split('/').pop() ?? key,
-        file_size: 0,
+        file_size: fileSize,
         content_type: contentType,
         uploaded_at: Date.now(),
         trace_id: userId,

@@ -67,11 +67,18 @@ export class DocumentEngine {
         throw new Error(`Document exceeds ${this.maxDocSizeMb}MB limit`);
       }
 
-      // Update status to processing
-      await this.docMetaRepo.update(
-        { id: event.document_id },
-        { status: 'processing' },
-      );
+      // Upsert metadata row and set status to processing
+      const processingMetadata = this.docMetaRepo.create({
+        id: event.document_id,
+        conversationId: event.conversation_id,
+        userId: event.user_id,
+        fileKey: event.file_key,
+        fileName: event.file_name,
+        fileSize: event.file_size,
+        contentType: event.content_type,
+        status: 'processing',
+      });
+      await this.docMetaRepo.save(processingMetadata);
 
       // Chunk the text
       const chunks = this.chunkText(textContent, 500, 50);

@@ -106,7 +106,6 @@ export class PersistMessageConsumer {
         trace_id: traceId,
       };
 
-      void this.publisher.emit(KafkaTopics.ChatMessageCreated, event);
       await this.publisher.emit(KafkaTopics.ChatMessageCreated, event);
       this.logger.log(`[${traceId}] ChatMessageCreated event emitted`, {
         messageId: payload.message_id,

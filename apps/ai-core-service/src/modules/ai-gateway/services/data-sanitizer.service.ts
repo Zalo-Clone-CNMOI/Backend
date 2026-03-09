@@ -20,16 +20,16 @@ export class DataSanitizer {
       regex: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g,
       replacement: '[EMAIL]',
     },
+    // Credit card numbers — matched BEFORE phone to avoid partial phone match
+    {
+      regex: /\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/g,
+      replacement: '[CREDIT_CARD]',
+    },
     // Phone numbers (various formats)
     {
       regex:
         /\b(?:\+?\d{1,3}[-.\s]?)?\(?\d{2,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{3,4}\b/g,
       replacement: '[PHONE]',
-    },
-    // Credit card numbers
-    {
-      regex: /\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/g,
-      replacement: '[CREDIT_CARD]',
     },
     // SSN-like patterns
     {

@@ -15,13 +15,13 @@ import { SentNotificationStore } from './sent-notification.store';
 export class MockNotificationProvider implements INotificationProvider {
   constructor(private readonly store: SentNotificationStore) {}
 
-  async send(input: SendNotificationInput): Promise<SendNotificationResult> {
+  send(input: SendNotificationInput): Promise<SendNotificationResult> {
     this.store.push({
       userId: input.userId,
       title: input.title,
       body: input.body,
       sentAt: Date.now(),
     });
-    return { ok: true } as unknown as SendNotificationResult;
+    return Promise.resolve({ ok: true, successCount: 1, failureCount: 0 });
   }
 }

@@ -48,7 +48,7 @@ describe('MockNotificationProvider', () => {
         body: 'B',
       });
 
-      expect(result).toEqual({ ok: true });
+      expect(result).toEqual({ ok: true, successCount: 1, failureCount: 0 });
     });
 
     it('should include sentAt timestamp in stored notification', async () => {
@@ -99,7 +99,11 @@ describe('MockNotificationProvider', () => {
       });
 
       expect(result).toBeInstanceOf(Promise);
-      await expect(result).resolves.toEqual({ ok: true });
+      await expect(result).resolves.toEqual({
+        ok: true,
+        successCount: 1,
+        failureCount: 0,
+      });
     });
   });
 });

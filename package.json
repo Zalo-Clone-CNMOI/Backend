@@ -44,6 +44,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
+    "test:ci": "jest --coverage --forceExit --no-cache",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./apps/be/test/jest-e2e.json",
     "typeorm": "npx ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js",
@@ -147,18 +148,54 @@
       "^.+\\.(t|j)s$": "ts-jest"
     },
     "collectCoverageFrom": [
-      "**/*.(t|j)s"
+      "apps/**/*.ts",
+      "libs/**/*.ts",
+      "!**/*.spec.ts",
+      "!**/*.e2e-spec.ts",
+      "!**/main.ts",
+      "!**/index.ts",
+      "!**/*.module.ts",
+      "!**/migrations/**",
+      "!**/node_modules/**"
     ],
-    "coverageDirectory": "../coverage",
+    "coverageDirectory": "./coverage",
+    "coverageReporters": ["text", "text-summary", "lcov", "clover"],
+    "coverageThreshold": {
+      "global": {
+        "branches": 20,
+        "functions": 25,
+        "lines": 40,
+        "statements": 40
+      }
+    },
     "testEnvironment": "node",
     "roots": [
       "<rootDir>/libs/",
       "<rootDir>/apps/"
     ],
     "moduleNameMapper": {
+      "^@app/clients/interaction-client(|/.*)$": "<rootDir>/libs/clients/src/interaction-client/src/$1",
       "^@app/clients(|/.*)$": "<rootDir>/libs/clients/src/$1",
       "^@app/sso-client(|/.*)$": "<rootDir>/libs/sso-client/src/$1",
-      "^@app/types(|/.*)$": "<rootDir>/libs/types/src/$1"
+      "^@app/types(|/.*)$": "<rootDir>/libs/types/src/$1",
+      "^@libs/auth(|/.*)$": "<rootDir>/libs/auth/src/$1",
+      "^@libs/contracts(|/.*)$": "<rootDir>/libs/contracts/src/$1",
+      "^@libs/kafka(|/.*)$": "<rootDir>/libs/kafka/src/$1",
+      "^@libs/redis(|/.*)$": "<rootDir>/libs/redis/src/$1",
+      "^@libs/scylla(|/.*)$": "<rootDir>/libs/scylla/src/$1",
+      "^@libs/database(|/.*)$": "<rootDir>/libs/database/src/$1",
+      "^@libs/config(|/.*)$": "<rootDir>/libs/config/src/$1",
+      "^@libs/logger(|/.*)$": "<rootDir>/libs/logger/src/$1",
+      "^@libs/firebase(|/.*)$": "<rootDir>/libs/firebase/src/$1",
+      "^@libs/mvp-access(|/.*)$": "<rootDir>/libs/mvp-access/src/$1",
+      "^@libs/s3(|/.*)$": "<rootDir>/libs/s3/src/$1",
+      "^@libs/metrics(|/.*)$": "<rootDir>/libs/metrics/src/$1",
+      "^@libs/shared(|/.*)$": "<rootDir>/libs/shared/src/$1",
+      "^@app/constant(|/.*)$": "<rootDir>/libs/constant/src/$1",
+      "^@app/decorator(|/.*)$": "<rootDir>/libs/decorator/src/$1",
+      "^@app/interceptors(|/.*)$": "<rootDir>/libs/interceptors/src/$1",
+      "^@app/middleware(|/.*)$": "<rootDir>/libs/middleware/src/$1",
+      "^@app/swagger(|/.*)$": "<rootDir>/libs/swagger/src/$1"
     }
   }
 }

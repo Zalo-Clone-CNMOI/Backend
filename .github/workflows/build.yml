@@ -4,10 +4,10 @@ on:
   pull_request:
     branches: [main, develop]
     paths:
-      - 'apps/**'
-      - 'libs/**'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
+      - "apps/**"
+      - "libs/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
 
 jobs:
   lint-and-test:
@@ -49,6 +49,20 @@ jobs:
       # --------------------------------------------
       - name: Run lint
         run: pnpm run lint
+
+      # --------------------------------------------
+      # Test with coverage
+      # --------------------------------------------
+      - name: Run tests with coverage
+        run: pnpm run test:ci
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 14
+
       - name: Run build for all services
         run: pnpm run build:all
-      

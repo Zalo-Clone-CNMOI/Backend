@@ -60,7 +60,7 @@ services:
       SSO_SERVICE_URL: http://sso-service:5001/api
       INTERACTION_SERVICE_URL: http://interaction-service:5004/api
       JWT_SECRET: ${JWT_SECRET}
-      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@database-1.cda2o0ikkgnf.ap-southeast-1.rds.amazonaws.com:5432/${POSTGRES_DB:-postgres}
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@zalodb.cv600uwoag41.ap-southeast-1.rds.amazonaws.com:5432/${POSTGRES_DB:-postgres}
       DB_SSL: "true"
       FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID}
       FIREBASE_CLIENT_EMAIL: ${FIREBASE_CLIENT_EMAIL}
@@ -69,7 +69,7 @@ services:
       KAFKA_BROKERS: kafka:29092
       KAFKA_CLIENT_ID: sso-service
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
-      DB_HOST: database-1.cda2o0ikkgnf.ap-southeast-1.rds.amazonaws.com
+      DB_HOST: zalodb.cv600uwoag41.ap-southeast-1.rds.amazonaws.com
       DB_PORT: 5432
       DB_USERNAME: ${POSTGRES_USER:-postgres}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
@@ -114,7 +114,7 @@ services:
       SSO_SERVICE_URL: http://sso-service:5001/api
       INTERACTION_SERVICE_URL: http://interaction-service:5004/api
       JWT_SECRET: ${JWT_SECRET}
-      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@database-1.cda2o0ikkgnf.ap-southeast-1.rds.amazonaws.com:5432/${POSTGRES_DB:-postgres}
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@zalodb.cv600uwoag41.ap-southeast-1.rds.amazonaws.com:5432/${POSTGRES_DB:-postgres}
       KAFKA_BROKERS: kafka:29092
       KAFKA_CLIENT_ID: interaction-service
       REDIS_URL: redis://redis:6379
@@ -123,7 +123,7 @@ services:
       SCYLLA_LOCAL_DATACENTER: datacenter1
       SCYLLA_KEYSPACE: chat
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
-      DB_HOST: database-1.cda2o0ikkgnf.ap-southeast-1.rds.amazonaws.com
+      DB_HOST: zalodb.cv600uwoag41.ap-southeast-1.rds.amazonaws.com
       DB_PORT: 5432
       DB_USERNAME: ${POSTGRES_USER:-postgres}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
@@ -260,9 +260,9 @@ services:
       KAFKA_CLIENT_ID: ws-gateway
       KAFKA_GROUP_ID: ws-gateway-fanout
       REDIS_URL: redis://redis:6379
-      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@database-1.cda2o0ikkgnf.ap-southeast-1.rds.amazonaws.com:5432/${POSTGRES_DB:-postgres}
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@zalodb.cv600uwoag41.ap-southeast-1.rds.amazonaws.com:5432/${POSTGRES_DB:-postgres}
       DB_SSL: "true"
-      DB_HOST: database-1.cda2o0ikkgnf.ap-southeast-1.rds.amazonaws.com
+      DB_HOST: zalodb.cv600uwoag41.ap-southeast-1.rds.amazonaws.com
       DB_PORT: 5432
       DB_USERNAME: ${POSTGRES_USER:-postgres}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
@@ -353,9 +353,9 @@ services:
       KAFKA_CLIENT_ID: notification-service
       KAFKA_GROUP_ID: notification-service-group
       REDIS_URL: redis://redis:6379
-      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@database-1.cda2o0ikkgnf.ap-southeast-1.rds.amazonaws.com:5432/${POSTGRES_DB:-postgres}
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@zalodb.cv600uwoag41.ap-southeast-1.rds.amazonaws.com:5432/${POSTGRES_DB:-postgres}
       DB_SSL: "true"
-      DB_HOST: database-1.cda2o0ikkgnf.ap-southeast-1.rds.amazonaws.com
+      DB_HOST: zalodb.cv600uwoag41.ap-southeast-1.rds.amazonaws.com
       DB_PORT: 5432
       DB_USERNAME: ${POSTGRES_USER:-postgres}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}

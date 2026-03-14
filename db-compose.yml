@@ -1,5 +1,5 @@
 version: "3.8"
-name: app-compose-prod
+name: db-compose-prod
 
 services:
   scylla-init:

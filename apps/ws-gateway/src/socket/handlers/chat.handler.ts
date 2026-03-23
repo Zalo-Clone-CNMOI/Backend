@@ -97,6 +97,7 @@ export class ChatHandler {
       conversation_id: body.conversation_id,
       sender_id: userId,
       new_body: body.new_body,
+      created_at: body.created_at,
       edited_at: Date.now(),
       trace_id: `ws:${socket.id}:${body.message_id}`,
     };
@@ -127,6 +128,7 @@ export class ChatHandler {
       message_id: body.message_id,
       conversation_id: body.conversation_id,
       sender_id: userId,
+      created_at: body.created_at,
       deleted_at: Date.now(),
       trace_id: `ws:${socket.id}:${body.message_id}`,
     };

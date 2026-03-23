@@ -78,6 +78,7 @@ export interface WsChatEditPayload {
   message_id: string;
   conversation_id: string;
   new_body: string;
+  created_at: number;
 }
 
 export interface WsChatMessageUpdatedPayload {
@@ -91,6 +92,7 @@ export interface WsChatMessageUpdatedPayload {
 export interface WsChatDeletePayload {
   message_id: string;
   conversation_id: string;
+  created_at: number;
 }
 
 export interface WsChatMessageDeletedPayload {

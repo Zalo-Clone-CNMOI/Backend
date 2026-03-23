@@ -38,6 +38,7 @@ export interface ChatMessageEditCommand {
   conversation_id: string;
   sender_id: string;
   new_body: string;
+  created_at: number;
   edited_at: number;
   trace_id?: string;
 }
@@ -55,6 +56,7 @@ export interface ChatMessageDeleteCommand {
   message_id: string;
   conversation_id: string;
   sender_id: string;
+  created_at: number;
   deleted_at: number;
   trace_id?: string;
 }

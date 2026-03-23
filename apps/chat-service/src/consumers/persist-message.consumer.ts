@@ -186,7 +186,7 @@ export class PersistMessageConsumer {
     try {
       await this.repo.updateMessageBody(
         payload.conversation_id,
-        editedAt,
+        payload.created_at,
         payload.message_id,
         payload.new_body,
         editedAt,
@@ -239,7 +239,7 @@ export class PersistMessageConsumer {
     try {
       await this.repo.softDeleteMessage(
         payload.conversation_id,
-        deletedAt,
+        payload.created_at,
         payload.message_id,
         deletedAt,
       );

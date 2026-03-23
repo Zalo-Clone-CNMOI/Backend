@@ -35,8 +35,10 @@ const RETRY_DELAY_MS = 3000;
             logger.log('Connected to ScyllaDB');
             return client;
           } catch (error) {
+            const message =
+              error instanceof Error ? error.message : String(error);
             logger.warn(
-              `ScyllaDB connection attempt ${attempt}/${MAX_RETRIES} failed: ${error.message}`,
+              `ScyllaDB connection attempt ${attempt}/${MAX_RETRIES} failed: ${message}`,
             );
             if (attempt === MAX_RETRIES) throw error;
             await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));

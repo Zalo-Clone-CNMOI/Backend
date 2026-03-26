@@ -8,7 +8,12 @@ import { ConversationMembershipModule } from '@libs/mvp-access';
 import { ScyllaModule } from '@libs/scylla';
 import { RedisModule } from '@libs/redis';
 import { ChatGateway } from './socket/chat.gateway';
-import { ChatHandler, PresenceHandler, AiHandler } from './socket/handlers';
+import {
+  ChatHandler,
+  PresenceHandler,
+  AiHandler,
+  TypingHandler,
+} from './socket/handlers';
 import {
   ChatFanoutConsumer,
   PresenceFanoutConsumer,
@@ -35,6 +40,12 @@ import {
     FriendFanoutConsumer,
     AiFanoutConsumer,
   ],
-  providers: [ChatGateway, ChatHandler, PresenceHandler, AiHandler],
+  providers: [
+    ChatGateway,
+    ChatHandler,
+    PresenceHandler,
+    AiHandler,
+    TypingHandler,
+  ],
 })
 export class AppModule {}

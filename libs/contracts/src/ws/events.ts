@@ -12,6 +12,7 @@ export const WsEvents = {
   ChatReactionAdded: 'chat:reaction:added',
   ChatReactionRemoved: 'chat:reaction:removed',
   ChatTyping: 'chat:typing',
+  ChatTypingUpdate: 'chat:typing:update',
 
   PresenceHeartbeat: 'presence:heartbeat',
   PresenceUpdate: 'presence:update',
@@ -128,7 +129,17 @@ export interface WsChatReactionRemovedPayload {
 
 export interface WsChatTypingPayload {
   conversation_id: string;
-  is_typing: boolean;
+  username: string;
+}
+
+export interface WsChatTypingUser {
+  user_id: string;
+  username: string;
+}
+
+export interface WsChatTypingUpdatePayload {
+  conversation_id: string;
+  users: WsChatTypingUser[];
 }
 
 export interface WsPresenceHeartbeatPayload {

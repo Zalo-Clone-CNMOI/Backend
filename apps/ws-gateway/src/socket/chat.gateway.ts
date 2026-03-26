@@ -22,9 +22,15 @@ import {
   type WsAiSummaryRequestPayload,
   type WsAiTranslateRequestPayload,
   type WsAiDocumentQueryRequestPayload,
+  type WsChatTypingPayload,
 } from '@libs/contracts';
 import { KAFKA_CLIENT } from '@libs/kafka';
-import { ChatHandler, PresenceHandler, AiHandler } from './handlers';
+import {
+  ChatHandler,
+  PresenceHandler,
+  AiHandler,
+  TypingHandler,
+} from './handlers';
 
 type SocketData = { userId?: string };
 type AuthedSocket = Socket<any, any, any, SocketData>;
@@ -42,10 +48,12 @@ export class ChatGateway implements OnModuleInit {
     private readonly chatHandler: ChatHandler,
     private readonly presenceHandler: PresenceHandler,
     private readonly aiHandler: AiHandler,
+    private readonly typingHandler: TypingHandler,
   ) {}
 
   async onModuleInit() {
     await this.kafka.connect();
+    this.typingHandler.setServer(this.server);
   }
 
   handleConnection(socket: AuthedSocket) {
@@ -96,7 +104,12 @@ export class ChatGateway implements OnModuleInit {
     @ConnectedSocket() socket: AuthedSocket,
     @MessageBody() body: WsChatSendPayload,
   ) {
-    return this.chatHandler.handleSend(socket, body);
+    const result = this.chatHandler.handleSend(socket, body);
+    const userId = socket.data.userId;
+    if (userId) {
+      void this.typingHandler.clearTyping(userId, body.conversation_id);
+    }
+    return result;
   }
 
   @UseGuards(WsAuthGuard)
@@ -133,6 +146,15 @@ export class ChatGateway implements OnModuleInit {
     @MessageBody() body: WsChatUnreactPayload,
   ) {
     return this.chatHandler.handleUnreact(socket, body);
+  }
+
+  @UseGuards(WsAuthGuard)
+  @SubscribeMessage(WsEvents.ChatTyping)
+  handleTyping(
+    @ConnectedSocket() socket: AuthedSocket,
+    @MessageBody() body: WsChatTypingPayload,
+  ) {
+    return this.typingHandler.handleTyping(socket, body);
   }
 
   // ── Presence Event Handlers ──────────────────────────────────────────

@@ -1,7 +1,7 @@
 import { Entity, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { User } from './user.entity';
 import { Conversation } from './conversation.entity';
-import { MediaFileStatus } from '@app/constant';
+import { MediaFileStatus, MediaVisibility } from '@app/constant';
 import { BaseEntity } from '@libs/shared';
 
 @Entity('media_files')
@@ -27,6 +27,17 @@ export class MediaFile extends BaseEntity {
 
   @Column({ type: 'varchar', length: 20, default: 'pending' })
   status: MediaFileStatus;
+
+  @Column({ type: 'varchar', length: 10, default: 'public' })
+  visibility: MediaVisibility;
+
+  @Column({
+    type: 'varchar',
+    length: 500,
+    name: 'thumbnail_key',
+    nullable: true,
+  })
+  thumbnailKey: string | null;
 
   @ManyToOne(() => User, (user) => user.uploadedFiles, {
     onDelete: 'SET NULL',

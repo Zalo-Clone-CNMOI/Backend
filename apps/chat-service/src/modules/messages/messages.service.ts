@@ -148,6 +148,8 @@ export class MessagesService {
     attachment: MessageAttachment,
   ): AttachmentResponseDto {
     const bucket = process.env.S3_BUCKET ?? 'be-media';
+    const visibility =
+      attachment.visibility ?? this.inferVisibility(attachment.content_type);
 
     return {
       key: attachment.key,
@@ -156,11 +158,22 @@ export class MessagesService {
       size: attachment.size,
       contentType: attachment.content_type,
       thumbnailKey: attachment.thumbnail_key,
-      url: this.buildCdnUrl(bucket, attachment.key),
+      visibility,
+      url:
+        visibility === 'public'
+          ? this.buildCdnUrl(bucket, attachment.key)
+          : null,
       thumbnailUrl: attachment.thumbnail_key
         ? this.buildCdnUrl(bucket, attachment.thumbnail_key)
         : undefined,
     };
+  }
+
+  private inferVisibility(contentType: string): 'public' | 'private' {
+    if (contentType.startsWith('image/') || contentType.startsWith('video/')) {
+      return 'public';
+    }
+    return 'private';
   }
 
   private buildCdnUrl(bucket: string, key: string): string {

@@ -20,6 +20,7 @@ import {
   AuthFanoutConsumer,
   FriendFanoutConsumer,
   AiFanoutConsumer,
+  NotificationFanoutConsumer,
 } from './transport/fanout';
 
 @Module({
@@ -39,6 +40,7 @@ import {
     AuthFanoutConsumer,
     FriendFanoutConsumer,
     AiFanoutConsumer,
+    NotificationFanoutConsumer,
   ],
   providers: [
     ChatGateway,

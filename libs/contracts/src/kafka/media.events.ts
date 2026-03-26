@@ -2,6 +2,7 @@ export interface MediaUploadRequestedEvent {
   key: string;
   bucket: string;
   content_type: string;
+  visibility: 'public' | 'private';
   requested_at: number;
   requested_by_user_id?: string;
   trace_id?: string;

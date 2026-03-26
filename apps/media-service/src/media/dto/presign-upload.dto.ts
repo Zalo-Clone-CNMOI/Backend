@@ -8,4 +8,5 @@ export interface PresignUploadResponseDto {
   bucket: string;
   uploadUrl: string;
   expiresAt: number;
+  visibility: 'public' | 'private';
 }

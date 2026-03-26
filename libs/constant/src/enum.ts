@@ -95,6 +95,7 @@ export enum PresenceStatus {
 }
 
 export type MediaFileStatus = 'pending' | 'uploaded' | 'deleted';
+export type MediaVisibility = 'public' | 'private';
 export type MemberRole = 'owner' | 'admin' | 'member';
 
 // ── AI Core Enums ────────────────────────────────────────────────────

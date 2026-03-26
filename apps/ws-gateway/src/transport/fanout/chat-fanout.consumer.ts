@@ -30,6 +30,8 @@ export class ChatFanoutConsumer {
         sender_id: payload.sender_id,
         body: payload.body,
         created_at: payload.created_at,
+        attachments: payload.attachments,
+        reply_to_message_id: payload.reply_to_message_id,
       },
     );
   }

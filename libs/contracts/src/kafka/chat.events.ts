@@ -9,6 +9,7 @@ export interface MessageAttachment {
   size: number;
   content_type: string;
   thumbnail_key?: string;
+  visibility?: 'public' | 'private';
 }
 
 export interface ChatMessageSendCommand {

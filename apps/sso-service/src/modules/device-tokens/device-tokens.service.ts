@@ -27,7 +27,7 @@ export class DeviceTokensService {
 
     // Check if token already exists for this user
     let deviceToken = await this.deviceTokenRepository.findOne({
-      where: { userId, token: dto.token },
+      where: { userId, token: dto.token, platform: dto.platform },
     });
 
     if (deviceToken) {

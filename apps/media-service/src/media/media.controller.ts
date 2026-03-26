@@ -7,6 +7,10 @@ import type {
   ConfirmUploadRequestDto,
   ConfirmUploadResponseDto,
 } from './dto/confirm-upload.dto';
+import type {
+  PresignDownloadRequestDto,
+  PresignDownloadResponseDto,
+} from './dto/presign-download.dto';
 import { MediaService } from './media.service';
 
 @Controller('v1/media')
@@ -33,5 +37,12 @@ export class MediaController {
       body.conversationId,
     );
     return { ok: true, thumbnailKey: result.thumbnailKey };
+  }
+
+  @Post('presign/download')
+  async presignDownload(
+    @Body() body: PresignDownloadRequestDto,
+  ): Promise<PresignDownloadResponseDto> {
+    return await this.media.presignDownload(body.key);
   }
 }

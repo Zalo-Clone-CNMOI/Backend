@@ -19,6 +19,7 @@ import type {
   PresignUploadRequestDto,
   PresignUploadResponseDto,
 } from './dto/presign-upload.dto';
+import type { PresignDownloadResponseDto } from './dto/presign-download.dto';
 import * as sharp from 'sharp';
 import { Readable } from 'stream';
 import { v4 as uuidv4 } from 'uuid';
@@ -44,22 +45,33 @@ export class MediaService implements OnModuleInit {
     body: PresignUploadRequestDto,
     userId?: string,
   ): Promise<PresignUploadResponseDto> {
+    const visibility = this.classifyVisibility(body.contentType);
+    const prefix = visibility === 'public' ? 'public/' : 'private/';
+
     const result = await this.s3Service.presignUpload(
       body.fileName ?? 'file',
       body.contentType,
+      { prefix },
     );
 
     const event: MediaUploadRequestedEvent = {
       key: result.key,
       bucket: result.bucket,
       content_type: body.contentType,
+      visibility,
       requested_at: Date.now(),
       requested_by_user_id: userId,
     };
 
     this.kafka.emit(KafkaTopics.MediaUploadRequested, event);
 
-    return result;
+    return { ...result, visibility };
+  }
+
+  async presignDownload(key: string): Promise<PresignDownloadResponseDto> {
+    return this.s3Service.presignDownload(key, {
+      expiresSeconds: 3600,
+    });
   }
 
   async confirmUploaded(
@@ -117,6 +129,13 @@ export class MediaService implements OnModuleInit {
     }
 
     return {};
+  }
+
+  private classifyVisibility(contentType: string): 'public' | 'private' {
+    if (contentType.startsWith('image/') || contentType.startsWith('video/')) {
+      return 'public';
+    }
+    return 'private';
   }
 
   private isImage(contentType: string): boolean {

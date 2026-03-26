@@ -62,6 +62,9 @@ services:
       SSO_SERVICE_URL: http://sso-service:5001/api
       INTERACTION_SERVICE_URL: http://interaction-service:5004/api
       JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1h}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
       DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@zalodb.cv600uwoag41.ap-southeast-1.rds.amazonaws.com:5432/${POSTGRES_DB:-postgres}
       DB_SSL: "true"
       FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID}

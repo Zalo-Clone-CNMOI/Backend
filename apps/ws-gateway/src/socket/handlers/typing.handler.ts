@@ -24,11 +24,8 @@ export class TypingHandler implements OnModuleDestroy {
   private readonly THROTTLE_MS = 1000;
   private readonly RECHECK_DELAY_MS = 3500;
 
-  /** Server-side throttle: last processed timestamp per userId:conversationId */
   private readonly lastEventMap = new Map<string, number>();
-  /** Outgoing dedup: last broadcast JSON per conversationId */
   private readonly lastBroadcastMap = new Map<string, string>();
-  /** Cleanup timers per conversationId */
   private readonly pendingTimers = new Map<string, NodeJS.Timeout>();
 
   constructor(
@@ -49,20 +46,17 @@ export class TypingHandler implements OnModuleDestroy {
     const convId = body.conversation_id;
     const throttleKey = `${userId}:${convId}`;
 
-    // ── Server-side throttle ──────────────────────────────────────────
     const now = Date.now();
     const lastEvent = this.lastEventMap.get(throttleKey);
     if (lastEvent && now - lastEvent < this.THROTTLE_MS) return;
     this.lastEventMap.set(throttleKey, now);
 
-    // ── Membership check ────────────────────────────────────────────
     const canAccess = await this.membershipService.canUserAccessConversation(
       userId,
       convId,
     );
     if (!canAccess) return;
 
-    // ── Write to Redis hash ───────────────────────────────────────────
     const redisKey = `${this.REDIS_KEY_PREFIX}${convId}`;
     const value = JSON.stringify({
       username: body.username ?? '',
@@ -77,10 +71,8 @@ export class TypingHandler implements OnModuleDestroy {
       return;
     }
 
-    // ── Broadcast current typing list ─────────────────────────────────
     await this.broadcastTypingList(convId);
 
-    // ── Schedule cleanup re-check ─────────────────────────────────────
     this.scheduleCleanup(convId);
   }
 
@@ -105,8 +97,6 @@ export class TypingHandler implements OnModuleDestroy {
     this.lastEventMap.clear();
     this.lastBroadcastMap.clear();
   }
-
-  // ── Private helpers ─────────────────────────────────────────────────
 
   private async broadcastTypingList(conversationId: string): Promise<void> {
     const redisKey = `${this.REDIS_KEY_PREFIX}${conversationId}`;
@@ -139,23 +129,19 @@ export class TypingHandler implements OnModuleDestroy {
       }
     }
 
-    // Clean up expired fields (fire-and-forget)
     if (expired.length > 0) {
       void this.redis.hDel(redisKey, expired).catch(() => {});
     }
 
-    // ── Outgoing dedup ────────────────────────────────────────────────
     activeUsers.sort((a, b) => a.user_id.localeCompare(b.user_id));
     const snapshot = JSON.stringify(activeUsers);
     if (this.lastBroadcastMap.get(conversationId) === snapshot) return;
     this.lastBroadcastMap.set(conversationId, snapshot);
 
-    // Clean up dedup map when conversation has no typers
     if (activeUsers.length === 0) {
       this.lastBroadcastMap.delete(conversationId);
     }
 
-    // ── Broadcast ─────────────────────────────────────────────────────
     const payload: WsChatTypingUpdatePayload = {
       conversation_id: conversationId,
       users: activeUsers,

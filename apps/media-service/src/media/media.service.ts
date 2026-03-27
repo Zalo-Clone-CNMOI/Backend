@@ -1,4 +1,10 @@
-import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  Logger,
+  OnModuleInit,
+} from '@nestjs/common';
 import {
   GetObjectCommand,
   HeadObjectCommand,
@@ -9,6 +15,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { KAFKA_CLIENT } from '@libs/kafka';
 import { S3Service, S3_CLIENT, S3_CONFIG, type S3Config } from '@libs/s3';
+import { ConversationMembershipService } from '@libs/mvp-access';
 import { MediaFile } from '@libs/database';
 import { inferMediaVisibility } from '@app/constant';
 import type { S3Client } from '@aws-sdk/client-s3';
@@ -44,6 +51,7 @@ export class MediaService implements OnModuleInit {
     @Inject(S3_CONFIG) private readonly s3Config: S3Config,
     @InjectRepository(MediaFile)
     private readonly mediaFileRepo: Repository<MediaFile>,
+    private readonly membershipService: ConversationMembershipService,
   ) {}
 
   async onModuleInit() {
@@ -52,13 +60,16 @@ export class MediaService implements OnModuleInit {
 
   async canUserAccessFile(key: string, userId: string): Promise<boolean> {
     const file = await this.mediaFileRepo.findOne({ where: { key } });
-    if (!file) {
-      return false;
+    if (!file) return false;
+    if (file.visibility === 'public') return true;
+    if (file.uploadedById === userId) return true;
+    if (file.conversationId) {
+      return this.membershipService.canUserAccessConversation(
+        userId,
+        file.conversationId,
+      );
     }
-    if (file.visibility === 'public') {
-      return true;
-    }
-    return file.uploadedById === userId;
+    return false;
   }
 
   async presignUpload(
@@ -100,6 +111,14 @@ export class MediaService implements OnModuleInit {
     userId?: string,
     conversationId?: string,
   ): Promise<{ thumbnailKey?: string }> {
+    const fileExists = await this.s3Service.exists(key);
+    if (!fileExists) {
+      this.logger.warn(
+        `confirmUploaded rejected: file not found on S3 key=${key}`,
+      );
+      throw new BadRequestException(`File not found on S3: ${key}`);
+    }
+
     const event: MediaUploadedEvent = {
       key,
       bucket: this.s3Config.bucket,

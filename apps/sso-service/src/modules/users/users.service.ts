@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, ILike, Not } from 'typeorm';
 
-import { User, Friendship } from '@libs/database/entities';
+import { User, Friendship, MediaFile } from '@libs/database/entities';
 import { ErrorCode, UserStatus, FriendshipStatus } from '@app/constant';
 import {
   BusinessException,
@@ -28,6 +28,8 @@ export class UsersService {
     private readonly userRepository: Repository<User>,
     @InjectRepository(Friendship)
     private readonly friendshipRepository: Repository<Friendship>,
+    @InjectRepository(MediaFile)
+    private readonly mediaFileRepo: Repository<MediaFile>,
     private readonly cacheService: CacheService,
   ) {}
 
@@ -91,7 +93,15 @@ export class UsersService {
     if (dto.fullName !== undefined) updateData.fullName = dto.fullName;
     if (dto.email !== undefined) updateData.email = dto.email;
     if (dto.bio !== undefined) updateData.bio = dto.bio;
-    if (dto.avatarUrl !== undefined) updateData.avatarUrl = dto.avatarUrl;
+    if (dto.avatarUrl !== undefined) {
+      const file = await this.mediaFileRepo.findOne({
+        where: { key: dto.avatarUrl },
+      });
+      if (!file || file.uploadedById !== userId || file.status !== 'uploaded') {
+        throw BusinessException.badRequest(ErrorCode.MEDIA_PERMISSION_DENIED);
+      }
+      updateData.avatarUrl = dto.avatarUrl;
+    }
     if (dto.gender !== undefined) updateData.gender = dto.gender;
     if (dto.dateOfBirth !== undefined) {
       updateData.dateOfBirth = new Date(dto.dateOfBirth);

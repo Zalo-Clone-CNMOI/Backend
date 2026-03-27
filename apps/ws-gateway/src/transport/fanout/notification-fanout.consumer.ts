@@ -8,6 +8,12 @@ import {
 } from '@libs/contracts';
 import { ChatGateway } from '../../socket/chat.gateway';
 
+const ERROR_MESSAGES: Record<string, string> = {
+  INVALID_TOKEN: 'Your device token is invalid. Please re-login.',
+  TOKEN_EXPIRED: 'Your push token has expired. Please re-login.',
+  RATE_LIMITED: 'Too many notifications. Please try again later.',
+};
+
 @Controller()
 export class NotificationFanoutConsumer {
   constructor(private readonly gateway: ChatGateway) {}
@@ -31,7 +37,9 @@ export class NotificationFanoutConsumer {
       channel: payload.channel,
       type: payload.type,
       error_code: payload.error_code,
-      error_message: payload.error_message,
+      error_message:
+        ERROR_MESSAGES[payload.error_code] ??
+        'Notification delivery failed. Please try again.',
       retry_count: payload.retry_count,
       failed_at: payload.failed_at,
       trace_id: payload.trace_id,

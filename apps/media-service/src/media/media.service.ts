@@ -5,8 +5,12 @@ import {
   PutObjectCommand,
 } from '@aws-sdk/client-s3';
 import { ClientKafka } from '@nestjs/microservices';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { KAFKA_CLIENT } from '@libs/kafka';
 import { S3Service, S3_CLIENT, S3_CONFIG, type S3Config } from '@libs/s3';
+import { MediaFile } from '@libs/database';
+import { inferMediaVisibility } from '@app/constant';
 import type { S3Client } from '@aws-sdk/client-s3';
 import {
   KafkaTopics,
@@ -29,23 +33,39 @@ export class MediaService implements OnModuleInit {
   private readonly logger = new Logger(MediaService.name);
   private readonly THUMBNAIL_WIDTH = 300;
   private readonly THUMBNAIL_HEIGHT = 300;
+  private readonly DOWNLOAD_EXPIRES_SECONDS = Number(
+    process.env.MEDIA_DOWNLOAD_EXPIRES_SECONDS ?? 900,
+  );
 
   constructor(
     @Inject(KAFKA_CLIENT) private readonly kafka: ClientKafka,
     private readonly s3Service: S3Service,
     @Inject(S3_CLIENT) private readonly s3: S3Client,
     @Inject(S3_CONFIG) private readonly s3Config: S3Config,
+    @InjectRepository(MediaFile)
+    private readonly mediaFileRepo: Repository<MediaFile>,
   ) {}
 
   async onModuleInit() {
     await this.kafka.connect();
   }
 
+  async canUserAccessFile(key: string, userId: string): Promise<boolean> {
+    const file = await this.mediaFileRepo.findOne({ where: { key } });
+    if (!file) {
+      return false;
+    }
+    if (file.visibility === 'public') {
+      return true;
+    }
+    return file.uploadedById === userId;
+  }
+
   async presignUpload(
     body: PresignUploadRequestDto,
     userId?: string,
   ): Promise<PresignUploadResponseDto> {
-    const visibility = this.classifyVisibility(body.contentType);
+    const visibility = inferMediaVisibility(body.contentType);
     const prefix = visibility === 'public' ? 'public/' : 'private/';
 
     const result = await this.s3Service.presignUpload(
@@ -70,7 +90,7 @@ export class MediaService implements OnModuleInit {
 
   async presignDownload(key: string): Promise<PresignDownloadResponseDto> {
     return this.s3Service.presignDownload(key, {
-      expiresSeconds: 3600,
+      expiresSeconds: this.DOWNLOAD_EXPIRES_SECONDS,
     });
   }
 
@@ -129,13 +149,6 @@ export class MediaService implements OnModuleInit {
     }
 
     return {};
-  }
-
-  private classifyVisibility(contentType: string): 'public' | 'private' {
-    if (contentType.startsWith('image/') || contentType.startsWith('video/')) {
-      return 'public';
-    }
-    return 'private';
   }
 
   private isImage(contentType: string): boolean {

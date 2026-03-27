@@ -1,8 +1,11 @@
 import { Controller, Logger } from '@nestjs/common';
 import { EventPattern, Payload } from '@nestjs/microservices';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { MediaFile } from '@libs/database';
+import { S3_CONFIG, type S3Config } from '@libs/s3';
+import { Inject } from '@nestjs/common';
+import { inferMediaVisibility } from '@app/constant';
 import {
   KafkaTopics,
   type MediaUploadRequestedEvent,
@@ -18,6 +21,7 @@ export class MediaConsumer {
   constructor(
     @InjectRepository(MediaFile)
     private readonly mediaFileRepo: Repository<MediaFile>,
+    @Inject(S3_CONFIG) private readonly s3Config: S3Config,
   ) {}
 
   @EventPattern(KafkaTopics.MediaUploadRequested)
@@ -78,7 +82,7 @@ export class MediaConsumer {
           bucket: event.bucket,
           status: 'uploaded',
           contentType: 'application/octet-stream',
-          uploadedById: event.trace_id ?? null,
+          uploadedById: null,
           sizeBytes: null,
           conversationId: null,
           thumbnailKey: null,
@@ -139,67 +143,71 @@ export class MediaConsumer {
       `ChatMessageCreated with ${event.attachments.length} attachment(s): msg=${event.message_id}`,
     );
 
-    for (const attachment of event.attachments) {
-      try {
-        const existing = await this.mediaFileRepo.findOne({
-          where: { key: attachment.key },
-        });
+    try {
+      const keys = event.attachments.map((a) => a.key);
+      const existingFiles = await this.mediaFileRepo.find({
+        where: { key: In(keys) },
+      });
+      const existingMap = new Map(existingFiles.map((f) => [f.key, f]));
 
-        if (existing) {
-          const updates: Partial<MediaFile> = {};
-          if (!existing.conversationId) {
-            updates.conversationId = event.conversation_id;
-          }
-          if (existing.status !== 'uploaded') {
-            updates.status = 'uploaded';
-          }
-          if (!existing.sizeBytes && attachment.size) {
-            updates.sizeBytes = attachment.size;
-          }
-          if (attachment.thumbnail_key && !existing.thumbnailKey) {
-            updates.thumbnailKey = attachment.thumbnail_key;
-          }
-          if (attachment.visibility && !existing.visibility) {
-            updates.visibility = attachment.visibility;
-          }
+      for (const attachment of event.attachments) {
+        try {
+          const existing = existingMap.get(attachment.key);
 
-          if (Object.keys(updates).length > 0) {
-            await this.mediaFileRepo.update({ key: attachment.key }, updates);
-            this.logger.debug(`Updated MediaFile for key=${attachment.key}`);
+          if (existing) {
+            const updates: Partial<MediaFile> = {};
+            if (!existing.conversationId) {
+              updates.conversationId = event.conversation_id;
+            }
+            if (existing.status !== 'uploaded') {
+              updates.status = 'uploaded';
+            }
+            if (!existing.sizeBytes && attachment.size) {
+              updates.sizeBytes = attachment.size;
+            }
+            if (attachment.thumbnail_key && !existing.thumbnailKey) {
+              updates.thumbnailKey = attachment.thumbnail_key;
+            }
+            if (attachment.visibility && !existing.visibility) {
+              updates.visibility = attachment.visibility;
+            }
+
+            if (Object.keys(updates).length > 0) {
+              await this.mediaFileRepo.update({ key: attachment.key }, updates);
+              this.logger.debug(`Updated MediaFile for key=${attachment.key}`);
+            }
+          } else {
+            const visibility =
+              attachment.visibility ??
+              inferMediaVisibility(attachment.content_type);
+            const mediaFile = this.mediaFileRepo.create({
+              key: attachment.key,
+              bucket: this.s3Config.bucket,
+              contentType: attachment.content_type,
+              sizeBytes: attachment.size ?? null,
+              uploadedById: event.sender_id,
+              conversationId: event.conversation_id,
+              status: 'uploaded',
+              visibility,
+              thumbnailKey: attachment.thumbnail_key ?? null,
+            });
+            await this.mediaFileRepo.save(mediaFile);
+            this.logger.log(
+              `MediaFile created from chat attachment: key=${attachment.key}`,
+            );
           }
-        } else {
-          const visibility =
-            attachment.visibility ??
-            this.inferVisibility(attachment.content_type);
-          const mediaFile = this.mediaFileRepo.create({
-            key: attachment.key,
-            bucket: process.env.S3_BUCKET ?? '',
-            contentType: attachment.content_type,
-            sizeBytes: attachment.size ?? null,
-            uploadedById: event.sender_id,
-            conversationId: event.conversation_id,
-            status: 'uploaded',
-            visibility,
-            thumbnailKey: attachment.thumbnail_key ?? null,
-          });
-          await this.mediaFileRepo.save(mediaFile);
-          this.logger.log(
-            `MediaFile created from chat attachment: key=${attachment.key}`,
+        } catch (error) {
+          this.logger.error(
+            `Failed to track attachment key=${attachment.key} from msg=${event.message_id}`,
+            error instanceof Error ? error.stack : String(error),
           );
         }
-      } catch (error) {
-        this.logger.error(
-          `Failed to track attachment key=${attachment.key} from msg=${event.message_id}`,
-          error instanceof Error ? error.stack : String(error),
-        );
       }
+    } catch (error) {
+      this.logger.error(
+        `Failed to batch-fetch attachments for msg=${event.message_id}`,
+        error instanceof Error ? error.stack : String(error),
+      );
     }
-  }
-
-  private inferVisibility(contentType: string): 'public' | 'private' {
-    if (contentType.startsWith('image/') || contentType.startsWith('video/')) {
-      return 'public';
-    }
-    return 'private';
   }
 }

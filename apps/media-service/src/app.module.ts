@@ -9,7 +9,6 @@ import { HealthController } from './health.controller';
 import { MediaController } from './media/media.controller';
 import { MediaService } from './media/media.service';
 import { MediaConsumer } from './consumers/media.consumer';
-import { MediaPublisher } from './publishers/media.publisher';
 
 @Module({
   imports: [
@@ -35,6 +34,6 @@ import { MediaPublisher } from './publishers/media.publisher';
     }),
   ],
   controllers: [HealthController, MediaController, MediaConsumer],
-  providers: [MediaService, MediaPublisher],
+  providers: [MediaService],
 })
 export class AppModule {}

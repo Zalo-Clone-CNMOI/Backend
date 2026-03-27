@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { MessageRepository } from '@libs/scylla';
 import { CacheService } from '@libs/redis';
+import { inferMediaVisibility } from '@app/constant';
 import type {
   PersistedMessage,
   MessageAttachment,
@@ -149,7 +150,7 @@ export class MessagesService {
   ): AttachmentResponseDto {
     const bucket = process.env.S3_BUCKET ?? 'be-media';
     const visibility =
-      attachment.visibility ?? this.inferVisibility(attachment.content_type);
+      attachment.visibility ?? inferMediaVisibility(attachment.content_type);
 
     return {
       key: attachment.key,
@@ -167,13 +168,6 @@ export class MessagesService {
         ? this.buildCdnUrl(bucket, attachment.thumbnail_key)
         : undefined,
     };
-  }
-
-  private inferVisibility(contentType: string): 'public' | 'private' {
-    if (contentType.startsWith('image/') || contentType.startsWith('video/')) {
-      return 'public';
-    }
-    return 'private';
   }
 
   private buildCdnUrl(bucket: string, key: string): string {

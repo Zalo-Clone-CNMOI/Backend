@@ -22,8 +22,11 @@ export class AttachmentResponseDto {
   @ApiPropertyOptional({ description: 'Thumbnail key for images/videos' })
   thumbnailKey?: string;
 
-  @ApiProperty({ description: 'CDN URL' })
-  url: string;
+  @ApiProperty({ description: 'File visibility', enum: ['public', 'private'] })
+  visibility: 'public' | 'private';
+
+  @ApiPropertyOptional({ description: 'CDN URL (public files only)' })
+  url: string | null;
 
   @ApiPropertyOptional({ description: 'Thumbnail CDN URL' })
   thumbnailUrl?: string;

@@ -1,16 +1,21 @@
 import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@libs/config';
 import { LoggerModule } from '@libs/logger';
 import { KafkaModule } from '@libs/kafka';
+import { DatabaseModule, MediaFile } from '@libs/database';
 import { S3Module } from '@libs/s3';
 import { HealthController } from './health.controller';
 import { MediaController } from './media/media.controller';
 import { MediaService } from './media/media.service';
+import { MediaConsumer } from './consumers/media.consumer';
 
 @Module({
   imports: [
     ConfigModule,
     LoggerModule,
+    DatabaseModule,
+    TypeOrmModule.forFeature([MediaFile]),
     KafkaModule,
     S3Module.forRootAsync({
       isGlobal: true,
@@ -28,7 +33,7 @@ import { MediaService } from './media/media.service';
       }),
     }),
   ],
-  controllers: [HealthController, MediaController],
+  controllers: [HealthController, MediaController, MediaConsumer],
   providers: [MediaService],
 })
 export class AppModule {}

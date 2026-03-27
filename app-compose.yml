@@ -176,6 +176,14 @@ services:
       S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
       KAFKA_BROKERS: kafka:29092
       KAFKA_CLIENT_ID: media-service
+      KAFKA_GROUP_ID: media-service-persist
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@${DB_HOST:-localhost}:${DB_PORT:-5432}/${POSTGRES_DB:-postgres}
+      DB_SSL: ${DB_SSL:-true}
+      DB_HOST: ${DB_HOST:-localhost}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_USERNAME: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      DB_NAME: ${POSTGRES_DB:-postgres}
     ports:
       - "${MEDIA_PORT:-3003}:3003"
     networks:

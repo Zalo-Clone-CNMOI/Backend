@@ -27,6 +27,10 @@ export const WsEvents = {
   CancelFriendRequest: 'friend:request:cancel',
   FriendRemoved: 'friend:removed',
 
+  // ── Notification Events ─────────────────────────────────────────────
+  NotificationSent: 'notification:sent',
+  NotificationFailed: 'notification:failed',
+
   // ── AI Events ──────────────────────────────────────────────────────
   AiSmartReplyRequest: 'ai:smart-reply:request',
   AiSmartReplyResult: 'ai:smart-reply:result',
@@ -54,6 +58,7 @@ export interface WsMessageAttachment {
   size: number;
   content_type: string;
   thumbnail_key?: string;
+  visibility?: 'public' | 'private';
 }
 
 export interface WsChatSendPayload {
@@ -207,6 +212,28 @@ export interface WsCancelFriendRequestPayload {
 
 export interface WsFriendRemovedPayload {
   userId: string;
+}
+
+// ── Notification WebSocket Payloads ──────────────────────────────────────
+
+export interface WsNotificationSentPayload {
+  provider: string;
+  channel: string;
+  type?: string;
+  success_count?: number;
+  sent_at: number;
+  trace_id?: string;
+}
+
+export interface WsNotificationFailedPayload {
+  provider: string;
+  channel: string;
+  type?: string;
+  error_code: string;
+  error_message: string;
+  retry_count: number;
+  failed_at: number;
+  trace_id?: string;
 }
 
 // ── AI WebSocket Payloads ──────────────────────────────────────────────

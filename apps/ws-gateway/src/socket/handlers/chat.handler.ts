@@ -205,7 +205,8 @@ export class ChatHandler {
     for (const att of attachments) {
       const file = fileMap.get(att.key);
       if (!file) return 'attachment_not_found';
-      if (file.uploadedById !== userId) return 'attachment_not_owned';
+      if (file.uploadedById && file.uploadedById !== userId)
+        return 'attachment_not_owned';
       if (file.status !== 'uploaded') return 'attachment_not_ready';
     }
     return null;

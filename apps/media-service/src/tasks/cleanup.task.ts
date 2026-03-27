@@ -23,31 +23,29 @@ export class OrphanedFileCleanupTask {
     const cutoff = new Date(Date.now() - this.STALE_HOURS * 60 * 60 * 1000);
     let totalCleaned = 0;
 
-    while (true) {
-      const staleFiles = await this.mediaFileRepo.find({
-        where: {
-          status: 'pending' as const,
-          createdAt: LessThan(cutoff),
-        },
-        take: this.BATCH_SIZE,
-      });
+    const staleFiles = await this.mediaFileRepo.find({
+      where: {
+        status: 'pending' as const,
+        createdAt: LessThan(cutoff),
+      },
+      take: this.BATCH_SIZE,
+    });
 
-      if (staleFiles.length === 0) break;
+    if (staleFiles.length === 0) {
+      this.logger.log('No stale files found.');
+      return;
+    }
 
-      for (const file of staleFiles) {
-        try {
-          await this.s3Service.delete(file.key);
-          await this.mediaFileRepo.update(
-            { id: file.id },
-            { status: 'deleted' },
-          );
-          totalCleaned++;
-        } catch (error) {
-          this.logger.error(
-            `Failed to clean key=${file.key}`,
-            error instanceof Error ? error.stack : String(error),
-          );
-        }
+    for (const file of staleFiles) {
+      try {
+        await this.s3Service.delete(file.key);
+        await this.mediaFileRepo.update({ id: file.id }, { status: 'deleted' });
+        totalCleaned++;
+      } catch (error) {
+        this.logger.error(
+          `Failed to clean key=${file.key}`,
+          error instanceof Error ? error.stack : String(error),
+        );
       }
     }
 

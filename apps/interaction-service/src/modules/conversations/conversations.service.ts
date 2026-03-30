@@ -26,7 +26,7 @@ import {
   PaginationMeta,
   PaginationQuery,
 } from '@app/types';
-import { CacheService } from '@libs/redis';
+import { CacheService, REDIS_CLIENT } from '@libs/redis';
 
 import {
   CreateGroupConversationDto,
@@ -39,6 +39,15 @@ import {
   ConversationDetailDto,
   ConversationMemberResponseDto,
 } from './dto';
+import { RedisClientType } from 'redis';
+
+interface LastMessage {
+  message_id: string;
+  sender_id: string;
+  body: string;
+  created_at: number;
+  has_attachments: boolean;
+}
 
 @Injectable()
 export class ConversationsService {
@@ -54,6 +63,7 @@ export class ConversationsService {
     private readonly cacheService: CacheService,
     @Inject(KAFKA_CLIENT)
     private readonly kafkaClient: ClientKafka,
+    @Inject(REDIS_CLIENT) private readonly redis: RedisClientType,
   ) {}
 
   /**
@@ -88,16 +98,87 @@ export class ConversationsService {
         leftAt: IsNull(),
       },
     });
+
     const membershipMap = new Map(
       myMemberships.map((m) => [m.conversationId, m]),
     );
 
-    const items = conversations.map((c) => {
+    const lastMessageKeys = conversations.map(
+      (c) => `conversation:last:${c.id}`,
+    );
+
+    const unreadKeys = conversations.map(
+      (c) => `conversation:unread:${userId}:${c.id}`,
+    );
+
+    const [lastMessages, unreadCounts] = await Promise.all([
+      this.redis.mGet(lastMessageKeys),
+      this.redis.mGet(unreadKeys),
+    ]);
+
+    console.log(lastMessages, unreadCounts);
+
+    const items = conversations.map((c, index) => {
       const myMembership = membershipMap.get(c.id);
-      return this.toListItem(c, userId, myMembership);
+
+      let lastMessageRaw: LastMessage | null = null;
+
+      try {
+        lastMessageRaw = lastMessages[index]
+          ? (JSON.parse(lastMessages[index]) as LastMessage)
+          : null;
+      } catch {
+        this.logger.warn(`Invalid Redis JSON for conversation ${c.id}`);
+      }
+
+      const memberMap = new Map(
+        c.members?.map((m) => [m.userId, m.user?.fullName]),
+      );
+
+      let lastMessage: {
+        id: string;
+        content: string;
+        senderId: string;
+        senderName: string;
+        createdAt: Date;
+      } | null = null;
+
+      if (lastMessageRaw?.message_id) {
+        lastMessage = {
+          id: lastMessageRaw.message_id,
+          content: lastMessageRaw.body,
+          senderId: lastMessageRaw.sender_id,
+          senderName: memberMap.get(lastMessageRaw.sender_id) || 'Unknown',
+          createdAt: new Date(lastMessageRaw.created_at),
+        };
+      } else if (c.lastMessageAt && c.lastMessageId) {
+        lastMessage = {
+          id: c.lastMessageId,
+          content:
+            c.type === ConversationType.GROUP
+              ? 'New messages'
+              : 'No messages yet',
+          senderId: c.lastMessageId,
+          senderName: memberMap.get(c.lastMessageId) || 'Unknown',
+          createdAt: c.lastMessageAt,
+        };
+      } else {
+        lastMessage = null;
+      }
+
+      const unreadCount = Number(unreadCounts[index] || 0);
+
+      const base = this.toListItem(c, userId, myMembership);
+
+      return {
+        ...base,
+        lastMessage,
+        unreadCount,
+      };
     });
 
     const totalPages = Math.ceil(total / limit);
+
     const meta: PaginationMeta = {
       total,
       page,
@@ -109,7 +190,6 @@ export class ConversationsService {
 
     return { items, meta };
   }
-
   /**
    * Get conversation by ID
    */

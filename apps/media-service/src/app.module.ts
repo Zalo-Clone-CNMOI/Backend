@@ -4,11 +4,14 @@ import { ConfigModule } from '@libs/config';
 import { LoggerModule } from '@libs/logger';
 import { KafkaModule } from '@libs/kafka';
 import { DatabaseModule, MediaFile } from '@libs/database';
+import { ConversationMembershipModule } from '@libs/mvp-access';
+import { ScheduleModule } from '@nestjs/schedule';
 import { S3Module } from '@libs/s3';
 import { HealthController } from './health.controller';
 import { MediaController } from './media/media.controller';
 import { MediaService } from './media/media.service';
 import { MediaConsumer } from './consumers/media.consumer';
+import { OrphanedFileCleanupTask } from './tasks/cleanup.task';
 
 @Module({
   imports: [
@@ -16,6 +19,8 @@ import { MediaConsumer } from './consumers/media.consumer';
     LoggerModule,
     DatabaseModule,
     TypeOrmModule.forFeature([MediaFile]),
+    ConversationMembershipModule,
+    ScheduleModule.forRoot(),
     KafkaModule,
     S3Module.forRootAsync({
       isGlobal: true,
@@ -34,6 +39,6 @@ import { MediaConsumer } from './consumers/media.consumer';
     }),
   ],
   controllers: [HealthController, MediaController, MediaConsumer],
-  providers: [MediaService],
+  providers: [MediaService, OrphanedFileCleanupTask],
 })
 export class AppModule {}

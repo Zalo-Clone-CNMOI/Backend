@@ -13,30 +13,24 @@ export class DataSanitizer {
   private readonly logger = new Logger(DataSanitizer.name);
   private readonly enabled: boolean;
 
-  // Common PII patterns (English-only MVP)
   private readonly patterns: Array<{ regex: RegExp; replacement: string }> = [
-    // Email addresses
     {
       regex: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g,
       replacement: '[EMAIL]',
     },
-    // Phone numbers (various formats)
     {
       regex:
         /\b(?:\+?\d{1,3}[-.\s]?)?\(?\d{2,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{3,4}\b/g,
       replacement: '[PHONE]',
     },
-    // Credit card numbers
     {
       regex: /\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/g,
       replacement: '[CREDIT_CARD]',
     },
-    // SSN-like patterns
     {
       regex: /\b\d{3}[-\s]?\d{2}[-\s]?\d{4}\b/g,
       replacement: '[SSN]',
     },
-    // IP addresses
     {
       regex: /\b(?:\d{1,3}\.){3}\d{1,3}\b/g,
       replacement: '[IP_ADDRESS]',

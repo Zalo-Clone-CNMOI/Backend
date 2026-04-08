@@ -20,7 +20,6 @@ export class NotificationConsumer implements OnModuleInit {
   ) {}
 
   onModuleInit() {
-    // Wire batcher's flush callback to process batched notifications
     this.batcher.onBatchReady = (userId, notifications) => {
       this.logger.debug(
         `Batch ready for user ${userId}: ${notifications.length} notifications`,
@@ -50,7 +49,6 @@ export class NotificationConsumer implements OnModuleInit {
         `Notification requested for user ${payload.user_id} [trace=${payload.trace_id}]`,
       );
 
-      // Add to batch — returns notifications if batch is full
       const flushed = await this.batcher.addToBatch(payload);
 
       if (flushed && flushed.length > 0) {

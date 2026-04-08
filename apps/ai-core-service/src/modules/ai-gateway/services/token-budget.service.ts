@@ -45,7 +45,6 @@ export class TokenBudgetService {
     const key = this.getKey(userId);
     const newTotal = await this.redis.incrBy(key, tokensUsed);
 
-    // Set TTL to expire at end of day (max 24h)
     const ttl = await this.redis.ttl(key);
     if (ttl < 0) {
       await this.redis.expire(key, 86400);

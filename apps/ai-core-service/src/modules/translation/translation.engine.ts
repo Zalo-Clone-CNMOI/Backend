@@ -35,7 +35,6 @@ export class TranslationEngine {
   ): Promise<AiTranslateResultEvent> {
     const cacheKey = this.getCacheKey(event.body, event.target_language);
 
-    // Check cache
     const cached = await this.redis.get(cacheKey);
     if (cached) {
       this.logger.debug('Translation cache hit');
@@ -55,9 +54,7 @@ export class TranslationEngine {
           processed_at: Date.now(),
           trace_id: event.trace_id,
         };
-      } catch {
-        // Cache corrupted, regenerate
-      }
+      } catch {}
     }
 
     try {
@@ -85,7 +82,6 @@ export class TranslationEngine {
         true,
       );
 
-      // Cache the result
       await this.redis.setEx(
         cacheKey,
         this.CACHE_TTL,
@@ -144,7 +140,6 @@ export class TranslationEngine {
   }
 
   private getCacheKey(body: string, targetLang: string): string {
-    // Simple hash for cache key — use body length + first/last chars
     const hash = Buffer.from(body).toString('base64url').slice(0, 32);
     return `ai:translate:${hash}:${targetLang}`;
   }

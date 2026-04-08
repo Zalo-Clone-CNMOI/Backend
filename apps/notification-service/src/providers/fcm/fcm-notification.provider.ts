@@ -45,7 +45,6 @@ export class FcmNotificationProvider implements INotificationProvider {
           `FCM notification sent successfully to user ${input.userId}: ${result.successCount} success`,
         );
       }
-      // Deactivate invalid tokens
       if (result.invalidTokens.length > 0) {
         await this.deactivateTokens(result.invalidTokens);
         this.metrics.recordInvalidTokens(result.invalidTokens.length);

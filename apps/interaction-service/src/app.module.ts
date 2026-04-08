@@ -13,6 +13,7 @@ import { HealthCheckService } from '@libs/shared';
 import { HealthController } from './health.controller';
 import { ConversationsModule } from './modules/conversations';
 import { FriendsModule } from './modules/friends';
+import { InteractionConsumer } from './modules/consumers/interaction.consumer';
 
 @Module({
   imports: [
@@ -30,7 +31,7 @@ import { FriendsModule } from './modules/friends';
       ),
     }),
   ],
-  controllers: [HealthController],
+  controllers: [HealthController, InteractionConsumer],
   providers: [
     HealthCheckService,
     {

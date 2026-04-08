@@ -85,8 +85,8 @@ services:
     environment:
       NODE_ENV: production
       # Database - AWS RDS
-      DB_HOST: database-1.cda2o0ikkgnf.ap-southeast-1.rds.amazonaws.com
-      DB_PORT: 5432
+      DB_HOST: ${POSTGRES_HOST:-zalodb.cv600uwoag41.ap-southeast-1.rds.amazonaws.com}
+      DB_PORT: ${POSTGRES_PORT:-5432}
       DB_USERNAME: ${POSTGRES_USER:-postgres}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       DB_NAME: ${POSTGRES_DB:-postgres}
@@ -188,7 +188,7 @@ services:
       # JWT
       JWT_SECRET: ${JWT_SECRET}
       # Database - AWS RDS
-      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@database-1.cda2o0ikkgnf.ap-southeast-1.rds.amazonaws.com:5432/${POSTGRES_DB:-postgres}
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@zalodb.cv600uwoag41.ap-southeast-1.rds.amazonaws.com:5432/${POSTGRES_DB:-postgres}
       DB_SSL: "true"
       # Firebase
       FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID}
@@ -201,7 +201,7 @@ services:
       KAFKA_CLIENT_ID: sso-service
       # CORS
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
-      DB_HOST: database-1.cda2o0ikkgnf.ap-southeast-1.rds.amazonaws.com
+      DB_HOST: zalodb.cv600uwoag41.ap-southeast-1.rds.amazonaws.com
       DB_PORT: 5432
       DB_USERNAME: ${POSTGRES_USER:-postgres}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
@@ -254,7 +254,7 @@ services:
       # JWT
       JWT_SECRET: ${JWT_SECRET}
       # Database - AWS RDS
-      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@database-1.cda2o0ikkgnf.ap-southeast-1.rds.amazonaws.com:5432/${POSTGRES_DB:-postgres}
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@zalodb.cv600uwoag41.ap-southeast-1.rds.amazonaws.com:5432/${POSTGRES_DB:-postgres}
       # Kafka
       KAFKA_BROKERS: kafka:29092
       KAFKA_CLIENT_ID: interaction-service
@@ -267,7 +267,7 @@ services:
       SCYLLA_KEYSPACE: chat
       # CORS
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
-      DB_HOST: database-1.cda2o0ikkgnf.ap-southeast-1.rds.amazonaws.com
+      DB_HOST: zalodb.cv600uwoag41.ap-southeast-1.rds.amazonaws.com
       DB_PORT: 5432
       DB_USERNAME: ${POSTGRES_USER:-postgres}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
@@ -464,9 +464,9 @@ services:
       # Redis
       REDIS_URL: redis://redis:6379
       # Database - AWS RDS
-      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@database-1.cda2o0ikkgnf.ap-southeast-1.rds.amazonaws.com:5432/${POSTGRES_DB:-postgres}
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@zalodb.cv600uwoag41.ap-southeast-1.rds.amazonaws.com:5432/${POSTGRES_DB:-postgres}
       DB_SSL: "true"
-      DB_HOST: database-1.cda2o0ikkgnf.ap-southeast-1.rds.amazonaws.com
+      DB_HOST: zalodb.cv600uwoag41.ap-southeast-1.rds.amazonaws.com
       DB_PORT: 5432
       DB_USERNAME: ${POSTGRES_USER:-postgres}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}

@@ -26,6 +26,23 @@ export class ConversationMemberResponseDto {
   joinedAt: Date;
 }
 
+export class LastMessageDto {
+  @ApiProperty({ description: 'Message ID' })
+  message_id: string;
+
+  @ApiProperty({ description: 'Message content' })
+  body: string;
+
+  @ApiProperty({ description: 'Sender ID' })
+  sender_id: string;
+
+  @ApiProperty({ description: 'Created at' })
+  created_at: string;
+
+  @ApiProperty({ description: 'Has attachments' })
+  has_attachments: boolean;
+}
+
 /**
  * Conversation list item response
  */
@@ -65,6 +82,9 @@ export class ConversationListItemDto {
 
   @ApiProperty({ description: 'Created at' })
   createdAt: Date;
+
+  @ApiProperty({ description: 'Last message' })
+  last_message?: LastMessageDto | null;
 }
 
 /**

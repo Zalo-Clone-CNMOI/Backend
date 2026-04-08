@@ -12,6 +12,7 @@ export const WsEvents = {
   ChatReactionAdded: 'chat:reaction:added',
   ChatReactionRemoved: 'chat:reaction:removed',
   ChatTyping: 'chat:typing',
+  ChatTypingUpdate: 'chat:typing:update',
 
   PresenceHeartbeat: 'presence:heartbeat',
   PresenceUpdate: 'presence:update',
@@ -25,6 +26,10 @@ export const WsEvents = {
   RespondFriendRequest: 'friend:request:respond',
   CancelFriendRequest: 'friend:request:cancel',
   FriendRemoved: 'friend:removed',
+
+  // ── Notification Events ─────────────────────────────────────────────
+  NotificationSent: 'notification:sent',
+  NotificationFailed: 'notification:failed',
 
   // ── AI Events ──────────────────────────────────────────────────────
   AiSmartReplyRequest: 'ai:smart-reply:request',
@@ -53,6 +58,7 @@ export interface WsMessageAttachment {
   size: number;
   content_type: string;
   thumbnail_key?: string;
+  visibility?: 'public' | 'private';
 }
 
 export interface WsChatSendPayload {
@@ -78,6 +84,7 @@ export interface WsChatEditPayload {
   message_id: string;
   conversation_id: string;
   new_body: string;
+  created_at: number;
 }
 
 export interface WsChatMessageUpdatedPayload {
@@ -91,6 +98,7 @@ export interface WsChatMessageUpdatedPayload {
 export interface WsChatDeletePayload {
   message_id: string;
   conversation_id: string;
+  created_at: number;
 }
 
 export interface WsChatMessageDeletedPayload {
@@ -126,7 +134,17 @@ export interface WsChatReactionRemovedPayload {
 
 export interface WsChatTypingPayload {
   conversation_id: string;
-  is_typing: boolean;
+  username: string;
+}
+
+export interface WsChatTypingUser {
+  user_id: string;
+  username: string;
+}
+
+export interface WsChatTypingUpdatePayload {
+  conversation_id: string;
+  users: WsChatTypingUser[];
 }
 
 export interface WsPresenceHeartbeatPayload {
@@ -194,6 +212,28 @@ export interface WsCancelFriendRequestPayload {
 
 export interface WsFriendRemovedPayload {
   userId: string;
+}
+
+// ── Notification WebSocket Payloads ──────────────────────────────────────
+
+export interface WsNotificationSentPayload {
+  provider: string;
+  channel: string;
+  type?: string;
+  success_count?: number;
+  sent_at: number;
+  trace_id?: string;
+}
+
+export interface WsNotificationFailedPayload {
+  provider: string;
+  channel: string;
+  type?: string;
+  error_code: string;
+  error_message: string;
+  retry_count: number;
+  failed_at: number;
+  trace_id?: string;
 }
 
 // ── AI WebSocket Payloads ──────────────────────────────────────────────

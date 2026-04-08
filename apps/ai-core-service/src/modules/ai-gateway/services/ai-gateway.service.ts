@@ -57,7 +57,6 @@ export class AiGatewayService {
     options: LlmCompletionOptions,
     opts?: { skipBudgetCheck?: boolean; skipSanitize?: boolean },
   ): Promise<LlmCompletionResult> {
-    // PII sanitization
     if (!opts?.skipSanitize) {
       options = {
         ...options,
@@ -68,7 +67,6 @@ export class AiGatewayService {
       };
     }
 
-    // Budget check
     if (!opts?.skipBudgetCheck) {
       const canConsume = await this.tokenBudget.canConsume(userId, 2000);
       if (!canConsume) {
@@ -76,7 +74,6 @@ export class AiGatewayService {
       }
     }
 
-    // Try providers in order with circuit breaker
     const errors: string[] = [];
     for (const provider of this.getAvailableProviders()) {
       if (!this.isCircuitAllowed(provider.name)) {
@@ -89,7 +86,6 @@ export class AiGatewayService {
 
         this.onSuccess(provider.name);
 
-        // Record token usage
         await this.tokenBudget.consume(
           userId,
           result.tokensIn + result.tokensOut,
@@ -198,7 +194,6 @@ export class AiGatewayService {
       return false;
     }
 
-    // half-open: allow one request
     return true;
   }
 

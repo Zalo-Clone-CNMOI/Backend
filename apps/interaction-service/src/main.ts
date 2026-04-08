@@ -8,13 +8,23 @@ import {
   TransformResponseInterceptor,
 } from '@app/interceptors';
 import { JwtAuthGuard } from '@libs/auth';
+import { createKafkaMicroserviceOptions } from '@libs/kafka/kafka.util';
+import { loadConfig } from '@libs/config/app-config';
+import { MicroserviceOptions } from '@nestjs/microservices';
 
 async function bootstrap() {
   process.env.SERVICE_NAME ??= 'interaction-service';
+  process.env.KAFKA_GROUP_ID ??= 'interaction-service-consumers';
 
   const app = await NestFactory.create(AppModule);
+  const config = loadConfig(process.env.SERVICE_NAME);
+
   const logger = new Logger('Bootstrap');
   app.setGlobalPrefix('api');
+
+  app.connectMicroservice<MicroserviceOptions>(
+    createKafkaMicroserviceOptions(config),
+  );
 
   app.enableCors({
     origin: process.env.CORS_ORIGIN?.split(',') ?? '*',
@@ -43,6 +53,8 @@ async function bootstrap() {
     SwaggerModule.setup('docs', app, document);
     logger.log('Swagger documentation available at /docs');
   }
+
+  await app.startAllMicroservices();
 
   const port = Number(process.env.PORT ?? 5004);
   await app.listen(port);

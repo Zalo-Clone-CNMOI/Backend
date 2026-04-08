@@ -49,7 +49,6 @@ export class ModerationEngine {
 
       const parsed = this.parseResponse(result.content);
 
-      // Persist to DB
       const log = this.moderationRepo.create({
         messageId: event.message_id,
         conversationId: event.conversation_id,
@@ -64,7 +63,6 @@ export class ModerationEngine {
       });
       await this.moderationRepo.save(log);
 
-      // Record metrics
       this.aiMetrics.recordRequest(
         'moderation',
         result.provider,
@@ -103,7 +101,6 @@ export class ModerationEngine {
         false,
       );
 
-      // Return safe default — don't block messages on AI failure
       return {
         message_id: event.message_id,
         conversation_id: event.conversation_id,

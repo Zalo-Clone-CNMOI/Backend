@@ -41,7 +41,6 @@ export class SummaryEngine {
   ): Promise<AiSummaryResultEvent> {
     const cacheKey = `ai:summary:${event.conversation_id}`;
 
-    // Check cache
     if (this.cacheEnabled) {
       const cached = await this.redis.get(cacheKey);
       if (cached) {
@@ -55,9 +54,7 @@ export class SummaryEngine {
             processed_at: Date.now(),
             trace_id: event.trace_id,
           };
-        } catch {
-          // Cache corrupted, regenerate
-        }
+        } catch {}
       }
     }
 
@@ -99,7 +96,6 @@ export class SummaryEngine {
         trace_id: event.trace_id,
       };
 
-      // Cache the result
       if (this.cacheEnabled) {
         await this.redis.setEx(
           cacheKey,
@@ -151,7 +147,6 @@ export class SummaryEngine {
         summary: typeof json.summary === 'string' ? json.summary : content,
       };
     } catch {
-      // If not valid JSON, use the content directly
       return { summary: content };
     }
   }

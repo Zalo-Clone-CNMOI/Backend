@@ -1,112 +1,574 @@
-import { MigrationInterface, QueryRunner } from "typeorm";
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class  InitTable1768719874693 implements MigrationInterface {
-    name = ' InitTable1768719874693'
+export class InitTables1773478886753 implements MigrationInterface {
+  name = 'InitTables1773478886753';
 
-    public async up(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`CREATE TABLE "device_tokens" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP NOT NULL DEFAULT now(), "deletedAt" TIMESTAMP, "user_id" uuid NOT NULL, "token" character varying(500) NOT NULL, "platform" character varying(20) NOT NULL, "device_id" character varying(255), "is_active" boolean NOT NULL DEFAULT true, CONSTRAINT "UQ_a070dfec1c8f06cd29b854169f2" UNIQUE ("user_id", "token"), CONSTRAINT "PK_84700be257607cfb1f9dc2e52c3" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE INDEX "IDX_17e1f528b993c6d55def4cf5be" ON "device_tokens" ("user_id") `);
-        await queryRunner.query(`CREATE INDEX "IDX_977e24c520c49436d08e5eeea8" ON "device_tokens" ("token") `);
-        await queryRunner.query(`CREATE TABLE "media_files" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP NOT NULL DEFAULT now(), "deletedAt" TIMESTAMP, "key" character varying(500) NOT NULL, "bucket" character varying(100) NOT NULL, "content_type" character varying(100) NOT NULL, "size_bytes" bigint, "uploaded_by" uuid, "conversation_id" uuid, "status" character varying(20) NOT NULL DEFAULT 'pending', CONSTRAINT "UQ_a1092d459371530ce0c10c20895" UNIQUE ("key"), CONSTRAINT "PK_93b4da6741cd150e76f9ac035d8" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE INDEX "IDX_78f2e01705ad1a9b77ef3ee377" ON "media_files" ("uploaded_by") `);
-        await queryRunner.query(`CREATE TABLE "conversations" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP NOT NULL DEFAULT now(), "deletedAt" TIMESTAMP, "type" character varying(20) NOT NULL DEFAULT 'direct', "name" character varying(255), "avatar_url" character varying(500), "created_by" uuid, "last_message_id" uuid, "last_message_at" TIMESTAMP, CONSTRAINT "PK_ee34f4f7ced4ec8681f26bf04ef" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE INDEX "IDX_9185e4a10f53167d15f23e1720" ON "conversations" ("last_message_at") `);
-        await queryRunner.query(`CREATE TABLE "conversation_members" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP NOT NULL DEFAULT now(), "deletedAt" TIMESTAMP, "conversation_id" uuid NOT NULL, "user_id" uuid NOT NULL, "role" character varying(20) NOT NULL DEFAULT 'member', "nickname" character varying(100), "is_muted" boolean NOT NULL DEFAULT false, "last_read_at" TIMESTAMP, "joined_at" TIMESTAMP NOT NULL DEFAULT now(), "left_at" TIMESTAMP, CONSTRAINT "UQ_5fa9076068b6f2a26fb793d2439" UNIQUE ("conversation_id", "user_id"), CONSTRAINT "PK_33146a476696a973a14d931e675" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE INDEX "IDX_36340a1704b039608e34244511" ON "conversation_members" ("conversation_id") `);
-        await queryRunner.query(`CREATE INDEX "IDX_a46c76be8f62c4b00a835cdc37" ON "conversation_members" ("user_id") `);
-        await queryRunner.query(`CREATE INDEX "IDX_6d78ef4bd19c3273104742c944" ON "conversation_members" ("left_at") `);
-        await queryRunner.query(`CREATE TABLE "friendships" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP NOT NULL DEFAULT now(), "deletedAt" TIMESTAMP, "requester_id" uuid NOT NULL, "addressee_id" uuid NOT NULL, "status" character varying(20) NOT NULL DEFAULT 'pending', CONSTRAINT "UQ_2697f4d8948008ebd0784fe79c7" UNIQUE ("requester_id", "addressee_id"), CONSTRAINT "PK_08af97d0be72942681757f07bc8" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE INDEX "IDX_4864bfab7fad9a34292e12bdb0" ON "friendships" ("status") `);
-        await queryRunner.query(`CREATE TABLE "post_likes" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP NOT NULL DEFAULT now(), "deletedAt" TIMESTAMP, "post_id" uuid NOT NULL, "user_id" uuid NOT NULL, "reaction_type" character varying(20) NOT NULL DEFAULT 'like', CONSTRAINT "UQ_8f64693922a9e8c4e2605850d0b" UNIQUE ("post_id", "user_id"), CONSTRAINT "PK_e4ac7cb9daf243939c6eabb2e0d" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE INDEX "IDX_b40d37469c501092203d285af8" ON "post_likes" ("post_id") `);
-        await queryRunner.query(`CREATE TABLE "comment_likes" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP NOT NULL DEFAULT now(), "deletedAt" TIMESTAMP, "comment_id" uuid NOT NULL, "user_id" uuid NOT NULL, CONSTRAINT "UQ_660059072f131c773be5f37c475" UNIQUE ("comment_id", "user_id"), CONSTRAINT "PK_2c299aaf1f903c45ee7e6c7b419" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE INDEX "IDX_2073bf518ef7017ec19319a65e" ON "comment_likes" ("comment_id") `);
-        await queryRunner.query(`CREATE TABLE "post_comments" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP NOT NULL DEFAULT now(), "deletedAt" TIMESTAMP, "post_id" uuid NOT NULL, "user_id" uuid NOT NULL, "parent_comment_id" uuid, "content" text NOT NULL, "like_count" integer NOT NULL DEFAULT '0', "is_deleted" boolean NOT NULL DEFAULT false, CONSTRAINT "PK_2e99e04b4a1b31de6f833c18ced" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE INDEX "IDX_8eb985b7bd35fd7bc760b6cbe8" ON "post_comments" ("user_id") `);
-        await queryRunner.query(`CREATE INDEX "IDX_47e60da1f7aeb75961190bff75" ON "post_comments" ("parent_comment_id") `);
-        await queryRunner.query(`CREATE TABLE "notification_preferences" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP NOT NULL DEFAULT now(), "deletedAt" TIMESTAMP, "user_id" uuid NOT NULL, "push_enabled" boolean NOT NULL DEFAULT true, "sound_enabled" boolean NOT NULL DEFAULT true, "vibrate_enabled" boolean NOT NULL DEFAULT true, "show_preview" boolean NOT NULL DEFAULT true, "quiet_hours_start" TIME, "quiet_hours_end" TIME, CONSTRAINT "UQ_64c90edc7310c6be7c10c96f675" UNIQUE ("user_id"), CONSTRAINT "REL_64c90edc7310c6be7c10c96f67" UNIQUE ("user_id"), CONSTRAINT "PK_e94e2b543f2f218ee68e4f4fad2" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE TABLE "notification_logs" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP NOT NULL DEFAULT now(), "deletedAt" TIMESTAMP, "user_id" uuid NOT NULL, "channel" character varying(20) NOT NULL, "provider" character varying(50) NOT NULL, "title" character varying(255), "body" text, "data" jsonb, "status" character varying(20) NOT NULL, "error_message" text, "sent_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "PK_19c524e644cdeaebfcffc284871" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE INDEX "IDX_1a431dbf8e8336445526717401" ON "notification_logs" ("sent_at") `);
-        await queryRunner.query(`CREATE TYPE "public"."users_status_enum" AS ENUM('active', 'inactive', 'suspended', 'deleted')`);
-        await queryRunner.query(`CREATE TABLE "users" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP NOT NULL DEFAULT now(), "deletedAt" TIMESTAMP, "phone" character varying(20) NOT NULL, "email" character varying(255), "password_hash" character varying(255) NOT NULL, "full_name" character varying(255) NOT NULL, "avatar_url" character varying(500), "bio" character varying(500), "gender" character varying(10), "date_of_birth" date, "status" "public"."users_status_enum" NOT NULL DEFAULT 'active', "last_seen_at" TIMESTAMP, CONSTRAINT "UQ_a000cca60bcf04454e727699490" UNIQUE ("phone"), CONSTRAINT "UQ_97672ac88f789774dd47f7c8be3" UNIQUE ("email"), CONSTRAINT "PK_a3ffb1c0c8416b9fc6f907b7433" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE INDEX "IDX_a000cca60bcf04454e72769949" ON "users" ("phone") `);
-        await queryRunner.query(`CREATE INDEX "IDX_97672ac88f789774dd47f7c8be" ON "users" ("email") `);
-        await queryRunner.query(`CREATE INDEX "IDX_3676155292d72c67cd4e090514" ON "users" ("status") `);
-        await queryRunner.query(`CREATE TABLE "post_media" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP NOT NULL DEFAULT now(), "deletedAt" TIMESTAMP, "post_id" uuid NOT NULL, "media_url" character varying(500) NOT NULL, "media_type" character varying(20) NOT NULL, "thumbnail_url" character varying(500), "width" integer, "height" integer, "duration_seconds" integer, "display_order" integer NOT NULL DEFAULT '0', CONSTRAINT "PK_049edb1ce7ab3d2a98009b171d0" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE INDEX "IDX_f87ab15bafd1f147dd18774782" ON "post_media" ("display_order") `);
-        await queryRunner.query(`CREATE TABLE "posts" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP NOT NULL DEFAULT now(), "deletedAt" TIMESTAMP, "user_id" uuid NOT NULL, "content" text, "visibility" character varying(20) NOT NULL DEFAULT 'friends', "like_count" integer NOT NULL DEFAULT '0', "comment_count" integer NOT NULL DEFAULT '0', "share_count" integer NOT NULL DEFAULT '0', "is_pinned" boolean NOT NULL DEFAULT false, "is_deleted" boolean NOT NULL DEFAULT false, CONSTRAINT "PK_2829ac61eff60fcec60d7274b9e" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`ALTER TABLE "device_tokens" ADD CONSTRAINT "FK_17e1f528b993c6d55def4cf5bea" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "media_files" ADD CONSTRAINT "FK_78f2e01705ad1a9b77ef3ee3777" FOREIGN KEY ("uploaded_by") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "media_files" ADD CONSTRAINT "FK_21c0758119ae4c0ea4357809ab1" FOREIGN KEY ("conversation_id") REFERENCES "conversations"("id") ON DELETE SET NULL ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "conversations" ADD CONSTRAINT "FK_81d92d15c62b3fff79c617c9043" FOREIGN KEY ("created_by") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "conversation_members" ADD CONSTRAINT "FK_36340a1704b039608e34244511f" FOREIGN KEY ("conversation_id") REFERENCES "conversations"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "conversation_members" ADD CONSTRAINT "FK_a46c76be8f62c4b00a835cdc370" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "friendships" ADD CONSTRAINT "FK_4cf3c68ed4a5a9fde8d4c2b7319" FOREIGN KEY ("requester_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "friendships" ADD CONSTRAINT "FK_01b0760fd2402d21f12c6dc5f89" FOREIGN KEY ("addressee_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "post_likes" ADD CONSTRAINT "FK_b40d37469c501092203d285af80" FOREIGN KEY ("post_id") REFERENCES "posts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "post_likes" ADD CONSTRAINT "FK_9b9a7fc5eeff133cf71b8e06a7b" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "comment_likes" ADD CONSTRAINT "FK_2073bf518ef7017ec19319a65e5" FOREIGN KEY ("comment_id") REFERENCES "post_comments"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "comment_likes" ADD CONSTRAINT "FK_bdba9a10c64ff58d36b09e3ac45" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "post_comments" ADD CONSTRAINT "FK_e8ffd07822f03f90f637b13cd59" FOREIGN KEY ("post_id") REFERENCES "posts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "post_comments" ADD CONSTRAINT "FK_8eb985b7bd35fd7bc760b6cbe8b" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "post_comments" ADD CONSTRAINT "FK_47e60da1f7aeb75961190bff75d" FOREIGN KEY ("parent_comment_id") REFERENCES "post_comments"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "notification_preferences" ADD CONSTRAINT "FK_64c90edc7310c6be7c10c96f675" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "notification_logs" ADD CONSTRAINT "FK_f803d5e1bd85942b24ee4248701" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "post_media" ADD CONSTRAINT "FK_1eeb54a4fdfbe9db17899243cbe" FOREIGN KEY ("post_id") REFERENCES "posts"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "posts" ADD CONSTRAINT "FK_c4f9a7bd77b489e711277ee5986" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-    }
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    // Enable pgvector extension for document_chunks embedding column
+    await queryRunner.query(
+      `CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`,
+    );
+    await queryRunner.query(
+      `CREATE EXTENSION IF NOT EXISTS vector`,
+    );
 
-    public async down(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`ALTER TABLE "posts" DROP CONSTRAINT "FK_c4f9a7bd77b489e711277ee5986"`);
-        await queryRunner.query(`ALTER TABLE "post_media" DROP CONSTRAINT "FK_1eeb54a4fdfbe9db17899243cbe"`);
-        await queryRunner.query(`ALTER TABLE "notification_logs" DROP CONSTRAINT "FK_f803d5e1bd85942b24ee4248701"`);
-        await queryRunner.query(`ALTER TABLE "notification_preferences" DROP CONSTRAINT "FK_64c90edc7310c6be7c10c96f675"`);
-        await queryRunner.query(`ALTER TABLE "post_comments" DROP CONSTRAINT "FK_47e60da1f7aeb75961190bff75d"`);
-        await queryRunner.query(`ALTER TABLE "post_comments" DROP CONSTRAINT "FK_8eb985b7bd35fd7bc760b6cbe8b"`);
-        await queryRunner.query(`ALTER TABLE "post_comments" DROP CONSTRAINT "FK_e8ffd07822f03f90f637b13cd59"`);
-        await queryRunner.query(`ALTER TABLE "comment_likes" DROP CONSTRAINT "FK_bdba9a10c64ff58d36b09e3ac45"`);
-        await queryRunner.query(`ALTER TABLE "comment_likes" DROP CONSTRAINT "FK_2073bf518ef7017ec19319a65e5"`);
-        await queryRunner.query(`ALTER TABLE "post_likes" DROP CONSTRAINT "FK_9b9a7fc5eeff133cf71b8e06a7b"`);
-        await queryRunner.query(`ALTER TABLE "post_likes" DROP CONSTRAINT "FK_b40d37469c501092203d285af80"`);
-        await queryRunner.query(`ALTER TABLE "friendships" DROP CONSTRAINT "FK_01b0760fd2402d21f12c6dc5f89"`);
-        await queryRunner.query(`ALTER TABLE "friendships" DROP CONSTRAINT "FK_4cf3c68ed4a5a9fde8d4c2b7319"`);
-        await queryRunner.query(`ALTER TABLE "conversation_members" DROP CONSTRAINT "FK_a46c76be8f62c4b00a835cdc370"`);
-        await queryRunner.query(`ALTER TABLE "conversation_members" DROP CONSTRAINT "FK_36340a1704b039608e34244511f"`);
-        await queryRunner.query(`ALTER TABLE "conversations" DROP CONSTRAINT "FK_81d92d15c62b3fff79c617c9043"`);
-        await queryRunner.query(`ALTER TABLE "media_files" DROP CONSTRAINT "FK_21c0758119ae4c0ea4357809ab1"`);
-        await queryRunner.query(`ALTER TABLE "media_files" DROP CONSTRAINT "FK_78f2e01705ad1a9b77ef3ee3777"`);
-        await queryRunner.query(`ALTER TABLE "device_tokens" DROP CONSTRAINT "FK_17e1f528b993c6d55def4cf5bea"`);
-        await queryRunner.query(`DROP TABLE "posts"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_f87ab15bafd1f147dd18774782"`);
-        await queryRunner.query(`DROP TABLE "post_media"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_3676155292d72c67cd4e090514"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_97672ac88f789774dd47f7c8be"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_a000cca60bcf04454e72769949"`);
-        await queryRunner.query(`DROP TABLE "users"`);
-        await queryRunner.query(`DROP TYPE "public"."users_status_enum"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_1a431dbf8e8336445526717401"`);
-        await queryRunner.query(`DROP TABLE "notification_logs"`);
-        await queryRunner.query(`DROP TABLE "notification_preferences"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_47e60da1f7aeb75961190bff75"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_8eb985b7bd35fd7bc760b6cbe8"`);
-        await queryRunner.query(`DROP TABLE "post_comments"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_2073bf518ef7017ec19319a65e"`);
-        await queryRunner.query(`DROP TABLE "comment_likes"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_b40d37469c501092203d285af8"`);
-        await queryRunner.query(`DROP TABLE "post_likes"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_4864bfab7fad9a34292e12bdb0"`);
-        await queryRunner.query(`DROP TABLE "friendships"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_6d78ef4bd19c3273104742c944"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_a46c76be8f62c4b00a835cdc37"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_36340a1704b039608e34244511"`);
-        await queryRunner.query(`DROP TABLE "conversation_members"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_9185e4a10f53167d15f23e1720"`);
-        await queryRunner.query(`DROP TABLE "conversations"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_78f2e01705ad1a9b77ef3ee377"`);
-        await queryRunner.query(`DROP TABLE "media_files"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_977e24c520c49436d08e5eeea8"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_17e1f528b993c6d55def4cf5be"`);
-        await queryRunner.query(`DROP TABLE "device_tokens"`);
-    }
+    // Create enum types
+    await queryRunner.query(
+      `CREATE TYPE "public"."users_status_enum" AS ENUM('active', 'inactive', 'suspended', 'deleted')`,
+    );
+    await queryRunner.query(
+      `CREATE TYPE "public"."conversation_members_role_enum" AS ENUM('owner', 'admin', 'member')`,
+    );
+    await queryRunner.query(
+      `CREATE TYPE "public"."friendships_status_enum" AS ENUM('pending', 'accepted', 'blocked')`,
+    );
 
+    // 1. users
+    await queryRunner.query(`
+      CREATE TABLE "users" (
+        "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
+        "createdAt" TIMESTAMP NOT NULL DEFAULT now(),
+        "updatedAt" TIMESTAMP NOT NULL DEFAULT now(),
+        "deletedAt" TIMESTAMP,
+        "phone" varchar(20) NOT NULL,
+        "email" varchar(255),
+        "password_hash" varchar(255) NOT NULL,
+        "full_name" varchar(255) NOT NULL,
+        "avatar_url" varchar(500),
+        "bio" varchar(500),
+        "gender" varchar(10),
+        "date_of_birth" date,
+        "status" "public"."users_status_enum" NOT NULL DEFAULT 'active',
+        "last_seen_at" TIMESTAMP,
+        CONSTRAINT "UQ_users_phone" UNIQUE ("phone"),
+        CONSTRAINT "UQ_users_email" UNIQUE ("email"),
+        CONSTRAINT "PK_users" PRIMARY KEY ("id")
+      )
+    `);
+    await queryRunner.query(`CREATE INDEX "IDX_users_phone" ON "users" ("phone")`);
+    await queryRunner.query(`CREATE INDEX "IDX_users_email" ON "users" ("email")`);
+    await queryRunner.query(`CREATE INDEX "IDX_users_status" ON "users" ("status")`);
+
+    // 2. conversations
+    await queryRunner.query(`
+      CREATE TABLE "conversations" (
+        "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
+        "createdAt" TIMESTAMP NOT NULL DEFAULT now(),
+        "updatedAt" TIMESTAMP NOT NULL DEFAULT now(),
+        "deletedAt" TIMESTAMP,
+        "type" varchar(20) NOT NULL DEFAULT 'direct',
+        "name" varchar(255),
+        "avatar_url" varchar(500),
+        "created_by" uuid,
+        "last_message_id" uuid,
+        "last_message_at" TIMESTAMP,
+        CONSTRAINT "PK_conversations" PRIMARY KEY ("id")
+      )
+    `);
+    await queryRunner.query(`CREATE INDEX "IDX_conversations_last_message_at" ON "conversations" ("last_message_at")`);
+
+    // 3. conversation_members
+    await queryRunner.query(`
+      CREATE TABLE "conversation_members" (
+        "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
+        "createdAt" TIMESTAMP NOT NULL DEFAULT now(),
+        "updatedAt" TIMESTAMP NOT NULL DEFAULT now(),
+        "deletedAt" TIMESTAMP,
+        "conversation_id" uuid NOT NULL,
+        "user_id" uuid NOT NULL,
+        "role" "public"."conversation_members_role_enum" NOT NULL DEFAULT 'member',
+        "nickname" varchar(100),
+        "is_muted" boolean NOT NULL DEFAULT false,
+        "last_read_at" TIMESTAMP,
+        "joined_at" TIMESTAMP NOT NULL DEFAULT now(),
+        "left_at" TIMESTAMP,
+        CONSTRAINT "UQ_conversation_members_conv_user" UNIQUE ("conversation_id", "user_id"),
+        CONSTRAINT "PK_conversation_members" PRIMARY KEY ("id")
+      )
+    `);
+    await queryRunner.query(`CREATE INDEX "IDX_conversation_members_conversation_id" ON "conversation_members" ("conversation_id")`);
+    await queryRunner.query(`CREATE INDEX "IDX_conversation_members_user_id" ON "conversation_members" ("user_id")`);
+    await queryRunner.query(`CREATE INDEX "IDX_conversation_members_left_at" ON "conversation_members" ("left_at")`);
+
+    // 4. friendships
+    await queryRunner.query(`
+      CREATE TABLE "friendships" (
+        "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
+        "createdAt" TIMESTAMP NOT NULL DEFAULT now(),
+        "updatedAt" TIMESTAMP NOT NULL DEFAULT now(),
+        "deletedAt" TIMESTAMP,
+        "requester_id" uuid NOT NULL,
+        "addressee_id" uuid NOT NULL,
+        "status" "public"."friendships_status_enum" NOT NULL DEFAULT 'pending',
+        CONSTRAINT "UQ_friendships_requester_addressee" UNIQUE ("requester_id", "addressee_id"),
+        CONSTRAINT "PK_friendships" PRIMARY KEY ("id")
+      )
+    `);
+    await queryRunner.query(`CREATE INDEX "IDX_friendships_status" ON "friendships" ("status")`);
+
+    // 5. device_tokens
+    await queryRunner.query(`
+      CREATE TABLE "device_tokens" (
+        "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
+        "createdAt" TIMESTAMP NOT NULL DEFAULT now(),
+        "updatedAt" TIMESTAMP NOT NULL DEFAULT now(),
+        "deletedAt" TIMESTAMP,
+        "user_id" uuid NOT NULL,
+        "token" varchar(500) NOT NULL,
+        "platform" varchar(20) NOT NULL,
+        "device_id" varchar(255),
+        "is_active" boolean NOT NULL DEFAULT true,
+        CONSTRAINT "UQ_device_tokens_user_token" UNIQUE ("user_id", "token"),
+        CONSTRAINT "PK_device_tokens" PRIMARY KEY ("id")
+      )
+    `);
+    await queryRunner.query(`CREATE INDEX "IDX_device_tokens_user_id" ON "device_tokens" ("user_id")`);
+    await queryRunner.query(`CREATE INDEX "IDX_device_tokens_token" ON "device_tokens" ("token")`);
+
+    // 6. media_files
+    await queryRunner.query(`
+      CREATE TABLE "media_files" (
+        "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
+        "createdAt" TIMESTAMP NOT NULL DEFAULT now(),
+        "updatedAt" TIMESTAMP NOT NULL DEFAULT now(),
+        "deletedAt" TIMESTAMP,
+        "key" varchar(500) NOT NULL,
+        "bucket" varchar(100) NOT NULL,
+        "content_type" varchar(100) NOT NULL,
+        "size_bytes" bigint,
+        "uploaded_by" uuid,
+        "conversation_id" uuid,
+        "status" varchar(20) NOT NULL DEFAULT 'pending',
+        CONSTRAINT "UQ_media_files_key" UNIQUE ("key"),
+        CONSTRAINT "PK_media_files" PRIMARY KEY ("id")
+      )
+    `);
+    await queryRunner.query(`CREATE INDEX "IDX_media_files_uploaded_by" ON "media_files" ("uploaded_by")`);
+
+    // 7. posts
+    await queryRunner.query(`
+      CREATE TABLE "posts" (
+        "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
+        "createdAt" TIMESTAMP NOT NULL DEFAULT now(),
+        "updatedAt" TIMESTAMP NOT NULL DEFAULT now(),
+        "deletedAt" TIMESTAMP,
+        "user_id" uuid NOT NULL,
+        "content" text,
+        "visibility" varchar(20) NOT NULL DEFAULT 'friends',
+        "like_count" int NOT NULL DEFAULT 0,
+        "comment_count" int NOT NULL DEFAULT 0,
+        "share_count" int NOT NULL DEFAULT 0,
+        "is_pinned" boolean NOT NULL DEFAULT false,
+        "is_deleted" boolean NOT NULL DEFAULT false,
+        CONSTRAINT "PK_posts" PRIMARY KEY ("id")
+      )
+    `);
+
+    // 8. post_media
+    await queryRunner.query(`
+      CREATE TABLE "post_media" (
+        "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
+        "createdAt" TIMESTAMP NOT NULL DEFAULT now(),
+        "updatedAt" TIMESTAMP NOT NULL DEFAULT now(),
+        "deletedAt" TIMESTAMP,
+        "post_id" uuid NOT NULL,
+        "media_url" varchar(500) NOT NULL,
+        "media_type" varchar(20) NOT NULL,
+        "thumbnail_url" varchar(500),
+        "width" int,
+        "height" int,
+        "duration_seconds" int,
+        "display_order" int NOT NULL DEFAULT 0,
+        CONSTRAINT "PK_post_media" PRIMARY KEY ("id")
+      )
+    `);
+    await queryRunner.query(`CREATE INDEX "IDX_post_media_display_order" ON "post_media" ("display_order")`);
+
+    // 9. post_likes
+    await queryRunner.query(`
+      CREATE TABLE "post_likes" (
+        "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
+        "createdAt" TIMESTAMP NOT NULL DEFAULT now(),
+        "updatedAt" TIMESTAMP NOT NULL DEFAULT now(),
+        "deletedAt" TIMESTAMP,
+        "post_id" uuid NOT NULL,
+        "user_id" uuid NOT NULL,
+        "reaction_type" varchar(20) NOT NULL DEFAULT 'like',
+        CONSTRAINT "UQ_post_likes_post_user" UNIQUE ("post_id", "user_id"),
+        CONSTRAINT "PK_post_likes" PRIMARY KEY ("id")
+      )
+    `);
+    await queryRunner.query(`CREATE INDEX "IDX_post_likes_post_id" ON "post_likes" ("post_id")`);
+
+    // 10. post_comments
+    await queryRunner.query(`
+      CREATE TABLE "post_comments" (
+        "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
+        "createdAt" TIMESTAMP NOT NULL DEFAULT now(),
+        "updatedAt" TIMESTAMP NOT NULL DEFAULT now(),
+        "deletedAt" TIMESTAMP,
+        "post_id" uuid NOT NULL,
+        "user_id" uuid NOT NULL,
+        "parent_comment_id" uuid,
+        "content" text NOT NULL,
+        "like_count" int NOT NULL DEFAULT 0,
+        "is_deleted" boolean NOT NULL DEFAULT false,
+        CONSTRAINT "PK_post_comments" PRIMARY KEY ("id")
+      )
+    `);
+    await queryRunner.query(`CREATE INDEX "IDX_post_comments_user_id" ON "post_comments" ("user_id")`);
+    await queryRunner.query(`CREATE INDEX "IDX_post_comments_parent_comment_id" ON "post_comments" ("parent_comment_id")`);
+
+    // 11. comment_likes
+    await queryRunner.query(`
+      CREATE TABLE "comment_likes" (
+        "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
+        "createdAt" TIMESTAMP NOT NULL DEFAULT now(),
+        "updatedAt" TIMESTAMP NOT NULL DEFAULT now(),
+        "deletedAt" TIMESTAMP,
+        "comment_id" uuid NOT NULL,
+        "user_id" uuid NOT NULL,
+        CONSTRAINT "UQ_comment_likes_comment_user" UNIQUE ("comment_id", "user_id"),
+        CONSTRAINT "PK_comment_likes" PRIMARY KEY ("id")
+      )
+    `);
+    await queryRunner.query(`CREATE INDEX "IDX_comment_likes_comment_id" ON "comment_likes" ("comment_id")`);
+
+    // 12. notification_preferences
+    await queryRunner.query(`
+      CREATE TABLE "notification_preferences" (
+        "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
+        "createdAt" TIMESTAMP NOT NULL DEFAULT now(),
+        "updatedAt" TIMESTAMP NOT NULL DEFAULT now(),
+        "deletedAt" TIMESTAMP,
+        "user_id" uuid NOT NULL,
+        "push_enabled" boolean NOT NULL DEFAULT true,
+        "sound_enabled" boolean NOT NULL DEFAULT true,
+        "vibrate_enabled" boolean NOT NULL DEFAULT true,
+        "show_preview" boolean NOT NULL DEFAULT true,
+        "quiet_hours_start" time,
+        "quiet_hours_end" time,
+        CONSTRAINT "UQ_notification_preferences_user_id" UNIQUE ("user_id"),
+        CONSTRAINT "PK_notification_preferences" PRIMARY KEY ("id")
+      )
+    `);
+
+    // 13. notification_logs
+    await queryRunner.query(`
+      CREATE TABLE "notification_logs" (
+        "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
+        "createdAt" TIMESTAMP NOT NULL DEFAULT now(),
+        "updatedAt" TIMESTAMP NOT NULL DEFAULT now(),
+        "deletedAt" TIMESTAMP,
+        "user_id" uuid NOT NULL,
+        "channel" varchar(20) NOT NULL,
+        "provider" varchar(50) NOT NULL,
+        "title" varchar(255),
+        "body" text,
+        "data" jsonb,
+        "status" varchar(20) NOT NULL,
+        "error_message" text,
+        "sent_at" TIMESTAMP NOT NULL DEFAULT now(),
+        CONSTRAINT "PK_notification_logs" PRIMARY KEY ("id")
+      )
+    `);
+    await queryRunner.query(`CREATE INDEX "IDX_notification_logs_sent_at" ON "notification_logs" ("sent_at")`);
+
+    // 14. document_metadata
+    await queryRunner.query(`
+      CREATE TABLE "document_metadata" (
+        "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
+        "createdAt" TIMESTAMP NOT NULL DEFAULT now(),
+        "updatedAt" TIMESTAMP NOT NULL DEFAULT now(),
+        "deletedAt" TIMESTAMP,
+        "conversation_id" uuid NOT NULL,
+        "user_id" uuid NOT NULL,
+        "file_key" varchar(512) NOT NULL,
+        "file_name" varchar(255) NOT NULL,
+        "file_size" int NOT NULL,
+        "content_type" varchar(100) NOT NULL,
+        "status" varchar(20) NOT NULL DEFAULT 'pending',
+        "chunk_count" int NOT NULL DEFAULT 0,
+        "total_tokens" int NOT NULL DEFAULT 0,
+        "page_count" int,
+        "error_message" text,
+        "embedding_model" varchar(50),
+        "embedding_version" int NOT NULL DEFAULT 1,
+        CONSTRAINT "PK_document_metadata" PRIMARY KEY ("id")
+      )
+    `);
+    await queryRunner.query(`CREATE INDEX "idx_document_conversation" ON "document_metadata" ("conversation_id")`);
+    await queryRunner.query(`CREATE INDEX "idx_document_user" ON "document_metadata" ("user_id")`);
+
+    // 15. document_chunks
+    await queryRunner.query(`
+      CREATE TABLE "document_chunks" (
+        "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
+        "createdAt" TIMESTAMP NOT NULL DEFAULT now(),
+        "updatedAt" TIMESTAMP NOT NULL DEFAULT now(),
+        "deletedAt" TIMESTAMP,
+        "document_id" uuid NOT NULL,
+        "chunk_index" int NOT NULL,
+        "content" text NOT NULL,
+        "token_count" int NOT NULL DEFAULT 0,
+        "embedding" vector(1536),
+        "embedding_model" varchar(50),
+        "embedding_version" int NOT NULL DEFAULT 1,
+        "page_number" int,
+        CONSTRAINT "PK_document_chunks" PRIMARY KEY ("id")
+      )
+    `);
+    await queryRunner.query(`CREATE INDEX "idx_chunk_document" ON "document_chunks" ("document_id")`);
+
+    // 16. ai_moderation_logs
+    await queryRunner.query(`
+      CREATE TABLE "ai_moderation_logs" (
+        "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
+        "createdAt" TIMESTAMP NOT NULL DEFAULT now(),
+        "updatedAt" TIMESTAMP NOT NULL DEFAULT now(),
+        "deletedAt" TIMESTAMP,
+        "message_id" uuid NOT NULL,
+        "conversation_id" uuid NOT NULL,
+        "sender_id" uuid NOT NULL,
+        "is_flagged" boolean NOT NULL DEFAULT false,
+        "labels" text,
+        "confidence" float NOT NULL DEFAULT 0,
+        "provider" varchar(20) NOT NULL,
+        "ensemble" boolean NOT NULL DEFAULT false,
+        "tokens_used" int NOT NULL DEFAULT 0,
+        "trace_id" varchar(64),
+        "processed_at" TIMESTAMP NOT NULL DEFAULT now(),
+        CONSTRAINT "PK_ai_moderation_logs" PRIMARY KEY ("id")
+      )
+    `);
+    await queryRunner.query(`CREATE INDEX "IDX_ai_moderation_logs_message_id" ON "ai_moderation_logs" ("message_id")`);
+    await queryRunner.query(`CREATE INDEX "idx_ai_moderation_conversation" ON "ai_moderation_logs" ("conversation_id", "createdAt")`);
+    await queryRunner.query(`CREATE INDEX "idx_ai_moderation_flagged" ON "ai_moderation_logs" ("is_flagged", "createdAt")`);
+
+    // 17. ai_usage_logs
+    await queryRunner.query(`
+      CREATE TABLE "ai_usage_logs" (
+        "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
+        "createdAt" TIMESTAMP NOT NULL DEFAULT now(),
+        "updatedAt" TIMESTAMP NOT NULL DEFAULT now(),
+        "deletedAt" TIMESTAMP,
+        "user_id" uuid NOT NULL,
+        "feature" varchar(30) NOT NULL,
+        "provider" varchar(20) NOT NULL,
+        "model" varchar(50),
+        "tokens_in" int NOT NULL DEFAULT 0,
+        "tokens_out" int NOT NULL DEFAULT 0,
+        "total_tokens" int NOT NULL DEFAULT 0,
+        "estimated_cost_usd" decimal(10,6) NOT NULL DEFAULT 0,
+        "latency_ms" int NOT NULL DEFAULT 0,
+        "success" boolean NOT NULL DEFAULT true,
+        "error_message" text,
+        "trace_id" varchar(64),
+        CONSTRAINT "PK_ai_usage_logs" PRIMARY KEY ("id")
+      )
+    `);
+    await queryRunner.query(`CREATE INDEX "idx_ai_usage_user_date" ON "ai_usage_logs" ("user_id", "createdAt")`);
+    await queryRunner.query(`CREATE INDEX "idx_ai_usage_feature" ON "ai_usage_logs" ("feature", "createdAt")`);
+
+    // ===== FOREIGN KEYS =====
+
+    // conversations.created_by -> users.id
+    await queryRunner.query(`
+      ALTER TABLE "conversations"
+        ADD CONSTRAINT "FK_conversations_created_by" FOREIGN KEY ("created_by") REFERENCES "users"("id") ON DELETE SET NULL
+    `);
+
+    // conversation_members.conversation_id -> conversations.id
+    await queryRunner.query(`
+      ALTER TABLE "conversation_members"
+        ADD CONSTRAINT "FK_conversation_members_conversation" FOREIGN KEY ("conversation_id") REFERENCES "conversations"("id") ON DELETE CASCADE
+    `);
+
+    // conversation_members.user_id -> users.id
+    await queryRunner.query(`
+      ALTER TABLE "conversation_members"
+        ADD CONSTRAINT "FK_conversation_members_user" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE
+    `);
+
+    // friendships.requester_id -> users.id
+    await queryRunner.query(`
+      ALTER TABLE "friendships"
+        ADD CONSTRAINT "FK_friendships_requester" FOREIGN KEY ("requester_id") REFERENCES "users"("id") ON DELETE CASCADE
+    `);
+
+    // friendships.addressee_id -> users.id
+    await queryRunner.query(`
+      ALTER TABLE "friendships"
+        ADD CONSTRAINT "FK_friendships_addressee" FOREIGN KEY ("addressee_id") REFERENCES "users"("id") ON DELETE CASCADE
+    `);
+
+    // device_tokens.user_id -> users.id
+    await queryRunner.query(`
+      ALTER TABLE "device_tokens"
+        ADD CONSTRAINT "FK_device_tokens_user" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE
+    `);
+
+    // media_files.uploaded_by -> users.id
+    await queryRunner.query(`
+      ALTER TABLE "media_files"
+        ADD CONSTRAINT "FK_media_files_uploaded_by" FOREIGN KEY ("uploaded_by") REFERENCES "users"("id") ON DELETE SET NULL
+    `);
+
+    // media_files.conversation_id -> conversations.id
+    await queryRunner.query(`
+      ALTER TABLE "media_files"
+        ADD CONSTRAINT "FK_media_files_conversation" FOREIGN KEY ("conversation_id") REFERENCES "conversations"("id") ON DELETE SET NULL
+    `);
+
+    // posts.user_id -> users.id
+    await queryRunner.query(`
+      ALTER TABLE "posts"
+        ADD CONSTRAINT "FK_posts_user" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE
+    `);
+
+    // post_media.post_id -> posts.id
+    await queryRunner.query(`
+      ALTER TABLE "post_media"
+        ADD CONSTRAINT "FK_post_media_post" FOREIGN KEY ("post_id") REFERENCES "posts"("id") ON DELETE CASCADE
+    `);
+
+    // post_likes.post_id -> posts.id
+    await queryRunner.query(`
+      ALTER TABLE "post_likes"
+        ADD CONSTRAINT "FK_post_likes_post" FOREIGN KEY ("post_id") REFERENCES "posts"("id") ON DELETE CASCADE
+    `);
+
+    // post_likes.user_id -> users.id
+    await queryRunner.query(`
+      ALTER TABLE "post_likes"
+        ADD CONSTRAINT "FK_post_likes_user" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE
+    `);
+
+    // post_comments.post_id -> posts.id
+    await queryRunner.query(`
+      ALTER TABLE "post_comments"
+        ADD CONSTRAINT "FK_post_comments_post" FOREIGN KEY ("post_id") REFERENCES "posts"("id") ON DELETE CASCADE
+    `);
+
+    // post_comments.user_id -> users.id
+    await queryRunner.query(`
+      ALTER TABLE "post_comments"
+        ADD CONSTRAINT "FK_post_comments_user" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE
+    `);
+
+    // post_comments.parent_comment_id -> post_comments.id (self-referencing)
+    await queryRunner.query(`
+      ALTER TABLE "post_comments"
+        ADD CONSTRAINT "FK_post_comments_parent" FOREIGN KEY ("parent_comment_id") REFERENCES "post_comments"("id") ON DELETE CASCADE
+    `);
+
+    // comment_likes.comment_id -> post_comments.id
+    await queryRunner.query(`
+      ALTER TABLE "comment_likes"
+        ADD CONSTRAINT "FK_comment_likes_comment" FOREIGN KEY ("comment_id") REFERENCES "post_comments"("id") ON DELETE CASCADE
+    `);
+
+    // comment_likes.user_id -> users.id
+    await queryRunner.query(`
+      ALTER TABLE "comment_likes"
+        ADD CONSTRAINT "FK_comment_likes_user" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE
+    `);
+
+    // notification_preferences.user_id -> users.id
+    await queryRunner.query(`
+      ALTER TABLE "notification_preferences"
+        ADD CONSTRAINT "FK_notification_preferences_user" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE
+    `);
+
+    // notification_logs.user_id -> users.id
+    await queryRunner.query(`
+      ALTER TABLE "notification_logs"
+        ADD CONSTRAINT "FK_notification_logs_user" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE
+    `);
+
+    // document_metadata.user_id -> users.id
+    await queryRunner.query(`
+      ALTER TABLE "document_metadata"
+        ADD CONSTRAINT "FK_document_metadata_user" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE
+    `);
+
+    // document_chunks.document_id -> document_metadata.id
+    await queryRunner.query(`
+      ALTER TABLE "document_chunks"
+        ADD CONSTRAINT "FK_document_chunks_document" FOREIGN KEY ("document_id") REFERENCES "document_metadata"("id") ON DELETE CASCADE
+    `);
+
+    // ai_moderation_logs.sender_id -> users.id
+    await queryRunner.query(`
+      ALTER TABLE "ai_moderation_logs"
+        ADD CONSTRAINT "FK_ai_moderation_logs_sender" FOREIGN KEY ("sender_id") REFERENCES "users"("id") ON DELETE CASCADE
+    `);
+
+    // ai_usage_logs.user_id -> users.id
+    await queryRunner.query(`
+      ALTER TABLE "ai_usage_logs"
+        ADD CONSTRAINT "FK_ai_usage_logs_user" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE
+    `);
+
+    // IVFFlat index for vector similarity search on document_chunks
+    await queryRunner.query(`
+      CREATE INDEX "idx_document_chunks_embedding" ON "document_chunks"
+        USING ivfflat ("embedding" vector_cosine_ops)
+        WITH (lists = 100)
+    `);
+  }
+
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    // Drop IVFFlat index
+    await queryRunner.query(`DROP INDEX IF EXISTS "idx_document_chunks_embedding"`);
+
+    // Drop all foreign keys
+    await queryRunner.query(`ALTER TABLE "ai_usage_logs" DROP CONSTRAINT IF EXISTS "FK_ai_usage_logs_user"`);
+    await queryRunner.query(`ALTER TABLE "ai_moderation_logs" DROP CONSTRAINT IF EXISTS "FK_ai_moderation_logs_sender"`);
+    await queryRunner.query(`ALTER TABLE "document_chunks" DROP CONSTRAINT IF EXISTS "FK_document_chunks_document"`);
+    await queryRunner.query(`ALTER TABLE "document_metadata" DROP CONSTRAINT IF EXISTS "FK_document_metadata_user"`);
+    await queryRunner.query(`ALTER TABLE "notification_logs" DROP CONSTRAINT IF EXISTS "FK_notification_logs_user"`);
+    await queryRunner.query(`ALTER TABLE "notification_preferences" DROP CONSTRAINT IF EXISTS "FK_notification_preferences_user"`);
+    await queryRunner.query(`ALTER TABLE "comment_likes" DROP CONSTRAINT IF EXISTS "FK_comment_likes_user"`);
+    await queryRunner.query(`ALTER TABLE "comment_likes" DROP CONSTRAINT IF EXISTS "FK_comment_likes_comment"`);
+    await queryRunner.query(`ALTER TABLE "post_comments" DROP CONSTRAINT IF EXISTS "FK_post_comments_parent"`);
+    await queryRunner.query(`ALTER TABLE "post_comments" DROP CONSTRAINT IF EXISTS "FK_post_comments_user"`);
+    await queryRunner.query(`ALTER TABLE "post_comments" DROP CONSTRAINT IF EXISTS "FK_post_comments_post"`);
+    await queryRunner.query(`ALTER TABLE "post_likes" DROP CONSTRAINT IF EXISTS "FK_post_likes_user"`);
+    await queryRunner.query(`ALTER TABLE "post_likes" DROP CONSTRAINT IF EXISTS "FK_post_likes_post"`);
+    await queryRunner.query(`ALTER TABLE "post_media" DROP CONSTRAINT IF EXISTS "FK_post_media_post"`);
+    await queryRunner.query(`ALTER TABLE "posts" DROP CONSTRAINT IF EXISTS "FK_posts_user"`);
+    await queryRunner.query(`ALTER TABLE "media_files" DROP CONSTRAINT IF EXISTS "FK_media_files_conversation"`);
+    await queryRunner.query(`ALTER TABLE "media_files" DROP CONSTRAINT IF EXISTS "FK_media_files_uploaded_by"`);
+    await queryRunner.query(`ALTER TABLE "device_tokens" DROP CONSTRAINT IF EXISTS "FK_device_tokens_user"`);
+    await queryRunner.query(`ALTER TABLE "friendships" DROP CONSTRAINT IF EXISTS "FK_friendships_addressee"`);
+    await queryRunner.query(`ALTER TABLE "friendships" DROP CONSTRAINT IF EXISTS "FK_friendships_requester"`);
+    await queryRunner.query(`ALTER TABLE "conversation_members" DROP CONSTRAINT IF EXISTS "FK_conversation_members_user"`);
+    await queryRunner.query(`ALTER TABLE "conversation_members" DROP CONSTRAINT IF EXISTS "FK_conversation_members_conversation"`);
+    await queryRunner.query(`ALTER TABLE "conversations" DROP CONSTRAINT IF EXISTS "FK_conversations_created_by"`);
+
+    // Drop tables in reverse dependency order
+    await queryRunner.query(`DROP TABLE IF EXISTS "ai_usage_logs"`);
+    await queryRunner.query(`DROP TABLE IF EXISTS "ai_moderation_logs"`);
+    await queryRunner.query(`DROP TABLE IF EXISTS "document_chunks"`);
+    await queryRunner.query(`DROP TABLE IF EXISTS "document_metadata"`);
+    await queryRunner.query(`DROP TABLE IF EXISTS "notification_logs"`);
+    await queryRunner.query(`DROP TABLE IF EXISTS "notification_preferences"`);
+    await queryRunner.query(`DROP TABLE IF EXISTS "comment_likes"`);
+    await queryRunner.query(`DROP TABLE IF EXISTS "post_comments"`);
+    await queryRunner.query(`DROP TABLE IF EXISTS "post_likes"`);
+    await queryRunner.query(`DROP TABLE IF EXISTS "post_media"`);
+    await queryRunner.query(`DROP TABLE IF EXISTS "posts"`);
+    await queryRunner.query(`DROP TABLE IF EXISTS "media_files"`);
+    await queryRunner.query(`DROP TABLE IF EXISTS "device_tokens"`);
+    await queryRunner.query(`DROP TABLE IF EXISTS "friendships"`);
+    await queryRunner.query(`DROP TABLE IF EXISTS "conversation_members"`);
+    await queryRunner.query(`DROP TABLE IF EXISTS "conversations"`);
+    await queryRunner.query(`DROP TABLE IF EXISTS "users"`);
+
+    // Drop enum types
+    await queryRunner.query(`DROP TYPE IF EXISTS "public"."friendships_status_enum"`);
+    await queryRunner.query(`DROP TYPE IF EXISTS "public"."conversation_members_role_enum"`);
+    await queryRunner.query(`DROP TYPE IF EXISTS "public"."users_status_enum"`);
+  }
 }

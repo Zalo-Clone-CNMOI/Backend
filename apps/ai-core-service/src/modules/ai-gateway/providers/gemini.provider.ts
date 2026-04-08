@@ -153,7 +153,6 @@ export class GeminiProvider implements ILlmProvider {
   }
 
   async embed(_text: string, _model?: string): Promise<LlmEmbeddingResult> {
-    // Gemini embedding support — use OpenAI as primary for embeddings
     throw new Error(
       'Gemini embedding not implemented. Use OpenAI provider for embeddings.',
     );

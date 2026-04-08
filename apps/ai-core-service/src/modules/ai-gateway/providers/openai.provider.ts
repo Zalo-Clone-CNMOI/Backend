@@ -23,7 +23,6 @@ export class OpenAiProvider implements ILlmProvider {
 
   private async getClient() {
     if (!this.client) {
-      // Dynamic import to avoid hard dependency when not configured
       const { default: OpenAI } = await import('openai');
       this.client = new OpenAI({ apiKey: this.config.openaiApiKey });
     }

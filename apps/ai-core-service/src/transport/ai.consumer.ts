@@ -102,10 +102,7 @@ export class AiConsumer {
     let textContent: string;
 
     try {
-      // 1. Download file from S3
       const buffer = await this.s3Service.download(event.file_key);
-
-      // 2. Extract text based on content type
       textContent = this.extractText(buffer, event.content_type);
 
       this.logger.debug(
@@ -137,8 +134,6 @@ export class AiConsumer {
     if (AiConsumer.TEXT_MIME_TYPES.has(contentType)) {
       return buffer.toString('utf-8');
     }
-
-    // Binary document formats — TODO: integrate parser libraries
     if (
       contentType === 'application/pdf' ||
       contentType === 'application/msword' ||

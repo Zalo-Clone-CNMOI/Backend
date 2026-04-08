@@ -111,6 +111,14 @@ export class PersistMessageConsumer {
         messageId: payload.message_id,
       });
 
+      await this.emitMessageNotification(
+        payload.conversation_id,
+        payload.sender_id,
+        payload.body,
+        payload.message_id,
+        traceId,
+      );
+
       // ── AI Moderation: auto-moderate every new message ──────────────
       void (async () => {
         try {
@@ -178,7 +186,7 @@ export class PersistMessageConsumer {
     try {
       await this.repo.updateMessageBody(
         payload.conversation_id,
-        editedAt,
+        payload.created_at,
         payload.message_id,
         payload.new_body,
         editedAt,
@@ -231,7 +239,7 @@ export class PersistMessageConsumer {
     try {
       await this.repo.softDeleteMessage(
         payload.conversation_id,
-        deletedAt,
+        payload.created_at,
         payload.message_id,
         deletedAt,
       );
@@ -302,6 +310,14 @@ export class PersistMessageConsumer {
       this.logger.log(`[${traceId}] ChatReactionAdded event emitted`, {
         duration: Date.now() - startTime,
       });
+
+      await this.emitMessageNotification(
+        payload.conversation_id,
+        payload.user_id,
+        `Reacted with ${payload.reaction_type}`,
+        payload.message_id,
+        traceId,
+      );
     } catch (error) {
       this.logger.error(`[${traceId}] ChatReactionAdd failed`, {
         messageId: payload.message_id,

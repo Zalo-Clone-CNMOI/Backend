@@ -1,5 +1,5 @@
 version: "3.8"
-name: app-compose-prod
+name: db-compose-prod
 
 services:
   scylla-init:
@@ -48,25 +48,6 @@ services:
       retries: 10
       start_period: 60s
   
-  migration:
-    build:
-      context: .
-      dockerfile: Dockerfile.migration
-    container_name: zalo_migration
-    environment:
-      NODE_ENV: production
-      # Database - configure DB_HOST via environment (e.g. .env or CI secrets)
-      DB_HOST: ${DB_HOST:-localhost}
-      DB_PORT: 5432
-      DB_USERNAME: ${POSTGRES_USER:-postgres}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      DB_NAME: ${POSTGRES_DB:-postgres}
-    networks:
-      - zalo_network
-    restart: "no"
-    profiles:
-      - migration
-
 volumes:
   scylla_data:
     driver: local

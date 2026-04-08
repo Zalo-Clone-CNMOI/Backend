@@ -1,6 +1,9 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { ClientKafka } from '@nestjs/microservices';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, In } from 'typeorm';
 import { KAFKA_CLIENT } from '@libs/kafka';
+import { MediaFile } from '@libs/database';
 import { ConversationMembershipService } from '@libs/mvp-access';
 import {
   KafkaTopics,
@@ -11,6 +14,7 @@ import {
   type WsChatDeletePayload,
   type WsChatReactPayload,
   type WsChatUnreactPayload,
+  type WsMessageAttachment,
   type ChatMessageEditCommand,
   type ChatMessageDeleteCommand,
   type ChatReactionAddCommand,
@@ -26,6 +30,8 @@ export class ChatHandler {
   constructor(
     @Inject(KAFKA_CLIENT) private readonly kafka: ClientKafka,
     private readonly membershipService: ConversationMembershipService,
+    @InjectRepository(MediaFile)
+    private readonly mediaFileRepo: Repository<MediaFile>,
   ) {}
 
   async handleJoin(socket: AuthedSocket, conversationId: string) {
@@ -56,6 +62,19 @@ export class ChatHandler {
         message_id: body.message_id,
         status: 'rejected',
         reason: 'not_member',
+      } satisfies WsChatAckPayload);
+      return;
+    }
+
+    const attachmentError = await this.validateAttachments(
+      body.attachments,
+      userId,
+    );
+    if (attachmentError) {
+      socket.emit(WsEvents.ChatAck, {
+        message_id: body.message_id,
+        status: 'rejected',
+        reason: attachmentError,
       } satisfies WsChatAckPayload);
       return;
     }
@@ -97,6 +116,7 @@ export class ChatHandler {
       conversation_id: body.conversation_id,
       sender_id: userId,
       new_body: body.new_body,
+      created_at: body.created_at,
       edited_at: Date.now(),
       trace_id: `ws:${socket.id}:${body.message_id}`,
     };
@@ -127,6 +147,7 @@ export class ChatHandler {
       message_id: body.message_id,
       conversation_id: body.conversation_id,
       sender_id: userId,
+      created_at: body.created_at,
       deleted_at: Date.now(),
       trace_id: `ws:${socket.id}:${body.message_id}`,
     };
@@ -167,6 +188,28 @@ export class ChatHandler {
       message_id: body.message_id,
       status: 'accepted',
     } satisfies WsChatAckPayload);
+  }
+
+  private async validateAttachments(
+    attachments: WsMessageAttachment[] | undefined,
+    userId: string,
+  ): Promise<string | null> {
+    if (!attachments || attachments.length === 0) return null;
+
+    const keys = attachments.map((a) => a.key);
+    const files = await this.mediaFileRepo.find({
+      where: { key: In(keys) },
+    });
+    const fileMap = new Map(files.map((f) => [f.key, f]));
+
+    for (const att of attachments) {
+      const file = fileMap.get(att.key);
+      if (!file) return 'attachment_not_found';
+      if (file.uploadedById && file.uploadedById !== userId)
+        return 'attachment_not_owned';
+      if (file.status !== 'uploaded') return 'attachment_not_ready';
+    }
+    return null;
   }
 
   async handleUnreact(socket: AuthedSocket, body: WsChatUnreactPayload) {

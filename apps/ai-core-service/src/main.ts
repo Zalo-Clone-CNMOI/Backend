@@ -12,7 +12,6 @@ async function bootstrap() {
   const logger = new Logger('Bootstrap');
   const config = loadConfig(process.env.SERVICE_NAME);
 
-  // Pattern B: HTTP + Kafka hybrid
   const app = await NestFactory.create(AppModule);
 
   app.connectMicroservice<MicroserviceOptions>(

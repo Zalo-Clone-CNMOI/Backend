@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
     inputs:
       service:
-        description: "Service to deploy (all, bff, sso, interaction, media, chat, ws, presence)"
+        description: "Service to deploy (all, bff, sso, interaction, media, chat, ws, presence, notification, ai)"
         required: false
         default: "all"
 
@@ -43,6 +43,8 @@ jobs:
       chat: ${{ steps.detect.outputs.chat }}
       ws: ${{ steps.detect.outputs.ws }}
       presence: ${{ steps.detect.outputs.presence }}
+      notification: ${{ steps.detect.outputs.notification }}
+      ai: ${{ steps.detect.outputs.ai }}
       any_service: ${{ steps.detect.outputs.any_service }}
 
     steps:
@@ -54,7 +56,7 @@ jobs:
         name: Detect changes
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.force }}" = "true" ]; then
-            for s in bff sso interaction media chat ws presence; do
+            for s in bff sso interaction media chat ws presence notification ai; do
               echo "$s=true" >> $GITHUB_OUTPUT
             done
             echo "any_service=true" >> $GITHUB_OUTPUT
@@ -63,7 +65,7 @@ jobs:
 
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             SERVICE="${{ github.event.inputs.service }}"
-            for s in bff sso interaction media chat ws presence; do
+            for s in bff sso interaction media chat ws presence notification ai; do
               if [ "$SERVICE" = "all" ] || [ "$SERVICE" = "$s" ]; then
                 echo "$s=true" >> $GITHUB_OUTPUT
               else
@@ -85,8 +87,8 @@ jobs:
           fi
 
           any=false
-          for s in bff sso interaction media chat ws presence; do
-            if echo "$CHANGED" | grep -qE "apps/$s-service|apps/$s-gateway|libs/|package.json|pnpm-lock.yaml|app-compose.yml"; then
+          for s in bff sso interaction media chat ws presence notification ai; do
+            if echo "$CHANGED" | grep -qE "apps/$s-|libs/|package.json|pnpm-lock.yaml|app-compose.yml"; then
               echo "$s=true" >> $GITHUB_OUTPUT
               any=true
             else
@@ -140,19 +142,26 @@ jobs:
           - name: presence
             service: presence-service
             enabled: ${{ needs.detect-changes.outputs.presence }}
+          - name: notification
+            service: notification-service
+            enabled: ${{ needs.detect-changes.outputs.notification }}
+          - name: ai
+            service: ai-core-service
+            enabled: ${{ needs.detect-changes.outputs.ai }}
 
     steps:
       - uses: actions/checkout@v4
-      - name: Check enabled
-        if: matrix.enabled != 'true'
-        run: exit 0
+        if: matrix.enabled == 'true'
       - uses: docker/setup-buildx-action@v3
+        if: matrix.enabled == 'true'
       - uses: docker/login-action@v3
+        if: matrix.enabled == 'true'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ env.GH_TOKEN }}
       - uses: docker/metadata-action@v5
+        if: matrix.enabled == 'true'
         id: meta
         with:
           images: ghcr.io/${{ env.IMAGE_PREFIX }}/${{ matrix.service }}
@@ -160,6 +169,7 @@ jobs:
             type=sha
             type=raw,value=latest
       - uses: docker/build-push-action@v5
+        if: matrix.enabled == 'true'
         with:
           context: .
           file: apps/${{ matrix.service }}/Dockerfile
@@ -192,6 +202,10 @@ jobs:
               app-compose.yml \
               ${{ env.EC2_USER }}@${{ env.EC2_HOST }}:~/Backend/
 
+      - name: Compute image tag
+        id: image-tag
+        run: echo "tag=sha-${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+
       - name: Deploy Services
         id: deploy
         env:
@@ -202,6 +216,9 @@ jobs:
           CHAT_CHANGED: ${{ needs.detect-changes.outputs.chat }}
           WS_CHANGED: ${{ needs.detect-changes.outputs.ws }}
           PRESENCE_CHANGED: ${{ needs.detect-changes.outputs.presence }}
+          NOTIFICATION_CHANGED: ${{ needs.detect-changes.outputs.notification }}
+          AI_CHANGED: ${{ needs.detect-changes.outputs.ai }}
+          DEPLOY_IMAGE_TAG: ${{ steps.image-tag.outputs.tag }}
         run: |
           ssh -o BatchMode=yes -o ConnectTimeout=10 ${{ env.EC2_USER }}@${{ env.EC2_HOST }} << 'DEPLOY_SCRIPT'
             set -euo pipefail
@@ -218,6 +235,10 @@ jobs:
               source .env.prod
               set +a
             fi
+
+            # Override IMAGE_TAG with the tag from current CI build
+            export IMAGE_TAG="${{ env.DEPLOY_IMAGE_TAG }}"
+            echo "📦 Deploying with IMAGE_TAG=$IMAGE_TAG"
 
             DEPLOYMENT_FAILED=false
             FAILED_SERVICES=""
@@ -275,6 +296,8 @@ jobs:
             [ "${{ env.CHAT_CHANGED }}" = "true" ] && deploy_service chat-service app-compose.yml || true
             [ "${{ env.WS_CHANGED }}" = "true" ] && deploy_service ws-gateway app-compose.yml || true
             [ "${{ env.PRESENCE_CHANGED }}" = "true" ] && deploy_service presence-service app-compose.yml || true
+            [ "${{ env.NOTIFICATION_CHANGED }}" = "true" ] && deploy_service notification-service app-compose.yml || true
+            [ "${{ env.AI_CHANGED }}" = "true" ] && deploy_service ai-core-service app-compose.yml || true
 
             docker image prune -f
 

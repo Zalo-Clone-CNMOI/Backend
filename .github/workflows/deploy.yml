@@ -19,6 +19,10 @@ on:
         description: "Service to deploy (all, bff, sso, interaction, media, chat, ws, presence, notification, ai)"
         required: false
         default: "all"
+      force:
+        description: "Force deploy all services"
+        required: false
+        default: "false"
 
 permissions:
   contents: read
@@ -27,6 +31,7 @@ permissions:
 env:
   DOCKER_REGISTRY: ghcr.io
   IMAGE_PREFIX: ${{ github.repository_owner }}/zalo-clone
+  DOCKER_PRUNE_UNTIL: 240h
   EC2_HOST: ${{ secrets.EC2_HOST }}
   EC2_USER: ${{ secrets.EC2_USER }}
   EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
@@ -224,8 +229,13 @@ jobs:
             set -euo pipefail
             cd ~/Backend
             mkdir -p .rollback
+            DOCKER_PRUNE_UNTIL="${{ env.DOCKER_PRUNE_UNTIL }}"
 
             echo "${{ env.GH_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            echo "📊 Disk usage before deploy"
+            df -h
+            docker system df || true
 
             docker network prune -f
             docker network create --driver bridge --subnet 172.28.0.0/16 zalo_network 2>/dev/null || echo "Network exists"
@@ -258,9 +268,17 @@ jobs:
               fi
 
               if ! docker compose -f "$COMPOSE_FILE" pull "$SERVICE_NAME"; then
-                echo "❌ Pull failed for $SERVICE_NAME"
-                DEPLOYMENT_FAILED=true
-                return 1
+                echo "⚠️ Pull failed for $SERVICE_NAME, trying cleanup then retry once"
+                docker container prune -f || true
+                docker image prune -af --filter "until=$DOCKER_PRUNE_UNTIL" || true
+                docker builder prune -af --filter "until=$DOCKER_PRUNE_UNTIL" || true
+
+                if ! docker compose -f "$COMPOSE_FILE" pull "$SERVICE_NAME"; then
+                  echo "❌ Pull failed for $SERVICE_NAME after cleanup retry"
+                  DEPLOYMENT_FAILED=true
+                  FAILED_SERVICES="$FAILED_SERVICES $SERVICE_NAME"
+                  return 1
+                fi
               fi
 
               if ! docker compose -f "$COMPOSE_FILE" up -d --no-deps --remove-orphans "$SERVICE_NAME"; then
@@ -299,8 +317,6 @@ jobs:
             [ "${{ env.NOTIFICATION_CHANGED }}" = "true" ] && deploy_service notification-service app-compose.yml || true
             [ "${{ env.AI_CHANGED }}" = "true" ] && deploy_service ai-core-service app-compose.yml || true
 
-            docker image prune -f
-
             if [ "$DEPLOYMENT_FAILED" = "true" ]; then
               echo "❌ Deployment failed for: $FAILED_SERVICES"
               exit 1
@@ -338,6 +354,21 @@ jobs:
             check_file "db-compose.yml"
             check_file "app-compose.yml"
           HEALTH_SCRIPT
+
+      - name: Prune old Docker artifacts on EC2
+        run: |
+          ssh -o BatchMode=yes -o ConnectTimeout=10 ${{ env.EC2_USER }}@${{ env.EC2_HOST }} << 'PRUNE_SCRIPT'
+            set -euo pipefail
+            echo "🧹 Pruning unused Docker artifacts (volumes are kept)"
+            docker container prune -f || true
+            docker image prune -af --filter "until=${{ env.DOCKER_PRUNE_UNTIL }}" || true
+            docker builder prune -af --filter "until=${{ env.DOCKER_PRUNE_UNTIL }}" || true
+            docker network prune -f || true
+
+            echo "📊 Disk usage after cleanup"
+            df -h
+            docker system df || true
+          PRUNE_SCRIPT
 
       - name: Cleanup
         if: always()

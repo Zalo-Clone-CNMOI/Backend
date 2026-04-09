@@ -1,0 +1,197 @@
+openapi: 3.0.0
+info:
+  title: Media Service API
+  version: 1.0.0
+  description: Media upload and download endpoints
+servers:
+  - url: http://media-service:3003/api
+    description: Docker internal service (default)
+  - url: http://localhost:3003/api
+    description: Local development server
+paths:
+  /v1/media/presign/upload:
+    post:
+      tags:
+        - Media
+      summary: Generate presigned upload URL
+      operationId: presignUpload
+      parameters:
+        - in: header
+          name: x-user-id
+          required: false
+          description: Optional caller user id for audit/event tracing
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PresignUploadRequestDto'
+      responses:
+        '201':
+          description: Presigned upload URL generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PresignUploadResponseDto'
+        '400':
+          description: Invalid request payload
+
+  /v1/media/upload/confirm:
+    post:
+      tags:
+        - Media
+      summary: Confirm uploaded object
+      operationId: confirmUpload
+      parameters:
+        - in: header
+          name: x-user-id
+          required: false
+          description: Optional caller user id for audit/event tracing
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmUploadRequestDto'
+      responses:
+        '201':
+          description: Upload confirmed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfirmUploadResponseDto'
+        '400':
+          description: Invalid request payload
+
+  /v1/media/presign/download:
+    post:
+      tags:
+        - Media
+      summary: Generate presigned download URL
+      operationId: presignDownload
+      parameters:
+        - in: header
+          name: x-user-id
+          required: true
+          description: Authenticated user id for media authorization
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PresignDownloadRequestDto'
+      responses:
+        '201':
+          description: Presigned download URL generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PresignDownloadResponseDto'
+        '400':
+          description: Invalid request payload
+        '401':
+          description: Missing user id
+        '403':
+          description: Access denied
+
+components:
+  schemas:
+    PresignUploadRequestDto:
+      type: object
+      required:
+        - contentType
+      properties:
+        contentType:
+          type: string
+          description: MIME content type of uploaded file
+          example: image/jpeg
+        fileName:
+          type: string
+          description: Original file name
+          example: photo.jpg
+
+    PresignUploadResponseDto:
+      type: object
+      required:
+        - key
+        - bucket
+        - uploadUrl
+        - expiresAt
+        - visibility
+      properties:
+        key:
+          type: string
+          example: public/photo.jpg-1730000000000
+        bucket:
+          type: string
+          example: zalo-media-prod
+        uploadUrl:
+          type: string
+          example: https://s3.example.com/bucket/key?signature=abc
+        expiresAt:
+          type: integer
+          format: int64
+          example: 1730000015000
+        visibility:
+          type: string
+          enum:
+            - public
+            - private
+
+    ConfirmUploadRequestDto:
+      type: object
+      required:
+        - key
+        - contentType
+      properties:
+        key:
+          type: string
+          example: public/photo.jpg-1730000000000
+        contentType:
+          type: string
+          example: image/jpeg
+        conversationId:
+          type: string
+          format: uuid
+          example: 9a24776a-050d-4f76-9385-316eb2b2a0cd
+
+    ConfirmUploadResponseDto:
+      type: object
+      required:
+        - ok
+      properties:
+        ok:
+          type: boolean
+          example: true
+        thumbnailKey:
+          type: string
+          example: thumbs/public/photo.jpg-1730000000000
+
+    PresignDownloadRequestDto:
+      type: object
+      required:
+        - key
+      properties:
+        key:
+          type: string
+          example: private/docs/report.pdf-1730000000000
+
+    PresignDownloadResponseDto:
+      type: object
+      required:
+        - downloadUrl
+        - expiresAt
+      properties:
+        downloadUrl:
+          type: string
+          example: https://s3.example.com/bucket/key?signature=xyz
+        expiresAt:
+          type: integer
+          format: int64
+          example: 1730000015000

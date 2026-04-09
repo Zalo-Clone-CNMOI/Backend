@@ -15,6 +15,7 @@ services:
       AI_CORE_SERVICE_URL: http://ai-core-service:5005/api
       CHAT_SERVICE_URL: http://chat-service:5002/api
       INTERACTION_SERVICE_URL: http://interaction-service:5004/api
+      MEDIA_SERVICE_URL: http://media-service:3003/api
       JWT_SECRET: ${JWT_SECRET}
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
       KAFKA_BROKERS: kafka:29092

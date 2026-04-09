@@ -53,6 +53,12 @@
       "@app/clients/interaction-client/*": [
         "libs/clients/src/interaction-client/src/*"
       ],
+      "@app/clients/media-client": [
+        "libs/clients/src/media-client/src"
+      ],
+      "@app/clients/media-client/*": [
+        "libs/clients/src/media-client/src/*"
+      ],
       "@app/swagger": [
         "libs/swagger/src"
       ],

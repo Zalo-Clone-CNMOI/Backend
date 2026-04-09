@@ -129,6 +129,7 @@ services:
       BFF_SERVICE_URL: http://bff-service:5000/api
       SSO_SERVICE_URL: http://sso-service:5001/api
       INTERACTION_SERVICE_URL: http://interaction-service:5004/api
+      MEDIA_SERVICE_URL: http://media-service:3003/api
       # JWT
       JWT_SECRET: ${JWT_SECRET}
       # CORS

@@ -39,7 +39,7 @@ function makeProvider(
     complete: jest.fn(),
     completeStream: jest.fn(),
     embed: jest.fn(),
-  } as unknown as jest.Mocked<ILlmProvider>;
+  } as jest.Mocked<ILlmProvider>;
 }
 
 function makeResult(

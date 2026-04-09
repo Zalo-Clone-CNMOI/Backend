@@ -7,9 +7,16 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConversationsController } from './conversations.controller';
 import { ConversationsService } from './conversations.service';
+import { UpdateMemberRoleDtoRoleEnum } from '@app/constant';
 
 const uuid = (n: number) => `00000000-0000-0000-0000-00000000000${n}`;
-const user = { id: uuid(1), email: 'u@test.com' } as unknown;
+const user = {
+  id: uuid(1),
+  phone: '+84901234567',
+  email: 'u@test.com',
+  fullName: 'User Test',
+  status: 'active',
+};
 
 describe('ConversationsController', () => {
   let controller: ConversationsController;
@@ -42,7 +49,7 @@ describe('ConversationsController', () => {
 
   it('getConversations → service.getConversations(userId, query)', async () => {
     const query = { page: 1, limit: 20 };
-    await controller.getConversations(user, query as unknown);
+    await controller.getConversations(user, query);
     expect(service.getConversations).toHaveBeenCalledWith(user.id, query);
   });
 
@@ -53,19 +60,19 @@ describe('ConversationsController', () => {
 
   it('createGroupConversation → service.createGroupConversation(userId, dto)', async () => {
     const dto = { name: 'Group', memberIds: [uuid(3)] };
-    await controller.createGroupConversation(user, dto as unknown);
+    await controller.createGroupConversation(user, dto);
     expect(service.createGroupConversation).toHaveBeenCalledWith(user.id, dto);
   });
 
   it('createDirectConversation → service.createDirectConversation(userId, dto)', async () => {
     const dto = { participantId: uuid(3) };
-    await controller.createDirectConversation(user, dto as unknown);
+    await controller.createDirectConversation(user, dto);
     expect(service.createDirectConversation).toHaveBeenCalledWith(user.id, dto);
   });
 
   it('updateConversation → service.updateConversation(userId, convId, dto)', async () => {
     const dto = { name: 'Updated' };
-    await controller.updateConversation(user, uuid(2), dto as unknown);
+    await controller.updateConversation(user, uuid(2), dto);
     expect(service.updateConversation).toHaveBeenCalledWith(
       user.id,
       uuid(2),
@@ -75,7 +82,7 @@ describe('ConversationsController', () => {
 
   it('addMembers → service.addMembers(userId, convId, dto)', async () => {
     const dto = { memberIds: [uuid(4)] };
-    await controller.addMembers(user, uuid(2), dto as unknown);
+    await controller.addMembers(user, uuid(2), dto);
     expect(service.addMembers).toHaveBeenCalledWith(user.id, uuid(2), dto);
   });
 
@@ -94,8 +101,8 @@ describe('ConversationsController', () => {
   });
 
   it('updateMemberRole → service.updateMemberRole(userId, convId, memberId, dto)', async () => {
-    const dto = { role: 'admin' };
-    await controller.updateMemberRole(user, uuid(2), uuid(3), dto as unknown);
+    const dto = { role: UpdateMemberRoleDtoRoleEnum.ADMIN };
+    await controller.updateMemberRole(user, uuid(2), uuid(3), dto);
     expect(service.updateMemberRole).toHaveBeenCalledWith(
       user.id,
       uuid(2),
@@ -106,7 +113,7 @@ describe('ConversationsController', () => {
 
   it('updateMySettings → service.updateMySettings(userId, convId, dto)', async () => {
     const dto = { nickname: 'My Alias' };
-    await controller.updateMySettings(user, uuid(2), dto as unknown);
+    await controller.updateMySettings(user, uuid(2), dto);
     expect(service.updateMySettings).toHaveBeenCalledWith(
       user.id,
       uuid(2),

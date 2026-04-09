@@ -7,9 +7,16 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { FriendsController } from './friends.controller';
 import { FriendsService } from './friends.service';
+import { RespondFriendRequestDtoActionEnum } from './dto';
 
 const uuid = (n: number) => `00000000-0000-0000-0000-00000000000${n}`;
-const user = { id: uuid(1), email: 'u@test.com' } as unknown;
+const user = {
+  id: uuid(1),
+  phone: '+84901234567',
+  email: 'u@test.com',
+  fullName: 'User Test',
+  status: 'active',
+};
 
 describe('FriendsController', () => {
   let controller: FriendsController;
@@ -40,31 +47,31 @@ describe('FriendsController', () => {
 
   it('getFriends → service.getFriends(userId, query)', async () => {
     const query = { page: 1, limit: 20 };
-    await controller.getFriends(user, query as unknown);
+    await controller.getFriends(user, query);
     expect(service.getFriends).toHaveBeenCalledWith(user.id, query);
   });
 
   it('getPendingRequests → service.getPendingRequests(userId, query)', async () => {
     const query = { page: 1, limit: 20 };
-    await controller.getPendingRequests(user, query as unknown);
+    await controller.getPendingRequests(user, query);
     expect(service.getPendingRequests).toHaveBeenCalledWith(user.id, query);
   });
 
   it('getSentRequests → service.getSentRequests(userId, query)', async () => {
     const query = { page: 1, limit: 20 };
-    await controller.getSentRequests(user, query as unknown);
+    await controller.getSentRequests(user, query);
     expect(service.getSentRequests).toHaveBeenCalledWith(user.id, query);
   });
 
   it('sendFriendRequest → service.sendFriendRequest(userId, dto)', async () => {
     const dto = { userId: uuid(2) };
-    await controller.sendFriendRequest(user, dto as unknown);
+    await controller.sendFriendRequest(user, dto);
     expect(service.sendFriendRequest).toHaveBeenCalledWith(user.id, dto);
   });
 
   it('respondToRequest → service.respondToRequest(userId, requestId, dto)', async () => {
-    const dto = { action: 'accept' };
-    await controller.respondToRequest(user, uuid(9), dto as unknown);
+    const dto = { action: RespondFriendRequestDtoActionEnum.accept };
+    await controller.respondToRequest(user, uuid(9), dto);
     expect(service.respondToRequest).toHaveBeenCalledWith(
       user.id,
       uuid(9),

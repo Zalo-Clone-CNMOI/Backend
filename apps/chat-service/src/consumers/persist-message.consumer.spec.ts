@@ -14,6 +14,12 @@
  */
 import { PersistMessageConsumer } from './persist-message.consumer';
 import { createMockChatSendCommand } from '../../../../test/helpers';
+import type { MessageRepository } from '@libs/scylla';
+import type { ChatPublisher } from '../services/chat.publisher';
+import type { CacheService } from '@libs/redis';
+import type { ConversationMembershipService } from '@libs/mvp-access';
+import type { Repository } from 'typeorm';
+import type { User, ConversationMember } from '@libs/database';
 
 describe('PersistMessageConsumer', () => {
   type InternalLogger = {
@@ -75,15 +81,16 @@ describe('PersistMessageConsumer', () => {
     };
 
     consumer = new PersistMessageConsumer(
-      repo as unknown,
-      publisher as unknown,
-      cacheService as unknown,
-      membershipService as unknown,
-      userRepo as unknown,
-      conversationMemberRepo as unknown,
+      repo as unknown as MessageRepository,
+      publisher as unknown as ChatPublisher,
+      cacheService as unknown as CacheService,
+      membershipService as unknown as ConversationMembershipService,
+      userRepo as unknown as Repository<User>,
+      conversationMemberRepo as unknown as Repository<ConversationMember>,
     );
 
-    const internalLogger = (consumer as { logger: InternalLogger }).logger;
+    const internalLogger = (consumer as unknown as { logger: InternalLogger })
+      .logger;
     jest.spyOn(internalLogger, 'debug').mockImplementation(() => undefined);
     jest.spyOn(internalLogger, 'log').mockImplementation(() => undefined);
     jest.spyOn(internalLogger, 'warn').mockImplementation(() => undefined);
@@ -101,7 +108,7 @@ describe('PersistMessageConsumer', () => {
       repo.insertMessage.mockResolvedValue(undefined);
       repo.markMessageSeen.mockResolvedValue(undefined);
 
-      await consumer.onSend(payload as unknown);
+      await consumer.onSend(payload);
 
       expect(membershipService.canUserAccessConversation).toHaveBeenCalledWith(
         payload.sender_id,
@@ -140,7 +147,7 @@ describe('PersistMessageConsumer', () => {
       membershipService.canUserAccessConversation.mockResolvedValue(true);
       repo.wasMessageSeen.mockResolvedValue(true); // duplicate!
 
-      await consumer.onSend(payload as unknown);
+      await consumer.onSend(payload);
 
       expect(repo.insertMessage).not.toHaveBeenCalled();
       expect(repo.markMessageSeen).not.toHaveBeenCalled();
@@ -156,7 +163,7 @@ describe('PersistMessageConsumer', () => {
 
       membershipService.canUserAccessConversation.mockResolvedValue(false);
 
-      await consumer.onSend(payload as unknown);
+      await consumer.onSend(payload);
 
       expect(repo.wasMessageSeen).not.toHaveBeenCalled();
       expect(repo.insertMessage).not.toHaveBeenCalled();
@@ -173,7 +180,7 @@ describe('PersistMessageConsumer', () => {
       membershipService.canUserAccessConversation.mockResolvedValue(true);
       repo.wasMessageSeen.mockResolvedValue(false);
 
-      await consumer.onSend(payload as unknown);
+      await consumer.onSend(payload);
 
       // Publisher should have been called at least twice:
       // 1. ChatMessageCreated
@@ -181,13 +188,11 @@ describe('PersistMessageConsumer', () => {
       // We need to wait for the async fire-and-forget to complete
       await new Promise((r) => setTimeout(r, 50));
 
-      const emitCalls = publisher.emit.mock.calls;
-      expect(
-        emitCalls.some((c: unknown) => c[0] === 'chat.message.created'),
-      ).toBe(true);
-      expect(
-        emitCalls.some((c: unknown) => c[0] === 'ai.moderation.request'),
-      ).toBe(true);
+      const emitCalls = publisher.emit.mock.calls as Array<[string, unknown]>;
+      expect(emitCalls.some((c) => c[0] === 'chat.message.created')).toBe(true);
+      expect(emitCalls.some((c) => c[0] === 'ai.moderation.request')).toBe(
+        true,
+      );
     });
 
     it('should not fail if AI moderation emit fails', async () => {
@@ -202,7 +207,7 @@ describe('PersistMessageConsumer', () => {
         .mockRejectedValueOnce(new Error('Kafka down'));
 
       // Should not throw
-      await expect(consumer.onSend(payload as unknown)).resolves.not.toThrow();
+      await expect(consumer.onSend(payload)).resolves.not.toThrow();
 
       await new Promise((r) => setTimeout(r, 50));
     });
@@ -220,7 +225,7 @@ describe('PersistMessageConsumer', () => {
         new Error('Redis down'),
       );
 
-      await expect(consumer.onSend(payload as unknown)).resolves.not.toThrow();
+      await expect(consumer.onSend(payload)).resolves.not.toThrow();
     });
   });
 
@@ -378,7 +383,7 @@ describe('PersistMessageConsumer', () => {
       repo.wasMessageSeen.mockResolvedValue(false);
       repo.insertMessage.mockRejectedValue(new Error('ScyllaDB write error'));
 
-      await expect(consumer.onSend(payload as unknown)).rejects.toThrow(
+      await expect(consumer.onSend(payload)).rejects.toThrow(
         'ScyllaDB write error',
       );
     });

@@ -28,7 +28,6 @@ describe('BFF UsersService', () => {
     }).compile();
 
     service = module.get<UsersService>(UsersService);
-    (service as unknown).ssoClient = ssoClient;
   });
 
   describe('getMyProfile', () => {
@@ -57,7 +56,7 @@ describe('BFF UsersService', () => {
       const expected = { id: 'user-1', fullName: 'New Name' };
       ssoClient.updateMyProfile.mockResolvedValue(expected);
 
-      const result = await service.updateMyProfile('token', dto as unknown);
+      const result = await service.updateMyProfile('token', dto);
 
       expect(ssoClient.updateMyProfile).toHaveBeenCalledWith('token', dto);
       expect(result).toEqual(expected);

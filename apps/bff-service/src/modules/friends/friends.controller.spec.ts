@@ -7,6 +7,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { FriendsController } from './friends.controller';
 import { FriendsService } from './friends.service';
+import { RespondFriendRequestDtoActionEnum } from './dto';
 
 describe('BFF FriendsController', () => {
   let controller: FriendsController;
@@ -77,7 +78,7 @@ describe('BFF FriendsController', () => {
 
   describe('POST /friends/requests', () => {
     it('should delegate to sendFriendRequest with token and dto', async () => {
-      const dto = { userId: 'target-uuid' } as unknown;
+      const dto = { userId: 'target-uuid' };
       friendsService.sendFriendRequest.mockResolvedValue({ message: 'Sent' });
 
       await controller.sendFriendRequest('token', dto);
@@ -91,7 +92,7 @@ describe('BFF FriendsController', () => {
 
   describe('PATCH /friends/requests/:requestId', () => {
     it('should delegate to respondToRequest with token, requestId, and dto', async () => {
-      const dto = { action: 'accept' } as unknown;
+      const dto = { action: RespondFriendRequestDtoActionEnum.accept };
       friendsService.respondToRequest.mockResolvedValue({
         message: 'Accepted',
       });

@@ -12,6 +12,14 @@ import { WsAuthGuard } from './ws-auth.guard';
 import { JwtService } from './jwt.service';
 import { ExecutionContext } from '@nestjs/common';
 
+interface MockSocket {
+  data: { userId?: string };
+  handshake: {
+    headers: { authorization?: string };
+    auth: { token?: string };
+  };
+}
+
 describe('WsAuthGuard', () => {
   let guard: WsAuthGuard;
   let jwtService: { verifyToken: jest.Mock };
@@ -24,19 +32,19 @@ describe('WsAuthGuard', () => {
     guard = new WsAuthGuard(jwtService as unknown as JwtService);
   });
 
-  function createWsContext(socket: unknown): ExecutionContext {
+  function createWsContext(socket: MockSocket): ExecutionContext {
     return {
       switchToWs: () => ({
         getClient: () => socket,
       }),
-    } as unknown as ExecutionContext;
+    } as ExecutionContext;
   }
 
   // ─── Valid Token in Authorization Header ────────────────────────────────────
 
   describe('valid token in Authorization header', () => {
     it('should return true and set socket.data.userId', () => {
-      const socket = {
+      const socket: MockSocket = {
         data: {},
         handshake: {
           headers: { authorization: 'Bearer valid-jwt-token' },
@@ -52,7 +60,7 @@ describe('WsAuthGuard', () => {
       const result = guard.canActivate(createWsContext(socket));
 
       expect(result).toBe(true);
-      expect((socket.data as unknown).userId).toBe('user-123');
+      expect(socket.data.userId).toBe('user-123');
       expect(jwtService.verifyToken).toHaveBeenCalledWith('valid-jwt-token');
     });
   });
@@ -61,7 +69,7 @@ describe('WsAuthGuard', () => {
 
   describe('valid token in auth.token', () => {
     it('should extract token from handshake.auth.token when no header', () => {
-      const socket = {
+      const socket: MockSocket = {
         data: {},
         handshake: {
           headers: {},
@@ -77,7 +85,7 @@ describe('WsAuthGuard', () => {
       const result = guard.canActivate(createWsContext(socket));
 
       expect(result).toBe(true);
-      expect((socket.data as unknown).userId).toBe('user-456');
+      expect(socket.data.userId).toBe('user-456');
       expect(jwtService.verifyToken).toHaveBeenCalledWith('raw-jwt-token');
     });
   });
@@ -86,7 +94,7 @@ describe('WsAuthGuard', () => {
 
   describe('missing token (TC-WS-002)', () => {
     it('should return false when no authorization and no auth.token', () => {
-      const socket = {
+      const socket: MockSocket = {
         data: {},
         handshake: {
           headers: {},
@@ -101,7 +109,7 @@ describe('WsAuthGuard', () => {
     });
 
     it('should return false when authorization header is undefined', () => {
-      const socket = {
+      const socket: MockSocket = {
         data: {},
         handshake: {
           headers: { authorization: undefined },
@@ -119,7 +127,7 @@ describe('WsAuthGuard', () => {
 
   describe('invalid token', () => {
     it('should throw (or return false) when verifyToken throws', () => {
-      const socket = {
+      const socket: MockSocket = {
         data: {},
         handshake: {
           headers: { authorization: 'Bearer invalid-token' },
@@ -139,7 +147,7 @@ describe('WsAuthGuard', () => {
 
   describe('Bearer prefix handling', () => {
     it('should strip "Bearer " prefix from authorization header', () => {
-      const socket = {
+      const socket: MockSocket = {
         data: {},
         handshake: {
           headers: { authorization: 'Bearer my-token-123' },
@@ -158,7 +166,7 @@ describe('WsAuthGuard', () => {
     });
 
     it('should use raw token from auth.token without stripping', () => {
-      const socket = {
+      const socket: MockSocket = {
         data: {},
         handshake: {
           headers: {},

@@ -11,14 +11,16 @@ import { PresenceHandler } from './presence.handler';
 import { KAFKA_CLIENT } from '@libs/kafka';
 import { KafkaTopics } from '@libs/contracts';
 
+type AuthedSocket = Parameters<PresenceHandler['handleConnect']>[0];
+
 // ────── Mock Socket ──────────────────────────────────────────────────────
 
-function createMockSocket(userId = 'user-abc') {
+function createMockSocket(userId = 'user-abc'): AuthedSocket {
   return {
     id: 'socket-id-456',
     data: { userId },
     handshake: { headers: {}, auth: {} },
-  } as unknown;
+  } as unknown as AuthedSocket;
 }
 
 // ────── Test Suite ───────────────────────────────────────────────────────

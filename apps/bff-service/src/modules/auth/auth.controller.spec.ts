@@ -12,13 +12,13 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { UnauthorizedException } from '@nestjs/common';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { QrStatusResponseDtoStatusEnum } from '@app/clients';
 
 // ────── DTO Factories ────────────────────────────────────────────────────
 
 const makeRegisterDto = () => ({
-  firebaseToken: 'firebase-token-abc',
-  phone: '+84901234567',
-  name: 'John Doe',
+  firebaseIdToken: 'firebase-token-abc',
+  fullName: 'John Doe',
   password: 'StrongP@ss123',
   email: 'john@example.com',
 });
@@ -87,9 +87,9 @@ describe('BFF AuthController', () => {
     it('should delegate to authService.register and return result', async () => {
       const dto = makeRegisterDto();
       const response = makeAuthResponse();
-      authService.register.mockResolvedValue(response as unknown);
+      authService.register.mockResolvedValue(response);
 
-      const result = await controller.register(dto as unknown);
+      const result = await controller.register(dto);
 
       expect(authService.register).toHaveBeenCalledWith(dto);
       expect(result).toEqual(response);
@@ -98,9 +98,9 @@ describe('BFF AuthController', () => {
     it('should propagate errors from service', async () => {
       authService.register.mockRejectedValue(new Error('Phone already exists'));
 
-      await expect(
-        controller.register(makeRegisterDto() as unknown),
-      ).rejects.toThrow('Phone already exists');
+      await expect(controller.register(makeRegisterDto())).rejects.toThrow(
+        'Phone already exists',
+      );
     });
   });
 
@@ -110,9 +110,9 @@ describe('BFF AuthController', () => {
     it('should delegate to authService.login and return tokens', async () => {
       const dto = makeLoginDto();
       const response = makeAuthResponse();
-      authService.login.mockResolvedValue(response as unknown);
+      authService.login.mockResolvedValue(response);
 
-      const result = await controller.login(dto as unknown);
+      const result = await controller.login(dto);
 
       expect(authService.login).toHaveBeenCalledWith(dto);
       expect(result).toEqual(response);
@@ -125,9 +125,9 @@ describe('BFF AuthController', () => {
     it('should delegate to authService.refreshToken', async () => {
       const dto = { refreshToken: 'old-refresh-token' };
       const response = makeRefreshResponse();
-      authService.refreshToken.mockResolvedValue(response as unknown);
+      authService.refreshToken.mockResolvedValue(response);
 
-      const result = await controller.refreshToken(dto as unknown);
+      const result = await controller.refreshToken(dto);
 
       expect(authService.refreshToken).toHaveBeenCalledWith(dto);
       expect(result).toEqual(response);
@@ -141,35 +141,32 @@ describe('BFF AuthController', () => {
       authService.logout.mockResolvedValue({ message: 'Logged out' });
 
       const result = await controller.logout('Bearer my-access-token', {
-        refreshToken: 'my-refresh-token',
-      } as unknown);
+        deviceId: 'device-abc',
+      });
 
       expect(authService.logout).toHaveBeenCalledWith('my-access-token', {
-        refreshToken: 'my-refresh-token',
+        deviceId: 'device-abc',
       });
       expect(result).toEqual({ message: 'Logged out' });
     });
 
     it('should throw UnauthorizedException when no authorization header', async () => {
       await expect(
-        controller.logout('', { refreshToken: 'token' } as unknown),
+        controller.logout('', { deviceId: 'token' }),
       ).rejects.toThrow(UnauthorizedException);
     });
 
     it('should throw UnauthorizedException when header lacks Bearer prefix', async () => {
       await expect(
         controller.logout('Basic some-token', {
-          refreshToken: 'tok',
-        } as unknown),
+          deviceId: 'tok',
+        }),
       ).rejects.toThrow(UnauthorizedException);
     });
 
     it('should throw UnauthorizedException when authorization is undefined', async () => {
       await expect(
-        controller.logout(
-          undefined as unknown,
-          { refreshToken: 'tok' } as unknown,
-        ),
+        controller.logout(undefined as unknown as string, { deviceId: 'tok' }),
       ).rejects.toThrow(UnauthorizedException);
     });
   });
@@ -182,8 +179,8 @@ describe('BFF AuthController', () => {
         message: 'Password reset successful',
       });
 
-      const dto = { firebaseToken: 'token', newPassword: 'NewP@ss456' };
-      const result = await controller.resetPassword(dto as unknown);
+      const dto = { firebaseIdToken: 'token', newPassword: 'NewP@ss456' };
+      const result = await controller.resetPassword(dto);
 
       expect(authService.resetPassword).toHaveBeenCalledWith(dto);
       expect(result).toEqual({ message: 'Password reset successful' });
@@ -201,9 +198,9 @@ describe('BFF AuthController', () => {
           qrToken: 'qr-token',
           expiresAt: new Date().toISOString(),
         };
-        authService.qrGenerate.mockResolvedValue(response as unknown);
+        authService.qrGenerate.mockResolvedValue(response);
 
-        const result = await controller.qrGenerate(dto as unknown);
+        const result = await controller.qrGenerate(dto);
 
         expect(authService.qrGenerate).toHaveBeenCalledWith(dto);
         expect(result).toEqual(response);
@@ -214,13 +211,15 @@ describe('BFF AuthController', () => {
       it('should delegate to authService.qrStatus', async () => {
         const sessionId = 'e2f3a1b4-5678-4abc-9def-0123456789ab';
         authService.qrStatus.mockResolvedValue({
-          status: 'pending',
-        } as unknown);
+          status: QrStatusResponseDtoStatusEnum.PENDING,
+        });
 
         const result = await controller.qrStatus(sessionId);
 
         expect(authService.qrStatus).toHaveBeenCalledWith(sessionId);
-        expect(result).toEqual({ status: 'pending' });
+        expect(result).toEqual({
+          status: QrStatusResponseDtoStatusEnum.PENDING,
+        });
       });
     });
 
@@ -232,7 +231,7 @@ describe('BFF AuthController', () => {
 
         const result = await controller.qrConfirm('Bearer mobile-token', {
           sessionId: 'session-uuid',
-        } as unknown);
+        });
 
         expect(authService.qrConfirm).toHaveBeenCalledWith('mobile-token', {
           sessionId: 'session-uuid',
@@ -242,7 +241,7 @@ describe('BFF AuthController', () => {
 
       it('should throw UnauthorizedException without Bearer token', async () => {
         await expect(
-          controller.qrConfirm('', { sessionId: 's' } as unknown),
+          controller.qrConfirm('', { sessionId: 's' }),
         ).rejects.toThrow(UnauthorizedException);
       });
     });
@@ -255,7 +254,7 @@ describe('BFF AuthController', () => {
 
         await controller.qrReject('Bearer mobile-token', {
           sessionId: 'session-uuid',
-        } as unknown);
+        });
 
         expect(authService.qrReject).toHaveBeenCalledWith('mobile-token', {
           sessionId: 'session-uuid',
@@ -264,7 +263,7 @@ describe('BFF AuthController', () => {
 
       it('should throw UnauthorizedException without Bearer token', async () => {
         await expect(
-          controller.qrReject('', { sessionId: 's' } as unknown),
+          controller.qrReject('', { sessionId: 's' }),
         ).rejects.toThrow(UnauthorizedException);
       });
     });

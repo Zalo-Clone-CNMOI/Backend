@@ -57,7 +57,8 @@ describe('NotificationConsumer', () => {
 
     consumer = module.get<NotificationConsumer>(NotificationConsumer);
 
-    const internalLogger = (consumer as { logger: InternalLogger }).logger;
+    const internalLogger = (consumer as unknown as { logger: InternalLogger })
+      .logger;
     jest.spyOn(internalLogger, 'debug').mockImplementation(() => undefined);
     jest.spyOn(internalLogger, 'log').mockImplementation(() => undefined);
     jest.spyOn(internalLogger, 'error').mockImplementation(() => undefined);
@@ -77,8 +78,8 @@ describe('NotificationConsumer', () => {
   describe('onModuleInit', () => {
     it('should set batcher.onBatchReady callback', () => {
       consumer.onModuleInit();
-      expect((batcher as unknown).onBatchReady).toBeDefined();
-      expect(typeof (batcher as unknown).onBatchReady).toBe('function');
+      expect(batcher.onBatchReady).toBeDefined();
+      expect(typeof batcher.onBatchReady).toBe('function');
     });
   });
 

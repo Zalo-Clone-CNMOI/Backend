@@ -7,6 +7,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConversationsService } from './conversations.service';
 import { InteractionClientService } from '@app/clients/interaction-client';
+import { UpdateMemberRoleDtoRoleEnum } from '@app/constant';
 
 describe('ConversationsService (BFF)', () => {
   let service: ConversationsService;
@@ -94,10 +95,7 @@ describe('ConversationsService (BFF)', () => {
   describe('createGroupConversation', () => {
     it('should delegate with token and DTO', async () => {
       const dto = { name: 'Team', memberIds: ['u1', 'u2'] };
-      const result = await service.createGroupConversation(
-        TOKEN,
-        dto as unknown,
-      );
+      const result = await service.createGroupConversation(TOKEN, dto);
 
       expect(client.createGroupConversation).toHaveBeenCalledWith(TOKEN, dto);
       expect(result).toEqual({ id: 'conv-new' });
@@ -108,11 +106,8 @@ describe('ConversationsService (BFF)', () => {
 
   describe('createDirectConversation', () => {
     it('should delegate with token and DTO', async () => {
-      const dto = { targetUserId: 'u2' };
-      const result = await service.createDirectConversation(
-        TOKEN,
-        dto as unknown,
-      );
+      const dto = { participantId: 'u2' };
+      const result = await service.createDirectConversation(TOKEN, dto);
 
       expect(client.createDirectConversation).toHaveBeenCalledWith(TOKEN, dto);
       expect(result).toEqual({ id: 'conv-dm' });
@@ -124,11 +119,7 @@ describe('ConversationsService (BFF)', () => {
   describe('updateConversation', () => {
     it('should delegate with token, conversationId, and DTO', async () => {
       const dto = { name: 'Renamed' };
-      const result = await service.updateConversation(
-        TOKEN,
-        'conv-1',
-        dto as unknown,
-      );
+      const result = await service.updateConversation(TOKEN, 'conv-1', dto);
 
       expect(client.updateConversation).toHaveBeenCalledWith(
         TOKEN,
@@ -144,7 +135,7 @@ describe('ConversationsService (BFF)', () => {
   describe('addMembers', () => {
     it('should delegate with token, conversationId, and DTO', async () => {
       const dto = { memberIds: ['u3', 'u4'] };
-      const result = await service.addMembers(TOKEN, 'conv-1', dto as unknown);
+      const result = await service.addMembers(TOKEN, 'conv-1', dto);
 
       expect(client.addMembers).toHaveBeenCalledWith(TOKEN, 'conv-1', dto);
       expect(result).toEqual({ ok: true });
@@ -185,13 +176,8 @@ describe('ConversationsService (BFF)', () => {
 
   describe('updateMemberRole', () => {
     it('should delegate with token, conversationId, memberId, and DTO', async () => {
-      const dto = { role: 'admin' };
-      const result = await service.updateMemberRole(
-        TOKEN,
-        'conv-1',
-        'u2',
-        dto as unknown,
-      );
+      const dto = { role: UpdateMemberRoleDtoRoleEnum.ADMIN };
+      const result = await service.updateMemberRole(TOKEN, 'conv-1', 'u2', dto);
 
       expect(client.updateMemberRole).toHaveBeenCalledWith(
         TOKEN,
@@ -207,12 +193,8 @@ describe('ConversationsService (BFF)', () => {
 
   describe('updateMySettings', () => {
     it('should delegate with token, conversationId, and DTO', async () => {
-      const dto = { muted: true };
-      const result = await service.updateMySettings(
-        TOKEN,
-        'conv-1',
-        dto as unknown,
-      );
+      const dto = { notificationEnabled: false };
+      const result = await service.updateMySettings(TOKEN, 'conv-1', dto);
 
       expect(client.updateMySettings).toHaveBeenCalledWith(
         TOKEN,

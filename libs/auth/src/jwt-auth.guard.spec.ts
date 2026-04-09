@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/unbound-method */
 /**
  * Unit tests for JwtAuthGuard
  *
@@ -18,31 +17,50 @@ import { ExecutionContext } from '@nestjs/common';
 import { BusinessException } from '@app/types';
 import { ErrorCode, UserStatus } from '@app/constant';
 import { createMockUser, createMockJwtPayload } from '../../../test/helpers';
+import type { Repository } from 'typeorm';
+import type { User } from '@libs/database';
+
+interface MockRequest {
+  headers: {
+    authorization?: string;
+  };
+  user?: {
+    id: string;
+    phone: string;
+    fullName: string;
+    status: string;
+    email?: string;
+  };
+}
 
 describe('JwtAuthGuard', () => {
   let guard: JwtAuthGuard;
-  let jwtService: JwtService;
-  let reflector: Reflector;
+  let jwtService: Pick<JwtService, 'verifyAccessToken'>;
+  let reflector: Pick<Reflector, 'getAllAndOverride'>;
   let userRepository: { findOne: jest.Mock };
 
   beforeEach(() => {
     jwtService = {
       verifyAccessToken: jest.fn(),
-    } as unknown as JwtService;
+    };
 
     reflector = {
       getAllAndOverride: jest.fn(),
-    } as unknown as Reflector;
+    };
 
     userRepository = {
       findOne: jest.fn(),
     };
 
-    guard = new JwtAuthGuard(jwtService, reflector, userRepository as unknown);
+    guard = new JwtAuthGuard(
+      jwtService as JwtService,
+      reflector as Reflector,
+      userRepository as unknown as Repository<User>,
+    );
   });
 
   function createMockExecutionContext(authHeader?: string): ExecutionContext {
-    const request: unknown = {
+    const request: MockRequest = {
       headers: authHeader ? { authorization: authHeader } : {},
     };
 
@@ -52,7 +70,7 @@ describe('JwtAuthGuard', () => {
       }),
       getHandler: () => ({}),
       getClass: () => ({}),
-    } as unknown as ExecutionContext;
+    } as ExecutionContext;
   }
 
   // ─── Public Routes ─────────────────────────────────────────────────────────
@@ -202,7 +220,7 @@ describe('JwtAuthGuard', () => {
       (jwtService.verifyAccessToken as jest.Mock).mockReturnValue(mockPayload);
       userRepository.findOne.mockResolvedValue(mockUser);
 
-      const request: unknown = {
+      const request: MockRequest = {
         headers: { authorization: 'Bearer valid-token' },
       };
 
@@ -212,16 +230,16 @@ describe('JwtAuthGuard', () => {
         }),
         getHandler: () => ({}),
         getClass: () => ({}),
-      } as unknown as ExecutionContext;
+      } as ExecutionContext;
 
       const result = await guard.canActivate(ctx);
 
       expect(result).toBe(true);
       expect(request.user).toBeDefined();
-      expect(request.user.id).toBe(mockUser.id);
-      expect(request.user.phone).toBe(mockUser.phone);
-      expect(request.user.fullName).toBe(mockUser.fullName);
-      expect(request.user.status).toBe(UserStatus.ACTIVE);
+      expect(request.user?.id).toBe(mockUser.id);
+      expect(request.user?.phone).toBe(mockUser.phone);
+      expect(request.user?.fullName).toBe(mockUser.fullName);
+      expect(request.user?.status).toBe(UserStatus.ACTIVE);
     });
   });
 });

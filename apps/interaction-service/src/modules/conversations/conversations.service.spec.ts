@@ -16,15 +16,10 @@ import {
 } from '@libs/database/entities';
 import { CacheService, REDIS_CLIENT } from '@libs/redis';
 import { KAFKA_CLIENT } from '@libs/kafka';
+import { UpdateMemberRoleDtoRoleEnum } from '@app/constant';
 
 // ─── Mock Enums ──────────────────────────────────────────
 const ConversationType = { DIRECT: 'direct', GROUP: 'group' };
-const UpdateMemberRoleDtoRoleEnum = {
-  OWNER: 'owner',
-  ADMIN: 'admin',
-  MEMBER: 'member',
-};
-
 // ─── Helpers ─────────────────────────────────────────────
 const uuid = (n: number) => `00000000-0000-0000-0000-00000000000${n}`;
 
@@ -134,11 +129,6 @@ describe('ConversationsService', () => {
     }).compile();
 
     service = module.get<ConversationsService>(ConversationsService);
-    (service as unknown).userRepository = userRepository;
-    (service as unknown).conversationRepository = conversationRepository;
-    (service as unknown).memberRepository = memberRepository;
-    (service as unknown).cacheService = cacheService;
-    (service as unknown).redis = redisClient;
   });
 
   // ─── getConversations ──────────────────────────────────
@@ -163,7 +153,7 @@ describe('ConversationsService', () => {
       const result = await service.getConversations(uuid(2), {
         page: 1,
         limit: 20,
-      } as unknown);
+      });
 
       expect(result.items).toHaveLength(1);
       expect(result.meta.total).toBe(1);
@@ -186,7 +176,7 @@ describe('ConversationsService', () => {
       const result = await service.getConversations(uuid(2), {
         page: 1,
         limit: 200,
-      } as unknown);
+      });
 
       expect(result.meta.limit).toBe(50);
     });
@@ -226,7 +216,7 @@ describe('ConversationsService', () => {
       const result = await service.getConversations('me', {
         page: 1,
         limit: 20,
-      } as unknown);
+      });
 
       expect(result.items[0].name).toBe('Other Person');
       expect(result.items[0].avatarUrl).toBe('avatar.jpg');
@@ -310,7 +300,7 @@ describe('ConversationsService', () => {
       await service.createGroupConversation(uuid(2), {
         name: 'New Group',
         memberIds: [uuid(3)],
-      } as unknown);
+      });
 
       expect(conversationRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -334,7 +324,7 @@ describe('ConversationsService', () => {
       await service.createGroupConversation(uuid(2), {
         name: 'Test',
         memberIds: [uuid(2), uuid(3), uuid(3)], // duplicates
-      } as unknown);
+      });
 
       // Should save exactly 2 members after dedup
       expect(memberRepository.save).toHaveBeenCalledWith(
@@ -355,7 +345,7 @@ describe('ConversationsService', () => {
         service.createGroupConversation(uuid(2), {
           name: 'Test',
           memberIds: [uuid(3)],
-        } as unknown),
+        }),
       ).rejects.toThrow();
     });
   });
@@ -367,7 +357,7 @@ describe('ConversationsService', () => {
       await expect(
         service.createDirectConversation(uuid(2), {
           participantId: uuid(2),
-        } as unknown),
+        }),
       ).rejects.toThrow();
     });
 
@@ -377,7 +367,7 @@ describe('ConversationsService', () => {
       await expect(
         service.createDirectConversation(uuid(2), {
           participantId: uuid(3),
-        } as unknown),
+        }),
       ).rejects.toThrow();
     });
 
@@ -400,7 +390,7 @@ describe('ConversationsService', () => {
 
       const result = await service.createDirectConversation(uuid(2), {
         participantId: uuid(3),
-      } as unknown);
+      });
 
       expect(result).toBeDefined();
       // Should NOT create a new conversation
@@ -428,7 +418,7 @@ describe('ConversationsService', () => {
 
       await service.createDirectConversation(uuid(2), {
         participantId: uuid(3),
-      } as unknown);
+      });
 
       expect(conversationRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -456,7 +446,7 @@ describe('ConversationsService', () => {
       await expect(
         service.updateConversation(uuid(2), 'nonexistent', {
           name: 'New',
-        } as unknown),
+        }),
       ).rejects.toThrow();
     });
 
@@ -468,7 +458,7 @@ describe('ConversationsService', () => {
       await expect(
         service.updateConversation(uuid(2), uuid(1), {
           name: 'New',
-        } as unknown),
+        }),
       ).rejects.toThrow();
     });
 
@@ -480,7 +470,7 @@ describe('ConversationsService', () => {
       await expect(
         service.updateConversation('outsider', uuid(1), {
           name: 'New',
-        } as unknown),
+        }),
       ).rejects.toThrow();
     });
 
@@ -498,7 +488,7 @@ describe('ConversationsService', () => {
       await expect(
         service.updateConversation(uuid(2), uuid(1), {
           name: 'New',
-        } as unknown),
+        }),
       ).rejects.toThrow();
     });
 
@@ -510,7 +500,7 @@ describe('ConversationsService', () => {
 
       await service.updateConversation(uuid(2), uuid(1), {
         name: 'Updated Group',
-      } as unknown);
+      });
 
       expect(conversationRepository.save).toHaveBeenCalled();
       expect(cacheService.invalidateConversation).toHaveBeenCalled();
@@ -532,7 +522,7 @@ describe('ConversationsService', () => {
 
       await service.addMembers(uuid(2), uuid(1), {
         memberIds: [uuid(4)],
-      } as unknown);
+      });
 
       expect(memberRepository.save).toHaveBeenCalledWith(
         expect.arrayContaining([
@@ -552,7 +542,7 @@ describe('ConversationsService', () => {
       await expect(
         service.addMembers(uuid(2), uuid(1), {
           memberIds: [uuid(2), uuid(3)],
-        } as unknown),
+        }),
       ).rejects.toThrow();
     });
 
@@ -564,7 +554,7 @@ describe('ConversationsService', () => {
       await expect(
         service.addMembers(uuid(2), uuid(1), {
           memberIds: [uuid(4)],
-        } as unknown),
+        }),
       ).rejects.toThrow();
     });
 
@@ -582,7 +572,7 @@ describe('ConversationsService', () => {
       await expect(
         service.addMembers(uuid(2), uuid(1), {
           memberIds: [uuid(4)],
-        } as unknown),
+        }),
       ).rejects.toThrow();
     });
 
@@ -598,7 +588,7 @@ describe('ConversationsService', () => {
 
       await service.addMembers(uuid(2), uuid(1), {
         memberIds: [uuid(4)],
-      } as unknown);
+      });
 
       expect(cacheService.invalidateConversation).toHaveBeenCalled();
     });
@@ -814,7 +804,7 @@ describe('ConversationsService', () => {
         uuid(2), // owner
         uuid(1),
         uuid(3), // target
-        { role: UpdateMemberRoleDtoRoleEnum.ADMIN } as unknown,
+        { role: UpdateMemberRoleDtoRoleEnum.ADMIN },
       );
 
       expect(result.message).toContain('updated');
@@ -840,8 +830,8 @@ describe('ConversationsService', () => {
 
       await expect(
         service.updateMemberRole(uuid(2), uuid(1), uuid(3), {
-          role: 'admin',
-        } as unknown),
+          role: UpdateMemberRoleDtoRoleEnum.ADMIN,
+        }),
       ).rejects.toThrow();
     });
 
@@ -851,8 +841,8 @@ describe('ConversationsService', () => {
 
       await expect(
         service.updateMemberRole(uuid(2), uuid(1), uuid(2), {
-          role: 'admin',
-        } as unknown),
+          role: UpdateMemberRoleDtoRoleEnum.ADMIN,
+        }),
       ).rejects.toThrow();
     });
 
@@ -863,8 +853,8 @@ describe('ConversationsService', () => {
 
       await expect(
         service.updateMemberRole(uuid(2), uuid(1), uuid(3), {
-          role: 'admin',
-        } as unknown),
+          role: UpdateMemberRoleDtoRoleEnum.ADMIN,
+        }),
       ).rejects.toThrow();
     });
   });
@@ -879,7 +869,7 @@ describe('ConversationsService', () => {
       const result = await service.updateMySettings(uuid(2), uuid(1), {
         nickname: 'My Nickname',
         isMuted: true,
-      } as unknown);
+      });
 
       expect(result.message).toContain('Settings updated');
       expect(memberRepository.save).toHaveBeenCalledWith(
@@ -896,7 +886,7 @@ describe('ConversationsService', () => {
       await expect(
         service.updateMySettings('outsider', uuid(1), {
           nickname: 'test',
-        } as unknown),
+        }),
       ).rejects.toThrow();
     });
   });

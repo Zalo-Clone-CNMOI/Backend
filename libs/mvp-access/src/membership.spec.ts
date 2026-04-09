@@ -13,6 +13,7 @@ import {
   canUserAccessConversation,
   listConversationsForUser,
 } from './membership';
+import { Logger } from '@nestjs/common';
 import { ConversationMember } from '@libs/database/entities';
 
 // ────── Mock Repository ──────────────────────────────────────────────────
@@ -188,7 +189,7 @@ describe('ConversationMembershipService', () => {
 
   describe('deprecated standalone functions', () => {
     it('canUserAccessConversation() should return false and warn', () => {
-      const spy = jest.spyOn(console, 'warn').mockImplementation();
+      const spy = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
 
       expect(canUserAccessConversation()).toBe(false);
       expect(spy).toHaveBeenCalledWith(expect.stringContaining('DEPRECATED'));
@@ -197,7 +198,7 @@ describe('ConversationMembershipService', () => {
     });
 
     it('listConversationsForUser() should return empty array and warn', () => {
-      const spy = jest.spyOn(console, 'warn').mockImplementation();
+      const spy = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
 
       expect(listConversationsForUser()).toEqual([]);
       expect(spy).toHaveBeenCalledWith(expect.stringContaining('DEPRECATED'));

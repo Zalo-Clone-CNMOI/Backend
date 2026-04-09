@@ -32,7 +32,7 @@ describe('BFF UsersController', () => {
   describe('Bearer token extraction', () => {
     it('should throw UnauthorizedException when authorization header is missing', async () => {
       await expect(
-        controller.getMyProfile(undefined as unknown),
+        controller.getMyProfile(undefined as unknown as string),
       ).rejects.toThrow(UnauthorizedException);
     });
 
@@ -68,7 +68,7 @@ describe('BFF UsersController', () => {
 
   describe('PATCH /users/me', () => {
     it('should extract token and delegate dto to service', async () => {
-      const dto = { fullName: 'Updated Name' } as unknown;
+      const dto = { fullName: 'Updated Name' };
       const expected = { id: 'user-1', fullName: 'Updated Name' };
       usersService.updateMyProfile.mockResolvedValue(expected);
 
@@ -81,7 +81,7 @@ describe('BFF UsersController', () => {
 
   describe('GET /users/search', () => {
     it('should extract token and pass query params to service', async () => {
-      const dto = { q: 'Nguyen', page: 1, limit: 20 } as unknown;
+      const dto = { q: 'Nguyen', page: 1, limit: 20 };
       usersService.searchUsers.mockResolvedValue({
         items: [],
         meta: { total: 0 },

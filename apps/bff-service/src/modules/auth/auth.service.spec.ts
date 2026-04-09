@@ -8,6 +8,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthService } from './auth.service';
 import { SsoClientService } from '@app/clients';
+import { QrStatusResponseDtoStatusEnum } from '@app/clients';
 
 // ────── Test Suite ───────────────────────────────────────────────────────
 
@@ -44,15 +45,14 @@ describe('BFF AuthService', () => {
 
   it('should delegate register() to ssoClient', async () => {
     const dto = {
-      firebaseToken: 'token',
-      phone: '123',
-      name: 'A',
+      firebaseIdToken: 'token',
+      fullName: 'A',
       password: 'p',
     };
     const expected = { user: {}, tokens: {} };
-    ssoClient.register.mockResolvedValue(expected as unknown);
+    ssoClient.register.mockResolvedValue(expected);
 
-    const result = await service.register(dto as unknown);
+    const result = await service.register(dto);
 
     expect(ssoClient.register).toHaveBeenCalledWith(dto);
     expect(result).toBe(expected);
@@ -61,9 +61,9 @@ describe('BFF AuthService', () => {
   it('should delegate login() to ssoClient', async () => {
     const dto = { phone: '123', password: 'p' };
     const expected = { user: {}, tokens: {} };
-    ssoClient.login.mockResolvedValue(expected as unknown);
+    ssoClient.login.mockResolvedValue(expected);
 
-    const result = await service.login(dto as unknown);
+    const result = await service.login(dto);
 
     expect(ssoClient.login).toHaveBeenCalledWith(dto);
     expect(result).toBe(expected);
@@ -71,30 +71,30 @@ describe('BFF AuthService', () => {
 
   it('should delegate refreshToken() to ssoClient', async () => {
     const dto = { refreshToken: 'old' };
-    ssoClient.refreshToken.mockResolvedValue({ accessToken: 'new' } as unknown);
+    ssoClient.refreshToken.mockResolvedValue({ accessToken: 'new' });
 
-    await service.refreshToken(dto as unknown);
+    await service.refreshToken(dto);
 
     expect(ssoClient.refreshToken).toHaveBeenCalledWith(dto);
   });
 
   it('should delegate logout() with accessToken to ssoClient', async () => {
-    ssoClient.logout.mockResolvedValue({ message: 'ok' } as unknown);
+    ssoClient.logout.mockResolvedValue({ message: 'ok' });
 
-    await service.logout('access-token', { refreshToken: 'rt' } as unknown);
+    await service.logout('access-token', { deviceId: 'rt' });
 
     expect(ssoClient.logout).toHaveBeenCalledWith('access-token', {
-      refreshToken: 'rt',
+      deviceId: 'rt',
     });
   });
 
   it('should delegate resetPassword() to ssoClient', async () => {
-    ssoClient.resetPassword.mockResolvedValue({ message: 'done' } as unknown);
+    ssoClient.resetPassword.mockResolvedValue({ message: 'done' });
 
     await service.resetPassword({
-      firebaseToken: 't',
+      firebaseIdToken: 't',
       newPassword: 'p',
-    } as unknown);
+    });
 
     expect(ssoClient.resetPassword).toHaveBeenCalled();
   });
@@ -104,26 +104,28 @@ describe('BFF AuthService', () => {
       sessionId: 's',
       qrToken: 'q',
       expiresAt: 'e',
-    } as unknown);
+    });
 
-    await service.qrGenerate({ socketId: 'sock' } as unknown);
+    await service.qrGenerate({ socketId: 'sock' });
 
     expect(ssoClient.qrGenerate).toHaveBeenCalledWith({ socketId: 'sock' });
   });
 
   it('should delegate qrStatus() to ssoClient', async () => {
-    ssoClient.qrStatus.mockResolvedValue({ status: 'pending' } as unknown);
+    ssoClient.qrStatus.mockResolvedValue({
+      status: QrStatusResponseDtoStatusEnum.PENDING,
+    });
 
     const result = await service.qrStatus('session-id');
 
     expect(ssoClient.qrStatus).toHaveBeenCalledWith('session-id');
-    expect(result).toEqual({ status: 'pending' });
+    expect(result).toEqual({ status: QrStatusResponseDtoStatusEnum.PENDING });
   });
 
   it('should delegate qrConfirm() with accessToken', async () => {
-    ssoClient.qrConfirm.mockResolvedValue({ message: 'confirmed' } as unknown);
+    ssoClient.qrConfirm.mockResolvedValue({ message: 'confirmed' });
 
-    await service.qrConfirm('token', { sessionId: 's' } as unknown);
+    await service.qrConfirm('token', { sessionId: 's' });
 
     expect(ssoClient.qrConfirm).toHaveBeenCalledWith('token', {
       sessionId: 's',
@@ -131,9 +133,9 @@ describe('BFF AuthService', () => {
   });
 
   it('should delegate qrReject() with accessToken', async () => {
-    ssoClient.qrReject.mockResolvedValue({ message: 'rejected' } as unknown);
+    ssoClient.qrReject.mockResolvedValue({ message: 'rejected' });
 
-    await service.qrReject('token', { sessionId: 's' } as unknown);
+    await service.qrReject('token', { sessionId: 's' });
 
     expect(ssoClient.qrReject).toHaveBeenCalledWith('token', {
       sessionId: 's',
@@ -147,11 +149,10 @@ describe('BFF AuthService', () => {
 
     await expect(
       service.register({
-        firebaseToken: 't',
-        phone: 'p',
-        name: 'n',
+        firebaseIdToken: 't',
+        fullName: 'n',
         password: 'pw',
-      } as unknown),
+      }),
     ).rejects.toThrow('SSO unavailable');
   });
 
@@ -159,7 +160,7 @@ describe('BFF AuthService', () => {
     ssoClient.login.mockRejectedValue(new Error('Invalid credentials'));
 
     await expect(
-      service.login({ phone: '123', password: 'wrong' } as unknown),
+      service.login({ phone: '123', password: 'wrong' }),
     ).rejects.toThrow('Invalid credentials');
   });
 });

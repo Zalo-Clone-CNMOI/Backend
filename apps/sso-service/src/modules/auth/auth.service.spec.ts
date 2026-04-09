@@ -19,6 +19,12 @@ import {
   createMockQrSession,
 } from '../../../../../test/helpers';
 import * as bcrypt from 'bcrypt';
+import type { Repository, DataSource } from 'typeorm';
+import type { User } from '@libs/database/entities';
+import type { JwtService as JwtServiceType } from '@libs/auth';
+import type { RedisService as RedisServiceType } from '@libs/redis';
+import type { ClientKafka } from '@nestjs/microservices';
+import type { FirebaseService as FirebaseServiceType } from '@libs/firebase';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -86,12 +92,12 @@ describe('AuthService', () => {
     };
 
     service = new AuthService(
-      userRepository as unknown,
-      jwtService as unknown,
-      redisService as unknown,
-      kafkaClient as unknown,
-      dataSource as unknown,
-      firebaseService as unknown,
+      userRepository as unknown as Repository<User>,
+      jwtService as unknown as JwtServiceType,
+      redisService as unknown as RedisServiceType,
+      kafkaClient as unknown as ClientKafka,
+      dataSource as unknown as DataSource,
+      firebaseService as unknown as FirebaseServiceType,
     );
   });
 
@@ -161,9 +167,7 @@ describe('AuthService', () => {
       // Second findOne: email check → found
       userRepository.findOne
         .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce(
-          createMockUser({ email: 'dup@test.com' as unknown }),
-        );
+        .mockResolvedValueOnce(createMockUser({ email: 'dup@test.com' }));
 
       await expect(
         service.register({
@@ -446,11 +450,13 @@ describe('AuthService', () => {
       });
 
       // dataSource.transaction callback receives a manager
-      dataSource.transaction.mockImplementation(async (cb: unknown) => {
-        return cb({
-          findOne: jest.fn().mockResolvedValue(mockUser),
-        });
-      });
+      dataSource.transaction.mockImplementation(
+        async (cb: (manager: { findOne: jest.Mock }) => Promise<unknown>) => {
+          return cb({
+            findOne: jest.fn().mockResolvedValue(mockUser),
+          });
+        },
+      );
 
       const result = await service.confirmQrSession(mockUser.id, {
         sessionId: session.sessionId,

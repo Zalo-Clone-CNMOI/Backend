@@ -21,13 +21,13 @@ import type { AiModerationRequestEvent } from '@libs/contracts';
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function makeGateway() {
-  return { complete: jest.fn() } as unknown as jest.Mocked<AiGatewayService>;
+  return { complete: jest.fn() } as jest.Mocked<AiGatewayService>;
 }
 
 function makeMetrics() {
   return {
     recordRequest: jest.fn(),
-  } as unknown as jest.Mocked<AiMetricsService>;
+  } as jest.Mocked<AiMetricsService>;
 }
 
 function makeRepo() {

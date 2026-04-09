@@ -74,7 +74,7 @@ describe('FriendsService (integration)', () => {
 
   describe('getFriends', () => {
     it('should return empty list when no friends', async () => {
-      const qb = jest.fn() as unknown;
+      const qb = jest.fn();
       const chainable = [
         'leftJoinAndSelect',
         'where',
@@ -118,7 +118,7 @@ describe('FriendsService (integration)', () => {
         },
       };
 
-      const qb = jest.fn() as unknown;
+      const qb = jest.fn();
       const chainable = [
         'leftJoinAndSelect',
         'where',
@@ -142,7 +142,7 @@ describe('FriendsService (integration)', () => {
     });
 
     it('should respect pagination', async () => {
-      const qb = jest.fn() as unknown;
+      const qb = jest.fn();
       const chainable = [
         'leftJoinAndSelect',
         'where',

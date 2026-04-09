@@ -7,7 +7,7 @@
  *
  * Covers full pipeline: prompt building → cache check → LLM call → cache store → result.
  */
-/* eslint-disable @typescript-eslint/unbound-method, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
 import { SummaryEngine } from '../../../apps/ai-core-service/src/modules/summary/summary.engine';
 import { TranslationEngine } from '../../../apps/ai-core-service/src/modules/translation/translation.engine';
@@ -25,13 +25,13 @@ import type {
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function makeGateway() {
-  return { complete: jest.fn() } as unknown as jest.Mocked<AiGatewayService>;
+  return { complete: jest.fn() } as jest.Mocked<AiGatewayService>;
 }
 
 function makeMetrics() {
   return {
     recordRequest: jest.fn(),
-  } as unknown as jest.Mocked<AiMetricsService>;
+  } as jest.Mocked<AiMetricsService>;
 }
 
 function makeRedis() {
@@ -42,7 +42,7 @@ function makeRedis() {
     incrBy: jest.fn().mockResolvedValue(0),
     ttl: jest.fn().mockResolvedValue(-1),
     expire: jest.fn().mockResolvedValue(1),
-  } as unknown as jest.Mocked<RedisService>;
+  } as jest.Mocked<RedisService>;
 }
 
 function makeLlmResult(
@@ -178,7 +178,7 @@ describe('SummaryEngine (integration)', () => {
       gateway.complete.mockResolvedValue(
         makeLlmResult({
           content: JSON.stringify({ summary: 'LLM-generated summary' }),
-        }) as unknown,
+        }),
       );
 
       await engine.summarize(event, [
@@ -192,7 +192,7 @@ describe('SummaryEngine (integration)', () => {
       const callArgs = gateway.complete.mock.calls[0];
       // Arg 0 = userId, Arg 1 = request object
       expect(callArgs[0]).toBe(event.user_id);
-      const req = callArgs[1] as unknown;
+      const req = callArgs[1];
       expect(req.messages).toHaveLength(2); // system + user from PromptBuilderService
       expect(req.messages[0].role).toBe('system');
       expect(req.messages[1].role).toBe('user');
@@ -208,7 +208,7 @@ describe('SummaryEngine (integration)', () => {
           content: JSON.stringify({
             summary: 'Great conversation about NestJS.',
           }),
-        }) as unknown,
+        }),
       );
 
       const result = await engine.summarize(event, ['m1 text', 'm2 text']);
@@ -228,7 +228,7 @@ describe('SummaryEngine (integration)', () => {
       gateway.complete.mockResolvedValue(
         makeLlmResult({
           content: JSON.stringify({ summary: 'Cached conversation.' }),
-        }) as unknown,
+        }),
       );
 
       await engine.summarize(event, ['text']);
@@ -275,7 +275,7 @@ describe('SummaryEngine (integration)', () => {
       gateway.complete.mockResolvedValue(
         makeLlmResult({
           content: JSON.stringify({ summary: 'Fresh summary' }),
-        }) as unknown,
+        }),
       );
 
       const result = await engine.summarize(event, ['text a', 'text b']);
@@ -326,7 +326,7 @@ describe('SummaryEngine (integration)', () => {
       gateway.complete.mockResolvedValue(
         makeLlmResult({
           content: JSON.stringify({ summary: 'Regenerated summary' }),
-        }) as unknown,
+        }),
       );
 
       const result = await engine.summarize(event, ['text']);
@@ -441,13 +441,13 @@ describe('TranslationEngine (integration)', () => {
             translated_text: 'Xin chào',
             source_language: 'en',
           }),
-        }) as unknown,
+        }),
       );
 
       await engine.translate(event);
 
       expect(gateway.complete).toHaveBeenCalledTimes(1);
-      const req = gateway.complete.mock.calls[0][1] as unknown;
+      const req = gateway.complete.mock.calls[0][1];
       expect(req.messages).toHaveLength(2);
       expect(req.messages[0].role).toBe('system');
       expect(req.messages[1].role).toBe('user');
@@ -466,12 +466,12 @@ describe('TranslationEngine (integration)', () => {
             translated_text: 'ok',
             source_language: 'en',
           }),
-        }) as unknown,
+        }),
       );
 
       await engine.translate(event);
 
-      const req = gateway.complete.mock.calls[0][1] as unknown;
+      const req = gateway.complete.mock.calls[0][1];
       const systemMsg: string = req.messages[0].content;
       expect(systemMsg).toContain('to vi');
     });
@@ -484,7 +484,7 @@ describe('TranslationEngine (integration)', () => {
             translated_text: 'Xin chào',
             source_language: 'en',
           }),
-        }) as unknown,
+        }),
       );
 
       await engine.translate(event);
@@ -508,7 +508,7 @@ describe('TranslationEngine (integration)', () => {
           model: 'gemini-pro',
           tokensIn: 30,
           tokensOut: 20,
-        }) as unknown,
+        }),
       );
 
       const result = await engine.translate(event);
@@ -534,7 +534,7 @@ describe('TranslationEngine (integration)', () => {
           tokensIn: 20,
           tokensOut: 15,
           latencyMs: 90,
-        }) as unknown,
+        }),
       );
 
       await engine.translate(event);
@@ -567,7 +567,7 @@ describe('TranslationEngine (integration)', () => {
             translated_text: 'translated',
             source_language: 'en',
           }),
-        }) as unknown,
+        }),
       );
 
       await engine.translate(eventVi);
@@ -597,7 +597,7 @@ describe('TranslationEngine (integration)', () => {
             translated_text: 'hi',
             source_language: 'en',
           }),
-        }) as unknown,
+        }),
       );
       await engine.translate(event1);
 
@@ -681,7 +681,7 @@ describe('TranslationEngine (integration)', () => {
             translated_text: 'Rebuilt',
             source_language: 'en',
           }),
-        }) as unknown,
+        }),
       );
 
       const result = await engine.translate(event);

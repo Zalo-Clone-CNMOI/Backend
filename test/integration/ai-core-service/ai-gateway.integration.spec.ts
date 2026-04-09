@@ -32,7 +32,7 @@ function makeProvider(
     complete: jest.fn(),
     completeStream: jest.fn(),
     embed: jest.fn(),
-  } as unknown as jest.Mocked<ILlmProvider>;
+  } as jest.Mocked<ILlmProvider>;
 }
 
 function makeRedis(): jest.Mocked<RedisService> {
@@ -43,7 +43,7 @@ function makeRedis(): jest.Mocked<RedisService> {
     incrBy: jest.fn().mockResolvedValue(100),
     ttl: jest.fn().mockResolvedValue(3600),
     expire: jest.fn().mockResolvedValue(true),
-  } as unknown as jest.Mocked<RedisService>;
+  } as jest.Mocked<RedisService>;
 }
 
 function makeResult(

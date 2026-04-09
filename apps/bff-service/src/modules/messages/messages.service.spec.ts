@@ -27,8 +27,6 @@ describe('BFF MessagesService', () => {
     }).compile();
 
     service = module.get<MessagesService>(MessagesService);
-    // Inject manually since token name may differ
-    (service as unknown).chatClient = chatClient;
   });
 
   describe('getMessages', () => {

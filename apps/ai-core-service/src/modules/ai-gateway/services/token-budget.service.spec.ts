@@ -119,7 +119,7 @@ describe('TokenBudgetService', () => {
     it('sets 24h TTL when key has no expiry (ttl returns -1)', async () => {
       redis.incrBy.mockResolvedValue(1000);
       redis.ttl.mockResolvedValue(-1); // no TTL
-      redis.expire.mockResolvedValue(true as unknown);
+      redis.expire.mockResolvedValue(true);
 
       await service.consume('user1', 1000);
 
@@ -132,7 +132,7 @@ describe('TokenBudgetService', () => {
     it('sets TTL when key does not exist (ttl returns -2)', async () => {
       redis.incrBy.mockResolvedValue(1000);
       redis.ttl.mockResolvedValue(-2); // key does not exist
-      redis.expire.mockResolvedValue(true as unknown);
+      redis.expire.mockResolvedValue(true);
 
       await service.consume('user1', 1000);
 

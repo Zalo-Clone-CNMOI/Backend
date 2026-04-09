@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/unbound-method */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/unbound-method */
 /**
  * @file chat.handler.spec.ts
  * @covers ChatHandler – WS Gateway chat event handler with membership checks
@@ -22,15 +22,17 @@ import type {
   WsChatUnreactPayload,
 } from '@libs/contracts';
 
+type AuthedSocket = Parameters<ChatHandler['handleJoin']>[0];
+
 // ────── Mock Socket Factory ──────────────────────────────────────────────
 
-function createMockSocket(userId = 'user-abc') {
+function createMockSocket(userId = 'user-abc'): AuthedSocket {
   return {
     id: 'socket-id-123',
     data: { userId },
     emit: jest.fn(),
     join: jest.fn(),
-  } as unknown;
+  } as unknown as AuthedSocket;
 }
 
 // ────── Payload Factories ────────────────────────────────────────────────

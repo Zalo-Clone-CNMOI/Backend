@@ -75,7 +75,7 @@ describe('MockNotificationProvider', () => {
       const items = store.list();
       expect(items).toHaveLength(1);
       // data is not part of SentNotification, so it should not be present
-      expect((items[0] as unknown).data).toBeUndefined();
+      expect('data' in items[0]).toBe(false);
     });
 
     it('should store multiple notifications in order', async () => {

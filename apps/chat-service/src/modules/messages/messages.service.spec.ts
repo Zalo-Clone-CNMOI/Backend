@@ -50,9 +50,6 @@ describe('Chat MessagesService', () => {
     }).compile();
 
     service = module.get<MessagesService>(MessagesService);
-    (service as unknown).messageRepository = messageRepository;
-    (service as unknown).cacheService = cacheService;
-    (service as unknown).cdnBaseUrl = 'https://cdn.example.com';
   });
 
   // ─── getMessages ─────────────────────────────────────
@@ -68,7 +65,7 @@ describe('Chat MessagesService', () => {
 
       const result = await service.getMessages('conv-1', {
         limit: 50,
-      } as unknown);
+      });
 
       expect(cacheService.getRecentMessages).toHaveBeenCalledWith('conv-1');
       expect(messageRepository.getMessages).not.toHaveBeenCalled();
@@ -85,7 +82,7 @@ describe('Chat MessagesService', () => {
 
       const result = await service.getMessages('conv-1', {
         limit: 50,
-      } as unknown);
+      });
 
       expect(messageRepository.getMessages).toHaveBeenCalledWith('conv-1', {
         cursor: undefined,
@@ -108,7 +105,7 @@ describe('Chat MessagesService', () => {
       await service.getMessages('conv-1', {
         cursor: 'abc-cursor',
         limit: 50,
-      } as unknown);
+      });
 
       expect(cacheService.getRecentMessages).not.toHaveBeenCalled();
       expect(messageRepository.getMessages).toHaveBeenCalled();
@@ -121,7 +118,7 @@ describe('Chat MessagesService', () => {
         has_more: false,
       });
 
-      await service.getMessages('conv-1', { limit: 100 } as unknown);
+      await service.getMessages('conv-1', { limit: 100 });
 
       expect(cacheService.setRecentMessages).not.toHaveBeenCalled();
     });
@@ -133,7 +130,7 @@ describe('Chat MessagesService', () => {
         has_more: false,
       });
 
-      await service.getMessages('conv-1', {} as unknown);
+      await service.getMessages('conv-1', {});
 
       expect(messageRepository.getMessages).toHaveBeenCalledWith('conv-1', {
         cursor: undefined,
@@ -154,7 +151,7 @@ describe('Chat MessagesService', () => {
 
       const result = await service.getMessages('conv-1', {
         limit: 50,
-      } as unknown);
+      });
 
       expect(result.items[0]).toEqual(
         expect.objectContaining({
@@ -181,7 +178,7 @@ describe('Chat MessagesService', () => {
 
       const result = await service.getMessages('conv-1', {
         limit: 50,
-      } as unknown);
+      });
 
       expect(result.items[0].body).toBe('');
       expect(result.items[0].isDeleted).toBe(true);
@@ -232,16 +229,12 @@ describe('Chat MessagesService', () => {
       expect(result.reactions).toHaveLength(3);
 
       // Summary should aggregate by type
-      const loveSummary = result.summary.find(
-        (s: unknown) => s.type === 'love',
-      );
+      const loveSummary = result.summary.find((s) => s.type === 'love');
       expect(loveSummary).toBeDefined();
       expect(loveSummary!.count).toBe(2);
       expect(loveSummary!.userIds).toEqual(['user-1', 'user-2']);
 
-      const hahaSummary = result.summary.find(
-        (s: unknown) => s.type === 'haha',
-      );
+      const hahaSummary = result.summary.find((s) => s.type === 'haha');
       expect(hahaSummary).toBeDefined();
       expect(hahaSummary!.count).toBe(1);
     });
@@ -288,7 +281,7 @@ describe('Chat MessagesService', () => {
 
       const result = await service.getMessages('conv-1', {
         limit: 50,
-      } as unknown);
+      });
 
       const attachment = result.items[0].attachments![0];
       expect(attachment.key).toBe('images/photo.jpg');
@@ -317,14 +310,20 @@ describe('Chat MessagesService', () => {
 
       const result = await service.getMessages('conv-1', {
         limit: 50,
-      } as unknown);
+      });
 
       const attachment = result.items[0].attachments![0];
       expect(attachment.thumbnailUrl).toBeUndefined();
     });
 
     it('should use localhost format for local CDN', async () => {
-      (service as unknown).cdnBaseUrl = 'http://localhost:4566';
+      const originalCdn = process.env.CDN_BASE_URL;
+      process.env.CDN_BASE_URL = 'http://localhost:4566';
+
+      const localService = new MessagesService(
+        messageRepository as unknown as MessageRepository,
+        cacheService as unknown as CacheService,
+      );
 
       const msg = createMockMessage({
         attachments: [
@@ -344,14 +343,16 @@ describe('Chat MessagesService', () => {
         has_more: false,
       });
 
-      const result = await service.getMessages('conv-1', {
+      const result = await localService.getMessages('conv-1', {
         limit: 50,
-      } as unknown);
+      });
 
       // Localhost format includes bucket in path
       expect(result.items[0].attachments![0].url).toMatch(
         /localhost.*\/.*test\.jpg/,
       );
+
+      process.env.CDN_BASE_URL = originalCdn;
     });
   });
 });

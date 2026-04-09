@@ -7,6 +7,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { FriendsService } from './friends.service';
 import { InteractionClientService } from '@app/clients/interaction-client';
+import { RespondFriendRequestDtoActionEnum } from './dto';
 
 describe('BFF FriendsService', () => {
   let service: FriendsService;
@@ -33,7 +34,6 @@ describe('BFF FriendsService', () => {
     }).compile();
 
     service = module.get<FriendsService>(FriendsService);
-    (service as unknown).interactionClient = interactionClient;
   });
 
   describe('getFriends', () => {
@@ -83,7 +83,7 @@ describe('BFF FriendsService', () => {
         message: 'Sent',
       });
 
-      await service.sendFriendRequest('token', dto as unknown);
+      await service.sendFriendRequest('token', dto);
 
       expect(interactionClient.sendFriendRequest).toHaveBeenCalledWith(
         'token',
@@ -94,12 +94,12 @@ describe('BFF FriendsService', () => {
 
   describe('respondToRequest', () => {
     it('should delegate to interactionClient.respondToRequest', async () => {
-      const dto = { action: 'accept' };
+      const dto = { action: RespondFriendRequestDtoActionEnum.accept };
       interactionClient.respondToRequest.mockResolvedValue({
         message: 'Accepted',
       });
 
-      await service.respondToRequest('token', 'req-uuid', dto as unknown);
+      await service.respondToRequest('token', 'req-uuid', dto);
 
       expect(interactionClient.respondToRequest).toHaveBeenCalledWith(
         'token',

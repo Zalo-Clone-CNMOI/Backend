@@ -27,7 +27,7 @@ export class MessagesService {
     private readonly messageRepository: MessageRepository,
     private readonly cacheService: CacheService,
   ) {
-    const bucket = process.env.S3_BUCKET;
+    const bucket = process.env.S3_BUCKET ?? 'zalo-bucket';
     const region = process.env.AWS_REGION ?? 'ap-southeast-1';
     const endpoint = process.env.S3_ENDPOINT;
     this.cdnBaseUrl = endpoint

@@ -198,7 +198,10 @@ export class SsoClientService extends BaseHttpClient {
           Authorization: `Bearer ${accessToken}`,
         },
       });
-      return response.data;
+      const body = response.data as unknown as {
+        data?: UserProfileResponseDto;
+      };
+      return body.data ?? response.data;
     } catch (error) {
       this.handleError('getMyProfile', error);
     }

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /**
  * @file mock-notification.provider.spec.ts
  *
@@ -76,7 +75,7 @@ describe('MockNotificationProvider', () => {
       const items = store.list();
       expect(items).toHaveLength(1);
       // data is not part of SentNotification, so it should not be present
-      expect((items[0] as any).data).toBeUndefined();
+      expect((items[0] as unknown).data).toBeUndefined();
     });
 
     it('should store multiple notifications in order', async () => {

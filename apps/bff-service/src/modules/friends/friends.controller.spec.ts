@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment */
 /**
  * @file friends.controller.spec.ts (BFF)
  *
@@ -78,7 +77,7 @@ describe('BFF FriendsController', () => {
 
   describe('POST /friends/requests', () => {
     it('should delegate to sendFriendRequest with token and dto', async () => {
-      const dto = { userId: 'target-uuid' } as any;
+      const dto = { userId: 'target-uuid' } as unknown;
       friendsService.sendFriendRequest.mockResolvedValue({ message: 'Sent' });
 
       await controller.sendFriendRequest('token', dto);
@@ -92,7 +91,7 @@ describe('BFF FriendsController', () => {
 
   describe('PATCH /friends/requests/:requestId', () => {
     it('should delegate to respondToRequest with token, requestId, and dto', async () => {
-      const dto = { action: 'accept' } as any;
+      const dto = { action: 'accept' } as unknown;
       friendsService.respondToRequest.mockResolvedValue({
         message: 'Accepted',
       });

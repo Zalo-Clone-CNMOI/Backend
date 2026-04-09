@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 /**
  * @file friends.controller.spec.ts (interaction-service)
  *
@@ -10,7 +9,7 @@ import { FriendsController } from './friends.controller';
 import { FriendsService } from './friends.service';
 
 const uuid = (n: number) => `00000000-0000-0000-0000-00000000000${n}`;
-const user = { id: uuid(1), email: 'u@test.com' } as any;
+const user = { id: uuid(1), email: 'u@test.com' } as unknown;
 
 describe('FriendsController', () => {
   let controller: FriendsController;
@@ -41,31 +40,31 @@ describe('FriendsController', () => {
 
   it('getFriends → service.getFriends(userId, query)', async () => {
     const query = { page: 1, limit: 20 };
-    await controller.getFriends(user, query as any);
+    await controller.getFriends(user, query as unknown);
     expect(service.getFriends).toHaveBeenCalledWith(user.id, query);
   });
 
   it('getPendingRequests → service.getPendingRequests(userId, query)', async () => {
     const query = { page: 1, limit: 20 };
-    await controller.getPendingRequests(user, query as any);
+    await controller.getPendingRequests(user, query as unknown);
     expect(service.getPendingRequests).toHaveBeenCalledWith(user.id, query);
   });
 
   it('getSentRequests → service.getSentRequests(userId, query)', async () => {
     const query = { page: 1, limit: 20 };
-    await controller.getSentRequests(user, query as any);
+    await controller.getSentRequests(user, query as unknown);
     expect(service.getSentRequests).toHaveBeenCalledWith(user.id, query);
   });
 
   it('sendFriendRequest → service.sendFriendRequest(userId, dto)', async () => {
     const dto = { userId: uuid(2) };
-    await controller.sendFriendRequest(user, dto as any);
+    await controller.sendFriendRequest(user, dto as unknown);
     expect(service.sendFriendRequest).toHaveBeenCalledWith(user.id, dto);
   });
 
   it('respondToRequest → service.respondToRequest(userId, requestId, dto)', async () => {
     const dto = { action: 'accept' };
-    await controller.respondToRequest(user, uuid(9), dto as any);
+    await controller.respondToRequest(user, uuid(9), dto as unknown);
     expect(service.respondToRequest).toHaveBeenCalledWith(
       user.id,
       uuid(9),

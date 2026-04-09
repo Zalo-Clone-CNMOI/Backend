@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
 /**
  * @file messages.controller.spec.ts (chat-service)
  *
@@ -35,7 +34,10 @@ describe('Chat MessagesController', () => {
       messagesService.getMessages.mockResolvedValue(expected);
 
       const query = { limit: 50, cursor: 'abc' };
-      const result = await controller.getMessages('conv-uuid', query as any);
+      const result = await controller.getMessages(
+        'conv-uuid',
+        query as unknown,
+      );
 
       expect(messagesService.getMessages).toHaveBeenCalledWith(
         'conv-uuid',

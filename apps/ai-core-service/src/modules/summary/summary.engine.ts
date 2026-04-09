@@ -8,7 +8,19 @@ import { AiMetricsService } from '../ai-gateway/services/ai-metrics.service';
 import type {
   AiSummaryRequestEvent,
   AiSummaryResultEvent,
+  AiProviderType,
 } from '@libs/contracts';
+
+const toAiProviderType = (provider: string): AiProviderType => {
+  if (
+    provider === 'openai' ||
+    provider === 'gemini' ||
+    provider === 'anthropic'
+  ) {
+    return provider;
+  }
+  return 'openai';
+};
 
 /**
  * SummaryEngine — generates conversation summaries with caching.
@@ -93,7 +105,7 @@ export class SummaryEngine {
             event.message_ids?.[event.message_ids.length - 1] ?? 'unknown',
           count: messages.length,
         },
-        provider: result.provider as any,
+        provider: toAiProviderType(result.provider),
         tokens_used: result.tokensIn + result.tokensOut,
         cached: false,
         processed_at: Date.now(),

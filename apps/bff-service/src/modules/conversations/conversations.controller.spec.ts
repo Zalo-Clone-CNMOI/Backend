@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment */
 /**
  * @file conversations.controller.spec.ts (bff-service)
  *
@@ -85,7 +84,7 @@ describe('ConversationsController (BFF)', () => {
 
   describe('POST /group (createGroupConversation)', () => {
     it('should delegate with token and group DTO', async () => {
-      const dto = { name: 'Team', memberIds: ['u1', 'u2'] } as any;
+      const dto = { name: 'Team', memberIds: ['u1', 'u2'] } as unknown;
       const result = await controller.createGroupConversation(TOKEN, dto);
 
       expect(svc.createGroupConversation).toHaveBeenCalledWith(TOKEN, dto);
@@ -97,7 +96,7 @@ describe('ConversationsController (BFF)', () => {
 
   describe('POST /direct (createDirectConversation)', () => {
     it('should delegate with token and direct DTO', async () => {
-      const dto = { targetUserId: 'u2' } as any;
+      const dto = { targetUserId: 'u2' } as unknown;
       const result = await controller.createDirectConversation(TOKEN, dto);
 
       expect(svc.createDirectConversation).toHaveBeenCalledWith(TOKEN, dto);
@@ -109,7 +108,7 @@ describe('ConversationsController (BFF)', () => {
 
   describe('PATCH /:conversationId (updateConversation)', () => {
     it('should delegate with token, id, and update DTO', async () => {
-      const dto = { name: 'Renamed' } as any;
+      const dto = { name: 'Renamed' } as unknown;
       const result = await controller.updateConversation(TOKEN, 'conv-1', dto);
 
       expect(svc.updateConversation).toHaveBeenCalledWith(TOKEN, 'conv-1', dto);
@@ -121,7 +120,7 @@ describe('ConversationsController (BFF)', () => {
 
   describe('POST /:conversationId/members (addMembers)', () => {
     it('should delegate with token, id, and add-members DTO', async () => {
-      const dto = { memberIds: ['u3'] } as any;
+      const dto = { memberIds: ['u3'] } as unknown;
       const result = await controller.addMembers(TOKEN, 'conv-1', dto);
 
       expect(svc.addMembers).toHaveBeenCalledWith(TOKEN, 'conv-1', dto);
@@ -163,7 +162,7 @@ describe('ConversationsController (BFF)', () => {
 
   describe('PATCH /:conversationId/members/:memberId/role', () => {
     it('should delegate with token, conversationId, memberId, role DTO', async () => {
-      const dto = { role: 'admin' } as any;
+      const dto = { role: 'admin' } as unknown;
       const result = await controller.updateMemberRole(
         TOKEN,
         'conv-1',
@@ -185,7 +184,7 @@ describe('ConversationsController (BFF)', () => {
 
   describe('PATCH /:conversationId/settings (updateMySettings)', () => {
     it('should delegate with token, conversationId, settings DTO', async () => {
-      const dto = { muted: true } as any;
+      const dto = { muted: true } as unknown;
       const result = await controller.updateMySettings(TOKEN, 'conv-1', dto);
 
       expect(svc.updateMySettings).toHaveBeenCalledWith(TOKEN, 'conv-1', dto);

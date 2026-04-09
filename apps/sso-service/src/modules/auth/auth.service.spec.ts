@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/require-await */
+/* eslint-disable @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/require-await */
 /**
  * Unit tests for SSO AuthService
  *
@@ -86,12 +86,12 @@ describe('AuthService', () => {
     };
 
     service = new AuthService(
-      userRepository as any,
-      jwtService as any,
-      redisService as any,
-      kafkaClient as any,
-      dataSource as any,
-      firebaseService as any,
+      userRepository as unknown,
+      jwtService as unknown,
+      redisService as unknown,
+      kafkaClient as unknown,
+      dataSource as unknown,
+      firebaseService as unknown,
     );
   });
 
@@ -162,7 +162,7 @@ describe('AuthService', () => {
       userRepository.findOne
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(
-          createMockUser({ email: 'dup@test.com' as any }),
+          createMockUser({ email: 'dup@test.com' as unknown }),
         );
 
       await expect(
@@ -446,7 +446,7 @@ describe('AuthService', () => {
       });
 
       // dataSource.transaction callback receives a manager
-      dataSource.transaction.mockImplementation(async (cb: any) => {
+      dataSource.transaction.mockImplementation(async (cb: unknown) => {
         return cb({
           findOne: jest.fn().mockResolvedValue(mockUser),
         });

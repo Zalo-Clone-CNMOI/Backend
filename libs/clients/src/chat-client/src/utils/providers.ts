@@ -7,9 +7,16 @@ export interface ChatClientConfig {
   baseUrl: string;
 }
 
+type InjectToken =
+  | string
+  | symbol
+  | (abstract new (...args: never[]) => unknown);
+
 export interface ChatClientAsyncConfig {
-  useFactory: (...args: any[]) => Promise<ChatClientConfig> | ChatClientConfig;
-  inject?: any[];
+  useFactory: (
+    ...args: unknown[]
+  ) => Promise<ChatClientConfig> | ChatClientConfig;
+  inject?: InjectToken[];
 }
 
 export function injectApiProvider<T>(

@@ -7,7 +7,19 @@ import { AiMetricsService } from '../ai-gateway/services/ai-metrics.service';
 import type {
   AiTranslateRequestEvent,
   AiTranslateResultEvent,
+  AiProviderType,
 } from '@libs/contracts';
+
+const toAiProviderType = (provider: string): AiProviderType => {
+  if (
+    provider === 'openai' ||
+    provider === 'gemini' ||
+    provider === 'anthropic'
+  ) {
+    return provider;
+  }
+  return 'openai';
+};
 
 /**
  * TranslationEngine — translates messages with 24h Redis cache.
@@ -105,7 +117,7 @@ export class TranslationEngine {
         source_language:
           parsed.source_language ?? event.source_language ?? 'auto',
         target_language: event.target_language,
-        provider: result.provider as any,
+        provider: toAiProviderType(result.provider),
         tokens_used: result.tokensIn + result.tokensOut,
         cached: false,
         processed_at: Date.now(),

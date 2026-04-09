@@ -7,9 +7,16 @@ export interface SsoClientConfig {
   baseUrl: string;
 }
 
+type InjectToken =
+  | string
+  | symbol
+  | (abstract new (...args: never[]) => unknown);
+
 export interface SsoClientAsyncConfig {
-  useFactory: (...args: any[]) => Promise<SsoClientConfig> | SsoClientConfig;
-  inject?: any[];
+  useFactory: (
+    ...args: unknown[]
+  ) => Promise<SsoClientConfig> | SsoClientConfig;
+  inject?: InjectToken[];
 }
 
 export function injectApiProvider<T>(

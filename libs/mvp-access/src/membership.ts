@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull } from 'typeorm';
 import { ConversationMember } from '@libs/database/entities';
@@ -75,8 +75,10 @@ export class ConversationMembershipService {
   }
 }
 
+const logger = new Logger('ConversationMembershipServiceLegacy');
+
 export function canUserAccessConversation(): boolean {
-  console.warn(
+  logger.warn(
     'DEPRECATED: canUserAccessConversation() function uses hardcoded data. ' +
       'Use ConversationMembershipService.canUserAccessConversation() instead.',
   );
@@ -84,7 +86,7 @@ export function canUserAccessConversation(): boolean {
 }
 
 export function listConversationsForUser(): string[] {
-  console.warn(
+  logger.warn(
     'DEPRECATED: listConversationsForUser() function uses hardcoded data. ' +
       'Use ConversationMembershipService.listConversationsForUser() instead.',
   );

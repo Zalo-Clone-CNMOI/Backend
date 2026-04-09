@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/unbound-method */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/unbound-method */
 /**
  * Unit tests for JwtAuthGuard
  *
@@ -38,11 +38,11 @@ describe('JwtAuthGuard', () => {
       findOne: jest.fn(),
     };
 
-    guard = new JwtAuthGuard(jwtService, reflector, userRepository as any);
+    guard = new JwtAuthGuard(jwtService, reflector, userRepository as unknown);
   });
 
   function createMockExecutionContext(authHeader?: string): ExecutionContext {
-    const request: any = {
+    const request: unknown = {
       headers: authHeader ? { authorization: authHeader } : {},
     };
 
@@ -202,7 +202,7 @@ describe('JwtAuthGuard', () => {
       (jwtService.verifyAccessToken as jest.Mock).mockReturnValue(mockPayload);
       userRepository.findOne.mockResolvedValue(mockUser);
 
-      const request: any = {
+      const request: unknown = {
         headers: { authorization: 'Bearer valid-token' },
       };
 

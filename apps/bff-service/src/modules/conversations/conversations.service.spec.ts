@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
 /**
  * @file conversations.service.spec.ts (bff-service)
  *
@@ -95,7 +94,10 @@ describe('ConversationsService (BFF)', () => {
   describe('createGroupConversation', () => {
     it('should delegate with token and DTO', async () => {
       const dto = { name: 'Team', memberIds: ['u1', 'u2'] };
-      const result = await service.createGroupConversation(TOKEN, dto as any);
+      const result = await service.createGroupConversation(
+        TOKEN,
+        dto as unknown,
+      );
 
       expect(client.createGroupConversation).toHaveBeenCalledWith(TOKEN, dto);
       expect(result).toEqual({ id: 'conv-new' });
@@ -107,7 +109,10 @@ describe('ConversationsService (BFF)', () => {
   describe('createDirectConversation', () => {
     it('should delegate with token and DTO', async () => {
       const dto = { targetUserId: 'u2' };
-      const result = await service.createDirectConversation(TOKEN, dto as any);
+      const result = await service.createDirectConversation(
+        TOKEN,
+        dto as unknown,
+      );
 
       expect(client.createDirectConversation).toHaveBeenCalledWith(TOKEN, dto);
       expect(result).toEqual({ id: 'conv-dm' });
@@ -122,7 +127,7 @@ describe('ConversationsService (BFF)', () => {
       const result = await service.updateConversation(
         TOKEN,
         'conv-1',
-        dto as any,
+        dto as unknown,
       );
 
       expect(client.updateConversation).toHaveBeenCalledWith(
@@ -139,7 +144,7 @@ describe('ConversationsService (BFF)', () => {
   describe('addMembers', () => {
     it('should delegate with token, conversationId, and DTO', async () => {
       const dto = { memberIds: ['u3', 'u4'] };
-      const result = await service.addMembers(TOKEN, 'conv-1', dto as any);
+      const result = await service.addMembers(TOKEN, 'conv-1', dto as unknown);
 
       expect(client.addMembers).toHaveBeenCalledWith(TOKEN, 'conv-1', dto);
       expect(result).toEqual({ ok: true });
@@ -185,7 +190,7 @@ describe('ConversationsService (BFF)', () => {
         TOKEN,
         'conv-1',
         'u2',
-        dto as any,
+        dto as unknown,
       );
 
       expect(client.updateMemberRole).toHaveBeenCalledWith(
@@ -206,7 +211,7 @@ describe('ConversationsService (BFF)', () => {
       const result = await service.updateMySettings(
         TOKEN,
         'conv-1',
-        dto as any,
+        dto as unknown,
       );
 
       expect(client.updateMySettings).toHaveBeenCalledWith(

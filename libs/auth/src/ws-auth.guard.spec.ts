@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-member-access */
 /**
  * Unit tests for WsAuthGuard
  *
@@ -25,7 +24,7 @@ describe('WsAuthGuard', () => {
     guard = new WsAuthGuard(jwtService as unknown as JwtService);
   });
 
-  function createWsContext(socket: any): ExecutionContext {
+  function createWsContext(socket: unknown): ExecutionContext {
     return {
       switchToWs: () => ({
         getClient: () => socket,
@@ -53,7 +52,7 @@ describe('WsAuthGuard', () => {
       const result = guard.canActivate(createWsContext(socket));
 
       expect(result).toBe(true);
-      expect((socket.data as any).userId).toBe('user-123');
+      expect((socket.data as unknown).userId).toBe('user-123');
       expect(jwtService.verifyToken).toHaveBeenCalledWith('valid-jwt-token');
     });
   });
@@ -78,7 +77,7 @@ describe('WsAuthGuard', () => {
       const result = guard.canActivate(createWsContext(socket));
 
       expect(result).toBe(true);
-      expect((socket.data as any).userId).toBe('user-456');
+      expect((socket.data as unknown).userId).toBe('user-456');
       expect(jwtService.verifyToken).toHaveBeenCalledWith('raw-jwt-token');
     });
   });

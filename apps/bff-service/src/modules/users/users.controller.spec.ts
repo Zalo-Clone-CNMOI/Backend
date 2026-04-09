@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment */
 /**
  * @file users.controller.spec.ts (BFF)
  *
@@ -32,9 +31,9 @@ describe('BFF UsersController', () => {
 
   describe('Bearer token extraction', () => {
     it('should throw UnauthorizedException when authorization header is missing', async () => {
-      await expect(controller.getMyProfile(undefined as any)).rejects.toThrow(
-        UnauthorizedException,
-      );
+      await expect(
+        controller.getMyProfile(undefined as unknown),
+      ).rejects.toThrow(UnauthorizedException);
     });
 
     it('should throw UnauthorizedException when not Bearer format', async () => {
@@ -69,7 +68,7 @@ describe('BFF UsersController', () => {
 
   describe('PATCH /users/me', () => {
     it('should extract token and delegate dto to service', async () => {
-      const dto = { fullName: 'Updated Name' } as any;
+      const dto = { fullName: 'Updated Name' } as unknown;
       const expected = { id: 'user-1', fullName: 'Updated Name' };
       usersService.updateMyProfile.mockResolvedValue(expected);
 
@@ -82,7 +81,7 @@ describe('BFF UsersController', () => {
 
   describe('GET /users/search', () => {
     it('should extract token and pass query params to service', async () => {
-      const dto = { q: 'Nguyen', page: 1, limit: 20 } as any;
+      const dto = { q: 'Nguyen', page: 1, limit: 20 } as unknown;
       usersService.searchUsers.mockResolvedValue({
         items: [],
         meta: { total: 0 },

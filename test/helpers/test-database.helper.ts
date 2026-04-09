@@ -11,7 +11,7 @@
  * Each method returns a sensible default (null, [], 0, etc.)
  * and can be overridden per-test via mockResolvedValue / mockImplementation.
  */
-export function createMockRepository<T = any>() {
+export function createMockRepository<T = unknown>() {
   return {
     find: jest.fn().mockResolvedValue([]),
     findOne: jest.fn().mockResolvedValue(null),

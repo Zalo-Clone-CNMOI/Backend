@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/unbound-method */
+/* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/unbound-method */
 /**
  * @file chat.handler.spec.ts
  * @covers ChatHandler – WS Gateway chat event handler with membership checks
@@ -30,7 +30,7 @@ function createMockSocket(userId = 'user-abc') {
     data: { userId },
     emit: jest.fn(),
     join: jest.fn(),
-  } as any;
+  } as unknown;
 }
 
 // ────── Payload Factories ────────────────────────────────────────────────

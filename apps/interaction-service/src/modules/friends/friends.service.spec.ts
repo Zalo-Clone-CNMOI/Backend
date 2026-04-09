@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 /**
  * @file friends.service.spec.ts (interaction-service)
  *
@@ -26,7 +26,7 @@ const RespondFriendRequestDtoActionEnum = {
 
 const uuid = (n: number) => `00000000-0000-0000-0000-00000000000${n}`;
 
-const createMockFriendship = (overrides: Record<string, any> = {}) => ({
+const createMockFriendship = (overrides: Record<string, unknown> = {}) => ({
   id: uuid(9),
   requesterId: uuid(1),
   addresseeId: uuid(2),
@@ -98,10 +98,10 @@ describe('FriendsService', () => {
     }).compile();
 
     service = module.get<FriendsService>(FriendsService);
-    (service as any).userRepository = userRepository;
-    (service as any).friendshipRepository = friendshipRepository;
-    (service as any).kafkaClient = kafkaClient;
-    (service as any).cacheService = cacheService;
+    (service as unknown).userRepository = userRepository;
+    (service as unknown).friendshipRepository = friendshipRepository;
+    (service as unknown).kafkaClient = kafkaClient;
+    (service as unknown).cacheService = cacheService;
   });
 
   // ─── getFriends ─────────────────────────────────────────
@@ -125,7 +125,7 @@ describe('FriendsService', () => {
       const result = await service.getFriends(uuid(1), {
         page: 1,
         limit: 20,
-      } as any);
+      } as unknown);
 
       expect(result.items).toHaveLength(1);
       expect(result.meta.total).toBe(1);
@@ -147,7 +147,7 @@ describe('FriendsService', () => {
       const result = await service.getFriends(uuid(1), {
         page: 1,
         limit: 200,
-      } as any);
+      } as unknown);
 
       expect(result.meta.limit).toBe(50);
     });
@@ -163,7 +163,7 @@ describe('FriendsService', () => {
       const result = await service.getPendingRequests(uuid(2), {
         page: 1,
         limit: 20,
-      } as any);
+      } as unknown);
 
       expect(result.items).toHaveLength(1);
       expect(result.items[0].user.id).toBe(uuid(1)); // requester
@@ -180,7 +180,7 @@ describe('FriendsService', () => {
       const result = await service.getSentRequests(uuid(1), {
         page: 1,
         limit: 20,
-      } as any);
+      } as unknown);
 
       expect(result.items).toHaveLength(1);
       expect(result.items[0].user.id).toBe(uuid(2)); // addressee
@@ -192,7 +192,7 @@ describe('FriendsService', () => {
   describe('sendFriendRequest', () => {
     it('should throw when adding yourself', async () => {
       await expect(
-        service.sendFriendRequest(uuid(1), { userId: uuid(1) } as any),
+        service.sendFriendRequest(uuid(1), { userId: uuid(1) } as unknown),
       ).rejects.toThrow();
     });
 
@@ -200,7 +200,7 @@ describe('FriendsService', () => {
       userRepository.findOne.mockResolvedValue(null);
 
       await expect(
-        service.sendFriendRequest(uuid(1), { userId: uuid(2) } as any),
+        service.sendFriendRequest(uuid(1), { userId: uuid(2) } as unknown),
       ).rejects.toThrow();
     });
 
@@ -211,7 +211,7 @@ describe('FriendsService', () => {
       });
 
       await expect(
-        service.sendFriendRequest(uuid(1), { userId: uuid(2) } as any),
+        service.sendFriendRequest(uuid(1), { userId: uuid(2) } as unknown),
       ).rejects.toThrow();
     });
 
@@ -225,7 +225,7 @@ describe('FriendsService', () => {
       );
 
       await expect(
-        service.sendFriendRequest(uuid(1), { userId: uuid(2) } as any),
+        service.sendFriendRequest(uuid(1), { userId: uuid(2) } as unknown),
       ).rejects.toThrow();
     });
 
@@ -239,7 +239,7 @@ describe('FriendsService', () => {
       );
 
       await expect(
-        service.sendFriendRequest(uuid(1), { userId: uuid(2) } as any),
+        service.sendFriendRequest(uuid(1), { userId: uuid(2) } as unknown),
       ).rejects.toThrow();
     });
 
@@ -253,7 +253,7 @@ describe('FriendsService', () => {
       );
 
       await expect(
-        service.sendFriendRequest(uuid(1), { userId: uuid(2) } as any),
+        service.sendFriendRequest(uuid(1), { userId: uuid(2) } as unknown),
       ).rejects.toThrow();
     });
 
@@ -272,7 +272,7 @@ describe('FriendsService', () => {
 
       const result = await service.sendFriendRequest(uuid(1), {
         userId: uuid(2),
-      } as any);
+      } as unknown);
 
       expect(result.message).toContain('sent');
       expect(result.requestId).toBe(uuid(9));
@@ -295,7 +295,7 @@ describe('FriendsService', () => {
       await expect(
         service.respondToRequest(uuid(2), 'nonexistent', {
           action: 'accept',
-        } as any),
+        } as unknown),
       ).rejects.toThrow();
     });
 
@@ -310,7 +310,7 @@ describe('FriendsService', () => {
 
       const result = await service.respondToRequest(uuid(2), uuid(9), {
         action: RespondFriendRequestDtoActionEnum.accept,
-      } as any);
+      } as unknown);
 
       expect(result.message).toContain('accepted');
       expect(friendshipRepository.save).toHaveBeenCalledWith(
@@ -332,7 +332,7 @@ describe('FriendsService', () => {
 
       const result = await service.respondToRequest(uuid(2), uuid(9), {
         action: RespondFriendRequestDtoActionEnum.reject,
-      } as any);
+      } as unknown);
 
       expect(result.message).toContain('rejected');
       expect(friendshipRepository.remove).toHaveBeenCalledWith(req);
@@ -348,7 +348,9 @@ describe('FriendsService', () => {
       );
 
       await expect(
-        service.respondToRequest(uuid(2), uuid(9), { action: 'accept' } as any),
+        service.respondToRequest(uuid(2), uuid(9), {
+          action: 'accept',
+        } as unknown),
       ).rejects.toThrow();
     });
   });

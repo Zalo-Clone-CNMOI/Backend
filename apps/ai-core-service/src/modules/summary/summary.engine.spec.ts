@@ -165,7 +165,7 @@ describe('SummaryEngine', () => {
   describe('summarize() — cache miss', () => {
     it('calls LLM and returns generated summary', async () => {
       redis.get.mockResolvedValue(null);
-      redis.setEx.mockResolvedValue(undefined as any);
+      redis.setEx.mockResolvedValue(undefined as unknown);
       gateway.complete.mockResolvedValue(
         llmResult(JSON.stringify({ summary: 'A short summary.' })),
       );
@@ -182,7 +182,7 @@ describe('SummaryEngine', () => {
 
     it('stores generated summary in Redis cache', async () => {
       redis.get.mockResolvedValue(null);
-      redis.setEx.mockResolvedValue(undefined as any);
+      redis.setEx.mockResolvedValue(undefined as unknown);
       gateway.complete.mockResolvedValue(
         llmResult(JSON.stringify({ summary: 'Stored summary.' })),
       );
@@ -198,7 +198,7 @@ describe('SummaryEngine', () => {
 
     it('sets correct message_range from message_ids', async () => {
       redis.get.mockResolvedValue(null);
-      redis.setEx.mockResolvedValue(undefined as any);
+      redis.setEx.mockResolvedValue(undefined as unknown);
       gateway.complete.mockResolvedValue(
         llmResult(JSON.stringify({ summary: 'Summary' })),
       );
@@ -218,7 +218,7 @@ describe('SummaryEngine', () => {
 
     it('records success metrics', async () => {
       redis.get.mockResolvedValue(null);
-      redis.setEx.mockResolvedValue(undefined as any);
+      redis.setEx.mockResolvedValue(undefined as unknown);
       gateway.complete.mockResolvedValue(
         llmResult(JSON.stringify({ summary: 'Done' })),
       );
@@ -238,7 +238,7 @@ describe('SummaryEngine', () => {
 
     it('handles plain-text LLM response (non-JSON)', async () => {
       redis.get.mockResolvedValue(null);
-      redis.setEx.mockResolvedValue(undefined as any);
+      redis.setEx.mockResolvedValue(undefined as unknown);
       gateway.complete.mockResolvedValue(llmResult('A plain text summary.'));
 
       const result = await engine.summarize(makeEvent(), []);
@@ -296,7 +296,7 @@ describe('SummaryEngine', () => {
   describe('summarize() — corrupted cache', () => {
     it('regenerates when cached value is invalid JSON', async () => {
       redis.get.mockResolvedValue('{invalid json}');
-      redis.setEx.mockResolvedValue(undefined as any);
+      redis.setEx.mockResolvedValue(undefined as unknown);
       gateway.complete.mockResolvedValue(
         llmResult(JSON.stringify({ summary: 'Regenerated.' })),
       );

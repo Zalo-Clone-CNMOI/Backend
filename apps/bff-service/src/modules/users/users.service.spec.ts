@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access */
 /**
  * @file users.service.spec.ts (BFF)
  *
@@ -29,7 +28,7 @@ describe('BFF UsersService', () => {
     }).compile();
 
     service = module.get<UsersService>(UsersService);
-    (service as any).ssoClient = ssoClient;
+    (service as unknown).ssoClient = ssoClient;
   });
 
   describe('getMyProfile', () => {
@@ -58,7 +57,7 @@ describe('BFF UsersService', () => {
       const expected = { id: 'user-1', fullName: 'New Name' };
       ssoClient.updateMyProfile.mockResolvedValue(expected);
 
-      const result = await service.updateMyProfile('token', dto as any);
+      const result = await service.updateMyProfile('token', dto as unknown);
 
       expect(ssoClient.updateMyProfile).toHaveBeenCalledWith('token', dto);
       expect(result).toEqual(expected);

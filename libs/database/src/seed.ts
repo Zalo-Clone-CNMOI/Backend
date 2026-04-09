@@ -26,23 +26,26 @@ import {
   NotificationStatus,
 } from '@app/constant/enum';
 import * as bcrypt from 'bcrypt';
+import { Logger } from '@nestjs/common';
+
+const logger = new Logger('DatabaseSeed');
 
 async function bootstrap() {
   const queryRunner = AppDataSource.createQueryRunner();
 
   try {
-    console.log('Initializing Data Source...');
+    logger.log('Initializing Data Source...');
     await AppDataSource.initialize();
-    console.log('Data Source initialized!');
+    logger.log('Data Source initialized!');
 
-    console.log('Starting transaction...');
+    logger.log('Starting transaction...');
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     const manager = queryRunner.manager;
 
     // --- Users ---
-    console.log('Seeding Users...');
+    logger.log('Seeding Users...');
     // We want to ensure specific users exist to reference them later by index
     const passwordHash = await bcrypt.hash('123456', 10);
     const userPayloads = [
@@ -166,16 +169,16 @@ async function bootstrap() {
       if (!user) {
         user = manager.create(User, payload);
         user = await manager.save(user);
-        console.log(`Created user: ${user.fullName}`);
+        logger.log(`Created user: ${user.fullName}`);
       } else {
-        console.log(`User exists: ${user.fullName}`);
+        logger.log(`User exists: ${user.fullName}`);
       }
       users.push(user);
     }
-    console.log(`Total users available for seeding: ${users.length}`);
+    logger.log(`Total users available for seeding: ${users.length}`);
 
     // --- Notification Preferences ---
-    console.log('Seeding Notification Preferences...');
+    logger.log('Seeding Notification Preferences...');
     for (const user of users) {
       const existingPref = await manager.findOne(NotificationPreference, {
         where: { userId: user.id },
@@ -194,7 +197,7 @@ async function bootstrap() {
     }
 
     // --- Device Tokens ---
-    console.log('Seeding Device Tokens...');
+    logger.log('Seeding Device Tokens...');
     if ((await manager.count(DeviceToken)) === 0 && users.length > 0) {
       await manager.save(
         manager.create(DeviceToken, {
@@ -223,7 +226,7 @@ async function bootstrap() {
     }
 
     // --- Friendships ---
-    console.log('Seeding Friendships...');
+    logger.log('Seeding Friendships...');
     if ((await manager.count(Friendship)) === 0 && users.length >= 8) {
       // User 1 <-> User 2 (Accepted)
       await manager.save(
@@ -268,7 +271,7 @@ async function bootstrap() {
     }
 
     // --- Conversations & Members ---
-    console.log('Seeding Conversations...');
+    logger.log('Seeding Conversations...');
     if ((await manager.count(Conversation)) === 0 && users.length >= 6) {
       // Direct Chat: User 1 & User 2
       const directConv = await manager.save(
@@ -373,7 +376,7 @@ async function bootstrap() {
     }
 
     // --- Media Files ---
-    console.log('Seeding Media Files...');
+    logger.log('Seeding Media Files...');
     if ((await manager.count(MediaFile)) === 0 && users.length > 0) {
       // Image
       await manager.save(
@@ -401,7 +404,7 @@ async function bootstrap() {
     }
 
     // --- Posts ---
-    console.log('Seeding Posts...');
+    logger.log('Seeding Posts...');
     if ((await manager.count(Post)) === 0 && users.length >= 9) {
       const p1 = await manager.save(
         manager.create(Post, {
@@ -450,7 +453,7 @@ async function bootstrap() {
       );
 
       // --- Post Media ---
-      console.log('Seeding Post Media...');
+      logger.log('Seeding Post Media...');
 
       // Post 2 has an image
       await manager.save(
@@ -494,7 +497,7 @@ async function bootstrap() {
       );
 
       // --- Post Likes ---
-      console.log('Seeding Post Likes...');
+      logger.log('Seeding Post Likes...');
       await manager.save(
         manager.create(PostLike, {
           postId: p1.id,
@@ -547,7 +550,7 @@ async function bootstrap() {
       );
 
       // --- Post Comments ---
-      console.log('Seeding Post Comments...');
+      logger.log('Seeding Post Comments...');
       const comment1 = await manager.save(
         manager.create(PostComment, {
           postId: p1.id,
@@ -575,7 +578,7 @@ async function bootstrap() {
       );
 
       // --- Comment Likes ---
-      console.log('Seeding Comment Likes...');
+      logger.log('Seeding Comment Likes...');
       await manager.save(
         manager.create(CommentLike, {
           commentId: comment1.id,
@@ -597,7 +600,7 @@ async function bootstrap() {
     }
 
     // --- Notification Logs ---
-    console.log('Seeding Notification Logs...');
+    logger.log('Seeding Notification Logs...');
     if ((await manager.count(NotificationLog)) === 0 && users.length > 0) {
       await manager.save(
         manager.create(NotificationLog, {
@@ -622,9 +625,9 @@ async function bootstrap() {
     }
 
     await queryRunner.commitTransaction();
-    console.log('Seeding completed successfully!');
+    logger.log('Seeding completed successfully!');
   } catch (error) {
-    console.error('Error during seeding, rolling back...', error);
+    logger.error('Error during seeding, rolling back...', error);
     await queryRunner.rollbackTransaction();
   } finally {
     await queryRunner.release();

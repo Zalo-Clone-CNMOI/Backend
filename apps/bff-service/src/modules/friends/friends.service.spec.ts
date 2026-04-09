@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access */
 /**
  * @file friends.service.spec.ts (BFF)
  *
@@ -34,7 +33,7 @@ describe('BFF FriendsService', () => {
     }).compile();
 
     service = module.get<FriendsService>(FriendsService);
-    (service as any).interactionClient = interactionClient;
+    (service as unknown).interactionClient = interactionClient;
   });
 
   describe('getFriends', () => {
@@ -84,7 +83,7 @@ describe('BFF FriendsService', () => {
         message: 'Sent',
       });
 
-      await service.sendFriendRequest('token', dto as any);
+      await service.sendFriendRequest('token', dto as unknown);
 
       expect(interactionClient.sendFriendRequest).toHaveBeenCalledWith(
         'token',
@@ -100,7 +99,7 @@ describe('BFF FriendsService', () => {
         message: 'Accepted',
       });
 
-      await service.respondToRequest('token', 'req-uuid', dto as any);
+      await service.respondToRequest('token', 'req-uuid', dto as unknown);
 
       expect(interactionClient.respondToRequest).toHaveBeenCalledWith(
         'token',

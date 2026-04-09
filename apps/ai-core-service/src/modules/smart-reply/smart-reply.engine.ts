@@ -6,6 +6,7 @@ import { AiMetricsService } from '../ai-gateway/services/ai-metrics.service';
 import type {
   AiSmartReplyRequestEvent,
   AiSmartReplyResultEvent,
+  AiProviderType,
 } from '@libs/contracts';
 
 @Injectable()
@@ -53,7 +54,7 @@ export class SmartReplyEngine {
         conversation_id: event.conversation_id,
         user_id: event.user_id,
         suggestions: parsed.suggestions,
-        provider: result.provider as any,
+        provider: toAiProviderType(result.provider),
         tokens_used: result.tokensIn + result.tokensOut,
         processed_at: Date.now(),
         trace_id: event.trace_id,
@@ -99,3 +100,14 @@ export class SmartReplyEngine {
     }
   }
 }
+
+const toAiProviderType = (provider: string): AiProviderType => {
+  if (
+    provider === 'openai' ||
+    provider === 'gemini' ||
+    provider === 'anthropic'
+  ) {
+    return provider;
+  }
+  return 'openai';
+};

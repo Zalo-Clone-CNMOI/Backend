@@ -31,9 +31,15 @@ import {
   AiHandler,
   TypingHandler,
 } from './handlers';
+import type { DefaultEventsMap } from 'socket.io/dist/typed-events';
 
 type SocketData = { userId?: string };
-type AuthedSocket = Socket<any, any, any, SocketData>;
+type AuthedSocket = Socket<
+  DefaultEventsMap,
+  DefaultEventsMap,
+  DefaultEventsMap,
+  SocketData
+>;
 
 @WebSocketGateway({
   cors: { origin: '*' },

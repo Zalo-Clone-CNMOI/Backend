@@ -61,7 +61,9 @@ export class InteractionConsumer {
         created_at,
         has_attachments: !!attachments?.length,
       };
-      console.log(lastMessage);
+      this.logger.debug(
+        `Latest message snapshot for ${conversation_id}: ${JSON.stringify(lastMessage)}`,
+      );
 
       await this.redis.set(key, JSON.stringify(lastMessage));
 

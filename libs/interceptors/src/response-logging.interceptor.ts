@@ -6,6 +6,7 @@ import {
   NestInterceptor,
 } from '@nestjs/common';
 import { map, Observable } from 'rxjs';
+import type { Request, Response } from 'express';
 
 @Injectable()
 export class ResponseLoggingInterceptor implements NestInterceptor {
@@ -14,26 +15,25 @@ export class ResponseLoggingInterceptor implements NestInterceptor {
     this.logger = new Logger(ResponseLoggingInterceptor.name);
   }
 
-  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const request = context.switchToHttp().getRequest();
+  intercept(
+    context: ExecutionContext,
+    next: CallHandler<unknown>,
+  ): Observable<unknown> {
+    const request = context.switchToHttp().getRequest<Request>();
     const startTime = Date.now();
 
     return next.handle().pipe(
-      map((data: any) => {
+      map((data: unknown) => {
         const executionTime = Date.now() - startTime;
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        const response = context.switchToHttp().getResponse();
+        const response = context.switchToHttp().getResponse<Response>();
 
         this.logger.log(
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
           `Response for ${request.method} ${request.url} - Status: ${response.statusCode} - Execution Time: ${executionTime}ms`,
         );
 
         return {
           success: !(data instanceof Error) && data !== null,
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-          data: data,
+          data,
           timestamp: new Date().toISOString(),
         };
       }),

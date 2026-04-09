@@ -15,7 +15,7 @@
  *  - blockUser (new block, upgrade existing friendship)
  *  - unblockUser (success, not blocked)
  */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { FriendsService } from '../../../apps/interaction-service/src/modules/friends/friends.service';
@@ -74,7 +74,7 @@ describe('FriendsService (integration)', () => {
 
   describe('getFriends', () => {
     it('should return empty list when no friends', async () => {
-      const qb = jest.fn() as any;
+      const qb = jest.fn() as unknown;
       const chainable = [
         'leftJoinAndSelect',
         'where',
@@ -118,7 +118,7 @@ describe('FriendsService (integration)', () => {
         },
       };
 
-      const qb = jest.fn() as any;
+      const qb = jest.fn() as unknown;
       const chainable = [
         'leftJoinAndSelect',
         'where',
@@ -142,7 +142,7 @@ describe('FriendsService (integration)', () => {
     });
 
     it('should respect pagination', async () => {
-      const qb = jest.fn() as any;
+      const qb = jest.fn() as unknown;
       const chainable = [
         'leftJoinAndSelect',
         'where',

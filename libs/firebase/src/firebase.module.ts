@@ -5,6 +5,11 @@ import { FirebaseService } from './firebase.service';
 import { FIREBASE_CONFIG, FIREBASE_APP } from './firebase.tokens';
 import type { FirebaseConfig } from './firebase.interface';
 
+type InjectToken =
+  | string
+  | symbol
+  | (abstract new (...args: never[]) => unknown);
+
 @Global()
 @Module({})
 export class FirebaseModule {
@@ -48,12 +53,14 @@ export class FirebaseModule {
    * Register Firebase module asynchronously
    */
   static forRootAsync(options: {
-    useFactory: (...args: any[]) => Promise<FirebaseConfig> | FirebaseConfig;
-    inject?: any[];
+    useFactory: (
+      ...args: unknown[]
+    ) => Promise<FirebaseConfig> | FirebaseConfig;
+    inject?: InjectToken[];
   }): DynamicModule {
     const firebaseAppProvider = {
       provide: FIREBASE_APP,
-      useFactory: async (...args: any[]) => {
+      useFactory: async (...args: unknown[]) => {
         const config = await options.useFactory(...args);
 
         // Check if already initialized
@@ -69,7 +76,7 @@ export class FirebaseModule {
           }),
         });
       },
-      inject: options.inject || [],
+      inject: options.inject ?? [],
     };
 
     return {

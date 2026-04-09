@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /**
  * @file messages.service.spec.ts (BFF)
  *
@@ -29,7 +28,7 @@ describe('BFF MessagesService', () => {
 
     service = module.get<MessagesService>(MessagesService);
     // Inject manually since token name may differ
-    (service as any).chatClient = chatClient;
+    (service as unknown).chatClient = chatClient;
   });
 
   describe('getMessages', () => {

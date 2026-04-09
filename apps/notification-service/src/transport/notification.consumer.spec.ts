@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /**
  * @file notification.consumer.spec.ts
  *
@@ -17,6 +16,12 @@ import type {
 } from '@libs/contracts';
 
 describe('NotificationConsumer', () => {
+  type InternalLogger = {
+    debug: (...args: unknown[]) => void;
+    log: (...args: unknown[]) => void;
+    error: (...args: unknown[]) => void;
+  };
+
   let consumer: NotificationConsumer;
   let notificationService: Record<string, jest.Mock>;
   let batcher: Record<string, jest.Mock>;
@@ -52,15 +57,10 @@ describe('NotificationConsumer', () => {
 
     consumer = module.get<NotificationConsumer>(NotificationConsumer);
 
-    jest
-      .spyOn((consumer as any).logger, 'debug')
-      .mockImplementation(() => undefined);
-    jest
-      .spyOn((consumer as any).logger, 'log')
-      .mockImplementation(() => undefined);
-    jest
-      .spyOn((consumer as any).logger, 'error')
-      .mockImplementation(() => undefined);
+    const internalLogger = (consumer as { logger: InternalLogger }).logger;
+    jest.spyOn(internalLogger, 'debug').mockImplementation(() => undefined);
+    jest.spyOn(internalLogger, 'log').mockImplementation(() => undefined);
+    jest.spyOn(internalLogger, 'error').mockImplementation(() => undefined);
   });
 
   const basePayload: NotificationRequestedEvent = {
@@ -77,8 +77,8 @@ describe('NotificationConsumer', () => {
   describe('onModuleInit', () => {
     it('should set batcher.onBatchReady callback', () => {
       consumer.onModuleInit();
-      expect((batcher as any).onBatchReady).toBeDefined();
-      expect(typeof (batcher as any).onBatchReady).toBe('function');
+      expect((batcher as unknown).onBatchReady).toBeDefined();
+      expect(typeof (batcher as unknown).onBatchReady).toBe('function');
     });
   });
 

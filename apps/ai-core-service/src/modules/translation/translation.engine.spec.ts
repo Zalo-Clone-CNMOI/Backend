@@ -161,7 +161,7 @@ describe('TranslationEngine', () => {
   describe('translate() — cache miss', () => {
     it('calls LLM and returns translated text', async () => {
       redis.get.mockResolvedValue(null);
-      redis.setEx.mockResolvedValue(undefined as any);
+      redis.setEx.mockResolvedValue(undefined as unknown);
       gateway.complete.mockResolvedValue(llmResult('Xin chào!'));
 
       const result = await engine.translate(makeEvent());
@@ -172,7 +172,7 @@ describe('TranslationEngine', () => {
 
     it('stores translation in Redis with 24h TTL', async () => {
       redis.get.mockResolvedValue(null);
-      redis.setEx.mockResolvedValue(undefined as any);
+      redis.setEx.mockResolvedValue(undefined as unknown);
       gateway.complete.mockResolvedValue(llmResult('Bonjour!', 'en'));
 
       await engine.translate(makeEvent({ target_language: 'fr' }));
@@ -186,7 +186,7 @@ describe('TranslationEngine', () => {
 
     it('sets source_language from LLM response', async () => {
       redis.get.mockResolvedValue(null);
-      redis.setEx.mockResolvedValue(undefined as any);
+      redis.setEx.mockResolvedValue(undefined as unknown);
       gateway.complete.mockResolvedValue(llmResult('Salut!', 'en'));
 
       const result = await engine.translate(
@@ -198,7 +198,7 @@ describe('TranslationEngine', () => {
 
     it('records success metrics', async () => {
       redis.get.mockResolvedValue(null);
-      redis.setEx.mockResolvedValue(undefined as any);
+      redis.setEx.mockResolvedValue(undefined as unknown);
       gateway.complete.mockResolvedValue(llmResult('Translated'));
 
       await engine.translate(makeEvent());
@@ -216,7 +216,7 @@ describe('TranslationEngine', () => {
 
     it('calculates tokens_used as tokensIn + tokensOut', async () => {
       redis.get.mockResolvedValue(null);
-      redis.setEx.mockResolvedValue(undefined as any);
+      redis.setEx.mockResolvedValue(undefined as unknown);
       gateway.complete.mockResolvedValue(llmResult('Done')); // tokensIn=60, tokensOut=40
 
       const result = await engine.translate(makeEvent());
@@ -226,7 +226,7 @@ describe('TranslationEngine', () => {
 
     it('handles non-JSON LLM response (plain text fallback)', async () => {
       redis.get.mockResolvedValue(null);
-      redis.setEx.mockResolvedValue(undefined as any);
+      redis.setEx.mockResolvedValue(undefined as unknown);
       gateway.complete.mockResolvedValue({
         content: 'Plain translated text',
         tokensIn: 60,
@@ -296,7 +296,7 @@ describe('TranslationEngine', () => {
   describe('translate() — corrupted cache', () => {
     it('regenerates when cached value is invalid JSON', async () => {
       redis.get.mockResolvedValue('{bad json}');
-      redis.setEx.mockResolvedValue(undefined as any);
+      redis.setEx.mockResolvedValue(undefined as unknown);
       gateway.complete.mockResolvedValue(llmResult('Regenerated'));
 
       const result = await engine.translate(makeEvent());

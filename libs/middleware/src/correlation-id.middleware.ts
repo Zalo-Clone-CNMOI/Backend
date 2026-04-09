@@ -3,7 +3,7 @@ import { Request, Response, NextFunction } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { AsyncLocalStorage } from 'async_hooks';
 
-export const asyncLocalStorage = new AsyncLocalStorage<Map<string, any>>();
+export const asyncLocalStorage = new AsyncLocalStorage<Map<string, unknown>>();
 
 export const CORRELATION_ID_HEADER = 'x-correlation-id';
 export const REQUEST_ID_HEADER = 'x-request-id';
@@ -20,7 +20,7 @@ export class CorrelationIdMiddleware implements NestMiddleware {
 
     const requestId = uuidv4();
 
-    const store = new Map<string, any>();
+    const store = new Map<string, unknown>();
     store.set('correlationId', correlationId);
     store.set('requestId', requestId);
     store.set('timestamp', Date.now());

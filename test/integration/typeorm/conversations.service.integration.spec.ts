@@ -16,7 +16,7 @@
  *  - updateMemberRole (owner-only)
  *  - markAsRead
  */
-/* eslint-disable @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ConversationsService } from '../../../apps/interaction-service/src/modules/conversations/conversations.service';
@@ -88,7 +88,7 @@ describe('ConversationsService (integration)', () => {
   });
 
   // Helpers
-  function makeConversation(overrides: Record<string, any> = {}) {
+  function makeConversation(overrides: Record<string, unknown> = {}) {
     return {
       id: CONV_ID,
       type: ConversationType.GROUP,
@@ -102,7 +102,7 @@ describe('ConversationsService (integration)', () => {
     };
   }
 
-  function makeMember(overrides: Record<string, any> = {}) {
+  function makeMember(overrides: Record<string, unknown> = {}) {
     return {
       id: 'member-id',
       conversationId: CONV_ID,
@@ -257,7 +257,7 @@ describe('ConversationsService (integration)', () => {
       const savedConv = makeConversation({ id: 'new-conv-id' });
       conversationRepo.create.mockReturnValue(savedConv);
       conversationRepo.save.mockResolvedValue(savedConv);
-      memberRepo.create.mockImplementation((dto: any) => dto);
+      memberRepo.create.mockImplementation((dto: unknown) => dto);
       memberRepo.save.mockResolvedValue([]);
 
       // getConversationById reload
@@ -478,7 +478,7 @@ describe('ConversationsService (integration)', () => {
         id: USER_ID,
         fullName: 'Owner User',
       });
-      memberRepo.create.mockImplementation((dto: any) => dto);
+      memberRepo.create.mockImplementation((dto: unknown) => dto);
       memberRepo.save.mockResolvedValue([]);
       memberRepo.findOne.mockResolvedValue(makeMember());
 

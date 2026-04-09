@@ -270,7 +270,7 @@ describe('MediaService', () => {
 
       // MediaUploaded still emitted, but NOT AiDocumentUpload
       const aiDocCalls = kafka.emit.mock.calls.filter(
-        (c: any[]) => c[0] === KafkaTopics.AiDocumentUpload,
+        (c: unknown[]) => c[0] === KafkaTopics.AiDocumentUpload,
       );
       expect(aiDocCalls).toHaveLength(0);
     });
@@ -284,7 +284,7 @@ describe('MediaService', () => {
       );
 
       const aiDocCalls = kafka.emit.mock.calls.filter(
-        (c: any[]) => c[0] === KafkaTopics.AiDocumentUpload,
+        (c: unknown[]) => c[0] === KafkaTopics.AiDocumentUpload,
       );
       expect(aiDocCalls).toHaveLength(0);
     });
@@ -298,7 +298,7 @@ describe('MediaService', () => {
       );
 
       const aiDocCalls = kafka.emit.mock.calls.filter(
-        (c: any[]) => c[0] === KafkaTopics.AiDocumentUpload,
+        (c: unknown[]) => c[0] === KafkaTopics.AiDocumentUpload,
       );
       expect(aiDocCalls).toHaveLength(0);
     });

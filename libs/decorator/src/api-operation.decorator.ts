@@ -1,4 +1,5 @@
 import { applyDecorators } from '@nestjs/common';
+import type { Type } from '@nestjs/common';
 import {
   ApiOperation,
   ApiOkResponse,
@@ -10,11 +11,10 @@ import {
 } from '@nestjs/swagger';
 
 interface ApiOperatorOptions {
-  type?: any;
+  type?: string | Type<unknown> | [Type<unknown>];
   summary: string;
   description: string;
 }
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 export function ApiOperationDecorator({
   type,
   summary,
@@ -36,4 +36,3 @@ export function ApiOperationDecorator({
     }),
   );
 }
-/* eslint-enable @typescript-eslint/no-unsafe-assignment */

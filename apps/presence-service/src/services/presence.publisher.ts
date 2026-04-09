@@ -58,7 +58,7 @@ export class PresencePublisher implements OnModuleInit {
     }
   }
 
-  private handleFallback(topic: string, payload: unknown, error: any) {
+  private handleFallback(topic: string, payload: unknown, error: unknown) {
     this.logger.error(
       `Lost Kafka connection in PresencePublisher. Performing fallback for topic ${topic}`,
     );

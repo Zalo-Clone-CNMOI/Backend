@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 /**
  * @file presence.handler.spec.ts
  * @covers PresenceHandler – WS Gateway presence event handler
@@ -18,7 +18,7 @@ function createMockSocket(userId = 'user-abc') {
     id: 'socket-id-456',
     data: { userId },
     handshake: { headers: {}, auth: {} },
-  } as any;
+  } as unknown;
 }
 
 // ────── Test Suite ───────────────────────────────────────────────────────

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access */
 /**
  * @file messages.service.spec.ts (chat-service)
  *
@@ -12,7 +11,7 @@ import { MessageRepository } from '@libs/scylla';
 import { CacheService } from '@libs/redis';
 
 // Helpers
-const createMockMessage = (overrides: Record<string, any> = {}) => ({
+const createMockMessage = (overrides: Record<string, unknown> = {}) => ({
   message_id: 'msg-1',
   conversation_id: 'conv-1',
   sender_id: 'user-1',
@@ -51,9 +50,9 @@ describe('Chat MessagesService', () => {
     }).compile();
 
     service = module.get<MessagesService>(MessagesService);
-    (service as any).messageRepository = messageRepository;
-    (service as any).cacheService = cacheService;
-    (service as any).cdnBaseUrl = 'https://cdn.example.com';
+    (service as unknown).messageRepository = messageRepository;
+    (service as unknown).cacheService = cacheService;
+    (service as unknown).cdnBaseUrl = 'https://cdn.example.com';
   });
 
   // ─── getMessages ─────────────────────────────────────
@@ -67,7 +66,9 @@ describe('Chat MessagesService', () => {
       };
       cacheService.getRecentMessages.mockResolvedValue(cached);
 
-      const result = await service.getMessages('conv-1', { limit: 50 } as any);
+      const result = await service.getMessages('conv-1', {
+        limit: 50,
+      } as unknown);
 
       expect(cacheService.getRecentMessages).toHaveBeenCalledWith('conv-1');
       expect(messageRepository.getMessages).not.toHaveBeenCalled();
@@ -82,7 +83,9 @@ describe('Chat MessagesService', () => {
         has_more: false,
       });
 
-      const result = await service.getMessages('conv-1', { limit: 50 } as any);
+      const result = await service.getMessages('conv-1', {
+        limit: 50,
+      } as unknown);
 
       expect(messageRepository.getMessages).toHaveBeenCalledWith('conv-1', {
         cursor: undefined,
@@ -105,7 +108,7 @@ describe('Chat MessagesService', () => {
       await service.getMessages('conv-1', {
         cursor: 'abc-cursor',
         limit: 50,
-      } as any);
+      } as unknown);
 
       expect(cacheService.getRecentMessages).not.toHaveBeenCalled();
       expect(messageRepository.getMessages).toHaveBeenCalled();
@@ -118,7 +121,7 @@ describe('Chat MessagesService', () => {
         has_more: false,
       });
 
-      await service.getMessages('conv-1', { limit: 100 } as any);
+      await service.getMessages('conv-1', { limit: 100 } as unknown);
 
       expect(cacheService.setRecentMessages).not.toHaveBeenCalled();
     });
@@ -130,7 +133,7 @@ describe('Chat MessagesService', () => {
         has_more: false,
       });
 
-      await service.getMessages('conv-1', {} as any);
+      await service.getMessages('conv-1', {} as unknown);
 
       expect(messageRepository.getMessages).toHaveBeenCalledWith('conv-1', {
         cursor: undefined,
@@ -149,7 +152,9 @@ describe('Chat MessagesService', () => {
         has_more: true,
       });
 
-      const result = await service.getMessages('conv-1', { limit: 50 } as any);
+      const result = await service.getMessages('conv-1', {
+        limit: 50,
+      } as unknown);
 
       expect(result.items[0]).toEqual(
         expect.objectContaining({
@@ -174,7 +179,9 @@ describe('Chat MessagesService', () => {
         has_more: false,
       });
 
-      const result = await service.getMessages('conv-1', { limit: 50 } as any);
+      const result = await service.getMessages('conv-1', {
+        limit: 50,
+      } as unknown);
 
       expect(result.items[0].body).toBe('');
       expect(result.items[0].isDeleted).toBe(true);
@@ -225,12 +232,16 @@ describe('Chat MessagesService', () => {
       expect(result.reactions).toHaveLength(3);
 
       // Summary should aggregate by type
-      const loveSummary = result.summary.find((s: any) => s.type === 'love');
+      const loveSummary = result.summary.find(
+        (s: unknown) => s.type === 'love',
+      );
       expect(loveSummary).toBeDefined();
       expect(loveSummary!.count).toBe(2);
       expect(loveSummary!.userIds).toEqual(['user-1', 'user-2']);
 
-      const hahaSummary = result.summary.find((s: any) => s.type === 'haha');
+      const hahaSummary = result.summary.find(
+        (s: unknown) => s.type === 'haha',
+      );
       expect(hahaSummary).toBeDefined();
       expect(hahaSummary!.count).toBe(1);
     });
@@ -275,7 +286,9 @@ describe('Chat MessagesService', () => {
         has_more: false,
       });
 
-      const result = await service.getMessages('conv-1', { limit: 50 } as any);
+      const result = await service.getMessages('conv-1', {
+        limit: 50,
+      } as unknown);
 
       const attachment = result.items[0].attachments![0];
       expect(attachment.key).toBe('images/photo.jpg');
@@ -302,14 +315,16 @@ describe('Chat MessagesService', () => {
         has_more: false,
       });
 
-      const result = await service.getMessages('conv-1', { limit: 50 } as any);
+      const result = await service.getMessages('conv-1', {
+        limit: 50,
+      } as unknown);
 
       const attachment = result.items[0].attachments![0];
       expect(attachment.thumbnailUrl).toBeUndefined();
     });
 
     it('should use localhost format for local CDN', async () => {
-      (service as any).cdnBaseUrl = 'http://localhost:4566';
+      (service as unknown).cdnBaseUrl = 'http://localhost:4566';
 
       const msg = createMockMessage({
         attachments: [
@@ -329,7 +344,9 @@ describe('Chat MessagesService', () => {
         has_more: false,
       });
 
-      const result = await service.getMessages('conv-1', { limit: 50 } as any);
+      const result = await service.getMessages('conv-1', {
+        limit: 50,
+      } as unknown);
 
       // Localhost format includes bucket in path
       expect(result.items[0].attachments![0].url).toMatch(

@@ -9,6 +9,11 @@ export interface S3Config {
   secretAccessKey?: string;
 }
 
+type InjectToken =
+  | string
+  | symbol
+  | (abstract new (...args: never[]) => unknown);
+
 export interface S3ModuleOptions {
   isGlobal?: boolean;
   config: S3Config;
@@ -16,6 +21,6 @@ export interface S3ModuleOptions {
 
 export interface S3ModuleAsyncOptions {
   isGlobal?: boolean;
-  inject?: any[];
-  useFactory: (...args: any[]) => Promise<S3Config> | S3Config;
+  inject?: InjectToken[];
+  useFactory: (...args: unknown[]) => Promise<S3Config> | S3Config;
 }

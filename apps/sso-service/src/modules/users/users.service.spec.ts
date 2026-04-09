@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /**
  * @file users.service.spec.ts (SSO)
  *
@@ -15,7 +15,7 @@ import { CacheService } from '@libs/redis';
 const UserStatus = { ACTIVE: 'active', INACTIVE: 'inactive' };
 
 // Helpers
-const createMockUser = (overrides: Record<string, any> = {}) => ({
+const createMockUser = (overrides: Record<string, unknown> = {}) => ({
   id: 'user-1',
   phone: '+84901234567',
   email: 'test@example.com',
@@ -80,10 +80,10 @@ describe('SSO UsersService', () => {
 
     service = module.get<UsersService>(UsersService);
     // Inject mocks manually since @InjectRepository uses tokens
-    (service as any).userRepository = userRepository;
-    (service as any).friendshipRepository = friendshipRepository;
-    (service as any).mediaFileRepo = mediaFileRepository;
-    (service as any).cacheService = cacheService;
+    (service as unknown).userRepository = userRepository;
+    (service as unknown).friendshipRepository = friendshipRepository;
+    (service as unknown).mediaFileRepo = mediaFileRepository;
+    (service as unknown).cacheService = cacheService;
   });
 
   // ─── getMyProfile ───────────────────────────────────────
@@ -140,7 +140,7 @@ describe('SSO UsersService', () => {
 
       const result = await service.updateMyProfile('user-1', {
         fullName: 'New Name',
-      } as any);
+      } as unknown);
 
       expect(userRepository.update).toHaveBeenCalledWith('user-1', {
         fullName: 'New Name',
@@ -153,7 +153,7 @@ describe('SSO UsersService', () => {
       userRepository.findOne.mockResolvedValue(null);
 
       await expect(
-        service.updateMyProfile('nonexistent', { fullName: 'Test' } as any),
+        service.updateMyProfile('nonexistent', { fullName: 'Test' } as unknown),
       ).rejects.toThrow();
     });
 
@@ -166,7 +166,7 @@ describe('SSO UsersService', () => {
       await expect(
         service.updateMyProfile('user-1', {
           email: 'taken@example.com',
-        } as any),
+        } as unknown),
       ).rejects.toThrow();
     });
 
@@ -179,7 +179,7 @@ describe('SSO UsersService', () => {
 
       await service.updateMyProfile('user-1', {
         email: 'new@example.com',
-      } as any);
+      } as unknown);
 
       expect(userRepository.update).toHaveBeenCalledWith(
         'user-1',
@@ -198,7 +198,7 @@ describe('SSO UsersService', () => {
       await service.updateMyProfile('user-1', {
         email: 'same@example.com',
         fullName: 'New',
-      } as any);
+      } as unknown);
 
       // findOne called only twice: (1) get user, (2) reload after update
       // Not a third time for email check since email is same
@@ -213,7 +213,7 @@ describe('SSO UsersService', () => {
 
       await service.updateMyProfile('user-1', {
         dateOfBirth: '2000-01-01',
-      } as any);
+      } as unknown);
 
       expect(userRepository.update).toHaveBeenCalledWith(
         'user-1',
@@ -229,7 +229,7 @@ describe('SSO UsersService', () => {
         .mockResolvedValueOnce(mockUser)
         .mockResolvedValueOnce(mockUser);
 
-      await service.updateMyProfile('user-1', { bio: 'New bio' } as any);
+      await service.updateMyProfile('user-1', { bio: 'New bio' } as unknown);
 
       expect(userRepository.update).toHaveBeenCalledWith('user-1', {
         bio: 'New bio',
@@ -343,7 +343,7 @@ describe('SSO UsersService', () => {
       friendshipRepository.createQueryBuilder.mockReturnValue(mockQb);
 
       const result = await service.searchUsers(
-        { q: 'Nguyen', page: 1, limit: 20 } as any,
+        { q: 'Nguyen', page: 1, limit: 20 } as unknown,
         'current-user',
       );
 
@@ -362,7 +362,7 @@ describe('SSO UsersService', () => {
       friendshipRepository.createQueryBuilder.mockReturnValue(mockQb);
 
       const result = await service.searchUsers(
-        { q: 'NonExistent', page: 1, limit: 20 } as any,
+        { q: 'NonExistent', page: 1, limit: 20 } as unknown,
         'current-user',
       );
 
@@ -380,7 +380,7 @@ describe('SSO UsersService', () => {
       friendshipRepository.createQueryBuilder.mockReturnValue(mockQb);
 
       const result = await service.searchUsers(
-        { q: 'test', page: 1, limit: 200 } as any,
+        { q: 'test', page: 1, limit: 200 } as unknown,
         'current-user',
       );
 
@@ -407,7 +407,7 @@ describe('SSO UsersService', () => {
       friendshipRepository.createQueryBuilder.mockReturnValue(mockQb);
 
       const result = await service.searchUsers(
-        { q: 'Friend', page: 1, limit: 20 } as any,
+        { q: 'Friend', page: 1, limit: 20 } as unknown,
         'current-user',
       );
 
@@ -424,7 +424,7 @@ describe('SSO UsersService', () => {
       friendshipRepository.createQueryBuilder.mockReturnValue(mockQb);
 
       const result = await service.searchUsers(
-        { q: 'test', page: 2, limit: 20 } as any,
+        { q: 'test', page: 2, limit: 20 } as unknown,
         'current-user',
       );
 
@@ -446,7 +446,7 @@ describe('SSO UsersService', () => {
       friendshipRepository.createQueryBuilder.mockReturnValue(mockQb);
 
       const result = await service.searchUsers(
-        { q: 'test', page: 1, limit: 20 } as any,
+        { q: 'test', page: 1, limit: 20 } as unknown,
         'current-user',
       );
 
@@ -472,7 +472,7 @@ describe('SSO UsersService', () => {
       friendshipRepository.createQueryBuilder.mockReturnValue(mockQb);
 
       const result = await service.searchUsers(
-        { q: 'test', page: 1, limit: 20 } as any,
+        { q: 'test', page: 1, limit: 20 } as unknown,
         'current-user',
       );
 
@@ -496,7 +496,7 @@ describe('SSO UsersService', () => {
       friendshipRepository.createQueryBuilder.mockReturnValue(mockQb);
 
       const result = await service.searchUsers(
-        { q: 'test', page: 1, limit: 20 } as any,
+        { q: 'test', page: 1, limit: 20 } as unknown,
         'current-user',
       );
 

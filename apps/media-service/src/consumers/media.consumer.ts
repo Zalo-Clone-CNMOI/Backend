@@ -31,30 +31,26 @@ export class MediaConsumer {
     this.logger.log(`MediaUploadRequested: key=${event.key}`);
 
     try {
-      const existing = await this.mediaFileRepo.findOne({
-        where: { key: event.key },
-      });
-      if (existing) {
-        this.logger.debug(
-          `MediaFile already exists for key=${event.key}, skipping`,
-        );
-        return;
-      }
-
-      const mediaFile = this.mediaFileRepo.create({
-        key: event.key,
-        bucket: event.bucket,
-        contentType: event.content_type,
-        status: 'pending',
-        visibility: event.visibility ?? 'public',
-        uploadedById: event.requested_by_user_id ?? null,
-        conversationId: null,
-        sizeBytes: null,
-        thumbnailKey: null,
-      });
-
-      await this.mediaFileRepo.save(mediaFile);
-      this.logger.log(`MediaFile created (pending): key=${event.key}`);
+      await this.mediaFileRepo
+        .createQueryBuilder()
+        .insert()
+        .into(MediaFile)
+        .values({
+          key: event.key,
+          bucket: event.bucket,
+          contentType: event.content_type,
+          status: 'pending',
+          visibility: event.visibility ?? 'public',
+          uploadedById: event.requested_by_user_id ?? null,
+          conversationId: null,
+          sizeBytes: null,
+          thumbnailKey: null,
+        })
+        .orIgnore()
+        .execute();
+      this.logger.log(
+        `MediaFile upserted (pending, skip if exists): key=${event.key}`,
+      );
     } catch (error) {
       this.logger.error(
         `Failed to persist MediaUploadRequested for key=${event.key}`,

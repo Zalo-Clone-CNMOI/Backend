@@ -118,6 +118,32 @@ export class MediaService implements OnModuleInit {
       );
       throw new BadRequestException(`File not found on S3: ${key}`);
     }
+    try {
+      const visibility = inferMediaVisibility(contentType);
+      await this.mediaFileRepo
+        .createQueryBuilder()
+        .insert()
+        .into(MediaFile)
+        .values({
+          key,
+          bucket: this.s3Config.bucket,
+          contentType,
+          status: 'uploaded',
+          visibility,
+          uploadedById: userId ?? null,
+          conversationId: conversationId ?? null,
+          sizeBytes: null,
+          thumbnailKey: null,
+        })
+        .orUpdate(['status'], ['key'])
+        .execute();
+      this.logger.log(`MediaFile upserted to uploaded (sync): key=${key}`);
+    } catch (error) {
+      this.logger.error(
+        `Failed to sync upsert MediaFile for key=${key}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
 
     const event: MediaUploadedEvent = {
       key,

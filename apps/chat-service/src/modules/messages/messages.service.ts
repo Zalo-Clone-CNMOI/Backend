@@ -27,17 +27,12 @@ export class MessagesService {
     private readonly messageRepository: MessageRepository,
     private readonly cacheService: CacheService,
   ) {
-    const explicit = process.env.CDN_BASE_URL;
-    if (explicit) {
-      this.cdnBaseUrl = explicit;
-    } else {
-      const bucket = process.env.S3_BUCKET;
-      const region = process.env.AWS_REGION ?? 'ap-southeast-1';
-      const endpoint = process.env.S3_ENDPOINT;
-      this.cdnBaseUrl = endpoint
-        ? endpoint // LocalStack: http://localhost:4566
-        : `https://${bucket}.s3.${region}.amazonaws.com`;
-    }
+    const bucket = process.env.S3_BUCKET;
+    const region = process.env.AWS_REGION ?? 'ap-southeast-1';
+    const endpoint = process.env.S3_ENDPOINT;
+    this.cdnBaseUrl = endpoint
+      ? endpoint
+      : `https://${bucket}.s3.${region}.amazonaws.com`;
   }
 
   async getMessages(

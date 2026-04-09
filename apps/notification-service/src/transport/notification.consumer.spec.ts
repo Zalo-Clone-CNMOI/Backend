@@ -51,6 +51,16 @@ describe('NotificationConsumer', () => {
     }).compile();
 
     consumer = module.get<NotificationConsumer>(NotificationConsumer);
+
+    jest
+      .spyOn((consumer as any).logger, 'debug')
+      .mockImplementation(() => undefined);
+    jest
+      .spyOn((consumer as any).logger, 'log')
+      .mockImplementation(() => undefined);
+    jest
+      .spyOn((consumer as any).logger, 'error')
+      .mockImplementation(() => undefined);
   });
 
   const basePayload: NotificationRequestedEvent = {

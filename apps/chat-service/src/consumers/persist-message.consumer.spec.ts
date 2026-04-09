@@ -65,7 +65,7 @@ describe('PersistMessageConsumer', () => {
 
     conversationMemberRepo = {
       findOne: jest.fn(),
-      find: jest.fn(),
+      find: jest.fn().mockResolvedValue([]),
     };
 
     consumer = new PersistMessageConsumer(
@@ -76,6 +76,19 @@ describe('PersistMessageConsumer', () => {
       userRepo as any,
       conversationMemberRepo as any,
     );
+
+    jest
+      .spyOn((consumer as any).logger, 'debug')
+      .mockImplementation(() => undefined);
+    jest
+      .spyOn((consumer as any).logger, 'log')
+      .mockImplementation(() => undefined);
+    jest
+      .spyOn((consumer as any).logger, 'warn')
+      .mockImplementation(() => undefined);
+    jest
+      .spyOn((consumer as any).logger, 'error')
+      .mockImplementation(() => undefined);
   });
 
   // ─── onSend: Happy Path ────────────────────────────────────────────────────
@@ -221,6 +234,7 @@ describe('PersistMessageConsumer', () => {
         conversation_id: 'conv-1',
         sender_id: 'user-1',
         new_body: 'Edited message text',
+        created_at: Date.now() - 1000,
         edited_at: Date.now(),
         trace_id: 'test-trace',
       };
@@ -255,6 +269,7 @@ describe('PersistMessageConsumer', () => {
         message_id: 'msg-del-1',
         conversation_id: 'conv-1',
         sender_id: 'user-1',
+        created_at: Date.now() - 1000,
         deleted_at: Date.now(),
         trace_id: 'test-trace',
       };

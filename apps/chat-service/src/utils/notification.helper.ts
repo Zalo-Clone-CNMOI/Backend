@@ -8,15 +8,22 @@ export async function getConversationMemberIds(
   conversationMemberRepo: Repository<ConversationMember>,
   conversationId: string,
 ): Promise<string[]> {
-  const members = await conversationMemberRepo.find({
-    where: {
-      conversationId,
-      leftAt: IsNull(), // Only active members
-    },
-    select: ['userId'],
-  });
+  const members =
+    (await conversationMemberRepo.find({
+      where: {
+        conversationId,
+        leftAt: IsNull(),
+      },
+      select: ['userId'],
+    })) ?? [];
 
-  return members.map((m) => m.userId);
+  if (!Array.isArray(members)) {
+    return [];
+  }
+
+  return members
+    .map((m) => m.userId)
+    .filter((userId): userId is string => Boolean(userId));
 }
 
 /**

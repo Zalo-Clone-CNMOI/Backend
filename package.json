@@ -45,6 +45,7 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:ci": "jest --coverage --forceExit --no-cache",
+    "test:leaks": "jest --detectOpenHandles --runInBand --no-cache",
     "test:integration": "jest --config ./test/jest-e2e.json --testPathPattern=integration --forceExit --no-cache",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./apps/be/test/jest-e2e.json",
@@ -158,6 +159,8 @@
       "!**/index.ts",
       "!**/*.module.ts",
       "!**/migrations/**",
+      "!libs/interceptors/src/**",
+      "!libs/swagger/src/**",
       "!**/node_modules/**"
     ],
     "coverageDirectory": "./coverage",

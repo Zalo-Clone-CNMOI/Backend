@@ -8,7 +8,9 @@
  */
 
 import { Test, TestingModule } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
 import { ChatHandler } from './chat.handler';
+import { MediaFile } from '@libs/database';
 import { ConversationMembershipService } from '@libs/mvp-access';
 import { KAFKA_CLIENT } from '@libs/kafka';
 import { KafkaTopics, WsEvents } from '@libs/contracts';
@@ -93,9 +95,11 @@ describe('ChatHandler', () => {
   let handler: ChatHandler;
   let membership: jest.Mocked<ConversationMembershipService>;
   let kafka: { emit: jest.Mock };
+  let mediaFileRepo: { find: jest.Mock };
 
   beforeEach(async () => {
     kafka = { emit: jest.fn() };
+    mediaFileRepo = { find: jest.fn().mockResolvedValue([]) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -107,6 +111,7 @@ describe('ChatHandler', () => {
             canUserAccessConversation: jest.fn(),
           },
         },
+        { provide: getRepositoryToken(MediaFile), useValue: mediaFileRepo },
       ],
     }).compile();
 
@@ -218,9 +223,23 @@ describe('ChatHandler', () => {
     it('should include attachments in Kafka command', async () => {
       const socket = createMockSocket();
       const attachments = [
-        { url: 'http://example.com/img.png', type: 'image' },
+        {
+          key: 'private/uploads/img-1.png',
+          type: 'image' as const,
+          name: 'img-1.png',
+          size: 1024,
+          content_type: 'image/png',
+        },
       ];
-      const body = makeSendPayload({ attachments } as any);
+      mediaFileRepo.find.mockResolvedValue([
+        {
+          key: 'private/uploads/img-1.png',
+          uploadedById: 'user-abc',
+          status: 'uploaded',
+        },
+      ]);
+
+      const body = makeSendPayload({ attachments });
       membership.canUserAccessConversation.mockResolvedValue(true);
 
       await handler.handleSend(socket, body);

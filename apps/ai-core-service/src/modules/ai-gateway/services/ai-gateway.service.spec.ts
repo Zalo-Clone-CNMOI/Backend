@@ -17,6 +17,7 @@
  */
 /* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
+import { Logger } from '@nestjs/common';
 import { AiGatewayService } from './ai-gateway.service';
 import { DataSanitizer } from './data-sanitizer.service';
 import { TokenBudgetService } from './token-budget.service';
@@ -105,6 +106,8 @@ describe('AiGatewayService', () => {
     }).compile();
 
     gateway = module.get(AiGatewayService);
+
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
   });
 
   // ── complete — happy path ─────────────────────────────────────────

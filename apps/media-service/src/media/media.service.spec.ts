@@ -7,16 +7,21 @@
  * detection, and image type filtering.
  */
 import { Test, TestingModule } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
 import { MediaService } from './media.service';
 import { S3Service, S3_CLIENT, S3_CONFIG } from '@libs/s3';
 import { KAFKA_CLIENT } from '@libs/kafka';
 import { KafkaTopics } from '@libs/contracts';
+import { ConversationMembershipService } from '@libs/mvp-access';
+import { MediaFile } from '@libs/database';
 
 describe('MediaService', () => {
   let service: MediaService;
   let kafka: Record<string, jest.Mock>;
   let s3Service: Record<string, jest.Mock>;
   let s3Client: Record<string, jest.Mock>;
+  let mediaFileRepo: Record<string, jest.Mock>;
+  let membershipService: Record<string, jest.Mock>;
   let s3Config: { bucket: string; region: string };
 
   beforeEach(async () => {
@@ -26,6 +31,7 @@ describe('MediaService', () => {
     };
 
     s3Service = {
+      exists: jest.fn().mockResolvedValue(true),
       presignUpload: jest.fn().mockResolvedValue({
         key: 'uploads/abc123/photo.jpg',
         bucket: 'test-bucket',
@@ -38,6 +44,14 @@ describe('MediaService', () => {
       send: jest.fn(),
     };
 
+    mediaFileRepo = {
+      findOne: jest.fn(),
+    };
+
+    membershipService = {
+      canUserAccessConversation: jest.fn().mockResolvedValue(true),
+    };
+
     s3Config = { bucket: 'test-bucket', region: 'us-east-1' };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -47,6 +61,11 @@ describe('MediaService', () => {
         { provide: S3Service, useValue: s3Service },
         { provide: S3_CLIENT, useValue: s3Client },
         { provide: S3_CONFIG, useValue: s3Config },
+        { provide: getRepositoryToken(MediaFile), useValue: mediaFileRepo },
+        {
+          provide: ConversationMembershipService,
+          useValue: membershipService,
+        },
       ],
     }).compile();
 
@@ -63,6 +82,7 @@ describe('MediaService', () => {
       expect(s3Service.presignUpload).toHaveBeenCalledWith(
         'photo.jpg',
         'image/jpeg',
+        expect.objectContaining({ prefix: 'public/' }),
       );
       expect(result).toEqual(
         expect.objectContaining({
@@ -80,6 +100,7 @@ describe('MediaService', () => {
       expect(s3Service.presignUpload).toHaveBeenCalledWith(
         'file',
         'application/pdf',
+        expect.objectContaining({ prefix: 'private/' }),
       );
     });
 

@@ -8,7 +8,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { UsersService } from './users.service';
-import { User, Friendship } from '@libs/database/entities';
+import { User, Friendship, MediaFile } from '@libs/database/entities';
 import { CacheService } from '@libs/redis';
 
 // Mock constants
@@ -34,6 +34,7 @@ describe('SSO UsersService', () => {
   let service: UsersService;
   let userRepository: Record<string, jest.Mock>;
   let friendshipRepository: Record<string, jest.Mock>;
+  let mediaFileRepository: Record<string, jest.Mock>;
   let cacheService: Record<string, jest.Mock>;
 
   beforeEach(async () => {
@@ -47,6 +48,10 @@ describe('SSO UsersService', () => {
     friendshipRepository = {
       findOne: jest.fn(),
       createQueryBuilder: jest.fn(),
+    };
+
+    mediaFileRepository = {
+      findOne: jest.fn(),
     };
 
     cacheService = {
@@ -65,6 +70,10 @@ describe('SSO UsersService', () => {
           provide: getRepositoryToken(Friendship),
           useValue: friendshipRepository,
         },
+        {
+          provide: getRepositoryToken(MediaFile),
+          useValue: mediaFileRepository,
+        },
         { provide: CacheService, useValue: cacheService },
       ],
     }).compile();
@@ -73,6 +82,7 @@ describe('SSO UsersService', () => {
     // Inject mocks manually since @InjectRepository uses tokens
     (service as any).userRepository = userRepository;
     (service as any).friendshipRepository = friendshipRepository;
+    (service as any).mediaFileRepo = mediaFileRepository;
     (service as any).cacheService = cacheService;
   });
 

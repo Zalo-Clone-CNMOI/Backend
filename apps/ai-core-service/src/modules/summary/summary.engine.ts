@@ -54,7 +54,11 @@ export class SummaryEngine {
             processed_at: Date.now(),
             trace_id: event.trace_id,
           };
-        } catch {}
+        } catch {
+          this.logger.warn(
+            `Invalid cached summary payload: ${event.conversation_id}`,
+          );
+        }
       }
     }
 

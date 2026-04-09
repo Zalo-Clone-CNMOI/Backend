@@ -120,6 +120,8 @@ export class NotificationBatcher implements OnModuleDestroy {
       });
     }, this.BATCH_DELAY_MS);
 
+    timer.unref?.();
+
     this.flushTimers.set(userId, timer);
   }
 

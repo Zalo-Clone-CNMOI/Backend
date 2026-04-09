@@ -14,7 +14,7 @@ import {
   Conversation,
   ConversationMember,
 } from '@libs/database/entities';
-import { CacheService } from '@libs/redis';
+import { CacheService, REDIS_CLIENT } from '@libs/redis';
 import { KAFKA_CLIENT } from '@libs/kafka';
 
 // ─── Mock Enums ──────────────────────────────────────────
@@ -72,6 +72,7 @@ describe('ConversationsService', () => {
   let memberRepository: Record<string, jest.Mock>;
   let cacheService: Record<string, jest.Mock>;
   let kafkaClient: Record<string, jest.Mock>;
+  let redisClient: Record<string, jest.Mock>;
 
   beforeEach(async () => {
     userRepository = {
@@ -110,6 +111,10 @@ describe('ConversationsService', () => {
       emit: jest.fn(),
     };
 
+    redisClient = {
+      mGet: jest.fn().mockResolvedValue([]),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ConversationsService,
@@ -124,6 +129,7 @@ describe('ConversationsService', () => {
         },
         { provide: CacheService, useValue: cacheService },
         { provide: KAFKA_CLIENT, useValue: kafkaClient },
+        { provide: REDIS_CLIENT, useValue: redisClient },
       ],
     }).compile();
 
@@ -132,6 +138,7 @@ describe('ConversationsService', () => {
     (service as any).conversationRepository = conversationRepository;
     (service as any).memberRepository = memberRepository;
     (service as any).cacheService = cacheService;
+    (service as any).redis = redisClient;
   });
 
   // ─── getConversations ──────────────────────────────────

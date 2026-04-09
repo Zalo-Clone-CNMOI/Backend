@@ -13,6 +13,7 @@
  */
 /* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
+import { Logger } from '@nestjs/common';
 import { TranslationEngine } from './translation.engine';
 import { AiGatewayService } from '../ai-gateway/services/ai-gateway.service';
 import { PromptBuilderService } from '../ai-gateway/services/prompt-builder.service';
@@ -97,6 +98,8 @@ describe('TranslationEngine', () => {
     }).compile();
 
     engine = module.get(TranslationEngine);
+
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
   });
 
   // ── Cache hit ─────────────────────────────────────────────────────

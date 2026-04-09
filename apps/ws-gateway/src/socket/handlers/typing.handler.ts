@@ -160,6 +160,8 @@ export class TypingHandler implements OnModuleDestroy {
       void this.broadcastTypingList(conversationId);
     }, this.RECHECK_DELAY_MS);
 
+    timer.unref?.();
+
     this.pendingTimers.set(conversationId, timer);
   }
 }

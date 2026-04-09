@@ -54,7 +54,11 @@ export class TranslationEngine {
           processed_at: Date.now(),
           trace_id: event.trace_id,
         };
-      } catch {}
+      } catch {
+        this.logger.warn(
+          `Invalid translation cache payload for message ${event.message_id}`,
+        );
+      }
     }
 
     try {

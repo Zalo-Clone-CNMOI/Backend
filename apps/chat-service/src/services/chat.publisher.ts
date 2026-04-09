@@ -58,7 +58,7 @@ export class ChatPublisher implements OnModuleInit {
     }
   }
 
-  private handleFallback(topic: string, payload: unknown, error: any) {
+  private handleFallback(topic: string, payload: unknown, error: unknown) {
     this.logger.error(
       `Lost Kafka connection in ChatPublisher. Performing fallback for topic ${topic}`,
     );

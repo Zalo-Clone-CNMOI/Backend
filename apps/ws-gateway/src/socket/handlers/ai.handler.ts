@@ -11,9 +11,15 @@ import {
   type WsAiDocumentQueryRequestPayload,
 } from '@libs/contracts';
 import type { Socket } from 'socket.io';
+import type { DefaultEventsMap } from 'socket.io/dist/typed-events';
 
 type SocketData = { userId?: string };
-type AuthedSocket = Socket<any, any, any, SocketData>;
+type AuthedSocket = Socket<
+  DefaultEventsMap,
+  DefaultEventsMap,
+  DefaultEventsMap,
+  SocketData
+>;
 
 const DEFAULT_CONTEXT_COUNT = 10;
 const DEFAULT_SUMMARY_MESSAGE_COUNT = 50;

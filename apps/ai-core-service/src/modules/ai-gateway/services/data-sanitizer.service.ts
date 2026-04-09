@@ -19,13 +19,13 @@ export class DataSanitizer {
       replacement: '[EMAIL]',
     },
     {
+      regex: /\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/g,
+      replacement: '[CREDIT_CARD]',
+    },
+    {
       regex:
         /\b(?:\+?\d{1,3}[-.\s]?)?\(?\d{2,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{3,4}\b/g,
       replacement: '[PHONE]',
-    },
-    {
-      regex: /\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/g,
-      replacement: '[CREDIT_CARD]',
     },
     {
       regex: /\b\d{3}[-\s]?\d{2}[-\s]?\d{4}\b/g,

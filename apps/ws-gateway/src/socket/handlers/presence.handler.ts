@@ -10,9 +10,15 @@ import {
 } from '@libs/contracts';
 import { v4 as uuidv4 } from 'uuid';
 import type { Socket } from 'socket.io';
+import type { DefaultEventsMap } from 'socket.io/dist/typed-events';
 
 type SocketData = { userId?: string };
-type AuthedSocket = Socket<any, any, any, SocketData>;
+type AuthedSocket = Socket<
+  DefaultEventsMap,
+  DefaultEventsMap,
+  DefaultEventsMap,
+  SocketData
+>;
 
 @Injectable()
 export class PresenceHandler {

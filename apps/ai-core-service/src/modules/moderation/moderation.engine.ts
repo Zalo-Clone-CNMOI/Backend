@@ -11,7 +11,19 @@ import type {
   AiModerationRequestEvent,
   AiModerationResultEvent,
   ModerationLabelType,
+  AiProviderType,
 } from '@libs/contracts';
+
+const toAiProviderType = (provider: string): AiProviderType => {
+  if (
+    provider === 'openai' ||
+    provider === 'gemini' ||
+    provider === 'anthropic'
+  ) {
+    return provider;
+  }
+  return 'openai';
+};
 
 @Injectable()
 export class ModerationEngine {
@@ -80,7 +92,7 @@ export class ModerationEngine {
         is_flagged: parsed.is_flagged,
         labels: parsed.labels,
         confidence: parsed.confidence,
-        provider: result.provider as any,
+        provider: toAiProviderType(result.provider),
         ensemble: this.ensembleEnabled,
         processed_at: Date.now(),
         tokens_used: result.tokensIn + result.tokensOut,

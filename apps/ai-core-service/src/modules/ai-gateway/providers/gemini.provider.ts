@@ -1,6 +1,7 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unused-vars, @typescript-eslint/require-await */
+/* eslint-disable @typescript-eslint/no-unused-vars, @typescript-eslint/require-await */
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { APP_CONFIG, AppConfig } from '@libs/config';
+import type { GoogleGenerativeAI } from '@google/generative-ai';
 import {
   ILlmProvider,
   LlmCompletionOptions,
@@ -13,7 +14,7 @@ import {
 export class GeminiProvider implements ILlmProvider {
   private readonly logger = new Logger(GeminiProvider.name);
   readonly name = 'gemini';
-  private client: any;
+  private client?: GoogleGenerativeAI;
 
   constructor(@Inject(APP_CONFIG) private readonly config: AppConfig) {}
 
@@ -21,7 +22,7 @@ export class GeminiProvider implements ILlmProvider {
     return !!this.config.geminiApiKey;
   }
 
-  private async getClient() {
+  private async getClient(): Promise<GoogleGenerativeAI> {
     if (!this.client) {
       const { GoogleGenerativeAI } = await import('@google/generative-ai');
       this.client = new GoogleGenerativeAI(this.config.geminiApiKey!);
@@ -48,9 +49,7 @@ export class GeminiProvider implements ILlmProvider {
 
       const chat = genModel.startChat({
         history: chatMessages.slice(0, -1),
-        systemInstruction: systemMsg
-          ? { parts: [{ text: systemMsg.content }] }
-          : undefined,
+        systemInstruction: systemMsg?.content,
         generationConfig: {
           maxOutputTokens: options.maxTokens ?? 1024,
           temperature: options.temperature ?? 0.7,
@@ -104,9 +103,7 @@ export class GeminiProvider implements ILlmProvider {
 
       const chat = genModel.startChat({
         history: chatMessages.slice(0, -1),
-        systemInstruction: systemMsg
-          ? { parts: [{ text: systemMsg.content }] }
-          : undefined,
+        systemInstruction: systemMsg?.content,
         generationConfig: {
           maxOutputTokens: options.maxTokens ?? 1024,
           temperature: options.temperature ?? 0.7,

@@ -116,8 +116,6 @@ export class ConversationsService {
       this.redis.mGet(unreadKeys),
     ]);
 
-    console.log(lastMessages, unreadCounts);
-
     const items = conversations.map((c, index) => {
       const myMembership = membershipMap.get(c.id);
 

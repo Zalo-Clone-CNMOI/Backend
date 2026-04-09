@@ -1,11 +1,13 @@
 import { IoAdapter } from '@nestjs/platform-socket.io';
 import type { INestApplicationContext } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { createClient, type RedisClientType } from 'redis';
 import type { Server, ServerOptions } from 'socket.io';
 import { loadConfig } from '@libs/config';
 
 export class RedisIoAdapter extends IoAdapter {
+  private readonly logger = new Logger(RedisIoAdapter.name);
   private adapterConstructor?: Parameters<Server['adapter']>[0];
   private pubClient?: RedisClientType;
   private subClient?: RedisClientType;
@@ -19,35 +21,39 @@ export class RedisIoAdapter extends IoAdapter {
     const url = process.env.REDIS_URL;
 
     if (!url) {
-      console.warn(
+      this.logger.warn(
         '[RedisIoAdapter] REDIS_URL is not set - Socket.IO will use in-memory adapter.',
       );
       return;
     }
 
-    console.log('[RedisIoAdapter] Connecting to Redis at:', url);
+    this.logger.log(`[RedisIoAdapter] Connecting to Redis at: ${url}`);
 
     const pubClient: RedisClientType = createClient({ url });
     const subClient: RedisClientType = pubClient.duplicate();
 
     pubClient.on('error', (err) => {
-      console.error('[RedisIoAdapter] Redis pubClient error:', err);
+      this.logger.error(
+        `[RedisIoAdapter] Redis pubClient error: ${err instanceof Error ? err.message : String(err)}`,
+      );
       this.isRedisConnected = false;
       this.adapterConstructor = undefined;
     });
 
     subClient.on('error', (err) => {
-      console.error('[RedisIoAdapter] Redis subClient error:', err);
+      this.logger.error(
+        `[RedisIoAdapter] Redis subClient error: ${err instanceof Error ? err.message : String(err)}`,
+      );
       this.isRedisConnected = false;
       this.adapterConstructor = undefined;
     });
 
     pubClient.on('connect', () => {
-      console.log('[RedisIoAdapter] Redis pubClient connected');
+      this.logger.log('[RedisIoAdapter] Redis pubClient connected');
     });
 
     subClient.on('connect', () => {
-      console.log('[RedisIoAdapter] Redis subClient connected');
+      this.logger.log('[RedisIoAdapter] Redis subClient connected');
     });
 
     try {
@@ -72,13 +78,13 @@ export class RedisIoAdapter extends IoAdapter {
       >[0];
       this.isRedisConnected = true;
 
-      console.log(
+      this.logger.log(
         '[RedisIoAdapter] Redis adapter created and validated successfully.',
       );
     } catch (err) {
-      console.error(
+      this.logger.error(
         '[RedisIoAdapter] Failed to connect to Redis - falling back to in-memory adapter.',
-        err,
+        err instanceof Error ? err.stack : String(err),
       );
       this.isRedisConnected = false;
       this.adapterConstructor = undefined;
@@ -87,7 +93,9 @@ export class RedisIoAdapter extends IoAdapter {
         await pubClient?.quit();
         await subClient?.quit();
       } catch (cleanupErr) {
-        console.error('[RedisIoAdapter] Error during cleanup:', cleanupErr);
+        this.logger.error(
+          `[RedisIoAdapter] Error during cleanup: ${cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr)}`,
+        );
       }
     }
   }
@@ -110,22 +118,26 @@ export class RedisIoAdapter extends IoAdapter {
         server.adapter(this.adapterConstructor);
 
         server.of('/').adapter.on('error', (err) => {
-          console.error('[RedisIoAdapter] Runtime adapter error:', err);
+          this.logger.error(
+            `[RedisIoAdapter] Runtime adapter error: ${err instanceof Error ? err.message : String(err)}`,
+          );
           this.isRedisConnected = false;
           this.adapterConstructor = undefined;
         });
 
-        console.log(
+        this.logger.log(
           '[RedisIoAdapter] Redis adapter applied to Socket.IO server.',
         );
       } catch (err) {
-        console.error('[RedisIoAdapter] Failed to apply adapter:', err);
-        console.warn(
+        this.logger.error(
+          `[RedisIoAdapter] Failed to apply adapter: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        this.logger.warn(
           '[RedisIoAdapter] Socket.IO running with in-memory adapter.',
         );
       }
     } else {
-      console.warn(
+      this.logger.warn(
         '[RedisIoAdapter] Socket.IO running with in-memory adapter.',
       );
     }

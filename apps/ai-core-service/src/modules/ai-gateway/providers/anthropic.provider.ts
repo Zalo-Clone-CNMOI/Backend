@@ -1,6 +1,7 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unused-vars, @typescript-eslint/require-await */
+/* eslint-disable @typescript-eslint/no-unused-vars, @typescript-eslint/require-await */
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { APP_CONFIG, AppConfig } from '@libs/config';
+import type Anthropic from '@anthropic-ai/sdk';
 import {
   ILlmProvider,
   LlmCompletionOptions,
@@ -13,7 +14,7 @@ import {
 export class AnthropicProvider implements ILlmProvider {
   private readonly logger = new Logger(AnthropicProvider.name);
   readonly name = 'anthropic';
-  private client: any;
+  private client?: Anthropic;
 
   constructor(@Inject(APP_CONFIG) private readonly config: AppConfig) {}
 
@@ -21,7 +22,7 @@ export class AnthropicProvider implements ILlmProvider {
     return !!this.config.anthropicApiKey;
   }
 
-  private async getClient() {
+  private async getClient(): Promise<Anthropic> {
     if (!this.client) {
       const { default: Anthropic } = await import('@anthropic-ai/sdk');
       this.client = new Anthropic({ apiKey: this.config.anthropicApiKey });

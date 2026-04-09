@@ -1,8 +1,10 @@
-import { Injectable, NestMiddleware } from '@nestjs/common';
+import { Injectable, NestMiddleware, Logger } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
 
 @Injectable()
 export class IpFilterMiddleware implements NestMiddleware {
+  private readonly logger = new Logger(IpFilterMiddleware.name);
+
   use(req: Request, res: Response, next: NextFunction) {
     const clientIp = req.ip || req.socket.remoteAddress || '';
     const origin = req.headers.origin || '';
@@ -27,7 +29,7 @@ export class IpFilterMiddleware implements NestMiddleware {
       !origin ||
       allowedOrigins.some((allowed) => cleanedOrigin.startsWith(allowed));
 
-    console.log(`🌍 IP: ${cleanedIp} | 🏷 Origin: ${cleanedOrigin}`);
+    this.logger.log(`IP: ${cleanedIp} | Origin: ${cleanedOrigin}`);
 
     if (isOriginAllowed) {
       next();

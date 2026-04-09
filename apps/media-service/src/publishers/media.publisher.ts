@@ -58,7 +58,7 @@ export class MediaPublisher implements OnModuleInit {
     }
   }
 
-  private handleFallback(topic: string, _payload: unknown, error: any) {
+  private handleFallback(topic: string, _payload: unknown, error: unknown) {
     this.logger.error(
       `Lost Kafka connection in MediaPublisher. Performing fallback for topic ${topic}`,
     );

@@ -1,6 +1,6 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return */
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { APP_CONFIG, AppConfig } from '@libs/config';
+import type OpenAI from 'openai';
 import {
   ILlmProvider,
   LlmCompletionOptions,
@@ -13,7 +13,7 @@ import {
 export class OpenAiProvider implements ILlmProvider {
   private readonly logger = new Logger(OpenAiProvider.name);
   readonly name = 'openai';
-  private client: any;
+  private client?: OpenAI;
 
   constructor(@Inject(APP_CONFIG) private readonly config: AppConfig) {}
 
@@ -21,7 +21,7 @@ export class OpenAiProvider implements ILlmProvider {
     return !!this.config.openaiApiKey;
   }
 
-  private async getClient() {
+  private async getClient(): Promise<OpenAI> {
     if (!this.client) {
       const { default: OpenAI } = await import('openai');
       this.client = new OpenAI({ apiKey: this.config.openaiApiKey });

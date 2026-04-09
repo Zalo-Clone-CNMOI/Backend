@@ -7,11 +7,16 @@ export interface InteractionClientConfig {
   baseUrl: string;
 }
 
+type InjectToken =
+  | string
+  | symbol
+  | (abstract new (...args: never[]) => unknown);
+
 export interface InteractionClientAsyncConfig {
   useFactory: (
-    ...args: any[]
+    ...args: unknown[]
   ) => Promise<InteractionClientConfig> | InteractionClientConfig;
-  inject?: any[];
+  inject?: InjectToken[];
 }
 
 export function injectApiProvider<T>(

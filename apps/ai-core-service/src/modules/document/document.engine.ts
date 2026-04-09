@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -13,7 +13,23 @@ import type {
   AiDocumentProcessedEvent,
   AiDocumentQueryEvent,
   AiDocumentQueryResultEvent,
+  AiProviderType,
 } from '@libs/contracts';
+
+interface SimilarityRow {
+  similarity?: string;
+}
+
+const toAiProviderType = (provider: string): AiProviderType => {
+  if (
+    provider === 'openai' ||
+    provider === 'gemini' ||
+    provider === 'anthropic'
+  ) {
+    return provider;
+  }
+  return 'openai';
+};
 
 /**
  * DocumentEngine — document processing + pgvector RAG pipeline.
@@ -208,11 +224,13 @@ export class DocumentEngine {
         .limit(topK)
         .getRawAndEntities();
 
-      const relevantChunks = chunks.raw.map((row: any, i: number) => ({
-        content: chunks.entities[i]?.content ?? '',
-        chunkIndex: chunks.entities[i]?.chunkIndex ?? 0,
-        similarity: parseFloat(row.similarity ?? '0'),
-      }));
+      const relevantChunks = chunks.raw.map(
+        (row: SimilarityRow, i: number) => ({
+          content: chunks.entities[i]?.content ?? '',
+          chunkIndex: chunks.entities[i]?.chunkIndex ?? 0,
+          similarity: parseFloat(row.similarity ?? '0'),
+        }),
+      );
 
       // Build RAG prompt and generate answer
       const messages = this.promptBuilder.buildDocumentQueryPrompt(
@@ -252,7 +270,7 @@ export class DocumentEngine {
           content_preview: c.content.slice(0, 200),
           similarity_score: c.similarity,
         })),
-        provider: result.provider as any,
+        provider: toAiProviderType(result.provider),
         tokens_used:
           result.tokensIn + result.tokensOut + queryEmbedding.tokensUsed,
         processed_at: Date.now(),

@@ -5,10 +5,16 @@ import {
   Logger,
 } from '@nestjs/common';
 import type { Socket } from 'socket.io';
+import type { DefaultEventsMap } from 'socket.io/dist/typed-events';
 import { JwtService } from './jwt.service';
 
 type SocketData = { userId?: string };
-type AuthedSocket = Socket<any, any, any, SocketData>;
+type AuthedSocket = Socket<
+  DefaultEventsMap,
+  DefaultEventsMap,
+  DefaultEventsMap,
+  SocketData
+>;
 @Injectable()
 export class WsAuthGuard implements CanActivate {
   private readonly logger: Logger;

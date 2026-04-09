@@ -1,5 +1,30 @@
 import { Injectable, Logger } from '@nestjs/common';
 
+interface HealthCheckDetail {
+  [key: string]: unknown;
+}
+
+interface PostgresConnection {
+  query(sql: string): Promise<unknown>;
+}
+
+interface RedisClient {
+  ping(): Promise<unknown>;
+}
+
+interface KafkaClusterInfo {
+  brokers: unknown[];
+  controller: unknown;
+}
+
+interface KafkaAdmin {
+  describeCluster(): Promise<KafkaClusterInfo>;
+}
+
+interface ScyllaClient {
+  execute(cql: string): Promise<unknown>;
+}
+
 export interface HealthCheckResult {
   status: 'healthy' | 'degraded' | 'unhealthy';
   checks: {
@@ -7,7 +32,7 @@ export interface HealthCheckResult {
       status: 'up' | 'down';
       message?: string;
       responseTime?: number;
-      details?: any;
+      details?: HealthCheckDetail;
     };
   };
   timestamp: string;
@@ -33,7 +58,7 @@ export class HealthCheckService {
       check: () => Promise<{
         status: 'up' | 'down';
         message?: string;
-        details?: any;
+        details?: HealthCheckDetail;
       }>;
     }>,
   ): Promise<HealthCheckResult> {
@@ -99,10 +124,9 @@ export class HealthCheckService {
    * PostgreSQL health check
    */
   async checkPostgres(
-    connection: any,
+    connection: PostgresConnection,
   ): Promise<{ status: 'up' | 'down'; message?: string }> {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       await connection.query('SELECT 1');
       return { status: 'up' };
     } catch (error: unknown) {
@@ -117,10 +141,9 @@ export class HealthCheckService {
    * Redis health check
    */
   async checkRedis(
-    client: any,
+    client: RedisClient,
   ): Promise<{ status: 'up' | 'down'; message?: string }> {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       await client.ping();
       return { status: 'up' };
     } catch (error: unknown) {
@@ -136,18 +159,17 @@ export class HealthCheckService {
   /**
    * Kafka health check
    */
-  async checkKafka(
-    admin: any,
-  ): Promise<{ status: 'up' | 'down'; message?: string; details?: any }> {
+  async checkKafka(admin: KafkaAdmin): Promise<{
+    status: 'up' | 'down';
+    message?: string;
+    details?: HealthCheckDetail;
+  }> {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
       const cluster = await admin.describeCluster();
       return {
         status: 'up',
         details: {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
           brokers: cluster.brokers.length,
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
           controller: cluster.controller,
         },
       };
@@ -165,10 +187,9 @@ export class HealthCheckService {
    * ScyllaDB health check
    */
   async checkScylla(
-    client: any,
+    client: ScyllaClient,
   ): Promise<{ status: 'up' | 'down'; message?: string }> {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       await client.execute('SELECT now() FROM system.local');
       return { status: 'up' };
     } catch (error: unknown) {

@@ -9,9 +9,15 @@ import {
   type WsChatTypingUser,
 } from '@libs/contracts';
 import type { Server, Socket } from 'socket.io';
+import type { DefaultEventsMap } from 'socket.io/dist/typed-events';
 
 type SocketData = { userId?: string };
-type AuthedSocket = Socket<any, any, any, SocketData>;
+type AuthedSocket = Socket<
+  DefaultEventsMap,
+  DefaultEventsMap,
+  DefaultEventsMap,
+  SocketData
+>;
 
 @Injectable()
 export class TypingHandler implements OnModuleDestroy {
@@ -159,6 +165,8 @@ export class TypingHandler implements OnModuleDestroy {
       this.pendingTimers.delete(conversationId);
       void this.broadcastTypingList(conversationId);
     }, this.RECHECK_DELAY_MS);
+
+    timer.unref?.();
 
     this.pendingTimers.set(conversationId, timer);
   }

@@ -866,6 +866,12 @@ describe('PersistMessageConsumer', () => {
 
       expect(publisher.emit).not.toHaveBeenCalled();
       expect(cacheService.set).not.toHaveBeenCalled();
+      expect(cacheService.delIfValueMatches).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `${payload.conversation_id}:${payload.message_id}:lock`,
+        ),
+        expect.any(String),
+      );
     });
 
     it('should skip moderation enforcement when message row is missing', async () => {

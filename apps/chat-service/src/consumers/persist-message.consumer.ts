@@ -39,6 +39,7 @@ const MODERATION_DELETE_EVENT_TTL_SECONDS = 86400;
 const MODERATION_DELETE_EVENT_LOCK_TTL_SECONDS = 120;
 const MIN_MODERATION_DELETE_EVENT_LOCK_TTL_SECONDS = 30;
 const MAX_MODERATION_DELETE_EVENT_LOCK_TTL_SECONDS = 900;
+const MIN_LOCK_RENEW_INTERVAL_MS = 5000;
 
 @Controller()
 export class PersistMessageConsumer {
@@ -237,6 +238,7 @@ export class PersistMessageConsumer {
     let shouldEmitDeleteEvent = false;
     let emitLockAcquired = false;
     let emitLockToken: string | null = null;
+    let emitLockRenewTimer: NodeJS.Timeout | null = null;
 
     try {
       const applied = await this.repo.trySoftDeleteMessage(
@@ -354,6 +356,62 @@ export class PersistMessageConsumer {
         return;
       }
 
+      const lockRenewIntervalMs = Math.max(
+        MIN_LOCK_RENEW_INTERVAL_MS,
+        Math.floor(this.moderationDeleteEventLockTtlSeconds * 1000 * 0.5),
+      );
+
+      emitLockRenewTimer = setInterval(() => {
+        if (!emitLockToken) {
+          return;
+        }
+
+        void this.cacheService
+          .expireIfValueMatches(
+            deleteEmitLockKey,
+            emitLockToken,
+            this.moderationDeleteEventLockTtlSeconds,
+          )
+          .then((renewed) => {
+            if (!renewed && emitLockRenewTimer) {
+              clearInterval(emitLockRenewTimer);
+              emitLockRenewTimer = null;
+              this.logger.warn(
+                `[${traceId}] Moderation delete event lock renewal skipped`,
+                {
+                  messageId: payload.message_id,
+                  conversationId: payload.conversation_id,
+                },
+              );
+            }
+          })
+          .catch((renewError) => {
+            this.logger.error(
+              `[${traceId}] Moderation delete event lock renewal failed`,
+              renewError,
+            );
+          });
+      }, lockRenewIntervalMs);
+
+      const lockRenewedBeforeEmit =
+        await this.cacheService.expireIfValueMatches(
+          deleteEmitLockKey,
+          emitLockToken,
+          this.moderationDeleteEventLockTtlSeconds,
+        );
+      if (!lockRenewedBeforeEmit) {
+        this.logger.warn(
+          `[${traceId}] Moderation delete event lock lost before publish`,
+          {
+            messageId: payload.message_id,
+            conversationId: payload.conversation_id,
+          },
+        );
+        throw new Error(
+          'Moderation delete event emit lock lost before publish',
+        );
+      }
+
       const event: ChatMessageDeletedEvent = {
         message_id: payload.message_id,
         conversation_id: payload.conversation_id,
@@ -390,6 +448,10 @@ export class PersistMessageConsumer {
       });
       throw error;
     } finally {
+      if (emitLockRenewTimer) {
+        clearInterval(emitLockRenewTimer);
+      }
+
       if (emitLockAcquired && emitLockToken) {
         await this.cacheService
           .delIfValueMatches(deleteEmitLockKey, emitLockToken)

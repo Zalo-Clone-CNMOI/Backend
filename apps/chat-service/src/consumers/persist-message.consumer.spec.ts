@@ -50,6 +50,7 @@ describe('PersistMessageConsumer', () => {
     get: jest.Mock;
     set: jest.Mock;
     setIfAbsent: jest.Mock;
+    expireIfValueMatches: jest.Mock;
     delIfValueMatches: jest.Mock;
     invalidateRecentMessages: jest.Mock;
   };
@@ -100,6 +101,7 @@ describe('PersistMessageConsumer', () => {
       get: jest.fn().mockResolvedValue(null),
       set: jest.fn().mockResolvedValue(undefined),
       setIfAbsent: jest.fn().mockResolvedValue(true),
+      expireIfValueMatches: jest.fn().mockResolvedValue(true),
       delIfValueMatches: jest.fn().mockResolvedValue(true),
       invalidateRecentMessages: jest.fn().mockResolvedValue(undefined),
     };
@@ -806,6 +808,32 @@ describe('PersistMessageConsumer', () => {
       expect(publisher.emit).not.toHaveBeenCalled();
       expect(cacheService.set).not.toHaveBeenCalled();
       expect(cacheService.delIfValueMatches).not.toHaveBeenCalled();
+    });
+
+    it('should throw when lock is lost before delete event publish', async () => {
+      const payload = {
+        message_id: 'msg-moderation-lock-lost-1',
+        conversation_id: 'conv-lock-lost-1',
+        sender_id: 'user-lock-lost-1',
+        created_at: Date.now() - 1000,
+        is_flagged: true,
+        labels: ['spam' as const],
+        confidence: 1,
+        provider: 'openai' as const,
+        ensemble: false,
+        processed_at: Date.now(),
+        tokens_used: 0,
+      };
+
+      repo.trySoftDeleteMessage.mockResolvedValue(true);
+      cacheService.expireIfValueMatches.mockResolvedValue(false);
+
+      await expect(consumer.onModerationResult(payload)).rejects.toThrow(
+        'Moderation delete event emit lock lost before publish',
+      );
+
+      expect(publisher.emit).not.toHaveBeenCalled();
+      expect(cacheService.set).not.toHaveBeenCalled();
     });
 
     it('should skip moderation enforcement when message row is missing', async () => {

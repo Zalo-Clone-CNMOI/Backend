@@ -17,7 +17,9 @@ import { REDIS_CLIENT } from './redis.tokens';
 function createMockRedis() {
   return {
     get: jest.fn(),
+    set: jest.fn(),
     setEx: jest.fn(),
+    eval: jest.fn(),
     del: jest.fn(),
     ping: jest.fn(),
     scanIterator: jest.fn(),
@@ -86,6 +88,66 @@ describe('CacheService', () => {
       await expect(
         cache.set('key1', { foo: 'bar' }, 300),
       ).resolves.toBeUndefined();
+    });
+  });
+
+  describe('setIfAbsent', () => {
+    it('should return true when NX set succeeds', async () => {
+      redis.set.mockResolvedValue('OK');
+
+      const acquired = await cache.setIfAbsent('lock:key', 'token-1', 120);
+
+      expect(acquired).toBe(true);
+      expect(redis.set).toHaveBeenCalledWith('lock:key', 'token-1', {
+        NX: true,
+        EX: 120,
+      });
+    });
+
+    it('should return false when NX set is rejected by existing key', async () => {
+      redis.set.mockResolvedValue(null);
+
+      const acquired = await cache.setIfAbsent('lock:key', 'token-1', 120);
+
+      expect(acquired).toBe(false);
+    });
+
+    it('should throw on Redis error', async () => {
+      redis.set.mockRejectedValue(new Error('Redis down'));
+
+      await expect(
+        cache.setIfAbsent('lock:key', 'token-1', 120),
+      ).rejects.toThrow('Redis down');
+    });
+  });
+
+  describe('expireIfValueMatches', () => {
+    it('should renew lock ttl when token matches', async () => {
+      redis.eval.mockResolvedValue(1);
+
+      const renewed = await cache.expireIfValueMatches(
+        'lock:key',
+        'token-1',
+        120,
+      );
+
+      expect(renewed).toBe(true);
+      expect(redis.eval).toHaveBeenCalledWith(expect.any(String), {
+        keys: ['lock:key'],
+        arguments: ['token-1', '120'],
+      });
+    });
+
+    it('should return false when token does not match', async () => {
+      redis.eval.mockResolvedValue(0);
+
+      const renewed = await cache.expireIfValueMatches(
+        'lock:key',
+        'token-1',
+        120,
+      );
+
+      expect(renewed).toBe(false);
     });
   });
 

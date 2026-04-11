@@ -88,6 +88,30 @@ export class CacheService {
     }
   }
 
+  async expireIfValueMatches(
+    key: string,
+    expectedValue: string,
+    ttl: number,
+  ): Promise<boolean> {
+    const script =
+      "if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('EXPIRE', KEYS[1], ARGV[2]) else return 0 end";
+
+    try {
+      const result = await this.redisClient.eval(script, {
+        keys: [key],
+        arguments: [expectedValue, String(ttl)],
+      });
+
+      return Number(result) === 1;
+    } catch (error) {
+      this.logger.error(
+        `Cache expireIfValueMatches error for key ${key}:`,
+        error,
+      );
+      return false;
+    }
+  }
+
   async del(...keys: string[]): Promise<void> {
     try {
       if (keys.length === 0) return;

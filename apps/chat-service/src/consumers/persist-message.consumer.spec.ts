@@ -31,11 +31,13 @@ describe('PersistMessageConsumer', () => {
 
   let consumer: PersistMessageConsumer;
   let repo: {
-    wasMessageSeen: jest.Mock;
+    tryBeginMessageProcessing: jest.Mock;
     insertMessage: jest.Mock;
-    markMessageSeen: jest.Mock;
+    markMessageStored: jest.Mock;
+    clearMessageProcessing: jest.Mock;
     updateMessageBody: jest.Mock;
     softDeleteMessage: jest.Mock;
+    getMessage: jest.Mock;
     getReactionsByUser: jest.Mock;
     addReaction: jest.Mock;
     removeReaction: jest.Mock;
@@ -48,11 +50,13 @@ describe('PersistMessageConsumer', () => {
 
   beforeEach(() => {
     repo = {
-      wasMessageSeen: jest.fn(),
+      tryBeginMessageProcessing: jest.fn(),
       insertMessage: jest.fn(),
-      markMessageSeen: jest.fn(),
+      markMessageStored: jest.fn(),
+      clearMessageProcessing: jest.fn(),
       updateMessageBody: jest.fn(),
       softDeleteMessage: jest.fn(),
+      getMessage: jest.fn(),
       getReactionsByUser: jest.fn(),
       addReaction: jest.fn(),
       removeReaction: jest.fn(),
@@ -104,9 +108,9 @@ describe('PersistMessageConsumer', () => {
       const payload = createMockChatSendCommand();
 
       membershipService.canUserAccessConversation.mockResolvedValue(true);
-      repo.wasMessageSeen.mockResolvedValue(false);
+      repo.tryBeginMessageProcessing.mockResolvedValue(true);
       repo.insertMessage.mockResolvedValue(undefined);
-      repo.markMessageSeen.mockResolvedValue(undefined);
+      repo.markMessageStored.mockResolvedValue(undefined);
 
       await consumer.onSend(payload);
 
@@ -120,19 +124,17 @@ describe('PersistMessageConsumer', () => {
           conversation_id: payload.conversation_id,
           sender_id: payload.sender_id,
           body: payload.body,
+          created_at: payload.sent_at,
         }),
       );
-      expect(repo.markMessageSeen).toHaveBeenCalledWith(
-        payload.message_id,
-        payload.conversation_id,
-        expect.any(Number),
-      );
+      expect(repo.markMessageStored).toHaveBeenCalledWith(payload.message_id);
       expect(publisher.emit).toHaveBeenCalledWith(
         'chat.message.created',
         expect.objectContaining({
           message_id: payload.message_id,
           conversation_id: payload.conversation_id,
           sender_id: payload.sender_id,
+          created_at: payload.sent_at,
         }),
       );
     });
@@ -141,17 +143,69 @@ describe('PersistMessageConsumer', () => {
   // ─── onSend: Idempotency ──────────────────────────────────────────────────
 
   describe('onSend — idempotency (TC-SVC-001, TC-KAFKA-003, TC-DB-004)', () => {
-    it('should skip duplicate message (already seen)', async () => {
+    it('should skip duplicate message when processing lock cannot be acquired', async () => {
       const payload = createMockChatSendCommand();
 
       membershipService.canUserAccessConversation.mockResolvedValue(true);
-      repo.wasMessageSeen.mockResolvedValue(true); // duplicate!
+      repo.tryBeginMessageProcessing.mockResolvedValue(false);
 
       await consumer.onSend(payload);
 
       expect(repo.insertMessage).not.toHaveBeenCalled();
-      expect(repo.markMessageSeen).not.toHaveBeenCalled();
+      expect(repo.markMessageStored).not.toHaveBeenCalled();
+      expect(repo.clearMessageProcessing).not.toHaveBeenCalled();
       expect(publisher.emit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('onSend — race/retry safety', () => {
+    it('should clear processing lock and allow retry when publisher fails', async () => {
+      const payload = createMockChatSendCommand();
+
+      membershipService.canUserAccessConversation.mockResolvedValue(true);
+      repo.tryBeginMessageProcessing
+        .mockResolvedValueOnce(true)
+        .mockResolvedValueOnce(true);
+      repo.insertMessage.mockResolvedValue(undefined);
+      repo.markMessageStored.mockResolvedValue(undefined);
+      repo.clearMessageProcessing.mockResolvedValue(undefined);
+      publisher.emit
+        .mockRejectedValueOnce(new Error('Kafka unavailable'))
+        .mockResolvedValue(undefined);
+
+      await expect(consumer.onSend(payload)).rejects.toThrow(
+        'Kafka unavailable',
+      );
+      await consumer.onSend(payload);
+
+      expect(repo.clearMessageProcessing).toHaveBeenCalledTimes(1);
+      expect(repo.clearMessageProcessing).toHaveBeenCalledWith(
+        payload.message_id,
+      );
+      expect(repo.tryBeginMessageProcessing).toHaveBeenCalledTimes(2);
+      expect(repo.markMessageStored).toHaveBeenCalledTimes(1);
+      expect(publisher.emit).toHaveBeenCalledWith(
+        'chat.message.created',
+        expect.objectContaining({ message_id: payload.message_id }),
+      );
+    });
+
+    it('should clear processing lock when message insert fails after lock acquisition', async () => {
+      const payload = createMockChatSendCommand();
+
+      membershipService.canUserAccessConversation.mockResolvedValue(true);
+      repo.tryBeginMessageProcessing.mockResolvedValue(true);
+      repo.insertMessage.mockRejectedValue(new Error('Scylla insert failed'));
+      repo.clearMessageProcessing.mockResolvedValue(undefined);
+
+      await expect(consumer.onSend(payload)).rejects.toThrow(
+        'Scylla insert failed',
+      );
+
+      expect(repo.clearMessageProcessing).toHaveBeenCalledWith(
+        payload.message_id,
+      );
+      expect(repo.markMessageStored).not.toHaveBeenCalled();
     });
   });
 
@@ -165,7 +219,7 @@ describe('PersistMessageConsumer', () => {
 
       await consumer.onSend(payload);
 
-      expect(repo.wasMessageSeen).not.toHaveBeenCalled();
+      expect(repo.tryBeginMessageProcessing).not.toHaveBeenCalled();
       expect(repo.insertMessage).not.toHaveBeenCalled();
       expect(publisher.emit).not.toHaveBeenCalled();
     });
@@ -178,7 +232,8 @@ describe('PersistMessageConsumer', () => {
       const payload = createMockChatSendCommand();
 
       membershipService.canUserAccessConversation.mockResolvedValue(true);
-      repo.wasMessageSeen.mockResolvedValue(false);
+      repo.tryBeginMessageProcessing.mockResolvedValue(true);
+      repo.markMessageStored.mockResolvedValue(undefined);
 
       await consumer.onSend(payload);
 
@@ -199,7 +254,8 @@ describe('PersistMessageConsumer', () => {
       const payload = createMockChatSendCommand();
 
       membershipService.canUserAccessConversation.mockResolvedValue(true);
-      repo.wasMessageSeen.mockResolvedValue(false);
+      repo.tryBeginMessageProcessing.mockResolvedValue(true);
+      repo.markMessageStored.mockResolvedValue(undefined);
 
       // Make publisher fail on the second call (ai moderation)
       publisher.emit
@@ -220,7 +276,8 @@ describe('PersistMessageConsumer', () => {
       const payload = createMockChatSendCommand();
 
       membershipService.canUserAccessConversation.mockResolvedValue(true);
-      repo.wasMessageSeen.mockResolvedValue(false);
+      repo.tryBeginMessageProcessing.mockResolvedValue(true);
+      repo.markMessageStored.mockResolvedValue(undefined);
       cacheService.invalidateRecentMessages.mockRejectedValue(
         new Error('Redis down'),
       );
@@ -242,6 +299,9 @@ describe('PersistMessageConsumer', () => {
         edited_at: Date.now(),
         trace_id: 'test-trace',
       };
+
+      membershipService.canUserAccessConversation.mockResolvedValue(true);
+      repo.getMessage.mockResolvedValue({ sender_id: payload.sender_id });
 
       await consumer.onEdit(payload);
 
@@ -277,6 +337,9 @@ describe('PersistMessageConsumer', () => {
         deleted_at: Date.now(),
         trace_id: 'test-trace',
       };
+
+      membershipService.canUserAccessConversation.mockResolvedValue(true);
+      repo.getMessage.mockResolvedValue({ sender_id: payload.sender_id });
 
       await consumer.onDelete(payload);
 
@@ -380,11 +443,16 @@ describe('PersistMessageConsumer', () => {
     it('should throw when ScyllaDB insertMessage fails', async () => {
       const payload = createMockChatSendCommand();
       membershipService.canUserAccessConversation.mockResolvedValue(true);
-      repo.wasMessageSeen.mockResolvedValue(false);
+      repo.tryBeginMessageProcessing.mockResolvedValue(true);
       repo.insertMessage.mockRejectedValue(new Error('ScyllaDB write error'));
+      repo.clearMessageProcessing.mockResolvedValue(undefined);
 
       await expect(consumer.onSend(payload)).rejects.toThrow(
         'ScyllaDB write error',
+      );
+
+      expect(repo.clearMessageProcessing).toHaveBeenCalledWith(
+        payload.message_id,
       );
     });
   });

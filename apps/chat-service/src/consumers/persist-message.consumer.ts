@@ -50,7 +50,10 @@ export class PersistMessageConsumer {
   @EventPattern(KafkaTopics.ChatMessageSend)
   async onSend(@Payload() payload: ChatMessageSendCommand) {
     const startTime = Date.now();
-    const createdAt = startTime;
+    const createdAt =
+      Number.isFinite(payload.sent_at) && payload.sent_at > 0
+        ? payload.sent_at
+        : startTime;
     const traceId = payload.trace_id || `trace-${Date.now()}-${Math.random()}`;
 
     this.logger.debug(`[${traceId}] ChatMessageSend started`, {
@@ -73,8 +76,12 @@ export class PersistMessageConsumer {
         return;
       }
 
-      const seen = await this.repo.wasMessageSeen(payload.message_id);
-      if (seen) {
+      const acquired = await this.repo.tryBeginMessageProcessing(
+        payload.message_id,
+        payload.conversation_id,
+        createdAt,
+      );
+      if (!acquired) {
         this.logger.debug(
           `[${traceId}] Message already processed (idempotent)`,
           {
@@ -84,37 +91,49 @@ export class PersistMessageConsumer {
         return;
       }
 
-      await this.repo.insertMessage({
-        message_id: payload.message_id,
-        conversation_id: payload.conversation_id,
-        sender_id: payload.sender_id,
-        body: payload.body,
-        created_at: createdAt,
-        attachments: payload.attachments,
-        reply_to_message_id: payload.reply_to_message_id,
-      });
+      let stored = false;
 
-      await this.repo.markMessageSeen(
-        payload.message_id,
-        payload.conversation_id,
-        createdAt,
-      );
+      try {
+        await this.repo.insertMessage({
+          message_id: payload.message_id,
+          conversation_id: payload.conversation_id,
+          sender_id: payload.sender_id,
+          body: payload.body,
+          created_at: createdAt,
+          attachments: payload.attachments,
+          reply_to_message_id: payload.reply_to_message_id,
+        });
 
-      const event: ChatMessageCreatedEvent = {
-        message_id: payload.message_id,
-        conversation_id: payload.conversation_id,
-        sender_id: payload.sender_id,
-        body: payload.body,
-        created_at: createdAt,
-        attachments: payload.attachments,
-        reply_to_message_id: payload.reply_to_message_id,
-        trace_id: traceId,
-      };
+        const event: ChatMessageCreatedEvent = {
+          message_id: payload.message_id,
+          conversation_id: payload.conversation_id,
+          sender_id: payload.sender_id,
+          body: payload.body,
+          created_at: createdAt,
+          attachments: payload.attachments,
+          reply_to_message_id: payload.reply_to_message_id,
+          trace_id: traceId,
+        };
 
-      await this.publisher.emit(KafkaTopics.ChatMessageCreated, event);
-      this.logger.log(`[${traceId}] ChatMessageCreated event emitted`, {
-        messageId: payload.message_id,
-      });
+        await this.publisher.emit(KafkaTopics.ChatMessageCreated, event);
+        this.logger.log(`[${traceId}] ChatMessageCreated event emitted`, {
+          messageId: payload.message_id,
+        });
+
+        await this.repo.markMessageStored(payload.message_id);
+        stored = true;
+      } catch (error) {
+        if (!stored) {
+          await this.repo
+            .clearMessageProcessing(payload.message_id)
+            .catch(() => {
+              this.logger.error(
+                `[${traceId}] Failed to clear idempotency lock for message: ${payload.message_id}`,
+              );
+            });
+        }
+        throw error;
+      }
 
       await this.emitMessageNotification(
         payload.conversation_id,

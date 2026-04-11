@@ -14,6 +14,37 @@ import {
 export class MessageRepository {
   constructor(@Inject(SCYLLA_CLIENT) private readonly client: Client) {}
 
+  async tryBeginMessageProcessing(
+    messageId: string,
+    conversationId: string,
+    createdAt: number,
+  ): Promise<boolean> {
+    const result = await this.client.execute(
+      'INSERT INTO idempotency_by_message_id (message_id, conversation_id, created_at, status) VALUES (?, ?, ?, ?) IF NOT EXISTS',
+      [messageId, conversationId, createdAt, 'pending'],
+      { prepare: true },
+    );
+
+    const appliedValue: unknown = result.first()?.get('[applied]');
+    return typeof appliedValue === 'boolean' ? appliedValue : false;
+  }
+
+  async markMessageStored(messageId: string): Promise<void> {
+    await this.client.execute(
+      'UPDATE idempotency_by_message_id SET status = ? WHERE message_id = ?',
+      ['stored', messageId],
+      { prepare: true },
+    );
+  }
+
+  async clearMessageProcessing(messageId: string): Promise<void> {
+    await this.client.execute(
+      'DELETE FROM idempotency_by_message_id WHERE message_id = ?',
+      [messageId],
+      { prepare: true },
+    );
+  }
+
   async wasMessageSeen(messageId: string): Promise<boolean> {
     const result = await this.client.execute(
       'SELECT message_id FROM idempotency_by_message_id WHERE message_id = ?',

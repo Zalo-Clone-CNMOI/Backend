@@ -1,9 +1,4 @@
-import {
-  BadRequestException,
-  Inject,
-  Injectable,
-  Logger,
-} from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { ClientKafka } from '@nestjs/microservices';
@@ -434,9 +429,12 @@ export class AuthService {
 
       return { message: 'QR login confirmed successfully', data: result };
     } catch (error: unknown) {
-      throw new BadRequestException(
+      this.logger.error(
+        `QR confirmation failed for session ${dto.sessionId}`,
+        error instanceof Error ? error.stack : undefined,
+      );
+      throw BusinessException.badRequest(
         'Failed to confirm QR session. Please try again.',
-        error instanceof Error ? error.message : undefined,
       );
     }
   }

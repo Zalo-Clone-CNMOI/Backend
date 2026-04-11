@@ -16,16 +16,24 @@ export class JwtService {
   private readonly logger = new Logger(JwtService.name);
 
   private get accessSecret(): string {
-    const secret = process.env.JWT_ACCESS_SECRET ?? process.env.JWT_SECRET;
+    const secret = process.env.JWT_SECRET;
 
-    if (!secret) {
-      throw new Error(
-        'JWT_ACCESS_SECRET or JWT_SECRET environment variable is required. ' +
-          'Set JWT_ACCESS_SECRET for production use.',
-      );
+    if (secret) {
+      return secret;
     }
 
-    return secret;
+    const isTestEnv = process.env.NODE_ENV === 'test';
+    if (isTestEnv && process.env.JWT_SECRET) {
+      this.logger.warn(
+        'Using legacy JWT_SECRET fallback in test environment. Set JWT_SECRET for production-safe config.',
+      );
+      return process.env.JWT_SECRET;
+    }
+
+    throw new Error(
+      'JWT_SECRET environment variable is required. ' +
+        'Set JWT_SECRET for production use.',
+    );
   }
 
   private get refreshSecret(): string {

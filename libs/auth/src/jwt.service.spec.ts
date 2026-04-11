@@ -20,7 +20,7 @@ describe('JwtService', () => {
   const REFRESH_SECRET = 'test-refresh-secret-key-for-unit-tests';
 
   beforeAll(() => {
-    process.env.JWT_ACCESS_SECRET = ACCESS_SECRET;
+    process.env.JWT_SECRET = ACCESS_SECRET;
     process.env.JWT_REFRESH_SECRET = REFRESH_SECRET;
     process.env.JWT_ACCESS_EXPIRES_IN = '15m';
     process.env.JWT_REFRESH_EXPIRES_IN = '7d';
@@ -31,7 +31,7 @@ describe('JwtService', () => {
   });
 
   afterAll(() => {
-    delete process.env.JWT_ACCESS_SECRET;
+    delete process.env.JWT_SECRET;
     delete process.env.JWT_REFRESH_SECRET;
     delete process.env.JWT_ACCESS_EXPIRES_IN;
     delete process.env.JWT_REFRESH_EXPIRES_IN;
@@ -318,18 +318,18 @@ describe('JwtService', () => {
   // ─── Missing environment variables ─────────────────────────────────────────
 
   describe('environment variable validation', () => {
-    it('should throw if JWT_ACCESS_SECRET is missing', () => {
-      const origAccess = process.env.JWT_ACCESS_SECRET;
+    it('should throw if JWT_SECRET is missing', () => {
+      const origAccess = process.env.JWT_SECRET;
       const origSecret = process.env.JWT_SECRET;
-      delete process.env.JWT_ACCESS_SECRET;
+      delete process.env.JWT_SECRET;
       delete process.env.JWT_SECRET;
 
       const svc = new JwtService();
       expect(() => svc.generateTokenPair('user-123', '+84901234567')).toThrow(
-        'JWT_ACCESS_SECRET',
+        'JWT_SECRET',
       );
 
-      process.env.JWT_ACCESS_SECRET = origAccess;
+      process.env.JWT_SECRET = origAccess;
       if (origSecret) process.env.JWT_SECRET = origSecret;
     });
 
@@ -345,9 +345,9 @@ describe('JwtService', () => {
       process.env.JWT_REFRESH_SECRET = orig;
     });
 
-    it('should fall back to JWT_SECRET if JWT_ACCESS_SECRET is absent', () => {
-      const origAccess = process.env.JWT_ACCESS_SECRET;
-      delete process.env.JWT_ACCESS_SECRET;
+    it('should fall back to JWT_SECRET if JWT_SECRET is absent', () => {
+      const origAccess = process.env.JWT_SECRET;
+      delete process.env.JWT_SECRET;
       process.env.JWT_SECRET = 'fallback-secret';
 
       const svc = new JwtService();
@@ -361,7 +361,7 @@ describe('JwtService', () => {
       ) as jwt.JwtPayload;
       expect(payload.sub).toBe('user-123');
 
-      process.env.JWT_ACCESS_SECRET = origAccess;
+      process.env.JWT_SECRET = origAccess;
       delete process.env.JWT_SECRET;
     });
   });

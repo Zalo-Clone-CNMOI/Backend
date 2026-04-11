@@ -165,6 +165,7 @@ export class AuthController {
    */
   @Public()
   @Get('qr/status/:sessionId')
+  @Throttle({ default: { limit: 6, ttl: seconds(30) } })
   @ApiOperationDecorator({
     summary: 'Get QR session status',
     description:

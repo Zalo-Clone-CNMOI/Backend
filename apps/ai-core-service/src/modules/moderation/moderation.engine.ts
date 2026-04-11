@@ -29,6 +29,7 @@ const toAiProviderType = (provider: string): AiProviderType => {
 export class ModerationEngine {
   private readonly logger = new Logger(ModerationEngine.name);
   private readonly ensembleEnabled: boolean;
+  private readonly failOpen: boolean;
 
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
@@ -39,8 +40,9 @@ export class ModerationEngine {
     private readonly moderationRepo: Repository<AiModerationLog>,
   ) {
     this.ensembleEnabled = config.aiModerationEnsemble === true;
+    this.failOpen = config.aiModerationFailOpen === true;
     this.logger.log(
-      `Moderation engine initialized (ensemble: ${this.ensembleEnabled})`,
+      `Moderation engine initialized (ensemble: ${this.ensembleEnabled}, failOpen: ${this.failOpen})`,
     );
   }
 
@@ -117,9 +119,7 @@ export class ModerationEngine {
         message_id: event.message_id,
         conversation_id: event.conversation_id,
         sender_id: event.sender_id,
-        is_flagged: false,
-        labels: ['clean' as ModerationLabelType],
-        confidence: 0,
+        ...this.fallbackModeration(),
         provider: 'openai' as const,
         ensemble: false,
         processed_at: Date.now(),
@@ -145,13 +145,29 @@ export class ModerationEngine {
       };
     } catch {
       this.logger.warn(
-        'Failed to parse moderation response, defaulting to clean',
+        'Failed to parse moderation response, applying fallback moderation policy',
       );
+      return this.fallbackModeration();
+    }
+  }
+
+  private fallbackModeration(): {
+    is_flagged: boolean;
+    labels: ModerationLabelType[];
+    confidence: number;
+  } {
+    if (this.failOpen) {
       return {
         is_flagged: false,
         labels: ['clean' as ModerationLabelType],
         confidence: 0,
       };
     }
+
+    return {
+      is_flagged: true,
+      labels: ['spam' as ModerationLabelType],
+      confidence: 1,
+    };
   }
 }

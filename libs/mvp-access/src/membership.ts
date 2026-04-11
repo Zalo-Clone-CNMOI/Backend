@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, IsNull } from 'typeorm';
+import { Repository, IsNull, In } from 'typeorm';
 import { ConversationMember } from '@libs/database/entities';
 
 @Injectable()
@@ -60,6 +60,7 @@ export class ConversationMembershipService {
     const memberships = await this.memberRepository.find({
       where: {
         userId,
+        conversationId: In(conversationIds),
         leftAt: IsNull(),
       },
       select: ['conversationId'],

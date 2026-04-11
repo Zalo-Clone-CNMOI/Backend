@@ -46,6 +46,7 @@ export interface AppConfig {
   aiMaxDocumentPages?: number;
   aiStreamBufferSize?: number;
   aiModerationEnsemble?: boolean;
+  aiModerationFailOpen?: boolean;
 }
 
 function readNumber(value: string | undefined): number | undefined {
@@ -120,5 +121,6 @@ export function loadConfig(serviceName: string): AppConfig {
     aiMaxDocumentPages: readNumber(process.env.AI_MAX_DOCUMENT_PAGES) ?? 200,
     aiStreamBufferSize: readNumber(process.env.AI_STREAM_BUFFER_SIZE) ?? 50,
     aiModerationEnsemble: process.env.AI_MODERATION_ENSEMBLE === 'true',
+    aiModerationFailOpen: process.env.AI_MODERATION_FAIL_OPEN === 'true',
   };
 }

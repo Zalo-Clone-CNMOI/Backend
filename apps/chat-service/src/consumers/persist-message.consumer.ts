@@ -27,6 +27,10 @@ import {
   getConversationMemberIds,
   getUserDisplayName,
 } from '../utils/notification.helper';
+import {
+  ensureConversationAccess,
+  ensureMessageOwnership,
+} from '../utils/access.helper';
 
 @Controller()
 export class PersistMessageConsumer {
@@ -56,15 +60,16 @@ export class PersistMessageConsumer {
     });
 
     try {
-      const canAccess = await this.membershipService.canUserAccessConversation(
-        payload.sender_id,
-        payload.conversation_id,
-      );
-      if (!canAccess) {
-        this.logger.warn(`[${traceId}] Unauthorized message attempt`, {
-          senderId: payload.sender_id,
-          conversationId: payload.conversation_id,
-        });
+      const hasAccess = await ensureConversationAccess({
+        membershipService: this.membershipService,
+        logger: this.logger,
+        traceId,
+        senderId: payload.sender_id,
+        conversationId: payload.conversation_id,
+        action: 'message',
+        messageId: payload.message_id,
+      });
+      if (!hasAccess) {
         return;
       }
 
@@ -184,6 +189,33 @@ export class PersistMessageConsumer {
     });
 
     try {
+      const hasAccess = await ensureConversationAccess({
+        membershipService: this.membershipService,
+        logger: this.logger,
+        traceId,
+        senderId: payload.sender_id,
+        conversationId: payload.conversation_id,
+        action: 'edit',
+        messageId: payload.message_id,
+      });
+      if (!hasAccess) {
+        return;
+      }
+
+      const isOwner = await ensureMessageOwnership({
+        repo: this.repo,
+        logger: this.logger,
+        traceId,
+        senderId: payload.sender_id,
+        conversationId: payload.conversation_id,
+        createdAt: payload.created_at,
+        messageId: payload.message_id,
+        action: 'edit',
+      });
+      if (!isOwner) {
+        return;
+      }
+
       await this.repo.updateMessageBody(
         payload.conversation_id,
         payload.created_at,
@@ -237,6 +269,33 @@ export class PersistMessageConsumer {
     });
 
     try {
+      const hasAccess = await ensureConversationAccess({
+        membershipService: this.membershipService,
+        logger: this.logger,
+        traceId,
+        senderId: payload.sender_id,
+        conversationId: payload.conversation_id,
+        action: 'delete',
+        messageId: payload.message_id,
+      });
+      if (!hasAccess) {
+        return;
+      }
+
+      const isOwner = await ensureMessageOwnership({
+        repo: this.repo,
+        logger: this.logger,
+        traceId,
+        senderId: payload.sender_id,
+        conversationId: payload.conversation_id,
+        createdAt: payload.created_at,
+        messageId: payload.message_id,
+        action: 'delete',
+      });
+      if (!isOwner) {
+        return;
+      }
+
       await this.repo.softDeleteMessage(
         payload.conversation_id,
         payload.created_at,

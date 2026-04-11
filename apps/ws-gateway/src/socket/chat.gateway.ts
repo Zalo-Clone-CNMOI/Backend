@@ -41,9 +41,7 @@ type AuthedSocket = Socket<
   SocketData
 >;
 
-@WebSocketGateway({
-  cors: { origin: '*' },
-})
+@WebSocketGateway()
 export class ChatGateway implements OnModuleInit {
   @WebSocketServer()
   private readonly server!: Server;

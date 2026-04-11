@@ -27,6 +27,7 @@ export interface AiModerationRequestEvent {
   message_id: string;
   conversation_id: string;
   sender_id: string;
+  created_at: number;
   body: string;
   requested_at: number;
   trace_id?: string;
@@ -36,6 +37,7 @@ export interface AiModerationResultEvent {
   message_id: string;
   conversation_id: string;
   sender_id: string;
+  created_at: number;
   is_flagged: boolean;
   labels: ModerationLabelType[];
   confidence: number;

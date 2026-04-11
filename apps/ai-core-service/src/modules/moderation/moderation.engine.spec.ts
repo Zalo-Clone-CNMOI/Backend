@@ -30,6 +30,7 @@ function makeRequest(
     message_id: 'msg-001',
     conversation_id: 'conv-001',
     sender_id: 'user-001',
+    created_at: Date.now(),
     body: 'Hello, world!',
     requested_at: Date.now(),
     trace_id: 'trace-001',
@@ -119,6 +120,7 @@ describe('ModerationEngine', () => {
       expect(result.labels).toEqual(['toxic']);
       expect(result.confidence).toBe(0.95);
       expect(result.message_id).toBe('msg-001');
+      expect(result.created_at).toBeDefined();
     });
 
     it('returns clean result when LLM says not flagged', async () => {
@@ -234,9 +236,9 @@ describe('ModerationEngine', () => {
 
       const result = await engine.moderate(makeRequest());
 
-      expect(result.is_flagged).toBe(false);
-      expect(result.labels).toEqual(['clean']);
-      expect(result.confidence).toBe(0);
+      expect(result.is_flagged).toBe(true);
+      expect(result.labels).toEqual(['spam']);
+      expect(result.confidence).toBe(1);
       expect(result.tokens_used).toBe(0);
     });
 
@@ -254,8 +256,8 @@ describe('ModerationEngine', () => {
 
       const result = await engine.moderate(makeRequest());
 
-      expect(result.is_flagged).toBe(false);
-      expect(result.labels).toEqual(['clean']);
+      expect(result.is_flagged).toBe(true);
+      expect(result.labels).toEqual(['spam']);
     });
 
     it('records failure metrics when LLM throws', async () => {

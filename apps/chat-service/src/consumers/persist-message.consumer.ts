@@ -17,6 +17,7 @@ import {
   type NotificationRequestedEvent,
   NotificationType,
   AiModerationRequestEvent,
+  type AiModerationResultEvent,
 } from '@libs/contracts';
 import { MessageRepository } from '@libs/scylla';
 import { CacheService } from '@libs/redis';
@@ -150,6 +151,7 @@ export class PersistMessageConsumer {
             message_id: payload.message_id,
             conversation_id: payload.conversation_id,
             sender_id: payload.sender_id,
+            created_at: createdAt,
             body: payload.body,
             requested_at: Date.now(),
             trace_id: traceId,
@@ -191,6 +193,56 @@ export class PersistMessageConsumer {
         messageId: payload.message_id,
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
+      });
+      throw error;
+    }
+  }
+
+  @EventPattern(KafkaTopics.AiModerationResult)
+  async onModerationResult(@Payload() payload: AiModerationResultEvent) {
+    if (!payload.is_flagged) {
+      return;
+    }
+
+    const traceId = payload.trace_id || `mod:${payload.message_id}`;
+    const deletedAt = Date.now();
+
+    try {
+      await this.repo.softDeleteMessage(
+        payload.conversation_id,
+        payload.created_at,
+        payload.message_id,
+        deletedAt,
+      );
+
+      const event: ChatMessageDeletedEvent = {
+        message_id: payload.message_id,
+        conversation_id: payload.conversation_id,
+        sender_id: payload.sender_id,
+        deleted_at: deletedAt,
+        trace_id: traceId,
+      };
+
+      await this.publisher.emit(KafkaTopics.ChatMessageDeleted, event);
+
+      await this.cacheService
+        .invalidateRecentMessages(payload.conversation_id)
+        .catch((err) => {
+          this.logger.error(
+            `[${traceId}] Moderation cache invalidation failed`,
+            err,
+          );
+        });
+
+      this.logger.warn(`[${traceId}] Message soft-deleted by moderation`, {
+        messageId: payload.message_id,
+        conversationId: payload.conversation_id,
+        labels: payload.labels,
+      });
+    } catch (error) {
+      this.logger.error(`[${traceId}] Moderation enforcement failed`, {
+        messageId: payload.message_id,
+        error: error instanceof Error ? error.message : String(error),
       });
       throw error;
     }

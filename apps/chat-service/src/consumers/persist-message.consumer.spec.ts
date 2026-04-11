@@ -248,6 +248,17 @@ describe('PersistMessageConsumer', () => {
       expect(emitCalls.some((c) => c[0] === 'ai.moderation.request')).toBe(
         true,
       );
+      expect(emitCalls).toEqual(
+        expect.arrayContaining([
+          [
+            'ai.moderation.request',
+            expect.objectContaining({
+              message_id: payload.message_id,
+              created_at: payload.sent_at,
+            }),
+          ],
+        ]),
+      );
     });
 
     it('should not fail if AI moderation emit fails', async () => {
@@ -454,6 +465,67 @@ describe('PersistMessageConsumer', () => {
       expect(repo.clearMessageProcessing).toHaveBeenCalledWith(
         payload.message_id,
       );
+    });
+  });
+
+  describe('onModerationResult', () => {
+    it('should enforce soft-delete and emit ChatMessageDeleted when flagged', async () => {
+      const payload = {
+        message_id: 'msg-moderation-1',
+        conversation_id: 'conv-1',
+        sender_id: 'user-1',
+        created_at: Date.now() - 1000,
+        is_flagged: true,
+        labels: ['spam' as const],
+        confidence: 1,
+        provider: 'openai' as const,
+        ensemble: false,
+        processed_at: Date.now(),
+        tokens_used: 0,
+        trace_id: 'mod-trace-1',
+      };
+
+      await consumer.onModerationResult(payload);
+
+      expect(repo.softDeleteMessage).toHaveBeenCalledWith(
+        payload.conversation_id,
+        payload.created_at,
+        payload.message_id,
+        expect.any(Number),
+      );
+      expect(publisher.emit).toHaveBeenCalledWith(
+        'chat.message.deleted',
+        expect.objectContaining({
+          message_id: payload.message_id,
+          conversation_id: payload.conversation_id,
+          sender_id: payload.sender_id,
+        }),
+      );
+      expect(cacheService.invalidateRecentMessages).toHaveBeenCalledWith(
+        payload.conversation_id,
+      );
+    });
+
+    it('should skip moderation enforcement when message is not flagged', async () => {
+      const payload = {
+        message_id: 'msg-moderation-2',
+        conversation_id: 'conv-2',
+        sender_id: 'user-2',
+        created_at: Date.now() - 1000,
+        is_flagged: false,
+        labels: ['clean' as const],
+        confidence: 1,
+        provider: 'openai' as const,
+        ensemble: false,
+        processed_at: Date.now(),
+        tokens_used: 0,
+      };
+
+      await consumer.onModerationResult(payload);
+
+      expect(repo.softDeleteMessage).not.toHaveBeenCalled();
+      expect(publisher.emit).not.toHaveBeenCalled();
+      expect(cacheService.invalidateRecentMessages).not.toHaveBeenCalled();
     });
   });
 });

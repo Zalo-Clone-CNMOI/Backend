@@ -109,6 +109,7 @@ describe('AiConsumer', () => {
         message_id: 'msg-1',
         conversation_id: 'conv-1',
         sender_id: 'user-1',
+        created_at: Date.now(),
         body: 'Hello',
         requested_at: Date.now(),
       };

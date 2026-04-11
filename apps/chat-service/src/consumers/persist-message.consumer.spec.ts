@@ -14,6 +14,7 @@
  */
 import { PersistMessageConsumer } from './persist-message.consumer';
 import { createMockChatSendCommand } from '../../../../test/helpers';
+import * as crypto from 'crypto';
 import type { MessageRepository } from '@libs/scylla';
 import type { ChatPublisher } from '../services/chat.publisher';
 import type { CacheService } from '@libs/redis';
@@ -47,6 +48,8 @@ describe('PersistMessageConsumer', () => {
   let cacheService: {
     get: jest.Mock;
     set: jest.Mock;
+    setIfAbsent: jest.Mock;
+    delIfValueMatches: jest.Mock;
     invalidateRecentMessages: jest.Mock;
   };
   let membershipService: { canUserAccessConversation: jest.Mock };
@@ -75,6 +78,8 @@ describe('PersistMessageConsumer', () => {
     cacheService = {
       get: jest.fn().mockResolvedValue(null),
       set: jest.fn().mockResolvedValue(undefined),
+      setIfAbsent: jest.fn().mockResolvedValue(true),
+      delIfValueMatches: jest.fn().mockResolvedValue(true),
       invalidateRecentMessages: jest.fn().mockResolvedValue(undefined),
     };
 
@@ -504,12 +509,31 @@ describe('PersistMessageConsumer', () => {
         expect.any(Number),
       );
       expect(repo.getMessage).not.toHaveBeenCalled();
+      expect(cacheService.setIfAbsent).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `${payload.conversation_id}:${payload.message_id}:lock`,
+        ),
+        expect.any(String),
+        30,
+      );
+      const [, lockToken] = cacheService.setIfAbsent.mock.calls[0] as [
+        string,
+        string,
+        number,
+      ];
+      expect(lockToken).not.toBe(payload.trace_id);
       expect(cacheService.set).toHaveBeenCalledWith(
         expect.stringContaining(
           `${payload.conversation_id}:${payload.message_id}`,
         ),
         true,
         86400,
+      );
+      expect(cacheService.delIfValueMatches).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `${payload.conversation_id}:${payload.message_id}:lock`,
+        ),
+        lockToken,
       );
       expect(publisher.emit).toHaveBeenCalledWith(
         'chat.message.deleted',
@@ -569,9 +593,11 @@ describe('PersistMessageConsumer', () => {
           `${payload.conversation_id}:${payload.message_id}`,
         ),
       );
+      expect(cacheService.setIfAbsent).not.toHaveBeenCalled();
       expect(repo.softDeleteMessage).not.toHaveBeenCalled();
       expect(publisher.emit).not.toHaveBeenCalled();
       expect(cacheService.invalidateRecentMessages).not.toHaveBeenCalled();
+      expect(cacheService.delIfValueMatches).not.toHaveBeenCalled();
     });
 
     it('should re-emit delete event on retry when message already deleted but emit marker is missing', async () => {
@@ -605,11 +631,33 @@ describe('PersistMessageConsumer', () => {
       });
       cacheService.get.mockResolvedValue(null);
 
+      const randomUuidSpy = jest
+        .spyOn(crypto, 'randomUUID')
+        .mockReturnValueOnce('11111111-1111-4111-8111-111111111111')
+        .mockReturnValueOnce('22222222-2222-4222-8222-222222222222');
+
       await expect(consumer.onModerationResult(payload)).rejects.toThrow(
         'Kafka unavailable',
       );
       await consumer.onModerationResult(payload);
 
+      randomUuidSpy.mockRestore();
+
+      expect(cacheService.setIfAbsent).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `${payload.conversation_id}:${payload.message_id}:lock`,
+        ),
+        '11111111-1111-4111-8111-111111111111',
+        30,
+      );
+      expect(cacheService.setIfAbsent).toHaveBeenNthCalledWith(
+        2,
+        expect.stringContaining(
+          `${payload.conversation_id}:${payload.message_id}:lock`,
+        ),
+        '22222222-2222-4222-8222-222222222222',
+        30,
+      );
       expect(publisher.emit).toHaveBeenCalledTimes(2);
       expect(cacheService.set).toHaveBeenCalledWith(
         expect.stringContaining(
@@ -618,6 +666,56 @@ describe('PersistMessageConsumer', () => {
         true,
         86400,
       );
+      expect(cacheService.delIfValueMatches).toHaveBeenNthCalledWith(
+        1,
+        expect.stringContaining(
+          `${payload.conversation_id}:${payload.message_id}:lock`,
+        ),
+        '11111111-1111-4111-8111-111111111111',
+      );
+      expect(cacheService.delIfValueMatches).toHaveBeenNthCalledWith(
+        2,
+        expect.stringContaining(
+          `${payload.conversation_id}:${payload.message_id}:lock`,
+        ),
+        '22222222-2222-4222-8222-222222222222',
+      );
+    });
+
+    it('should throw when retry emit lock is busy for deleted message', async () => {
+      const payload = {
+        message_id: 'msg-moderation-lock-1',
+        conversation_id: 'conv-lock-1',
+        sender_id: 'user-lock-1',
+        created_at: Date.now() - 1000,
+        is_flagged: true,
+        labels: ['spam' as const],
+        confidence: 1,
+        provider: 'openai' as const,
+        ensemble: false,
+        processed_at: Date.now(),
+        tokens_used: 0,
+      };
+
+      repo.trySoftDeleteMessage.mockResolvedValue(false);
+      repo.getMessage.mockResolvedValue({
+        message_id: payload.message_id,
+        conversation_id: payload.conversation_id,
+        sender_id: payload.sender_id,
+        body: '',
+        created_at: payload.created_at,
+        deleted_at: Date.now() - 10,
+      });
+      cacheService.get.mockResolvedValue(null);
+      cacheService.setIfAbsent.mockResolvedValue(false);
+
+      await expect(consumer.onModerationResult(payload)).rejects.toThrow(
+        'Moderation delete event emit lock busy',
+      );
+
+      expect(publisher.emit).not.toHaveBeenCalled();
+      expect(cacheService.set).not.toHaveBeenCalled();
+      expect(cacheService.delIfValueMatches).not.toHaveBeenCalled();
     });
 
     it('should skip moderation enforcement when message row is missing', async () => {
@@ -655,7 +753,9 @@ describe('PersistMessageConsumer', () => {
       );
       expect(repo.softDeleteMessage).not.toHaveBeenCalled();
       expect(publisher.emit).not.toHaveBeenCalled();
+      expect(cacheService.setIfAbsent).not.toHaveBeenCalled();
       expect(cacheService.invalidateRecentMessages).not.toHaveBeenCalled();
+      expect(cacheService.delIfValueMatches).not.toHaveBeenCalled();
     });
 
     it('should skip moderation enforcement when message is not flagged', async () => {
@@ -678,9 +778,11 @@ describe('PersistMessageConsumer', () => {
       expect(repo.trySoftDeleteMessage).not.toHaveBeenCalled();
       expect(cacheService.get).not.toHaveBeenCalled();
       expect(cacheService.set).not.toHaveBeenCalled();
+      expect(cacheService.setIfAbsent).not.toHaveBeenCalled();
       expect(repo.softDeleteMessage).not.toHaveBeenCalled();
       expect(publisher.emit).not.toHaveBeenCalled();
       expect(cacheService.invalidateRecentMessages).not.toHaveBeenCalled();
+      expect(cacheService.delIfValueMatches).not.toHaveBeenCalled();
     });
   });
 });

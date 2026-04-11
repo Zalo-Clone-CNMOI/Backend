@@ -1,6 +1,7 @@
 import { Controller, Logger } from '@nestjs/common';
 import { EventPattern, Payload } from '@nestjs/microservices';
 import { InjectRepository } from '@nestjs/typeorm';
+import * as crypto from 'crypto';
 import { Repository } from 'typeorm';
 import {
   KafkaTopics,
@@ -34,6 +35,7 @@ import {
 } from '../utils/access.helper';
 
 const MODERATION_DELETE_EVENT_TTL_SECONDS = 86400;
+const MODERATION_DELETE_EVENT_LOCK_TTL_SECONDS = 30;
 
 @Controller()
 export class PersistMessageConsumer {
@@ -212,7 +214,11 @@ export class PersistMessageConsumer {
       payload.conversation_id,
       payload.message_id,
     );
+    const deleteEmitLockKey = `${deleteEmitKey}:lock`;
     let effectiveDeletedAt = deletedAt;
+    let shouldEmitDeleteEvent = false;
+    let emitLockAcquired = false;
+    let emitLockToken: string | null = null;
 
     try {
       const applied = await this.repo.trySoftDeleteMessage(
@@ -266,6 +272,8 @@ export class PersistMessageConsumer {
               deletedAt: message.deleted_at,
             },
           );
+
+          shouldEmitDeleteEvent = true;
         } else {
           this.logger.error(
             `[${traceId}] Moderation enforcement failed: conditional delete not applied`,
@@ -276,6 +284,56 @@ export class PersistMessageConsumer {
           );
           throw new Error('Moderation conditional delete was not applied');
         }
+      } else {
+        shouldEmitDeleteEvent = true;
+      }
+
+      if (!shouldEmitDeleteEvent) {
+        return;
+      }
+
+      emitLockToken = crypto.randomUUID();
+      emitLockAcquired = await this.cacheService.setIfAbsent(
+        deleteEmitLockKey,
+        emitLockToken,
+        MODERATION_DELETE_EVENT_LOCK_TTL_SECONDS,
+      );
+
+      if (!emitLockAcquired) {
+        const alreadyEmitted =
+          await this.cacheService.get<boolean>(deleteEmitKey);
+        if (alreadyEmitted) {
+          this.logger.debug(
+            `[${traceId}] Moderation result deduplicated after lock contention`,
+            {
+              messageId: payload.message_id,
+              conversationId: payload.conversation_id,
+            },
+          );
+          return;
+        }
+
+        this.logger.warn(
+          `[${traceId}] Moderation delete event emit lock is busy`,
+          {
+            messageId: payload.message_id,
+            conversationId: payload.conversation_id,
+          },
+        );
+        throw new Error('Moderation delete event emit lock busy');
+      }
+
+      const alreadyEmittedAfterLock =
+        await this.cacheService.get<boolean>(deleteEmitKey);
+      if (alreadyEmittedAfterLock) {
+        this.logger.debug(
+          `[${traceId}] Moderation result deduplicated: delete event already emitted`,
+          {
+            messageId: payload.message_id,
+            conversationId: payload.conversation_id,
+          },
+        );
+        return;
       }
 
       const event: ChatMessageDeletedEvent = {
@@ -313,6 +371,17 @@ export class PersistMessageConsumer {
         error: error instanceof Error ? error.message : String(error),
       });
       throw error;
+    } finally {
+      if (emitLockAcquired && emitLockToken) {
+        await this.cacheService
+          .delIfValueMatches(deleteEmitLockKey, emitLockToken)
+          .catch((lockErr) => {
+            this.logger.error(
+              `[${traceId}] Failed to release moderation delete emit lock`,
+              lockErr,
+            );
+          });
+      }
     }
   }
 

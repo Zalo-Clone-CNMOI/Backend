@@ -55,6 +55,39 @@ export class CacheService {
     }
   }
 
+  async setIfAbsent(key: string, value: string, ttl: number): Promise<boolean> {
+    try {
+      const result = await this.redisClient.set(key, value, {
+        NX: true,
+        EX: ttl,
+      });
+      return result === 'OK';
+    } catch (error) {
+      this.logger.error(`Cache setIfAbsent error for key ${key}:`, error);
+      throw error;
+    }
+  }
+
+  async delIfValueMatches(
+    key: string,
+    expectedValue: string,
+  ): Promise<boolean> {
+    const script =
+      "if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) else return 0 end";
+
+    try {
+      const result = await this.redisClient.eval(script, {
+        keys: [key],
+        arguments: [expectedValue],
+      });
+
+      return Number(result) === 1;
+    } catch (error) {
+      this.logger.error(`Cache delIfValueMatches error for key ${key}:`, error);
+      return false;
+    }
+  }
+
   async del(...keys: string[]): Promise<void> {
     try {
       if (keys.length === 0) return;

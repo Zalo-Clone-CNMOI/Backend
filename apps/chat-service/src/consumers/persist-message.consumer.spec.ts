@@ -58,6 +58,25 @@ describe('PersistMessageConsumer', () => {
   let userRepo: { findOne: jest.Mock; find: jest.Mock };
   let conversationMemberRepo: { findOne: jest.Mock; find: jest.Mock };
 
+  const rebuildConsumer = () => {
+    consumer = new PersistMessageConsumer(
+      appConfig,
+      repo as unknown as MessageRepository,
+      publisher as unknown as ChatPublisher,
+      cacheService as unknown as CacheService,
+      membershipService as unknown as ConversationMembershipService,
+      userRepo as unknown as Repository<User>,
+      conversationMemberRepo as unknown as Repository<ConversationMember>,
+    );
+
+    const internalLogger = (consumer as unknown as { logger: InternalLogger })
+      .logger;
+    jest.spyOn(internalLogger, 'debug').mockImplementation(() => undefined);
+    jest.spyOn(internalLogger, 'log').mockImplementation(() => undefined);
+    jest.spyOn(internalLogger, 'warn').mockImplementation(() => undefined);
+    jest.spyOn(internalLogger, 'error').mockImplementation(() => undefined);
+  };
+
   beforeEach(() => {
     repo = {
       tryBeginMessageProcessing: jest.fn(),
@@ -111,22 +130,7 @@ describe('PersistMessageConsumer', () => {
       find: jest.fn().mockResolvedValue([]),
     };
 
-    consumer = new PersistMessageConsumer(
-      appConfig,
-      repo as unknown as MessageRepository,
-      publisher as unknown as ChatPublisher,
-      cacheService as unknown as CacheService,
-      membershipService as unknown as ConversationMembershipService,
-      userRepo as unknown as Repository<User>,
-      conversationMemberRepo as unknown as Repository<ConversationMember>,
-    );
-
-    const internalLogger = (consumer as unknown as { logger: InternalLogger })
-      .logger;
-    jest.spyOn(internalLogger, 'debug').mockImplementation(() => undefined);
-    jest.spyOn(internalLogger, 'log').mockImplementation(() => undefined);
-    jest.spyOn(internalLogger, 'warn').mockImplementation(() => undefined);
-    jest.spyOn(internalLogger, 'error').mockImplementation(() => undefined);
+    rebuildConsumer();
   });
 
   // ─── onSend: Happy Path ────────────────────────────────────────────────────
@@ -497,6 +501,21 @@ describe('PersistMessageConsumer', () => {
   });
 
   describe('onModerationResult', () => {
+    const createFlaggedModerationPayload = () => ({
+      message_id: 'msg-moderation-ttl',
+      conversation_id: 'conv-ttl',
+      sender_id: 'user-ttl',
+      created_at: Date.now() - 1000,
+      is_flagged: true,
+      labels: ['spam' as const],
+      confidence: 1,
+      provider: 'openai' as const,
+      ensemble: false,
+      processed_at: Date.now(),
+      tokens_used: 0,
+      trace_id: 'mod-trace-ttl',
+    });
+
     it('should enforce soft-delete and emit ChatMessageDeleted when flagged', async () => {
       const payload = {
         message_id: 'msg-moderation-1',
@@ -560,6 +579,60 @@ describe('PersistMessageConsumer', () => {
       );
       expect(cacheService.invalidateRecentMessages).toHaveBeenCalledWith(
         payload.conversation_id,
+      );
+    });
+
+    it('should use custom configured lock TTL for moderation emit lock', async () => {
+      appConfig.chatModerationDeleteLockTtlSeconds = 300;
+      rebuildConsumer();
+
+      const payload = createFlaggedModerationPayload();
+      repo.trySoftDeleteMessage.mockResolvedValue(true);
+
+      await consumer.onModerationResult(payload);
+
+      expect(cacheService.setIfAbsent).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `${payload.conversation_id}:${payload.message_id}:lock`,
+        ),
+        expect.any(String),
+        300,
+      );
+    });
+
+    it('should clamp too-small configured lock TTL to minimum', async () => {
+      appConfig.chatModerationDeleteLockTtlSeconds = 1;
+      rebuildConsumer();
+
+      const payload = createFlaggedModerationPayload();
+      repo.trySoftDeleteMessage.mockResolvedValue(true);
+
+      await consumer.onModerationResult(payload);
+
+      expect(cacheService.setIfAbsent).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `${payload.conversation_id}:${payload.message_id}:lock`,
+        ),
+        expect.any(String),
+        30,
+      );
+    });
+
+    it('should fallback to default lock TTL when configured value is invalid', async () => {
+      appConfig.chatModerationDeleteLockTtlSeconds = Number.POSITIVE_INFINITY;
+      rebuildConsumer();
+
+      const payload = createFlaggedModerationPayload();
+      repo.trySoftDeleteMessage.mockResolvedValue(true);
+
+      await consumer.onModerationResult(payload);
+
+      expect(cacheService.setIfAbsent).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `${payload.conversation_id}:${payload.message_id}:lock`,
+        ),
+        expect.any(String),
+        120,
       );
     });
 

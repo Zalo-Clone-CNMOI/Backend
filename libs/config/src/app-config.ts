@@ -59,6 +59,20 @@ function readNumber(value: string | undefined): number | undefined {
   return parsed;
 }
 
+function readPositiveInteger(
+  value: string | undefined,
+  min: number,
+  max: number,
+): number | undefined {
+  if (value === undefined || value === '') return undefined;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return undefined;
+
+  const normalized = Math.trunc(parsed);
+  if (normalized < min || normalized > max) return undefined;
+  return normalized;
+}
+
 export function loadConfig(serviceName: string): AppConfig {
   const nodeEnv = process.env.NODE_ENV ?? 'development';
   const kafkaBrokers = (process.env.KAFKA_BROKERS ?? 'localhost:9092')
@@ -126,6 +140,10 @@ export function loadConfig(serviceName: string): AppConfig {
     aiModerationEnsemble: process.env.AI_MODERATION_ENSEMBLE === 'true',
     aiModerationFailOpen: process.env.AI_MODERATION_FAIL_OPEN === 'true',
     chatModerationDeleteLockTtlSeconds:
-      readNumber(process.env.CHAT_MODERATION_DELETE_LOCK_TTL_SECONDS) ?? 120,
+      readPositiveInteger(
+        process.env.CHAT_MODERATION_DELETE_LOCK_TTL_SECONDS,
+        30,
+        900,
+      ) ?? 120,
   };
 }

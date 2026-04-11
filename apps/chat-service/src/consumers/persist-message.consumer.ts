@@ -38,6 +38,7 @@ import {
 const MODERATION_DELETE_EVENT_TTL_SECONDS = 86400;
 const MODERATION_DELETE_EVENT_LOCK_TTL_SECONDS = 120;
 const MIN_MODERATION_DELETE_EVENT_LOCK_TTL_SECONDS = 30;
+const MAX_MODERATION_DELETE_EVENT_LOCK_TTL_SECONDS = 900;
 
 @Controller()
 export class PersistMessageConsumer {
@@ -55,12 +56,17 @@ export class PersistMessageConsumer {
     @InjectRepository(ConversationMember)
     private readonly conversationMemberRepo: Repository<ConversationMember>,
   ) {
-    const configuredTtl =
-      this.config.chatModerationDeleteLockTtlSeconds ??
-      MODERATION_DELETE_EVENT_LOCK_TTL_SECONDS;
-    this.moderationDeleteEventLockTtlSeconds = Math.max(
-      configuredTtl,
-      MIN_MODERATION_DELETE_EVENT_LOCK_TTL_SECONDS,
+    const configuredTtl = this.config.chatModerationDeleteLockTtlSeconds;
+    if (configuredTtl === undefined || !Number.isFinite(configuredTtl)) {
+      this.moderationDeleteEventLockTtlSeconds =
+        MODERATION_DELETE_EVENT_LOCK_TTL_SECONDS;
+      return;
+    }
+
+    const normalizedTtl = Math.trunc(configuredTtl);
+    this.moderationDeleteEventLockTtlSeconds = Math.min(
+      Math.max(normalizedTtl, MIN_MODERATION_DELETE_EVENT_LOCK_TTL_SECONDS),
+      MAX_MODERATION_DELETE_EVENT_LOCK_TTL_SECONDS,
     );
   }
 

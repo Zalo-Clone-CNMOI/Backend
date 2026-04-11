@@ -35,6 +35,7 @@ describe('PersistMessageConsumer', () => {
     insertMessage: jest.Mock;
     markMessageStored: jest.Mock;
     clearMessageProcessing: jest.Mock;
+    trySoftDeleteMessage: jest.Mock;
     updateMessageBody: jest.Mock;
     softDeleteMessage: jest.Mock;
     getMessage: jest.Mock;
@@ -43,7 +44,11 @@ describe('PersistMessageConsumer', () => {
     removeReaction: jest.Mock;
   };
   let publisher: { emit: jest.Mock };
-  let cacheService: { invalidateRecentMessages: jest.Mock };
+  let cacheService: {
+    get: jest.Mock;
+    set: jest.Mock;
+    invalidateRecentMessages: jest.Mock;
+  };
   let membershipService: { canUserAccessConversation: jest.Mock };
   let userRepo: { findOne: jest.Mock; find: jest.Mock };
   let conversationMemberRepo: { findOne: jest.Mock; find: jest.Mock };
@@ -54,6 +59,7 @@ describe('PersistMessageConsumer', () => {
       insertMessage: jest.fn(),
       markMessageStored: jest.fn(),
       clearMessageProcessing: jest.fn(),
+      trySoftDeleteMessage: jest.fn(),
       updateMessageBody: jest.fn(),
       softDeleteMessage: jest.fn(),
       getMessage: jest.fn(),
@@ -67,6 +73,8 @@ describe('PersistMessageConsumer', () => {
     };
 
     cacheService = {
+      get: jest.fn().mockResolvedValue(null),
+      set: jest.fn().mockResolvedValue(undefined),
       invalidateRecentMessages: jest.fn().mockResolvedValue(undefined),
     };
 
@@ -485,13 +493,23 @@ describe('PersistMessageConsumer', () => {
         trace_id: 'mod-trace-1',
       };
 
+      repo.trySoftDeleteMessage.mockResolvedValue(true);
+
       await consumer.onModerationResult(payload);
 
-      expect(repo.softDeleteMessage).toHaveBeenCalledWith(
+      expect(repo.trySoftDeleteMessage).toHaveBeenCalledWith(
         payload.conversation_id,
         payload.created_at,
         payload.message_id,
         expect.any(Number),
+      );
+      expect(repo.getMessage).not.toHaveBeenCalled();
+      expect(cacheService.set).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `${payload.conversation_id}:${payload.message_id}`,
+        ),
+        true,
+        86400,
       );
       expect(publisher.emit).toHaveBeenCalledWith(
         'chat.message.deleted',
@@ -504,6 +522,140 @@ describe('PersistMessageConsumer', () => {
       expect(cacheService.invalidateRecentMessages).toHaveBeenCalledWith(
         payload.conversation_id,
       );
+    });
+
+    it('should skip moderation enforcement when message is already deleted', async () => {
+      const payload = {
+        message_id: 'msg-moderation-3',
+        conversation_id: 'conv-3',
+        sender_id: 'user-3',
+        created_at: Date.now() - 1000,
+        is_flagged: true,
+        labels: ['toxic' as const],
+        confidence: 1,
+        provider: 'openai' as const,
+        ensemble: false,
+        processed_at: Date.now(),
+        tokens_used: 0,
+      };
+
+      repo.trySoftDeleteMessage.mockResolvedValue(false);
+      cacheService.get.mockResolvedValue(true);
+
+      repo.getMessage.mockResolvedValue({
+        message_id: payload.message_id,
+        conversation_id: payload.conversation_id,
+        sender_id: payload.sender_id,
+        body: '',
+        created_at: payload.created_at,
+        deleted_at: Date.now() - 10,
+      });
+
+      await consumer.onModerationResult(payload);
+
+      expect(repo.trySoftDeleteMessage).toHaveBeenCalledWith(
+        payload.conversation_id,
+        payload.created_at,
+        payload.message_id,
+        expect.any(Number),
+      );
+      expect(repo.getMessage).toHaveBeenCalledWith(
+        payload.conversation_id,
+        payload.created_at,
+        payload.message_id,
+      );
+      expect(cacheService.get).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `${payload.conversation_id}:${payload.message_id}`,
+        ),
+      );
+      expect(repo.softDeleteMessage).not.toHaveBeenCalled();
+      expect(publisher.emit).not.toHaveBeenCalled();
+      expect(cacheService.invalidateRecentMessages).not.toHaveBeenCalled();
+    });
+
+    it('should re-emit delete event on retry when message already deleted but emit marker is missing', async () => {
+      const payload = {
+        message_id: 'msg-moderation-retry-1',
+        conversation_id: 'conv-retry-1',
+        sender_id: 'user-retry-1',
+        created_at: Date.now() - 1000,
+        is_flagged: true,
+        labels: ['spam' as const],
+        confidence: 1,
+        provider: 'openai' as const,
+        ensemble: false,
+        processed_at: Date.now(),
+        tokens_used: 0,
+      };
+
+      repo.trySoftDeleteMessage
+        .mockResolvedValueOnce(true)
+        .mockResolvedValueOnce(false);
+      publisher.emit
+        .mockRejectedValueOnce(new Error('Kafka unavailable'))
+        .mockResolvedValueOnce(undefined);
+      repo.getMessage.mockResolvedValue({
+        message_id: payload.message_id,
+        conversation_id: payload.conversation_id,
+        sender_id: payload.sender_id,
+        body: '',
+        created_at: payload.created_at,
+        deleted_at: Date.now() - 10,
+      });
+      cacheService.get.mockResolvedValue(null);
+
+      await expect(consumer.onModerationResult(payload)).rejects.toThrow(
+        'Kafka unavailable',
+      );
+      await consumer.onModerationResult(payload);
+
+      expect(publisher.emit).toHaveBeenCalledTimes(2);
+      expect(cacheService.set).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `${payload.conversation_id}:${payload.message_id}`,
+        ),
+        true,
+        86400,
+      );
+    });
+
+    it('should skip moderation enforcement when message row is missing', async () => {
+      const payload = {
+        message_id: 'msg-moderation-4',
+        conversation_id: 'conv-4',
+        sender_id: 'user-4',
+        created_at: Date.now() - 1000,
+        is_flagged: true,
+        labels: ['spam' as const],
+        confidence: 1,
+        provider: 'openai' as const,
+        ensemble: false,
+        processed_at: Date.now(),
+        tokens_used: 0,
+      };
+
+      repo.trySoftDeleteMessage.mockResolvedValue(false);
+      repo.getMessage.mockResolvedValue(null);
+
+      await expect(consumer.onModerationResult(payload)).rejects.toThrow(
+        'Moderation target message not found',
+      );
+
+      expect(repo.trySoftDeleteMessage).toHaveBeenCalledWith(
+        payload.conversation_id,
+        payload.created_at,
+        payload.message_id,
+        expect.any(Number),
+      );
+      expect(repo.getMessage).toHaveBeenCalledWith(
+        payload.conversation_id,
+        payload.created_at,
+        payload.message_id,
+      );
+      expect(repo.softDeleteMessage).not.toHaveBeenCalled();
+      expect(publisher.emit).not.toHaveBeenCalled();
+      expect(cacheService.invalidateRecentMessages).not.toHaveBeenCalled();
     });
 
     it('should skip moderation enforcement when message is not flagged', async () => {
@@ -523,6 +675,9 @@ describe('PersistMessageConsumer', () => {
 
       await consumer.onModerationResult(payload);
 
+      expect(repo.trySoftDeleteMessage).not.toHaveBeenCalled();
+      expect(cacheService.get).not.toHaveBeenCalled();
+      expect(cacheService.set).not.toHaveBeenCalled();
       expect(repo.softDeleteMessage).not.toHaveBeenCalled();
       expect(publisher.emit).not.toHaveBeenCalled();
       expect(cacheService.invalidateRecentMessages).not.toHaveBeenCalled();

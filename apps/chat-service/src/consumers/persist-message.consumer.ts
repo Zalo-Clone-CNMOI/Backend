@@ -33,6 +33,8 @@ import {
   ensureMessageOwnership,
 } from '../utils/access.helper';
 
+const MODERATION_DELETE_EVENT_TTL_SECONDS = 86400;
+
 @Controller()
 export class PersistMessageConsumer {
   private readonly logger = new Logger(PersistMessageConsumer.name);
@@ -206,24 +208,90 @@ export class PersistMessageConsumer {
 
     const traceId = payload.trace_id || `mod:${payload.message_id}`;
     const deletedAt = Date.now();
+    const deleteEmitKey = this.getModerationDeleteEmitKey(
+      payload.conversation_id,
+      payload.message_id,
+    );
+    let effectiveDeletedAt = deletedAt;
 
     try {
-      await this.repo.softDeleteMessage(
+      const applied = await this.repo.trySoftDeleteMessage(
         payload.conversation_id,
         payload.created_at,
         payload.message_id,
         deletedAt,
       );
 
+      if (!applied) {
+        const message = await this.repo.getMessage(
+          payload.conversation_id,
+          payload.created_at,
+          payload.message_id,
+        );
+
+        if (!message) {
+          this.logger.error(
+            `[${traceId}] Moderation enforcement failed: message not found`,
+            {
+              messageId: payload.message_id,
+              conversationId: payload.conversation_id,
+              createdAt: payload.created_at,
+            },
+          );
+          throw new Error('Moderation target message not found');
+        }
+
+        if (message.deleted_at) {
+          effectiveDeletedAt = message.deleted_at;
+
+          const alreadyEmitted =
+            await this.cacheService.get<boolean>(deleteEmitKey);
+          if (alreadyEmitted) {
+            this.logger.debug(
+              `[${traceId}] Moderation result deduplicated: delete event already emitted`,
+              {
+                messageId: payload.message_id,
+                conversationId: payload.conversation_id,
+                deletedAt: message.deleted_at,
+              },
+            );
+            return;
+          }
+
+          this.logger.warn(
+            `[${traceId}] Retrying delete event emit for previously deleted message`,
+            {
+              messageId: payload.message_id,
+              conversationId: payload.conversation_id,
+              deletedAt: message.deleted_at,
+            },
+          );
+        } else {
+          this.logger.error(
+            `[${traceId}] Moderation enforcement failed: conditional delete not applied`,
+            {
+              messageId: payload.message_id,
+              conversationId: payload.conversation_id,
+            },
+          );
+          throw new Error('Moderation conditional delete was not applied');
+        }
+      }
+
       const event: ChatMessageDeletedEvent = {
         message_id: payload.message_id,
         conversation_id: payload.conversation_id,
         sender_id: payload.sender_id,
-        deleted_at: deletedAt,
+        deleted_at: effectiveDeletedAt,
         trace_id: traceId,
       };
 
       await this.publisher.emit(KafkaTopics.ChatMessageDeleted, event);
+      await this.cacheService.set(
+        deleteEmitKey,
+        true,
+        MODERATION_DELETE_EVENT_TTL_SECONDS,
+      );
 
       await this.cacheService
         .invalidateRecentMessages(payload.conversation_id)
@@ -246,6 +314,13 @@ export class PersistMessageConsumer {
       });
       throw error;
     }
+  }
+
+  private getModerationDeleteEmitKey(
+    conversationId: string,
+    messageId: string,
+  ): string {
+    return `moderation:delete-event-emitted:${conversationId}:${messageId}`;
   }
 
   @EventPattern(KafkaTopics.ChatMessageEdit)

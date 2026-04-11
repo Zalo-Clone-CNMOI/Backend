@@ -172,6 +172,25 @@ export class MessageRepository {
     );
   }
 
+  async trySoftDeleteMessage(
+    conversationId: string,
+    createdAt: number,
+    messageId: string,
+    deletedAt: number,
+  ): Promise<boolean> {
+    const result = await this.client.execute(
+      `UPDATE messages_by_conversation
+       SET deleted_at = ?, body = ''
+       WHERE conversation_id = ? AND created_at = ? AND message_id = ?
+       IF deleted_at = null`,
+      [deletedAt, conversationId, createdAt, messageId],
+      { prepare: true },
+    );
+
+    const appliedValue: unknown = result.first()?.get('[applied]');
+    return typeof appliedValue === 'boolean' ? appliedValue : false;
+  }
+
   async addReaction(reaction: MessageReaction): Promise<void> {
     await this.client.execute(
       `INSERT INTO message_reactions 

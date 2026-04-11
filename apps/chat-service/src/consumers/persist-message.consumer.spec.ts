@@ -514,7 +514,7 @@ describe('PersistMessageConsumer', () => {
           `${payload.conversation_id}:${payload.message_id}:lock`,
         ),
         expect.any(String),
-        30,
+        120,
       );
       const [, lockToken] = cacheService.setIfAbsent.mock.calls[0] as [
         string,
@@ -636,19 +636,21 @@ describe('PersistMessageConsumer', () => {
         .mockReturnValueOnce('11111111-1111-4111-8111-111111111111')
         .mockReturnValueOnce('22222222-2222-4222-8222-222222222222');
 
-      await expect(consumer.onModerationResult(payload)).rejects.toThrow(
-        'Kafka unavailable',
-      );
-      await consumer.onModerationResult(payload);
-
-      randomUuidSpy.mockRestore();
+      try {
+        await expect(consumer.onModerationResult(payload)).rejects.toThrow(
+          'Kafka unavailable',
+        );
+        await consumer.onModerationResult(payload);
+      } finally {
+        randomUuidSpy.mockRestore();
+      }
 
       expect(cacheService.setIfAbsent).toHaveBeenCalledWith(
         expect.stringContaining(
           `${payload.conversation_id}:${payload.message_id}:lock`,
         ),
         '11111111-1111-4111-8111-111111111111',
-        30,
+        120,
       );
       expect(cacheService.setIfAbsent).toHaveBeenNthCalledWith(
         2,
@@ -656,7 +658,7 @@ describe('PersistMessageConsumer', () => {
           `${payload.conversation_id}:${payload.message_id}:lock`,
         ),
         '22222222-2222-4222-8222-222222222222',
-        30,
+        120,
       );
       expect(publisher.emit).toHaveBeenCalledTimes(2);
       expect(cacheService.set).toHaveBeenCalledWith(

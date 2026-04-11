@@ -35,7 +35,7 @@ import {
 } from '../utils/access.helper';
 
 const MODERATION_DELETE_EVENT_TTL_SECONDS = 86400;
-const MODERATION_DELETE_EVENT_LOCK_TTL_SECONDS = 30;
+const MODERATION_DELETE_EVENT_LOCK_TTL_SECONDS = 120;
 
 @Controller()
 export class PersistMessageConsumer {

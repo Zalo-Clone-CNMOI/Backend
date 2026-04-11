@@ -69,8 +69,7 @@ function readPositiveInteger(
   if (!Number.isFinite(parsed)) return undefined;
 
   const normalized = Math.trunc(parsed);
-  if (normalized < min || normalized > max) return undefined;
-  return normalized;
+  return Math.min(Math.max(normalized, min), max);
 }
 
 export function loadConfig(serviceName: string): AppConfig {

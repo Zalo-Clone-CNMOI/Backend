@@ -92,7 +92,7 @@ export class CacheService {
     key: string,
     expectedValue: string,
     ttl: number,
-  ): Promise<boolean> {
+  ): Promise<'renewed' | 'mismatch' | 'error'> {
     const script =
       "if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('EXPIRE', KEYS[1], ARGV[2]) else return 0 end";
 
@@ -102,13 +102,13 @@ export class CacheService {
         arguments: [expectedValue, String(ttl)],
       });
 
-      return Number(result) === 1;
+      return Number(result) === 1 ? 'renewed' : 'mismatch';
     } catch (error) {
       this.logger.error(
         `Cache expireIfValueMatches error for key ${key}:`,
         error,
       );
-      return false;
+      return 'error';
     }
   }
 

@@ -101,7 +101,7 @@ describe('PersistMessageConsumer', () => {
       get: jest.fn().mockResolvedValue(null),
       set: jest.fn().mockResolvedValue(undefined),
       setIfAbsent: jest.fn().mockResolvedValue(true),
-      expireIfValueMatches: jest.fn().mockResolvedValue(true),
+      expireIfValueMatches: jest.fn().mockResolvedValue('renewed'),
       delIfValueMatches: jest.fn().mockResolvedValue(true),
       invalidateRecentMessages: jest.fn().mockResolvedValue(undefined),
     };
@@ -826,10 +826,42 @@ describe('PersistMessageConsumer', () => {
       };
 
       repo.trySoftDeleteMessage.mockResolvedValue(true);
-      cacheService.expireIfValueMatches.mockResolvedValue(false);
+      cacheService.expireIfValueMatches.mockResolvedValue('mismatch');
 
       await expect(consumer.onModerationResult(payload)).rejects.toThrow(
         'Moderation delete event emit lock lost before publish',
+      );
+
+      expect(publisher.emit).not.toHaveBeenCalled();
+      expect(cacheService.set).not.toHaveBeenCalled();
+      expect(cacheService.delIfValueMatches).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `${payload.conversation_id}:${payload.message_id}:lock`,
+        ),
+        expect.any(String),
+      );
+    });
+
+    it('should throw renewal failed when pre-emit lock renewal returns infra error', async () => {
+      const payload = {
+        message_id: 'msg-moderation-lock-error-1',
+        conversation_id: 'conv-lock-error-1',
+        sender_id: 'user-lock-error-1',
+        created_at: Date.now() - 1000,
+        is_flagged: true,
+        labels: ['spam' as const],
+        confidence: 1,
+        provider: 'openai' as const,
+        ensemble: false,
+        processed_at: Date.now(),
+        tokens_used: 0,
+      };
+
+      repo.trySoftDeleteMessage.mockResolvedValue(true);
+      cacheService.expireIfValueMatches.mockResolvedValue('error');
+
+      await expect(consumer.onModerationResult(payload)).rejects.toThrow(
+        'Moderation delete event emit lock renewal failed',
       );
 
       expect(publisher.emit).not.toHaveBeenCalled();

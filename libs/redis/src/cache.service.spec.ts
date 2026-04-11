@@ -131,14 +131,14 @@ describe('CacheService', () => {
         120,
       );
 
-      expect(renewed).toBe(true);
+      expect(renewed).toBe('renewed');
       expect(redis.eval).toHaveBeenCalledWith(expect.any(String), {
         keys: ['lock:key'],
         arguments: ['token-1', '120'],
       });
     });
 
-    it('should return false when token does not match', async () => {
+    it('should return mismatch when token does not match', async () => {
       redis.eval.mockResolvedValue(0);
 
       const renewed = await cache.expireIfValueMatches(
@@ -147,7 +147,49 @@ describe('CacheService', () => {
         120,
       );
 
-      expect(renewed).toBe(false);
+      expect(renewed).toBe('mismatch');
+    });
+
+    it('should return error when Redis eval fails', async () => {
+      redis.eval.mockRejectedValue(new Error('Redis unavailable'));
+
+      const renewed = await cache.expireIfValueMatches(
+        'lock:key',
+        'token-1',
+        120,
+      );
+
+      expect(renewed).toBe('error');
+    });
+  });
+
+  describe('delIfValueMatches', () => {
+    it('should delete lock key when token matches', async () => {
+      redis.eval.mockResolvedValue(1);
+
+      const removed = await cache.delIfValueMatches('lock:key', 'token-1');
+
+      expect(removed).toBe(true);
+      expect(redis.eval).toHaveBeenCalledWith(expect.any(String), {
+        keys: ['lock:key'],
+        arguments: ['token-1'],
+      });
+    });
+
+    it('should return false when token does not match', async () => {
+      redis.eval.mockResolvedValue(0);
+
+      const removed = await cache.delIfValueMatches('lock:key', 'token-1');
+
+      expect(removed).toBe(false);
+    });
+
+    it('should return false on Redis eval error', async () => {
+      redis.eval.mockRejectedValue(new Error('Redis unavailable'));
+
+      const removed = await cache.delIfValueMatches('lock:key', 'token-1');
+
+      expect(removed).toBe(false);
     });
   });
 

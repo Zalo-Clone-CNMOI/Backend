@@ -372,12 +372,23 @@ export class PersistMessageConsumer {
             emitLockToken,
             this.moderationDeleteEventLockTtlSeconds,
           )
-          .then((renewed) => {
-            if (!renewed && emitLockRenewTimer) {
+          .then((renewStatus) => {
+            if (renewStatus === 'mismatch' && emitLockRenewTimer) {
               clearInterval(emitLockRenewTimer);
               emitLockRenewTimer = null;
               this.logger.warn(
                 `[${traceId}] Moderation delete event lock renewal skipped`,
+                {
+                  messageId: payload.message_id,
+                  conversationId: payload.conversation_id,
+                },
+              );
+              return;
+            }
+
+            if (renewStatus === 'error') {
+              this.logger.warn(
+                `[${traceId}] Moderation delete event lock renewal hit infra error`,
                 {
                   messageId: payload.message_id,
                   conversationId: payload.conversation_id,
@@ -393,13 +404,13 @@ export class PersistMessageConsumer {
           });
       }, lockRenewIntervalMs);
 
-      const lockRenewedBeforeEmit =
+      const lockRenewStatusBeforeEmit =
         await this.cacheService.expireIfValueMatches(
           deleteEmitLockKey,
           emitLockToken,
           this.moderationDeleteEventLockTtlSeconds,
         );
-      if (!lockRenewedBeforeEmit) {
+      if (lockRenewStatusBeforeEmit === 'mismatch') {
         this.logger.warn(
           `[${traceId}] Moderation delete event lock lost before publish`,
           {
@@ -410,6 +421,17 @@ export class PersistMessageConsumer {
         throw new Error(
           'Moderation delete event emit lock lost before publish',
         );
+      }
+
+      if (lockRenewStatusBeforeEmit === 'error') {
+        this.logger.error(
+          `[${traceId}] Moderation delete event lock renewal failed before publish`,
+          {
+            messageId: payload.message_id,
+            conversationId: payload.conversation_id,
+          },
+        );
+        throw new Error('Moderation delete event emit lock renewal failed');
       }
 
       const event: ChatMessageDeletedEvent = {

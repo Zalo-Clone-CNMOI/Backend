@@ -47,6 +47,9 @@ export interface AppConfig {
   aiStreamBufferSize?: number;
   aiModerationEnsemble?: boolean;
   aiModerationFailOpen?: boolean;
+
+  // Chat Service moderation delete emit lock TTL (seconds)
+  chatModerationDeleteLockTtlSeconds?: number;
 }
 
 function readNumber(value: string | undefined): number | undefined {
@@ -122,5 +125,7 @@ export function loadConfig(serviceName: string): AppConfig {
     aiStreamBufferSize: readNumber(process.env.AI_STREAM_BUFFER_SIZE) ?? 50,
     aiModerationEnsemble: process.env.AI_MODERATION_ENSEMBLE === 'true',
     aiModerationFailOpen: process.env.AI_MODERATION_FAIL_OPEN === 'true',
+    chatModerationDeleteLockTtlSeconds:
+      readNumber(process.env.CHAT_MODERATION_DELETE_LOCK_TTL_SECONDS) ?? 120,
   };
 }

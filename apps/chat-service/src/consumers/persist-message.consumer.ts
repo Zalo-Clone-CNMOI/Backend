@@ -1,4 +1,4 @@
-import { Controller, Logger } from '@nestjs/common';
+import { Controller, Inject, Logger } from '@nestjs/common';
 import { EventPattern, Payload } from '@nestjs/microservices';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as crypto from 'crypto';
@@ -20,6 +20,7 @@ import {
   AiModerationRequestEvent,
   type AiModerationResultEvent,
 } from '@libs/contracts';
+import { APP_CONFIG, type AppConfig } from '@libs/config';
 import { MessageRepository } from '@libs/scylla';
 import { CacheService } from '@libs/redis';
 import { ConversationMembershipService } from '@libs/mvp-access';
@@ -36,12 +37,15 @@ import {
 
 const MODERATION_DELETE_EVENT_TTL_SECONDS = 86400;
 const MODERATION_DELETE_EVENT_LOCK_TTL_SECONDS = 120;
+const MIN_MODERATION_DELETE_EVENT_LOCK_TTL_SECONDS = 30;
 
 @Controller()
 export class PersistMessageConsumer {
   private readonly logger = new Logger(PersistMessageConsumer.name);
+  private readonly moderationDeleteEventLockTtlSeconds: number;
 
   constructor(
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly repo: MessageRepository,
     private readonly publisher: ChatPublisher,
     private readonly cacheService: CacheService,
@@ -50,7 +54,15 @@ export class PersistMessageConsumer {
     private readonly userRepo: Repository<User>,
     @InjectRepository(ConversationMember)
     private readonly conversationMemberRepo: Repository<ConversationMember>,
-  ) {}
+  ) {
+    const configuredTtl =
+      this.config.chatModerationDeleteLockTtlSeconds ??
+      MODERATION_DELETE_EVENT_LOCK_TTL_SECONDS;
+    this.moderationDeleteEventLockTtlSeconds = Math.max(
+      configuredTtl,
+      MIN_MODERATION_DELETE_EVENT_LOCK_TTL_SECONDS,
+    );
+  }
 
   @EventPattern(KafkaTopics.ChatMessageSend)
   async onSend(@Payload() payload: ChatMessageSendCommand) {
@@ -296,7 +308,7 @@ export class PersistMessageConsumer {
       emitLockAcquired = await this.cacheService.setIfAbsent(
         deleteEmitLockKey,
         emitLockToken,
-        MODERATION_DELETE_EVENT_LOCK_TTL_SECONDS,
+        this.moderationDeleteEventLockTtlSeconds,
       );
 
       if (!emitLockAcquired) {

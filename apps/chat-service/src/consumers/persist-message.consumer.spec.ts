@@ -15,6 +15,7 @@
 import { PersistMessageConsumer } from './persist-message.consumer';
 import { createMockChatSendCommand } from '../../../../test/helpers';
 import * as crypto from 'crypto';
+import type { AppConfig } from '@libs/config';
 import type { MessageRepository } from '@libs/scylla';
 import type { ChatPublisher } from '../services/chat.publisher';
 import type { CacheService } from '@libs/redis';
@@ -53,6 +54,7 @@ describe('PersistMessageConsumer', () => {
     invalidateRecentMessages: jest.Mock;
   };
   let membershipService: { canUserAccessConversation: jest.Mock };
+  let appConfig: AppConfig;
   let userRepo: { findOne: jest.Mock; find: jest.Mock };
   let conversationMemberRepo: { findOne: jest.Mock; find: jest.Mock };
 
@@ -87,6 +89,18 @@ describe('PersistMessageConsumer', () => {
       canUserAccessConversation: jest.fn(),
     };
 
+    appConfig = {
+      nodeEnv: 'test',
+      serviceName: 'chat-service',
+      kafkaBrokers: ['localhost:9092'],
+      kafkaClientId: 'test',
+      scyllaContactPoints: ['127.0.0.1'],
+      scyllaLocalDatacenter: 'datacenter1',
+      scyllaKeyspace: 'chat',
+      allowedOrigins: ['http://localhost:3000'],
+      chatModerationDeleteLockTtlSeconds: 120,
+    };
+
     userRepo = {
       findOne: jest.fn(),
       find: jest.fn(),
@@ -98,6 +112,7 @@ describe('PersistMessageConsumer', () => {
     };
 
     consumer = new PersistMessageConsumer(
+      appConfig,
       repo as unknown as MessageRepository,
       publisher as unknown as ChatPublisher,
       cacheService as unknown as CacheService,

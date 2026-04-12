@@ -15,6 +15,7 @@
 import { PersistMessageConsumer } from './persist-message.consumer';
 import { createMockChatSendCommand } from '../../../../test/helpers';
 import * as crypto from 'crypto';
+import { CACHE_LOCK_RENEW_STATUS } from '@libs/redis';
 import type { AppConfig } from '@libs/config';
 import type { MessageRepository } from '@libs/scylla';
 import type { ChatPublisher } from '../services/chat.publisher';
@@ -101,7 +102,9 @@ describe('PersistMessageConsumer', () => {
       get: jest.fn().mockResolvedValue(null),
       set: jest.fn().mockResolvedValue(undefined),
       setIfAbsent: jest.fn().mockResolvedValue(true),
-      expireIfValueMatches: jest.fn().mockResolvedValue('renewed'),
+      expireIfValueMatches: jest
+        .fn()
+        .mockResolvedValue(CACHE_LOCK_RENEW_STATUS.Renewed),
       delIfValueMatches: jest.fn().mockResolvedValue(true),
       invalidateRecentMessages: jest.fn().mockResolvedValue(undefined),
     };
@@ -826,7 +829,9 @@ describe('PersistMessageConsumer', () => {
       };
 
       repo.trySoftDeleteMessage.mockResolvedValue(true);
-      cacheService.expireIfValueMatches.mockResolvedValue('mismatch');
+      cacheService.expireIfValueMatches.mockResolvedValue(
+        CACHE_LOCK_RENEW_STATUS.Mismatch,
+      );
 
       await expect(consumer.onModerationResult(payload)).rejects.toThrow(
         'Moderation delete event emit lock lost before publish',
@@ -858,7 +863,9 @@ describe('PersistMessageConsumer', () => {
       };
 
       repo.trySoftDeleteMessage.mockResolvedValue(true);
-      cacheService.expireIfValueMatches.mockResolvedValue('error');
+      cacheService.expireIfValueMatches.mockResolvedValue(
+        CACHE_LOCK_RENEW_STATUS.Error,
+      );
 
       await expect(consumer.onModerationResult(payload)).rejects.toThrow(
         'Moderation delete event emit lock renewal failed',

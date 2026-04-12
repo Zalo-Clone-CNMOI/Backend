@@ -22,7 +22,7 @@ import {
 } from '@libs/contracts';
 import { APP_CONFIG, type AppConfig } from '@libs/config';
 import { MessageRepository } from '@libs/scylla';
-import { CacheService } from '@libs/redis';
+import { CacheService, CACHE_LOCK_RENEW_STATUS } from '@libs/redis';
 import { ConversationMembershipService } from '@libs/mvp-access';
 import { User, ConversationMember } from '@libs/database';
 import { ChatPublisher } from '../services/chat.publisher';
@@ -373,7 +373,10 @@ export class PersistMessageConsumer {
             this.moderationDeleteEventLockTtlSeconds,
           )
           .then((renewStatus) => {
-            if (renewStatus === 'mismatch' && emitLockRenewTimer) {
+            if (
+              renewStatus === CACHE_LOCK_RENEW_STATUS.Mismatch &&
+              emitLockRenewTimer
+            ) {
               clearInterval(emitLockRenewTimer);
               emitLockRenewTimer = null;
               this.logger.warn(
@@ -386,7 +389,7 @@ export class PersistMessageConsumer {
               return;
             }
 
-            if (renewStatus === 'error') {
+            if (renewStatus === CACHE_LOCK_RENEW_STATUS.Error) {
               this.logger.warn(
                 `[${traceId}] Moderation delete event lock renewal hit infra error`,
                 {
@@ -410,7 +413,7 @@ export class PersistMessageConsumer {
           emitLockToken,
           this.moderationDeleteEventLockTtlSeconds,
         );
-      if (lockRenewStatusBeforeEmit === 'mismatch') {
+      if (lockRenewStatusBeforeEmit === CACHE_LOCK_RENEW_STATUS.Mismatch) {
         this.logger.warn(
           `[${traceId}] Moderation delete event lock lost before publish`,
           {
@@ -423,7 +426,7 @@ export class PersistMessageConsumer {
         );
       }
 
-      if (lockRenewStatusBeforeEmit === 'error') {
+      if (lockRenewStatusBeforeEmit === CACHE_LOCK_RENEW_STATUS.Error) {
         this.logger.error(
           `[${traceId}] Moderation delete event lock renewal failed before publish`,
           {

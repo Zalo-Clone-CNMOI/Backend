@@ -9,7 +9,7 @@
  */
 
 import { Test, TestingModule } from '@nestjs/testing';
-import { CacheService } from './cache.service';
+import { CacheService, CACHE_LOCK_RENEW_STATUS } from './cache.service';
 import { REDIS_CLIENT } from './redis.tokens';
 
 // ────── Mock Redis ───────────────────────────────────────────────────────
@@ -131,7 +131,7 @@ describe('CacheService', () => {
         120,
       );
 
-      expect(renewed).toBe('renewed');
+      expect(renewed).toBe(CACHE_LOCK_RENEW_STATUS.Renewed);
       expect(redis.eval).toHaveBeenCalledWith(expect.any(String), {
         keys: ['lock:key'],
         arguments: ['token-1', '120'],
@@ -147,7 +147,7 @@ describe('CacheService', () => {
         120,
       );
 
-      expect(renewed).toBe('mismatch');
+      expect(renewed).toBe(CACHE_LOCK_RENEW_STATUS.Mismatch);
     });
 
     it('should return error when Redis eval fails', async () => {
@@ -159,7 +159,7 @@ describe('CacheService', () => {
         120,
       );
 
-      expect(renewed).toBe('error');
+      expect(renewed).toBe(CACHE_LOCK_RENEW_STATUS.Error);
     });
   });
 

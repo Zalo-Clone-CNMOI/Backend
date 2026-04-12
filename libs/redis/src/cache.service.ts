@@ -2,6 +2,15 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { RedisClientType } from 'redis';
 import { REDIS_CLIENT } from './redis.tokens';
 
+export enum CacheLockRenewStatus {
+  Renewed = 'renewed',
+  Mismatch = 'mismatch',
+  Error = 'error',
+}
+
+// Alias constant for ergonomic usage in call sites.
+export const CACHE_LOCK_RENEW_STATUS = CacheLockRenewStatus;
+
 @Injectable()
 export class CacheService {
   private readonly logger = new Logger(CacheService.name);
@@ -92,7 +101,7 @@ export class CacheService {
     key: string,
     expectedValue: string,
     ttl: number,
-  ): Promise<'renewed' | 'mismatch' | 'error'> {
+  ): Promise<CacheLockRenewStatus> {
     const script =
       "if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('EXPIRE', KEYS[1], ARGV[2]) else return 0 end";
 
@@ -102,13 +111,15 @@ export class CacheService {
         arguments: [expectedValue, String(ttl)],
       });
 
-      return Number(result) === 1 ? 'renewed' : 'mismatch';
+      return Number(result) === 1
+        ? CacheLockRenewStatus.Renewed
+        : CacheLockRenewStatus.Mismatch;
     } catch (error) {
       this.logger.error(
         `Cache expireIfValueMatches error for key ${key}:`,
         error,
       );
-      return 'error';
+      return CacheLockRenewStatus.Error;
     }
   }
 

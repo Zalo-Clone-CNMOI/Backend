@@ -35,6 +35,9 @@ describe('PersistMessageConsumer', () => {
   let consumer: PersistMessageConsumer;
   let repo: {
     tryBeginMessageProcessing: jest.Mock;
+    getMessageProcessingState: jest.Mock;
+    tryClaimPendingReplay: jest.Mock;
+    restoreMessageProcessingToPending: jest.Mock;
     insertMessage: jest.Mock;
     markMessageStored: jest.Mock;
     clearMessageProcessing: jest.Mock;
@@ -82,6 +85,9 @@ describe('PersistMessageConsumer', () => {
   beforeEach(() => {
     repo = {
       tryBeginMessageProcessing: jest.fn(),
+      getMessageProcessingState: jest.fn(),
+      tryClaimPendingReplay: jest.fn(),
+      restoreMessageProcessingToPending: jest.fn(),
       insertMessage: jest.fn(),
       markMessageStored: jest.fn(),
       clearMessageProcessing: jest.fn(),
@@ -185,24 +191,85 @@ describe('PersistMessageConsumer', () => {
 
       membershipService.canUserAccessConversation.mockResolvedValue(true);
       repo.tryBeginMessageProcessing.mockResolvedValue(false);
+      repo.getMessageProcessingState.mockResolvedValue({
+        message_id: payload.message_id,
+        conversation_id: payload.conversation_id,
+        created_at: payload.sent_at,
+        status: 'stored',
+      });
 
       await consumer.onSend(payload);
 
       expect(repo.insertMessage).not.toHaveBeenCalled();
       expect(repo.markMessageStored).not.toHaveBeenCalled();
       expect(repo.clearMessageProcessing).not.toHaveBeenCalled();
+      expect(repo.tryClaimPendingReplay).not.toHaveBeenCalled();
       expect(publisher.emit).not.toHaveBeenCalled();
+    });
+
+    it('should replay pending message once and mark as stored', async () => {
+      const payload = createMockChatSendCommand();
+
+      membershipService.canUserAccessConversation.mockResolvedValue(true);
+      repo.tryBeginMessageProcessing.mockResolvedValue(false);
+      repo.getMessageProcessingState.mockResolvedValue({
+        message_id: payload.message_id,
+        conversation_id: payload.conversation_id,
+        created_at: payload.sent_at,
+        status: 'pending',
+      });
+      repo.tryClaimPendingReplay.mockResolvedValue(true);
+      repo.getMessage.mockResolvedValue({
+        message_id: payload.message_id,
+        conversation_id: payload.conversation_id,
+        sender_id: payload.sender_id,
+        body: payload.body,
+        created_at: payload.sent_at,
+        attachments: payload.attachments,
+        reply_to_message_id: payload.reply_to_message_id,
+      });
+
+      await consumer.onSend(payload);
+
+      expect(repo.tryClaimPendingReplay).toHaveBeenCalledWith(
+        payload.message_id,
+      );
+      expect(publisher.emit).toHaveBeenCalledWith(
+        'chat.message.created',
+        expect.objectContaining({
+          message_id: payload.message_id,
+          created_at: payload.sent_at,
+        }),
+      );
+      expect(repo.markMessageStored).toHaveBeenCalledWith(payload.message_id);
+      expect(repo.restoreMessageProcessingToPending).not.toHaveBeenCalled();
     });
   });
 
   describe('onSend — race/retry safety', () => {
-    it('should clear processing lock and allow retry when publisher fails', async () => {
+    it('should keep pending marker and replay on retry when publisher fails', async () => {
       const payload = createMockChatSendCommand();
 
       membershipService.canUserAccessConversation.mockResolvedValue(true);
       repo.tryBeginMessageProcessing
         .mockResolvedValueOnce(true)
-        .mockResolvedValueOnce(true);
+        .mockResolvedValueOnce(false);
+      repo.getMessageProcessingState.mockResolvedValue({
+        message_id: payload.message_id,
+        conversation_id: payload.conversation_id,
+        created_at: payload.sent_at,
+        status: 'pending',
+      });
+      repo.tryClaimPendingReplay.mockResolvedValue(true);
+      repo.getMessage.mockResolvedValue({
+        message_id: payload.message_id,
+        conversation_id: payload.conversation_id,
+        sender_id: payload.sender_id,
+        body: payload.body,
+        created_at: payload.sent_at,
+        attachments: payload.attachments,
+        reply_to_message_id: payload.reply_to_message_id,
+      });
       repo.insertMessage.mockResolvedValue(undefined);
       repo.markMessageStored.mockResolvedValue(undefined);
       repo.clearMessageProcessing.mockResolvedValue(undefined);
@@ -215,12 +282,12 @@ describe('PersistMessageConsumer', () => {
       );
       await consumer.onSend(payload);
 
-      expect(repo.clearMessageProcessing).toHaveBeenCalledTimes(1);
-      expect(repo.clearMessageProcessing).toHaveBeenCalledWith(
-        payload.message_id,
-      );
+      expect(repo.clearMessageProcessing).not.toHaveBeenCalled();
       expect(repo.tryBeginMessageProcessing).toHaveBeenCalledTimes(2);
       expect(repo.markMessageStored).toHaveBeenCalledTimes(1);
+      expect(repo.tryClaimPendingReplay).toHaveBeenCalledWith(
+        payload.message_id,
+      );
       expect(publisher.emit).toHaveBeenCalledWith(
         'chat.message.created',
         expect.objectContaining({ message_id: payload.message_id }),

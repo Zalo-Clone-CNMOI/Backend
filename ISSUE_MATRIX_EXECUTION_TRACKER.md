@@ -10,7 +10,7 @@ Close all remaining issue matrix gaps in risk-first order without breaking curre
 | ----- | -------------------------------- | -------- | ------------------------------------------------------------------------------------------ | ----------- |
 | PR-01 | Baseline + Scope Lock            | Blocker  | Freeze matrix, baseline evidence, gate templates                                           | In Progress |
 | PR-02 | Security/Auth Boundary           | Blocker  | Authz boundary, CORS hardening, QR socket binding, error envelope alignment                | In Progress |
-| PR-03 | Data Consistency/Idempotency     | Blocker  | Atomic idempotency, immutable timestamp semantics, seen-marker race, telemetry             | Not Started |
+| PR-03 | Data Consistency/Idempotency     | Blocker  | Atomic idempotency, immutable timestamp semantics, seen-marker race, telemetry             | In Progress |
 | PR-04 | AI Safety/Moderation Enforcement | Blocker  | Fail-safe policy, enforcement events, conversation fanout, idempotent emit                 | Not Started |
 | PR-05 | Validation/Contracts/Transport   | Blocker  | WS runtime validation, contract-first updates, retry/backoff/DLQ, WS/RPC error handling    | Not Started |
 | PR-06 | Performance/Scalability          | High     | Batch membership checks, JwtAuthGuard cache+revocation, attachment ownership tightening    | Not Started |
@@ -93,3 +93,9 @@ Close all remaining issue matrix gaps in risk-first order without breaking curre
   - added WS contract events for one-time QR socket binding token issuance
   - ws-gateway now issues one-time socketBindingToken and stores server-side binding in Redis
   - sso-service generate QR flow now requires socketBindingToken and rejects invalid/mismatched bindings
+- PR-03 consistency hardening has started:
+  - chat-service send consumer now reconciles pending idempotency state with replay claim semantics
+  - duplicate/replay/timestamp-mismatch telemetry counters with structured log fields were added
+  - seen-marker write path is now atomic (`IF NOT EXISTS`) and integration-tested for concurrent writes
+  - interaction-service markAsRead now performs monotonic conditional update to prevent lastReadAt regression under concurrent requests
+  - interaction-service tests now cover stale-update skip and non-member rejection under the new write path

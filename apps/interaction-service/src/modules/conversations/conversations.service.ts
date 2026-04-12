@@ -727,16 +727,29 @@ export class ConversationsService {
     userId: string,
     conversationId: string,
   ): Promise<{ message: string }> {
-    const membership = await this.memberRepository.findOne({
-      where: { conversationId, userId, leftAt: IsNull() },
-    });
+    const readAt = new Date();
 
-    if (!membership) {
-      throw BusinessException.notFound(ErrorCode.CONVERSATION_NOT_MEMBER);
+    const updateResult = await this.memberRepository
+      .createQueryBuilder()
+      .update(ConversationMember)
+      .set({ lastReadAt: readAt })
+      .where('conversation_id = :conversationId', { conversationId })
+      .andWhere('user_id = :userId', { userId })
+      .andWhere('left_at IS NULL')
+      .andWhere('(last_read_at IS NULL OR last_read_at < :readAt)', { readAt })
+      .execute();
+
+    if ((updateResult.affected ?? 0) === 0) {
+      const membership = await this.memberRepository.findOne({
+        where: { conversationId, userId, leftAt: IsNull() },
+      });
+
+      if (!membership) {
+        throw BusinessException.notFound(ErrorCode.CONVERSATION_NOT_MEMBER);
+      }
     }
 
-    membership.lastReadAt = new Date();
-    await this.memberRepository.save(membership);
+    await this.redis.del(`conversation:unread:${userId}:${conversationId}`);
 
     return { message: 'Marked as read' };
   }

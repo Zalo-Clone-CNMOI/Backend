@@ -10,6 +10,13 @@ import {
   ReactionType,
 } from '@app/types/interfaces/chat.interface';
 
+export interface MessageProcessingState {
+  message_id: string;
+  conversation_id: string;
+  created_at: number;
+  status: string;
+}
+
 @Injectable()
 export class MessageRepository {
   constructor(@Inject(SCYLLA_CLIENT) private readonly client: Client) {}
@@ -25,8 +32,41 @@ export class MessageRepository {
       { prepare: true },
     );
 
-    const appliedValue: unknown = result.first()?.get('[applied]');
-    return typeof appliedValue === 'boolean' ? appliedValue : false;
+    return this.getAppliedValue(result);
+  }
+
+  async getMessageProcessingState(
+    messageId: string,
+  ): Promise<MessageProcessingState | null> {
+    const result = await this.client.execute(
+      'SELECT message_id, conversation_id, created_at, status FROM idempotency_by_message_id WHERE message_id = ?',
+      [messageId],
+      { prepare: true },
+    );
+
+    if (result.rowLength === 0) {
+      return null;
+    }
+
+    return this.rowToMessageProcessingState(result.rows[0]);
+  }
+
+  async tryClaimPendingReplay(messageId: string): Promise<boolean> {
+    const result = await this.client.execute(
+      'UPDATE idempotency_by_message_id SET status = ? WHERE message_id = ? IF status = ?',
+      ['replaying', messageId, 'pending'],
+      { prepare: true },
+    );
+
+    return this.getAppliedValue(result);
+  }
+
+  async restoreMessageProcessingToPending(messageId: string): Promise<void> {
+    await this.client.execute(
+      'UPDATE idempotency_by_message_id SET status = ? WHERE message_id = ?',
+      ['pending', messageId],
+      { prepare: true },
+    );
   }
 
   async markMessageStored(messageId: string): Promise<void> {
@@ -58,12 +98,14 @@ export class MessageRepository {
     messageId: string,
     conversationId: string,
     createdAt: number,
-  ): Promise<void> {
-    await this.client.execute(
-      'INSERT INTO idempotency_by_message_id (message_id, conversation_id, created_at, status) VALUES (?, ?, ?, ?)',
+  ): Promise<boolean> {
+    const result = await this.client.execute(
+      'INSERT INTO idempotency_by_message_id (message_id, conversation_id, created_at, status) VALUES (?, ?, ?, ?) IF NOT EXISTS',
       [messageId, conversationId, createdAt, 'stored'],
       { prepare: true },
     );
+
+    return this.getAppliedValue(result);
   }
 
   async insertMessage(message: PersistedMessage): Promise<void> {
@@ -341,5 +383,53 @@ export class MessageRepository {
 
   private decodeCursor(cursor: string): number {
     return parseInt(Buffer.from(cursor, 'base64').toString('utf8'), 10);
+  }
+
+  private getAppliedValue(result: types.ResultSet): boolean {
+    const firstRow = this.getFirstRow(result);
+    if (!firstRow) {
+      return false;
+    }
+
+    const appliedValue: unknown = firstRow.get('[applied]');
+    return typeof appliedValue === 'boolean' ? appliedValue : false;
+  }
+
+  private getFirstRow(result: types.ResultSet): types.Row | null {
+    if (typeof result.first === 'function') {
+      return result.first() ?? null;
+    }
+
+    return result.rows.length > 0 ? result.rows[0] : null;
+  }
+
+  private rowToMessageProcessingState(row: types.Row): MessageProcessingState {
+    return {
+      message_id: row.get('message_id') as string,
+      conversation_id: row.get('conversation_id') as string,
+      created_at: this.toNumber(row.get('created_at')),
+      status: (row.get('status') as string) || 'unknown',
+    };
+  }
+
+  private toNumber(value: unknown): number {
+    if (typeof value === 'number') {
+      return value;
+    }
+
+    if (this.hasToNumber(value)) {
+      return value.toNumber();
+    }
+
+    return Number(value);
+  }
+
+  private hasToNumber(value: unknown): value is { toNumber: () => number } {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      'toNumber' in value &&
+      typeof (value as { toNumber?: unknown }).toNumber === 'function'
+    );
   }
 }

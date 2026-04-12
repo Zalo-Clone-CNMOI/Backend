@@ -58,22 +58,100 @@ export function createMockScyllaClient() {
       if (q.includes('SELECT') && q.includes('IDEMPOTENCY_BY_MESSAGE_ID')) {
         const messageId = params[0] as string;
         const row = idempotency.get(messageId);
+        const mappedRow = row ? createRow(row) : null;
         return {
           rowLength: row ? 1 : 0,
-          rows: row ? [createRow(row)] : [],
+          rows: mappedRow ? [mappedRow] : [],
+          first: () => mappedRow,
         };
       }
 
       if (q.includes('INSERT') && q.includes('IDEMPOTENCY_BY_MESSAGE_ID')) {
-        const [messageId, conversationId, createdAt, status] =
-          params as string[];
+        const [messageId, conversationId, createdAt, status] = params as [
+          string,
+          string,
+          number,
+          string,
+        ];
+
+        if (q.includes('IF NOT EXISTS')) {
+          const existing = idempotency.get(messageId);
+          if (existing) {
+            const existingRow = createRow({
+              '[applied]': false,
+              ...existing,
+            });
+            return {
+              rowLength: 1,
+              rows: [existingRow],
+              first: () => existingRow,
+            };
+          }
+
+          idempotency.set(messageId, {
+            message_id: messageId,
+            conversation_id: conversationId,
+            created_at: createdAt,
+            status,
+          });
+
+          const appliedRow = createRow({ '[applied]': true });
+          return {
+            rowLength: 1,
+            rows: [appliedRow],
+            first: () => appliedRow,
+          };
+        }
+
         idempotency.set(messageId, {
           message_id: messageId,
           conversation_id: conversationId,
           created_at: createdAt,
           status,
         });
-        return { rowLength: 0, rows: [] };
+        return { rowLength: 0, rows: [], first: () => null };
+      }
+
+      if (q.includes('UPDATE') && q.includes('IDEMPOTENCY_BY_MESSAGE_ID')) {
+        if (q.includes('IF STATUS = ?')) {
+          const [nextStatus, messageId, expectedStatus] = params as [
+            string,
+            string,
+            string,
+          ];
+          const current = idempotency.get(messageId);
+          const applied = !!current && current.status === expectedStatus;
+
+          if (applied && current) {
+            current.status = nextStatus;
+            idempotency.set(messageId, current);
+          }
+
+          const conditionalRow = createRow({
+            '[applied]': applied,
+            message_id: messageId,
+            status: current?.status,
+          });
+          return {
+            rowLength: 1,
+            rows: [conditionalRow],
+            first: () => conditionalRow,
+          };
+        }
+
+        const [nextStatus, messageId] = params as [string, string];
+        const current = idempotency.get(messageId);
+        if (current) {
+          current.status = nextStatus;
+          idempotency.set(messageId, current);
+        }
+        return { rowLength: 0, rows: [], first: () => null };
+      }
+
+      if (q.includes('DELETE') && q.includes('IDEMPOTENCY_BY_MESSAGE_ID')) {
+        const [messageId] = params as [string];
+        idempotency.delete(messageId);
+        return { rowLength: 0, rows: [], first: () => null };
       }
 
       // ─── messages_by_conversation ────────────────────

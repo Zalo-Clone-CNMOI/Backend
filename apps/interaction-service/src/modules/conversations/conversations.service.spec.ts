@@ -17,6 +17,7 @@ import {
 import { CacheService, REDIS_CLIENT } from '@libs/redis';
 import { KAFKA_CLIENT } from '@libs/kafka';
 import { UpdateMemberRoleDtoRoleEnum } from '@app/constant';
+import { IsNull } from 'typeorm';
 
 // ─── Mock Enums ──────────────────────────────────────────
 const ConversationType = { DIRECT: 'direct', GROUP: 'group' };
@@ -93,6 +94,7 @@ describe('ConversationsService', () => {
       find: jest.fn(),
       create: jest.fn().mockImplementation((data) => data),
       save: jest.fn().mockImplementation((data) => Promise.resolve(data)),
+      createQueryBuilder: jest.fn(),
     };
 
     cacheService = {
@@ -108,6 +110,7 @@ describe('ConversationsService', () => {
 
     redisClient = {
       mGet: jest.fn().mockResolvedValue([]),
+      del: jest.fn().mockResolvedValue(1),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -894,22 +897,120 @@ describe('ConversationsService', () => {
   // ─── markAsRead ──────────────────────────────────────
 
   describe('markAsRead', () => {
-    it('should set lastReadAt to current date', async () => {
-      const membership = createMockMember();
-      memberRepository.findOne.mockResolvedValue(membership);
+    it('should update lastReadAt when marker is older', async () => {
+      const qb = {
+        update: jest.fn().mockReturnThis(),
+        set: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        execute: jest.fn().mockResolvedValue({ affected: 1 }),
+      };
+      memberRepository.createQueryBuilder.mockReturnValue(qb);
 
       const result = await service.markAsRead(uuid(2), uuid(1));
 
       expect(result.message).toContain('read');
-      expect(memberRepository.save).toHaveBeenCalledWith(
-        expect.objectContaining({ lastReadAt: expect.any(Date) }),
+      expect(qb.update).toHaveBeenCalledWith(ConversationMember);
+      expect(qb.set).toHaveBeenCalledWith({ lastReadAt: expect.any(Date) });
+      expect(qb.where).toHaveBeenCalledWith('conversation_id = :conversationId', {
+        conversationId: uuid(1),
+      });
+      expect(qb.andWhere).toHaveBeenCalledWith('user_id = :userId', {
+        userId: uuid(2),
+      });
+      expect(qb.andWhere).toHaveBeenCalledWith('left_at IS NULL');
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        '(last_read_at IS NULL OR last_read_at < :readAt)',
+        { readAt: expect.any(Date) },
+      );
+      expect(memberRepository.findOne).not.toHaveBeenCalled();
+      expect(redisClient.del).toHaveBeenCalledWith(
+        `conversation:unread:${uuid(2)}:${uuid(1)}`,
+      );
+    });
+
+    it('should return success when membership exists but update is skipped by newer marker', async () => {
+      const qb = {
+        update: jest.fn().mockReturnThis(),
+        set: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        execute: jest.fn().mockResolvedValue({ affected: 0 }),
+      };
+      memberRepository.createQueryBuilder.mockReturnValue(qb);
+      memberRepository.findOne.mockResolvedValue(createMockMember());
+
+      const result = await service.markAsRead(uuid(2), uuid(1));
+
+      expect(result.message).toContain('read');
+      expect(memberRepository.findOne).toHaveBeenCalledWith({
+        where: { conversationId: uuid(1), userId: uuid(2), leftAt: IsNull() },
+      });
+      expect(redisClient.del).toHaveBeenCalledWith(
+        `conversation:unread:${uuid(2)}:${uuid(1)}`,
       );
     });
 
     it('should throw when not a member', async () => {
+      const qb = {
+        update: jest.fn().mockReturnThis(),
+        set: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        execute: jest.fn().mockResolvedValue({ affected: 0 }),
+      };
+      memberRepository.createQueryBuilder.mockReturnValue(qb);
       memberRepository.findOne.mockResolvedValue(null);
 
       await expect(service.markAsRead('outsider', uuid(1))).rejects.toThrow();
+      expect(redisClient.del).not.toHaveBeenCalled();
+    });
+
+    it('should skip update when lastReadAt equals readAt (strict-less-than monotonic guard)', async () => {
+      // When lastReadAt === readAt, the condition `last_read_at < :readAt` is false
+      // so affected = 0 but the member still exists — treated as idempotent success
+      const qb = {
+        update: jest.fn().mockReturnThis(),
+        set: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        execute: jest.fn().mockResolvedValue({ affected: 0 }),
+      };
+      memberRepository.createQueryBuilder.mockReturnValue(qb);
+      memberRepository.findOne.mockResolvedValue(
+        createMockMember({ lastReadAt: new Date() }),
+      );
+
+      const result = await service.markAsRead(uuid(2), uuid(1));
+
+      expect(result.message).toContain('read');
+      expect(redisClient.del).toHaveBeenCalledWith(
+        `conversation:unread:${uuid(2)}:${uuid(1)}`,
+      );
+    });
+
+    it('should update when lastReadAt is null (first-ever read by this member)', async () => {
+      // lastReadAt IS NULL satisfies the `last_read_at IS NULL OR ...` condition
+      const qb = {
+        update: jest.fn().mockReturnThis(),
+        set: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        execute: jest.fn().mockResolvedValue({ affected: 1 }),
+      };
+      memberRepository.createQueryBuilder.mockReturnValue(qb);
+
+      const result = await service.markAsRead(uuid(2), uuid(1));
+
+      expect(result.message).toContain('read');
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        '(last_read_at IS NULL OR last_read_at < :readAt)',
+        { readAt: expect.any(Date) },
+      );
+      expect(memberRepository.findOne).not.toHaveBeenCalled();
+      expect(redisClient.del).toHaveBeenCalledWith(
+        `conversation:unread:${uuid(2)}:${uuid(1)}`,
+      );
     });
   });
 });

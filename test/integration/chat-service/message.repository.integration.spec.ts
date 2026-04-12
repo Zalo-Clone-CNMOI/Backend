@@ -55,10 +55,61 @@ describe('MessageRepository (integration)', () => {
       const conversationId = uuid();
       const createdAt = Date.now();
 
-      await repo.markMessageSeen(messageId, conversationId, createdAt);
+      const applied = await repo.markMessageSeen(
+        messageId,
+        conversationId,
+        createdAt,
+      );
       const result = await repo.wasMessageSeen(messageId);
 
+      expect(applied).toBe(true);
       expect(result).toBe(true);
+    });
+
+    it('should apply seen marker only once under concurrent writes', async () => {
+      const messageId = uuid();
+      const conversationId = uuid();
+      const createdAt = Date.now();
+
+      const appliedResults = await Promise.all(
+        Array.from({ length: 5 }, () =>
+          repo.markMessageSeen(messageId, conversationId, createdAt),
+        ),
+      );
+
+      const appliedCount = appliedResults.filter(Boolean).length;
+      expect(appliedCount).toBe(1);
+      expect(await repo.wasMessageSeen(messageId)).toBe(true);
+    });
+
+    it('should reject duplicate begin-processing and preserve original created_at', async () => {
+      const messageId = uuid();
+      const conversationId = uuid();
+      const firstCreatedAt = Date.now();
+      const secondCreatedAt = firstCreatedAt + 1000;
+
+      const firstAcquire = await repo.tryBeginMessageProcessing(
+        messageId,
+        conversationId,
+        firstCreatedAt,
+      );
+      const secondAcquire = await repo.tryBeginMessageProcessing(
+        messageId,
+        conversationId,
+        secondCreatedAt,
+      );
+      const state = await repo.getMessageProcessingState(messageId);
+
+      expect(firstAcquire).toBe(true);
+      expect(secondAcquire).toBe(false);
+      expect(state).toEqual(
+        expect.objectContaining({
+          message_id: messageId,
+          conversation_id: conversationId,
+          created_at: firstCreatedAt,
+          status: 'pending',
+        }),
+      );
     });
 
     it('should track idempotency per message_id', async () => {

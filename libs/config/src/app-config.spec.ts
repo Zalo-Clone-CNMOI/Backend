@@ -43,4 +43,35 @@ describe('loadConfig', () => {
 
     expect(config.chatModerationDeleteLockTtlSeconds).toBe(120);
   });
+
+  it('should throw in production when CORS_ORIGIN is missing', () => {
+    process.env.NODE_ENV = 'production';
+    delete process.env.CORS_ORIGIN;
+
+    expect(() => loadConfig('chat-service')).toThrow(
+      'CORS_ORIGIN is required in production environment.',
+    );
+  });
+
+  it('should throw in production when CORS_ORIGIN contains wildcard', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.CORS_ORIGIN = 'https://example.com,*';
+
+    expect(() => loadConfig('chat-service')).toThrow(
+      'CORS_ORIGIN cannot contain wildcard (*) in production.',
+    );
+  });
+
+  it('should allow explicit CORS allow-list in production', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.CORS_ORIGIN =
+      'https://app.example.com,https://admin.example.com';
+
+    const config = loadConfig('chat-service');
+
+    expect(config.allowedOrigins).toEqual([
+      'https://app.example.com',
+      'https://admin.example.com',
+    ]);
+  });
 });

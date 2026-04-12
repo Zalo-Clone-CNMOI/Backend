@@ -17,7 +17,7 @@ services:
       INTERACTION_SERVICE_URL: http://interaction-service:5004/api
       MEDIA_SERVICE_URL: http://media-service:3003/api
       JWT_SECRET: ${JWT_SECRET}
-      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000,http://localhost:3001,http://localhost:8081}
       KAFKA_BROKERS: kafka:29092
       KAFKA_CLIENT_ID: bff-service
       REDIS_URL: redis://redis:6379
@@ -74,7 +74,7 @@ services:
       REDIS_URL: redis://redis:6379
       KAFKA_BROKERS: kafka:29092
       KAFKA_CLIENT_ID: sso-service
-      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000,http://localhost:3001,http://localhost:8081}
       DB_HOST: zalodb.cv600uwoag41.ap-southeast-1.rds.amazonaws.com
       DB_PORT: 5432
       DB_USERNAME: ${POSTGRES_USER:-postgres}
@@ -128,7 +128,7 @@ services:
       SCYLLA_CONTACT_POINTS: scylla
       SCYLLA_LOCAL_DATACENTER: datacenter1
       SCYLLA_KEYSPACE: chat
-      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000,http://localhost:3001,http://localhost:8081}
       DB_HOST: zalodb.cv600uwoag41.ap-southeast-1.rds.amazonaws.com
       DB_PORT: 5432
       DB_USERNAME: ${POSTGRES_USER:-postgres}

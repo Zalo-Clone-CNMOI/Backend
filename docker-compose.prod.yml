@@ -133,7 +133,7 @@ services:
       # JWT
       JWT_SECRET: ${JWT_SECRET}
       # CORS
-      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      CORS_ORIGIN: ${CORS_ORIGIN}
       # Kafka
       KAFKA_BROKERS: kafka:29092
       KAFKA_CLIENT_ID: bff-service
@@ -201,7 +201,7 @@ services:
       KAFKA_BROKERS: kafka:29092
       KAFKA_CLIENT_ID: sso-service
       # CORS
-      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      CORS_ORIGIN: ${CORS_ORIGIN}
       DB_HOST: zalodb.cv600uwoag41.ap-southeast-1.rds.amazonaws.com
       DB_PORT: 5432
       DB_USERNAME: ${POSTGRES_USER:-postgres}
@@ -267,7 +267,7 @@ services:
       SCYLLA_LOCAL_DATACENTER: datacenter1
       SCYLLA_KEYSPACE: chat
       # CORS
-      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      CORS_ORIGIN: ${CORS_ORIGIN}
       DB_HOST: zalodb.cv600uwoag41.ap-southeast-1.rds.amazonaws.com
       DB_PORT: 5432
       DB_USERNAME: ${POSTGRES_USER:-postgres}

@@ -79,11 +79,23 @@ export function loadConfig(serviceName: string): AppConfig {
     .map((v) => v.trim())
     .filter(Boolean);
 
-  const allowedOrigins = process.env.CORS_ORIGIN
-    ? process.env.CORS_ORIGIN.split(',')
+  const rawCorsOrigin = process.env.CORS_ORIGIN?.trim();
+  const allowedOrigins = rawCorsOrigin
+    ? rawCorsOrigin
+        .split(',')
         .map((v) => v.trim())
         .filter(Boolean)
-    : ['http://localhost:3000']; // Default for development
+    : ['http://localhost:3000'];
+
+  if (nodeEnv === 'production') {
+    if (!rawCorsOrigin || allowedOrigins.length === 0) {
+      throw new Error('CORS_ORIGIN is required in production environment.');
+    }
+
+    if (allowedOrigins.includes('*')) {
+      throw new Error('CORS_ORIGIN cannot contain wildcard (*) in production.');
+    }
+  }
 
   return {
     nodeEnv,

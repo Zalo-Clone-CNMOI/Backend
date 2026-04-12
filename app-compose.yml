@@ -171,6 +171,7 @@ services:
       PORT: 3003
       SERVICE_NAME: media-service
       BFF_SERVICE_URL: http://bff-service:5000/api
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000,http://localhost:3001,http://localhost:8081}
       AWS_REGION: ${AWS_REGION:-ap-southeast-1}
       S3_BUCKET: ${S3_BUCKET-zalo-bucket}
       S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
@@ -289,6 +290,7 @@ services:
       SERVICE_NAME: ws-gateway
       BFF_SERVICE_URL: http://bff-service:5000/api
       JWT_SECRET: ${JWT_SECRET}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000,http://localhost:3001,http://localhost:8081}
       KAFKA_BROKERS: kafka:29092
       KAFKA_CLIENT_ID: ws-gateway
       KAFKA_GROUP_ID: ws-gateway-fanout

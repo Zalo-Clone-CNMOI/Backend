@@ -350,6 +350,8 @@ services:
       SERVICE_NAME: media-service
       # Service URLs (internal Docker network)
       BFF_SERVICE_URL: http://bff-service:5000/api
+      # CORS
+      CORS_ORIGIN: ${CORS_ORIGIN}
       # AWS S3
       AWS_REGION: ${AWS_REGION:-ap-southeast-1}
       S3_BUCKET: ${S3_BUCKET}
@@ -463,6 +465,8 @@ services:
       BFF_SERVICE_URL: http://bff-service:5000/api
       # JWT
       JWT_SECRET: ${JWT_SECRET}
+      # CORS
+      CORS_ORIGIN: ${CORS_ORIGIN}
       # Kafka
       KAFKA_BROKERS: kafka:29092
       KAFKA_CLIENT_ID: ws-gateway

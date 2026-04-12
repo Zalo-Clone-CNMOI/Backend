@@ -9,15 +9,17 @@ import {
 } from '@app/interceptors';
 import { JwtAuthGuard } from '@libs/auth';
 import { createKafkaMicroserviceOptions } from '@libs/kafka/kafka.util';
-import { loadConfig } from '@libs/config/app-config';
+import { loadConfig, assertProductionCors } from '@libs/config';
 import { MicroserviceOptions } from '@nestjs/microservices';
 
 async function bootstrap() {
   process.env.SERVICE_NAME ??= 'interaction-service';
   process.env.KAFKA_GROUP_ID ??= 'interaction-service-consumers';
 
-  const app = await NestFactory.create(AppModule);
   const config = loadConfig(process.env.SERVICE_NAME);
+  assertProductionCors(config);
+
+  const app = await NestFactory.create(AppModule);
 
   const logger = new Logger('Bootstrap');
   app.setGlobalPrefix('api');

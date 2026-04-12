@@ -2,7 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { Logger } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { RedisIoAdapter } from './socket/redis-io.adapter';
-import { loadConfig } from '@libs/config';
+import { loadConfig, assertProductionCors } from '@libs/config';
 import { createKafkaMicroserviceOptions } from '@libs/kafka';
 
 async function bootstrap() {
@@ -11,6 +11,7 @@ async function bootstrap() {
   process.env.KAFKA_GROUP_ID ??= 'ws-gateway-fanout';
 
   const config = loadConfig(process.env.SERVICE_NAME);
+  assertProductionCors(config);
 
   logger.log('[Bootstrap] Creating Nest application for ws-gateway...');
   const app = await NestFactory.create(AppModule);
@@ -21,7 +22,7 @@ async function bootstrap() {
   });
 
   const redisUrl = process.env.REDIS_URL;
-  const adapter = new RedisIoAdapter(app);
+  const adapter = new RedisIoAdapter(app, config.allowedOrigins);
 
   if (redisUrl) {
     logger.log('[Bootstrap] Initializing Redis adapter...');

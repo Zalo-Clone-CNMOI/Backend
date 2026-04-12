@@ -2,7 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { MicroserviceOptions } from '@nestjs/microservices';
 import { AppModule } from './app.module';
-import { loadConfig } from '@libs/config';
+import { loadConfig, assertProductionCors } from '@libs/config';
 import { createKafkaMicroserviceOptions } from '@libs/kafka';
 
 async function bootstrap() {
@@ -11,6 +11,7 @@ async function bootstrap() {
 
   const logger = new Logger('Bootstrap');
   const config = loadConfig(process.env.SERVICE_NAME);
+  assertProductionCors(config);
 
   const app = await NestFactory.create(AppModule);
 
@@ -19,6 +20,11 @@ async function bootstrap() {
   );
 
   app.setGlobalPrefix('api');
+
+  app.enableCors({
+    origin: config.allowedOrigins,
+    credentials: true,
+  });
 
   app.useGlobalPipes(
     new ValidationPipe({

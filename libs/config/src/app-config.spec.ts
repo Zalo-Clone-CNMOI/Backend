@@ -1,4 +1,4 @@
-import { loadConfig } from './app-config';
+import { loadConfig, assertProductionCors } from './app-config';
 
 describe('loadConfig', () => {
   const originalEnv = process.env;
@@ -48,7 +48,9 @@ describe('loadConfig', () => {
     process.env.NODE_ENV = 'production';
     delete process.env.CORS_ORIGIN;
 
-    expect(() => loadConfig('chat-service')).toThrow(
+    const config = loadConfig('chat-service');
+
+    expect(() => assertProductionCors(config)).toThrow(
       'CORS_ORIGIN is required in production environment.',
     );
   });
@@ -57,7 +59,9 @@ describe('loadConfig', () => {
     process.env.NODE_ENV = 'production';
     process.env.CORS_ORIGIN = 'https://example.com,*';
 
-    expect(() => loadConfig('chat-service')).toThrow(
+    const config = loadConfig('chat-service');
+
+    expect(() => assertProductionCors(config)).toThrow(
       'CORS_ORIGIN cannot contain wildcard (*) in production.',
     );
   });
@@ -69,9 +73,19 @@ describe('loadConfig', () => {
 
     const config = loadConfig('chat-service');
 
+    expect(() => assertProductionCors(config)).not.toThrow();
     expect(config.allowedOrigins).toEqual([
       'https://app.example.com',
       'https://admin.example.com',
     ]);
+  });
+
+  it('should not throw when assertProductionCors is called in non-production', () => {
+    process.env.NODE_ENV = 'development';
+    delete process.env.CORS_ORIGIN;
+
+    const config = loadConfig('chat-service');
+
+    expect(() => assertProductionCors(config)).not.toThrow();
   });
 });

@@ -80,22 +80,19 @@ export function loadConfig(serviceName: string): AppConfig {
     .filter(Boolean);
 
   const rawCorsOrigin = process.env.CORS_ORIGIN?.trim();
+  const devDefaults = [
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://localhost:8081',
+  ];
   const allowedOrigins = rawCorsOrigin
     ? rawCorsOrigin
         .split(',')
         .map((v) => v.trim())
         .filter(Boolean)
-    : ['http://localhost:3000'];
-
-  if (nodeEnv === 'production') {
-    if (!rawCorsOrigin || allowedOrigins.length === 0) {
-      throw new Error('CORS_ORIGIN is required in production environment.');
-    }
-
-    if (allowedOrigins.includes('*')) {
-      throw new Error('CORS_ORIGIN cannot contain wildcard (*) in production.');
-    }
-  }
+    : nodeEnv === 'production'
+      ? [] // no fallback in production — assertProductionCors will catch this
+      : devDefaults;
 
   return {
     nodeEnv,
@@ -157,4 +154,21 @@ export function loadConfig(serviceName: string): AppConfig {
         900,
       ) ?? 120,
   };
+}
+
+/**
+ * Validates CORS configuration for HTTP-serving services in production.
+ * Call this in the bootstrap of any service that exposes HTTP to browsers.
+ * Pure Kafka consumers do not need to call this.
+ */
+export function assertProductionCors(config: AppConfig): void {
+  if (config.nodeEnv !== 'production') return;
+
+  if (config.allowedOrigins.length === 0) {
+    throw new Error('CORS_ORIGIN is required in production environment.');
+  }
+
+  if (config.allowedOrigins.includes('*')) {
+    throw new Error('CORS_ORIGIN cannot contain wildcard (*) in production.');
+  }
 }

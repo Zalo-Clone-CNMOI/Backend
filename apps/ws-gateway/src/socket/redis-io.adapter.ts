@@ -4,7 +4,6 @@ import { Logger } from '@nestjs/common';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { createClient, type RedisClientType } from 'redis';
 import type { Server, ServerOptions } from 'socket.io';
-import { loadConfig } from '@libs/config';
 
 export class RedisIoAdapter extends IoAdapter {
   private readonly logger = new Logger(RedisIoAdapter.name);
@@ -13,7 +12,10 @@ export class RedisIoAdapter extends IoAdapter {
   private subClient?: RedisClientType;
   private isRedisConnected = false;
 
-  constructor(app: INestApplicationContext) {
+  constructor(
+    app: INestApplicationContext,
+    private readonly allowedOrigins: string[],
+  ) {
     super(app);
   }
 
@@ -101,12 +103,10 @@ export class RedisIoAdapter extends IoAdapter {
   }
 
   override createIOServer(port: number, options?: ServerOptions): Server {
-    const config = loadConfig(process.env.SERVICE_NAME || 'ws-gateway');
-
     const server = super.createIOServer(port, {
       ...options,
       cors: {
-        origin: config.allowedOrigins,
+        origin: this.allowedOrigins,
         methods: ['GET', 'POST'],
         credentials: true,
       },

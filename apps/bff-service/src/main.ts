@@ -3,11 +3,12 @@ import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { BffServiceModule } from './bff-service.module';
 import { TransformResponseInterceptor } from '@app/interceptors/transform-response.interceptor';
-import { loadConfig } from '@libs/config';
+import { loadConfig, assertProductionCors } from '@libs/config';
 
 async function bootstrap() {
   process.env.SERVICE_NAME ??= 'bff-service';
   const appConfig = loadConfig(process.env.SERVICE_NAME);
+  assertProductionCors(appConfig);
 
   const app = await NestFactory.create(BffServiceModule);
   const logger = new Logger('BFF-Service');

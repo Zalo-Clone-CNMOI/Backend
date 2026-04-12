@@ -2,7 +2,10 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { BffServiceModule } from './bff-service.module';
-import { TransformResponseInterceptor } from '@app/interceptors/transform-response.interceptor';
+import {
+  HttpExceptionFilter,
+  TransformResponseInterceptor,
+} from '@app/interceptors';
 import { loadConfig, assertProductionCors } from '@libs/config';
 
 async function bootstrap() {
@@ -55,6 +58,7 @@ async function bootstrap() {
   SwaggerModule.setup('docs', app, document);
   logger.log('Swagger documentation available at /docs');
 
+  app.useGlobalFilters(new HttpExceptionFilter());
   app.useGlobalInterceptors(new TransformResponseInterceptor());
 
   const port = Number(process.env.PORT) || 3000;

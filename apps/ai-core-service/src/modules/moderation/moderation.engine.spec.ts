@@ -240,6 +240,8 @@ describe('ModerationEngine', () => {
       expect(result.labels).toEqual(['spam']);
       expect(result.confidence).toBe(1);
       expect(result.tokens_used).toBe(0);
+      expect(result.decision_source).toBe('fallback_provider_failure');
+      expect(result.failure_reason).toContain('LLM timeout');
     });
 
     it('returns safe default when LLM returns invalid JSON', async () => {
@@ -258,6 +260,8 @@ describe('ModerationEngine', () => {
 
       expect(result.is_flagged).toBe(true);
       expect(result.labels).toEqual(['spam']);
+      expect(result.decision_source).toBe('fallback_parse_failure');
+      expect(result.failure_reason).toBe('moderation_response_parse_failed');
     });
 
     it('records failure metrics when LLM throws', async () => {
@@ -288,6 +292,36 @@ describe('ModerationEngine', () => {
 
       expect(result.message_id).toBe('msg-xyz');
       expect(result.conversation_id).toBe('conv-xyz');
+    });
+
+    it('stays fail-closed even when aiModerationFailOpen is set true', async () => {
+      const m = await Test.createTestingModule({
+        providers: [
+          ModerationEngine,
+          {
+            provide: APP_CONFIG,
+            useValue: {
+              aiModerationEnsemble: false,
+              aiModerationFailOpen: true,
+            },
+          },
+          { provide: AiGatewayService, useValue: gateway },
+          { provide: PromptBuilderService, useClass: PromptBuilderService },
+          { provide: AiMetricsService, useValue: metrics },
+          {
+            provide: getRepositoryToken(AiModerationLog),
+            useValue: moderationRepo,
+          },
+        ],
+      }).compile();
+
+      const failClosedEngine = m.get(ModerationEngine);
+      gateway.complete.mockRejectedValue(new Error('provider down'));
+
+      const result = await failClosedEngine.moderate(makeRequest());
+
+      expect(result.is_flagged).toBe(true);
+      expect(result.decision_source).toBe('fallback_provider_failure');
     });
   });
 

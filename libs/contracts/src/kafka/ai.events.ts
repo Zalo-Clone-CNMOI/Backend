@@ -21,6 +21,20 @@ export type ModerationLabelType =
 
 export type AiProviderType = 'openai' | 'gemini' | 'anthropic';
 
+export type ModerationDecisionSourceType =
+  | 'model'
+  | 'fallback_provider_failure'
+  | 'fallback_parse_failure';
+
+export type ModerationEnforcementActionType = 'none' | 'soft_delete';
+
+export type ModerationEnforcementOutcomeType =
+  | 'not_flagged'
+  | 'deleted'
+  | 'already_deleted'
+  | 'deduplicated'
+  | 'failed';
+
 // ── Moderation ─────────────────────────────────────────────────────────────
 
 export interface AiModerationRequestEvent {
@@ -43,8 +57,26 @@ export interface AiModerationResultEvent {
   confidence: number;
   provider: AiProviderType;
   ensemble: boolean;
+  decision_source: ModerationDecisionSourceType;
+  failure_reason?: string;
   processed_at: number;
   tokens_used: number;
+  trace_id?: string;
+}
+
+export interface AiModerationEnforcementEvent {
+  message_id: string;
+  conversation_id: string;
+  sender_id: string;
+  created_at: number;
+  is_flagged: boolean;
+  labels: ModerationLabelType[];
+  confidence: number;
+  provider: AiProviderType;
+  action: ModerationEnforcementActionType;
+  outcome: ModerationEnforcementOutcomeType;
+  reason?: string;
+  enforced_at: number;
   trace_id?: string;
 }
 

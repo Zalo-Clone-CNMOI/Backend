@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { MicroserviceOptions } from '@nestjs/microservices';
 import { AppModule } from './app.module';
+import { HttpExceptionFilter } from '@app/interceptors';
 import { loadConfig, assertProductionCors } from '@libs/config';
 import { createKafkaMicroserviceOptions } from '@libs/kafka';
 
@@ -25,6 +26,8 @@ async function bootstrap() {
     origin: config.allowedOrigins,
     credentials: true,
   });
+
+  app.useGlobalFilters(new HttpExceptionFilter());
 
   app.useGlobalPipes(
     new ValidationPipe({

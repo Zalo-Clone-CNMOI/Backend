@@ -5,7 +5,8 @@ import {
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
-import { Inject, OnModuleInit, UseGuards } from '@nestjs/common';
+import { Inject, OnModuleInit, UseFilters, UseGuards } from '@nestjs/common';
+import { WsExceptionFilter } from '@app/interceptors';
 import type { Server, Socket } from 'socket.io';
 import { ClientKafka } from '@nestjs/microservices';
 import { JwtService, WsAuthGuard } from '@libs/auth';
@@ -44,6 +45,7 @@ type AuthedSocket = Socket<
   SocketData
 >;
 
+@UseFilters(WsExceptionFilter)
 @WebSocketGateway()
 export class ChatGateway implements OnModuleInit {
   @WebSocketServer()
@@ -220,7 +222,7 @@ export class ChatGateway implements OnModuleInit {
   ): Promise<void> {
     const isLimited = await this.isQrBindRateLimited(socket.id);
     if (isLimited) {
-      socket.emit('error', {
+      socket.emit(WsEvents.WsError, {
         code: 'RATE_LIMIT_EXCEEDED',
         message: 'Too many QR bind requests. Try again later.',
       });

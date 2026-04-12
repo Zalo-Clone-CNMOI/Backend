@@ -583,6 +583,7 @@ describe('PersistMessageConsumer', () => {
       confidence: 1,
       provider: 'openai' as const,
       ensemble: false,
+      decision_source: 'model' as const,
       processed_at: Date.now(),
       tokens_used: 0,
       trace_id: 'mod-trace-ttl',
@@ -599,6 +600,7 @@ describe('PersistMessageConsumer', () => {
         confidence: 1,
         provider: 'openai' as const,
         ensemble: false,
+        decision_source: 'model' as const,
         processed_at: Date.now(),
         tokens_used: 0,
         trace_id: 'mod-trace-1',
@@ -647,6 +649,15 @@ describe('PersistMessageConsumer', () => {
           message_id: payload.message_id,
           conversation_id: payload.conversation_id,
           sender_id: payload.sender_id,
+        }),
+      );
+      expect(publisher.emit).toHaveBeenCalledWith(
+        'ai.moderation.enforcement',
+        expect.objectContaining({
+          message_id: payload.message_id,
+          conversation_id: payload.conversation_id,
+          outcome: 'deleted',
+          action: 'soft_delete',
         }),
       );
       expect(cacheService.invalidateRecentMessages).toHaveBeenCalledWith(
@@ -719,6 +730,7 @@ describe('PersistMessageConsumer', () => {
         confidence: 1,
         provider: 'openai' as const,
         ensemble: false,
+        decision_source: 'model' as const,
         processed_at: Date.now(),
         tokens_used: 0,
       };
@@ -771,6 +783,7 @@ describe('PersistMessageConsumer', () => {
         confidence: 1,
         provider: 'openai' as const,
         ensemble: false,
+        decision_source: 'model' as const,
         processed_at: Date.now(),
         tokens_used: 0,
       };
@@ -820,7 +833,15 @@ describe('PersistMessageConsumer', () => {
         '22222222-2222-4222-8222-222222222222',
         120,
       );
-      expect(publisher.emit).toHaveBeenCalledTimes(2);
+      expect(publisher.emit).toHaveBeenCalledTimes(3);
+      expect(publisher.emit).toHaveBeenCalledWith(
+        'ai.moderation.enforcement',
+        expect.objectContaining({
+          message_id: payload.message_id,
+          outcome: 'already_deleted',
+          action: 'soft_delete',
+        }),
+      );
       expect(cacheService.set).toHaveBeenCalledWith(
         expect.stringContaining(
           `${payload.conversation_id}:${payload.message_id}`,
@@ -855,6 +876,7 @@ describe('PersistMessageConsumer', () => {
         confidence: 1,
         provider: 'openai' as const,
         ensemble: false,
+        decision_source: 'model' as const,
         processed_at: Date.now(),
         tokens_used: 0,
       };
@@ -891,6 +913,7 @@ describe('PersistMessageConsumer', () => {
         confidence: 1,
         provider: 'openai' as const,
         ensemble: false,
+        decision_source: 'model' as const,
         processed_at: Date.now(),
         tokens_used: 0,
       };
@@ -925,6 +948,7 @@ describe('PersistMessageConsumer', () => {
         confidence: 1,
         provider: 'openai' as const,
         ensemble: false,
+        decision_source: 'model' as const,
         processed_at: Date.now(),
         tokens_used: 0,
       };
@@ -959,6 +983,7 @@ describe('PersistMessageConsumer', () => {
         confidence: 1,
         provider: 'openai' as const,
         ensemble: false,
+        decision_source: 'model' as const,
         processed_at: Date.now(),
         tokens_used: 0,
       };
@@ -999,6 +1024,7 @@ describe('PersistMessageConsumer', () => {
         confidence: 1,
         provider: 'openai' as const,
         ensemble: false,
+        decision_source: 'model' as const,
         processed_at: Date.now(),
         tokens_used: 0,
       };

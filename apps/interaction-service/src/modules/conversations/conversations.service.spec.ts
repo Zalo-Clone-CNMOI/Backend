@@ -912,9 +912,12 @@ describe('ConversationsService', () => {
       expect(result.message).toContain('read');
       expect(qb.update).toHaveBeenCalledWith(ConversationMember);
       expect(qb.set).toHaveBeenCalledWith({ lastReadAt: expect.any(Date) });
-      expect(qb.where).toHaveBeenCalledWith('conversation_id = :conversationId', {
-        conversationId: uuid(1),
-      });
+      expect(qb.where).toHaveBeenCalledWith(
+        'conversation_id = :conversationId',
+        {
+          conversationId: uuid(1),
+        },
+      );
       expect(qb.andWhere).toHaveBeenCalledWith('user_id = :userId', {
         userId: uuid(2),
       });

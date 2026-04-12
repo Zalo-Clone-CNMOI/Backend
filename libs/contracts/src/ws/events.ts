@@ -33,6 +33,9 @@ export const WsEvents = {
   NotificationSent: 'notification:sent',
   NotificationFailed: 'notification:failed',
 
+  // ── Error Events ───────────────────────────────────────────────────
+  WsError: 'ws:error',
+
   // ── AI Events ──────────────────────────────────────────────────────
   AiSmartReplyRequest: 'ai:smart-reply:request',
   AiSmartReplyResult: 'ai:smart-reply:result',
@@ -41,6 +44,7 @@ export const WsEvents = {
   AiTranslateRequest: 'ai:translate:request',
   AiTranslateResult: 'ai:translate:result',
   AiModerationResult: 'ai:moderation:result',
+  AiModerationEnforcement: 'ai:moderation:enforcement',
   AiDocumentQueryRequest: 'ai:document:query:request',
   AiDocumentQueryResult: 'ai:document:query:result',
   AiStreamChunk: 'ai:stream:chunk',
@@ -48,6 +52,16 @@ export const WsEvents = {
 } as const;
 
 export type WsEventName = (typeof WsEvents)[keyof typeof WsEvents];
+
+/**
+ * Standardized WS error envelope — emitted on `ws:error` for all auth/authz
+ * rejections and unhandled handler exceptions. Mirrors the HTTP envelope's
+ * `error.code` / `error.message` fields for client-side symmetry.
+ */
+export interface WsErrorPayload {
+  code: string;
+  message: string;
+}
 
 export interface WsChatJoinPayload {
   conversation_id: string;
@@ -297,6 +311,24 @@ export interface WsAiModerationResultPayload {
   is_flagged: boolean;
   labels: string[];
   confidence: number;
+}
+
+export interface WsAiModerationEnforcementPayload {
+  message_id: string;
+  conversation_id: string;
+  sender_id: string;
+  action: 'none' | 'soft_delete';
+  outcome:
+    | 'not_flagged'
+    | 'deleted'
+    | 'already_deleted'
+    | 'deduplicated'
+    | 'failed';
+  reason?: string;
+  is_flagged: boolean;
+  labels: string[];
+  confidence: number;
+  enforced_at: number;
 }
 
 export interface WsAiDocumentQueryRequestPayload {

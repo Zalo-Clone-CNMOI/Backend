@@ -19,6 +19,7 @@ import {
   NotificationType,
   AiModerationRequestEvent,
   type AiModerationResultEvent,
+  type AiModerationEnforcementEvent,
 } from '@libs/contracts';
 import { APP_CONFIG, type AppConfig } from '@libs/config';
 import { MessageRepository } from '@libs/scylla';
@@ -430,6 +431,7 @@ export class PersistMessageConsumer {
     const deleteEmitLockKey = `${deleteEmitKey}:lock`;
     let effectiveDeletedAt = deletedAt;
     let shouldEmitDeleteEvent = false;
+    let deletedPreviously = false;
     let emitLockAcquired = false;
     let emitLockToken: string | null = null;
     let emitLockRenewTimer: NodeJS.Timeout | null = null;
@@ -463,6 +465,7 @@ export class PersistMessageConsumer {
 
         if (message.deleted_at) {
           effectiveDeletedAt = message.deleted_at;
+          deletedPreviously = true;
 
           const alreadyEmitted =
             await this.cacheService.get<boolean>(deleteEmitKey);
@@ -645,6 +648,33 @@ export class PersistMessageConsumer {
         true,
         MODERATION_DELETE_EVENT_TTL_SECONDS,
       );
+
+      const enforcementEvent: AiModerationEnforcementEvent = {
+        message_id: payload.message_id,
+        conversation_id: payload.conversation_id,
+        sender_id: payload.sender_id,
+        created_at: payload.created_at,
+        is_flagged: payload.is_flagged,
+        labels: payload.labels,
+        confidence: payload.confidence,
+        provider: payload.provider,
+        action: 'soft_delete',
+        outcome: deletedPreviously ? 'already_deleted' : 'deleted',
+        reason: deletedPreviously
+          ? 'message_was_already_deleted'
+          : 'conditional_delete_applied',
+        enforced_at: Date.now(),
+        trace_id: traceId,
+      };
+
+      await this.publisher
+        .emit(KafkaTopics.AiModerationEnforcement, enforcementEvent)
+        .catch((emitErr) => {
+          this.logger.error(
+            `[${traceId}] Failed to emit moderation enforcement outcome`,
+            emitErr,
+          );
+        });
 
       await this.cacheService
         .invalidateRecentMessages(payload.conversation_id)

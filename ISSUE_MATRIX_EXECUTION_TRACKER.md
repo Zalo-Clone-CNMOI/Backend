@@ -11,7 +11,7 @@ Close all remaining issue matrix gaps in risk-first order without breaking curre
 | PR-01 | Baseline + Scope Lock            | Blocker  | Freeze matrix, baseline evidence, gate templates                                           | In Progress |
 | PR-02 | Security/Auth Boundary           | Blocker  | Authz boundary, CORS hardening, QR socket binding, error envelope alignment                | In Progress |
 | PR-03 | Data Consistency/Idempotency     | Blocker  | Atomic idempotency, immutable timestamp semantics, seen-marker race, telemetry             | In Progress |
-| PR-04 | AI Safety/Moderation Enforcement | Blocker  | Fail-safe policy, enforcement events, conversation fanout, idempotent emit                 | Not Started |
+| PR-04 | AI Safety/Moderation Enforcement | Blocker  | Fail-safe policy, enforcement events, conversation fanout, idempotent emit                 | In Progress |
 | PR-05 | Validation/Contracts/Transport   | Blocker  | WS runtime validation, contract-first updates, retry/backoff/DLQ, WS/RPC error handling    | Not Started |
 | PR-06 | Performance/Scalability          | High     | Batch membership checks, JwtAuthGuard cache+revocation, attachment ownership tightening    | Not Started |
 | PR-07 | Environment + Dependency Hygiene | High     | Secret fallback removal, config schema validation, healthchecks, vulnerability remediation | Not Started |
@@ -99,3 +99,9 @@ Close all remaining issue matrix gaps in risk-first order without breaking curre
   - seen-marker write path is now atomic (`IF NOT EXISTS`) and integration-tested for concurrent writes
   - interaction-service markAsRead now performs monotonic conditional update to prevent lastReadAt regression under concurrent requests
   - interaction-service tests now cover stale-update skip and non-member rejection under the new write path
+- PR-04 AI safety/enforcement has started:
+  - contracts-first update added `ai.moderation.enforcement` topic and corresponding Kafka/WS payload contracts
+  - moderation engine is now explicitly fail-closed for provider and parsing failures (fail-open config ignored)
+  - moderation result payload now carries decision source/failure metadata for downstream traceability
+  - chat-service emits explicit moderation enforcement outcome events on delete enforcement path
+  - ws-gateway now fans out moderation enforcement outcomes to conversation scope

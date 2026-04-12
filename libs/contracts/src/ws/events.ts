@@ -21,6 +21,8 @@ export const WsEvents = {
 
   QrConfirmed: 'qr:confirmed',
   QrRejected: 'qr:rejected',
+  QrBindRequest: 'qr:bind:request',
+  QrBindIssued: 'qr:bind:issued',
 
   SendFriendRequest: 'friend:request:send',
   RespondFriendRequest: 'friend:request:respond',
@@ -182,6 +184,11 @@ export interface WsQrConfirmedPayload {
 export interface WsQrRejectedPayload {
   sessionId: string;
   reason: string;
+}
+export interface WsQrBindIssuedPayload {
+  socketId: string;
+  socketBindingToken: string;
+  expiresInSeconds: number;
 }
 
 // Friend Request Payloads

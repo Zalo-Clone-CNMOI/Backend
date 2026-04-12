@@ -9,13 +9,12 @@ import {
 
 export class QrGenerateDto {
   @ApiProperty({
-    description: 'WebSocket socket ID of the PC client',
-    example: 'abc123xyz',
+    description: 'One-time socket binding token issued by ws-gateway',
+    example: '6e1b4a96-f6d2-4e8a-b3e5-d88d8b99f8cb',
   })
-  @IsString()
-  @IsNotEmpty({ message: 'Socket ID is required' })
-  @MaxLength(100)
-  socketId: string;
+  @IsUUID('4', { message: 'Invalid socket binding token format' })
+  @IsNotEmpty({ message: 'Socket binding token is required' })
+  socketBindingToken: string;
 
   @ApiPropertyOptional({
     description: 'PC device information (browser, OS)',

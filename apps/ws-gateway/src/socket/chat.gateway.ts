@@ -9,6 +9,8 @@ import { Inject, OnModuleInit, UseGuards } from '@nestjs/common';
 import type { Server, Socket } from 'socket.io';
 import { ClientKafka } from '@nestjs/microservices';
 import { JwtService, WsAuthGuard } from '@libs/auth';
+import { RedisService } from '@libs/redis';
+import { randomUUID } from 'crypto';
 import {
   WsEvents,
   type WsChatJoinPayload,
@@ -23,6 +25,7 @@ import {
   type WsAiTranslateRequestPayload,
   type WsAiDocumentQueryRequestPayload,
   type WsChatTypingPayload,
+  type WsQrBindIssuedPayload,
 } from '@libs/contracts';
 import { KAFKA_CLIENT } from '@libs/kafka';
 import {
@@ -49,6 +52,7 @@ export class ChatGateway implements OnModuleInit {
   constructor(
     @Inject(KAFKA_CLIENT) private readonly kafka: ClientKafka,
     private readonly jwtService: JwtService,
+    private readonly redisService: RedisService,
     private readonly chatHandler: ChatHandler,
     private readonly presenceHandler: PresenceHandler,
     private readonly aiHandler: AiHandler,
@@ -208,6 +212,46 @@ export class ChatGateway implements OnModuleInit {
     @MessageBody() body: WsAiDocumentQueryRequestPayload,
   ) {
     return this.aiHandler.handleDocumentQuery(socket, body);
+  }
+
+  @SubscribeMessage(WsEvents.QrBindRequest)
+  async handleQrBindRequest(
+    @ConnectedSocket() socket: AuthedSocket,
+  ): Promise<void> {
+    const isLimited = await this.isQrBindRateLimited(socket.id);
+    if (isLimited) {
+      socket.emit('error', {
+        code: 'RATE_LIMIT_EXCEEDED',
+        message: 'Too many QR bind requests. Try again later.',
+      });
+      return;
+    }
+
+    const socketBindingToken = randomUUID();
+    const expiresInSeconds = 90;
+
+    await this.redisService.setQrSocketBinding(
+      socketBindingToken,
+      socket.id,
+      expiresInSeconds,
+    );
+
+    const payload: WsQrBindIssuedPayload = {
+      socketId: socket.id,
+      socketBindingToken,
+      expiresInSeconds,
+    };
+
+    socket.emit(WsEvents.QrBindIssued, payload);
+  }
+
+  private async isQrBindRateLimited(socketId: string): Promise<boolean> {
+    const key = `rate:qr-bind:${socketId}`;
+    const count = await this.redisService.incrBy(key, 1);
+    if (count === 1) {
+      await this.redisService.expire(key, 60);
+    }
+    return count > 5;
   }
 
   // ── Broadcast Utilities ──────────────────────────────────────────────

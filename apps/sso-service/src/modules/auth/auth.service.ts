@@ -4,6 +4,7 @@ import { DataSource, Repository } from 'typeorm';
 import { ClientKafka } from '@nestjs/microservices';
 import * as bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
+import { randomBytes } from 'crypto';
 
 import { User } from '@libs/database/entities';
 import { JwtService } from '@libs/auth';
@@ -289,10 +290,20 @@ export class AuthService {
    * PC calls this to create a QR code for mobile to scan
    */
   async generateQrSession(dto: QrGenerateDto): Promise<QrSessionResponseDto> {
-    this.logger.log(`Generating QR session for socket: ${dto.socketId}`);
+    this.logger.log('Generating QR session');
+
+    const socketId = await this.redisService.consumeQrSocketBinding(
+      dto.socketBindingToken,
+    );
+
+    if (!socketId) {
+      throw BusinessException.badRequest(ErrorCode.QR_SESSION_INVALID);
+    }
+
+    this.logger.log(`QR session bound to verified socket: ${socketId}`);
 
     const sessionId = uuidv4();
-    const qrToken = `qr_${sessionId}_${Date.now()}`;
+    const qrToken = `qr_${sessionId}_${randomBytes(16).toString('hex')}`;
     const now = Date.now();
     const expiresAt = now + this.QR_SESSION_TTL_SECONDS * 1000;
 
@@ -300,7 +311,7 @@ export class AuthService {
       sessionId,
       qrToken,
       status: QrSessionStatus.PENDING,
-      socketId: dto.socketId,
+      socketId,
       pcDeviceInfo: dto.deviceInfo,
       createdAt: now,
       expiresAt,

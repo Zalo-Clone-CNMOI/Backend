@@ -44,6 +44,7 @@ describe('AuthService', () => {
     getQrSession: jest.Mock;
     confirmQrSession: jest.Mock;
     rejectQrSession: jest.Mock;
+    consumeQrSocketBinding: jest.Mock;
   };
   let kafkaClient: { emit: jest.Mock };
   let dataSource: { transaction: jest.Mock };
@@ -75,6 +76,7 @@ describe('AuthService', () => {
       getQrSession: jest.fn(),
       confirmQrSession: jest.fn(),
       rejectQrSession: jest.fn(),
+      consumeQrSocketBinding: jest.fn(),
     };
 
     kafkaClient = { emit: jest.fn() };
@@ -388,11 +390,12 @@ describe('AuthService', () => {
   // ─── QR Session Flow ──────────────────────────────────────────────────────
 
   describe('generateQrSession', () => {
-    it('should create a QR session in Redis', async () => {
+    it('should create a QR session in Redis bound to the verified socket', async () => {
+      redisService.consumeQrSocketBinding.mockResolvedValue('socket-abc');
       redisService.setQrSession.mockResolvedValue(undefined);
 
       const result = await service.generateQrSession({
-        socketId: 'socket-abc',
+        socketBindingToken: '6e1b4a96-f6d2-4e8a-b3e5-d88d8b99f8cb',
       });
 
       expect(result).toHaveProperty('sessionId');
@@ -405,6 +408,18 @@ describe('AuthService', () => {
           status: 'PENDING',
         }),
       );
+    });
+
+    it('should reject when socket binding token is missing or already consumed', async () => {
+      redisService.consumeQrSocketBinding.mockResolvedValue(null);
+
+      await expect(
+        service.generateQrSession({
+          socketBindingToken: '6e1b4a96-f6d2-4e8a-b3e5-d88d8b99f8cb',
+        }),
+      ).rejects.toThrow(BusinessException);
+
+      expect(redisService.setQrSession).not.toHaveBeenCalled();
     });
   });
 

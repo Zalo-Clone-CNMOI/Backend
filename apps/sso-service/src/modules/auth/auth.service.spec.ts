@@ -477,6 +477,31 @@ describe('AuthService', () => {
 
       expect(redisService.setQrSession).not.toHaveBeenCalled();
     });
+
+    it('should reject replayed socket binding token after first successful consume', async () => {
+      redisService.consumeQrSocketBinding
+        .mockResolvedValueOnce('socket-abc')
+        .mockResolvedValueOnce(null);
+      redisService.setQrSession.mockResolvedValue(undefined);
+
+      await expect(
+        service.generateQrSession({
+          socketBindingToken: 'binding-token-once',
+        }),
+      ).resolves.toEqual(
+        expect.objectContaining({
+          expiresInSeconds: 300,
+        }),
+      );
+
+      await expect(
+        service.generateQrSession({
+          socketBindingToken: 'binding-token-once',
+        }),
+      ).rejects.toThrow(BusinessException);
+
+      expect(redisService.setQrSession).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('getQrStatus', () => {

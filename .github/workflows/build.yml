@@ -1,4 +1,4 @@
-name: Build Check
+name: Release Gate
 
 on:
   pull_request:
@@ -6,12 +6,15 @@ on:
     paths:
       - "apps/**"
       - "libs/**"
+      - "test/**"
       - "package.json"
       - "pnpm-lock.yaml"
+      - "openapitools.json"
+      - ".github/workflows/build.yml"
 
 jobs:
-  lint-and-test:
-    name: Lint & Test
+  release-gate:
+    name: Final Release Gate
     runs-on: ubuntu-latest
 
     steps:
@@ -52,15 +55,15 @@ jobs:
         run: pnpm run lint
 
       # --------------------------------------------
-      # Security audit gate (prod dependencies)
+      # OpenAPI Codegen Drift Check
       # --------------------------------------------
-      - name: Run production dependency audit
-        run: pnpm run audit:prod
+      - name: Verify OpenAPI codegen is in sync
+        run: pnpm run codegen:check
 
       # --------------------------------------------
-      # Test with coverage
+      # Unit Test Gate
       # --------------------------------------------
-      - name: Run tests with coverage
+      - name: Run unit tests with coverage
         run: pnpm run test:ci
 
       - name: Upload coverage report
@@ -70,6 +73,21 @@ jobs:
           name: coverage-report
           path: coverage/
           retention-days: 14
+
+      # --------------------------------------------
+      # Integration and E2E Gates
+      # --------------------------------------------
+      - name: Run integration tests
+        run: pnpm run test:integration
+
+      - name: Run e2e tests
+        run: pnpm run test:e2e
+
+      # --------------------------------------------
+      # Security audit gate (prod dependencies)
+      # --------------------------------------------
+      - name: Run production dependency audit
+        run: pnpm run audit:prod
 
       - name: Run build for all services
         run: pnpm run build:all

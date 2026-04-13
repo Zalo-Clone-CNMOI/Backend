@@ -99,5 +99,51 @@ describe('ChatGateway', () => {
       expect(redisService.setQrSocketBinding).not.toHaveBeenCalled();
       expect(emitMock).not.toHaveBeenCalled();
     });
+
+    it('should keep binding ownership isolated per requesting socket', async () => {
+      redisService.incrBy.mockResolvedValue(1);
+
+      const firstSocketEmit = jest.fn();
+      const secondSocketEmit = jest.fn();
+      const firstSocket = {
+        id: 'socket-owner-1',
+        emit: firstSocketEmit,
+      } as unknown as QrBindSocket;
+      const secondSocket = {
+        id: 'socket-owner-2',
+        emit: secondSocketEmit,
+      } as unknown as QrBindSocket;
+
+      await gateway.handleQrBindRequest(firstSocket);
+      await gateway.handleQrBindRequest(secondSocket);
+
+      expect(redisService.setQrSocketBinding).toHaveBeenNthCalledWith(
+        1,
+        expect.any(String),
+        'socket-owner-1',
+        90,
+      );
+      expect(redisService.setQrSocketBinding).toHaveBeenNthCalledWith(
+        2,
+        expect.any(String),
+        'socket-owner-2',
+        90,
+      );
+
+      const firstPayload = firstSocketEmit.mock.calls[0][1] as {
+        socketId: string;
+        socketBindingToken: string;
+      };
+      const secondPayload = secondSocketEmit.mock.calls[0][1] as {
+        socketId: string;
+        socketBindingToken: string;
+      };
+
+      expect(firstPayload.socketId).toBe('socket-owner-1');
+      expect(secondPayload.socketId).toBe('socket-owner-2');
+      expect(firstPayload.socketBindingToken).not.toBe(
+        secondPayload.socketBindingToken,
+      );
+    });
   });
 });

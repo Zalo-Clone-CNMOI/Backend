@@ -6,6 +6,7 @@ describe('RedisService auth cache helpers', () => {
     get: jest.fn(),
     setEx: jest.fn().mockResolvedValue(undefined),
     del: jest.fn().mockResolvedValue(undefined),
+    multi: jest.fn(),
     ping: jest.fn().mockResolvedValue('PONG'),
   };
 
@@ -70,5 +71,54 @@ describe('RedisService auth cache helpers', () => {
 
     expect(result).toBe('PONG');
     expect(redisClient.ping).toHaveBeenCalled();
+  });
+
+  it('should store QR socket binding with expected key ownership and ttl', async () => {
+    await service.setQrSocketBinding('bind-token-1', 'socket-owner-1', 90);
+
+    expect(redisClient.setEx).toHaveBeenCalledWith(
+      'qr:bind:bind-token-1',
+      90,
+      'socket-owner-1',
+    );
+  });
+
+  it('should consume QR socket binding token exactly once', async () => {
+    const getMock = jest.fn().mockReturnThis();
+    const delMock = jest.fn().mockReturnThis();
+    const execMock = jest
+      .fn()
+      .mockResolvedValueOnce(['socket-owner-1', 1])
+      .mockResolvedValueOnce([null, 0]);
+
+    redisClient.multi.mockImplementation(() => ({
+      get: getMock,
+      del: delMock,
+      exec: execMock,
+    }));
+
+    const firstConsume = await service.consumeQrSocketBinding('bind-token-1');
+    const secondConsume = await service.consumeQrSocketBinding('bind-token-1');
+
+    expect(firstConsume).toBe('socket-owner-1');
+    expect(secondConsume).toBeNull();
+    expect(getMock).toHaveBeenCalledWith('qr:bind:bind-token-1');
+    expect(delMock).toHaveBeenCalledWith('qr:bind:bind-token-1');
+  });
+
+  it('should return null when consume transaction fails', async () => {
+    const getMock = jest.fn().mockReturnThis();
+    const delMock = jest.fn().mockReturnThis();
+    const execMock = jest.fn().mockRejectedValue(new Error('redis down'));
+
+    redisClient.multi.mockImplementation(() => ({
+      get: getMock,
+      del: delMock,
+      exec: execMock,
+    }));
+
+    await expect(service.consumeQrSocketBinding('bind-token-err')).resolves.toBe(
+      null,
+    );
   });
 });

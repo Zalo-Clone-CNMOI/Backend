@@ -244,6 +244,33 @@ describe('PersistMessageConsumer', () => {
       expect(repo.markMessageStored).toHaveBeenCalledWith(payload.message_id);
       expect(repo.restoreMessageProcessingToPending).not.toHaveBeenCalled();
     });
+
+    it('should persist only once under concurrent duplicate onSend race', async () => {
+      const payload = createMockChatSendCommand();
+
+      membershipService.canUserAccessConversation.mockResolvedValue(true);
+      repo.tryBeginMessageProcessing
+        .mockResolvedValueOnce(true)
+        .mockResolvedValueOnce(false);
+      repo.getMessageProcessingState.mockResolvedValue({
+        message_id: payload.message_id,
+        conversation_id: payload.conversation_id,
+        created_at: payload.sent_at,
+        status: 'stored',
+      });
+      repo.insertMessage.mockResolvedValue(undefined);
+      repo.markMessageStored.mockResolvedValue(undefined);
+
+      await Promise.all([consumer.onSend(payload), consumer.onSend(payload)]);
+
+      expect(repo.insertMessage).toHaveBeenCalledTimes(1);
+      expect(repo.markMessageStored).toHaveBeenCalledTimes(1);
+
+      const createdEmits = (publisher.emit.mock.calls as Array<[string]>).filter(
+        ([topic]) => topic === 'chat.message.created',
+      );
+      expect(createdEmits).toHaveLength(1);
+    });
   });
 
   describe('onSend — race/retry safety', () => {
@@ -444,6 +471,30 @@ describe('PersistMessageConsumer', () => {
         payload.conversation_id,
       );
     });
+
+    it('should block edit when sender is not the message owner', async () => {
+      const payload = {
+        message_id: 'msg-edit-unauthorized',
+        conversation_id: 'conv-1',
+        sender_id: 'user-requester',
+        new_body: 'Edited body',
+        created_at: Date.now() - 1000,
+        edited_at: Date.now(),
+        trace_id: 'test-trace',
+      };
+
+      membershipService.canUserAccessConversation.mockResolvedValue(true);
+      repo.getMessage.mockResolvedValue({ sender_id: 'user-owner' });
+
+      await consumer.onEdit(payload);
+
+      expect(repo.updateMessageBody).not.toHaveBeenCalled();
+      expect(publisher.emit).not.toHaveBeenCalledWith(
+        'chat.message.updated',
+        expect.anything(),
+      );
+      expect(cacheService.invalidateRecentMessages).not.toHaveBeenCalled();
+    });
   });
 
   // ─── onDelete ──────────────────────────────────────────────────────────────
@@ -476,6 +527,28 @@ describe('PersistMessageConsumer', () => {
           message_id: payload.message_id,
           sender_id: payload.sender_id,
         }),
+      );
+    });
+
+    it('should block delete when sender is not the message owner', async () => {
+      const payload = {
+        message_id: 'msg-del-unauthorized',
+        conversation_id: 'conv-1',
+        sender_id: 'user-requester',
+        created_at: Date.now() - 1000,
+        deleted_at: Date.now(),
+        trace_id: 'test-trace',
+      };
+
+      membershipService.canUserAccessConversation.mockResolvedValue(true);
+      repo.getMessage.mockResolvedValue({ sender_id: 'user-owner' });
+
+      await consumer.onDelete(payload);
+
+      expect(repo.softDeleteMessage).not.toHaveBeenCalled();
+      expect(publisher.emit).not.toHaveBeenCalledWith(
+        'chat.message.deleted',
+        expect.anything(),
       );
     });
   });

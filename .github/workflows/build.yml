@@ -8,6 +8,7 @@ on:
       - "libs/**"
       - "test/**"
       - "package.json"
+      - "pnpm-workspace.yaml"
       - "pnpm-lock.yaml"
       - "openapitools.json"
       - ".github/workflows/build.yml"

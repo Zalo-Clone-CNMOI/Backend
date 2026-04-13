@@ -61,6 +61,8 @@ export type WsEventName = (typeof WsEvents)[keyof typeof WsEvents];
 export interface WsErrorPayload {
   code: string;
   message: string;
+  details?: unknown;
+  timestamp?: string;
 }
 
 export interface WsChatJoinPayload {

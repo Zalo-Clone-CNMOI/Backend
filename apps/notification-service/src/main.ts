@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { loadConfig } from '@libs/config';
 import { createKafkaMicroserviceOptions } from '@libs/kafka';
+import { RpcAllExceptionsFilter } from '@app/interceptors';
 
 async function bootstrap() {
   process.env.SERVICE_NAME ??= 'notification-service';
@@ -12,6 +13,7 @@ async function bootstrap() {
     AppModule,
     createKafkaMicroserviceOptions(config),
   );
+  app.useGlobalFilters(new RpcAllExceptionsFilter());
   await app.listen();
 }
 

@@ -2,7 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { MicroserviceOptions } from '@nestjs/microservices';
 import { AppModule } from './app.module';
-import { HttpExceptionFilter } from '@app/interceptors';
+import { HttpExceptionFilter, RpcAllExceptionsFilter } from '@app/interceptors';
 import { loadConfig, assertProductionCors } from '@libs/config';
 import { createKafkaMicroserviceOptions } from '@libs/kafka';
 
@@ -18,6 +18,9 @@ async function bootstrap() {
 
   app.connectMicroservice<MicroserviceOptions>(
     createKafkaMicroserviceOptions(config),
+    {
+      inheritAppConfig: true,
+    },
   );
 
   app.setGlobalPrefix('api');
@@ -27,7 +30,7 @@ async function bootstrap() {
     credentials: true,
   });
 
-  app.useGlobalFilters(new HttpExceptionFilter());
+  app.useGlobalFilters(new HttpExceptionFilter(), new RpcAllExceptionsFilter());
 
   app.useGlobalPipes(
     new ValidationPipe({

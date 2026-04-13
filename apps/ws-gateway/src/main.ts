@@ -4,6 +4,7 @@ import { AppModule } from './app.module';
 import { RedisIoAdapter } from './socket/redis-io.adapter';
 import { loadConfig, assertProductionCors } from '@libs/config';
 import { createKafkaMicroserviceOptions } from '@libs/kafka';
+import { RpcAllExceptionsFilter } from '@app/interceptors';
 
 async function bootstrap() {
   const logger = new Logger('WsGatewayBootstrap');
@@ -32,9 +33,12 @@ async function bootstrap() {
   }
 
   app.useWebSocketAdapter(adapter);
+  app.useGlobalFilters(new RpcAllExceptionsFilter());
 
   logger.log('[Bootstrap] Connecting Kafka microservice(s)...');
-  app.connectMicroservice(createKafkaMicroserviceOptions(config));
+  app.connectMicroservice(createKafkaMicroserviceOptions(config), {
+    inheritAppConfig: true,
+  });
   await app.startAllMicroservices();
   logger.log('[Bootstrap] Kafka microservices started.');
 

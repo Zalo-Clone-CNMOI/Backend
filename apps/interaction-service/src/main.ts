@@ -5,6 +5,7 @@ import { AppModule } from './app.module';
 import { createSwaggerDocument } from '@app/swagger/swagger';
 import {
   HttpExceptionFilter,
+  RpcAllExceptionsFilter,
   TransformResponseInterceptor,
 } from '@app/interceptors';
 import { JwtAuthGuard } from '@libs/auth';
@@ -26,6 +27,9 @@ async function bootstrap() {
 
   app.connectMicroservice<MicroserviceOptions>(
     createKafkaMicroserviceOptions(config),
+    {
+      inheritAppConfig: true,
+    },
   );
 
   app.enableCors({
@@ -44,7 +48,7 @@ async function bootstrap() {
     }),
   );
 
-  app.useGlobalFilters(new HttpExceptionFilter());
+  app.useGlobalFilters(new HttpExceptionFilter(), new RpcAllExceptionsFilter());
   app.useGlobalInterceptors(new TransformResponseInterceptor());
 
   const jwtAuthGuard = app.get(JwtAuthGuard);

@@ -6,6 +6,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotificationPublisher } from './notification.publisher';
 import { KAFKA_CLIENT } from '@libs/kafka';
+import { of } from 'rxjs';
 
 describe('NotificationPublisher', () => {
   let publisher: NotificationPublisher;
@@ -14,7 +15,7 @@ describe('NotificationPublisher', () => {
   beforeEach(async () => {
     kafka = {
       connect: jest.fn().mockResolvedValue(undefined),
-      emit: jest.fn().mockReturnValue({ subscribe: jest.fn() }),
+      emit: jest.fn().mockReturnValue(of(undefined)),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -36,31 +37,22 @@ describe('NotificationPublisher', () => {
   });
 
   describe('emit', () => {
-    it('should delegate to kafka.emit with topic and payload', () => {
+    it('should delegate to kafka.emit with topic and payload', async () => {
       const payload = { user_id: 'u1', message: 'hello' };
-      publisher.emit('test.topic', payload);
+      await publisher.emit('test.topic', payload);
 
       expect(kafka.emit).toHaveBeenCalledWith('test.topic', payload);
     });
 
-    it('should return the observable from kafka.emit', () => {
-      const mockObs = { subscribe: jest.fn() };
-      kafka.emit.mockReturnValue(mockObs);
-
-      const result = publisher.emit('topic', {});
-
-      expect(result).toBe(mockObs);
-    });
-
-    it('should forward arbitrary payloads without mutation', () => {
+    it('should forward arbitrary payloads without mutation', async () => {
       const complex = { nested: { deep: [1, 2, 3] }, flag: true };
-      publisher.emit('topic.complex', complex);
+      await publisher.emit('topic.complex', complex);
 
       expect(kafka.emit).toHaveBeenCalledWith('topic.complex', complex);
     });
 
-    it('should handle null payload', () => {
-      publisher.emit('topic.null', null);
+    it('should handle null payload', async () => {
+      await publisher.emit('topic.null', null);
 
       expect(kafka.emit).toHaveBeenCalledWith('topic.null', null);
     });

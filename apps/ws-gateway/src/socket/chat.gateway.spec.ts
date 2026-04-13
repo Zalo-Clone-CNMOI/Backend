@@ -95,7 +95,7 @@ describe('ChatGateway', () => {
 
       expect(redisService.setQrSocketBinding).not.toHaveBeenCalled();
       expect(emitMock).toHaveBeenCalledWith(
-        'error',
+        WsEvents.WsError,
         expect.objectContaining({ code: 'RATE_LIMIT_EXCEEDED' }),
       );
     });

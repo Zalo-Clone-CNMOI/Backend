@@ -21,6 +21,10 @@ export interface AppConfig {
 
   redisUrl?: string;
 
+  // JWT secrets — populated for services with requiresJwt: true
+  jwtSecret?: string;
+  jwtRefreshSecret?: string;
+
   // CORS configuration
   allowedOrigins: string[];
 
@@ -59,6 +63,7 @@ interface ServiceConfigRequirements {
   requiresKafkaGroupId: boolean;
   requiresRedis: boolean;
   requiresScylla: boolean;
+  requiresPostgres: boolean;
 }
 
 const DEFAULT_REQUIREMENTS: ServiceConfigRequirements = {
@@ -68,6 +73,7 @@ const DEFAULT_REQUIREMENTS: ServiceConfigRequirements = {
   requiresKafkaGroupId: false,
   requiresRedis: false,
   requiresScylla: false,
+  requiresPostgres: false,
 };
 
 const SERVICE_REQUIREMENTS: Record<string, ServiceConfigRequirements> = {
@@ -78,6 +84,7 @@ const SERVICE_REQUIREMENTS: Record<string, ServiceConfigRequirements> = {
     requiresKafkaGroupId: true,
     requiresRedis: true,
     requiresScylla: false,
+    requiresPostgres: false,
   },
   'bff-service': {
     requiresCors: true,
@@ -86,6 +93,7 @@ const SERVICE_REQUIREMENTS: Record<string, ServiceConfigRequirements> = {
     requiresKafkaGroupId: false,
     requiresRedis: true,
     requiresScylla: false,
+    requiresPostgres: false,
   },
   'chat-service': {
     requiresCors: false,
@@ -94,6 +102,7 @@ const SERVICE_REQUIREMENTS: Record<string, ServiceConfigRequirements> = {
     requiresKafkaGroupId: true,
     requiresRedis: true,
     requiresScylla: true,
+    requiresPostgres: false,
   },
   'interaction-service': {
     requiresCors: true,
@@ -102,6 +111,7 @@ const SERVICE_REQUIREMENTS: Record<string, ServiceConfigRequirements> = {
     requiresKafkaGroupId: true,
     requiresRedis: true,
     requiresScylla: false,
+    requiresPostgres: true,
   },
   'media-service': {
     requiresCors: true,
@@ -110,6 +120,7 @@ const SERVICE_REQUIREMENTS: Record<string, ServiceConfigRequirements> = {
     requiresKafkaGroupId: true,
     requiresRedis: false,
     requiresScylla: false,
+    requiresPostgres: false,
   },
   'notification-service': {
     requiresCors: false,
@@ -118,6 +129,7 @@ const SERVICE_REQUIREMENTS: Record<string, ServiceConfigRequirements> = {
     requiresKafkaGroupId: true,
     requiresRedis: true,
     requiresScylla: false,
+    requiresPostgres: false,
   },
   'presence-service': {
     requiresCors: false,
@@ -126,6 +138,7 @@ const SERVICE_REQUIREMENTS: Record<string, ServiceConfigRequirements> = {
     requiresKafkaGroupId: true,
     requiresRedis: true,
     requiresScylla: false,
+    requiresPostgres: false,
   },
   'sso-service': {
     requiresCors: true,
@@ -134,6 +147,7 @@ const SERVICE_REQUIREMENTS: Record<string, ServiceConfigRequirements> = {
     requiresKafkaGroupId: false,
     requiresRedis: true,
     requiresScylla: false,
+    requiresPostgres: true,
   },
   'ws-gateway': {
     requiresCors: true,
@@ -142,6 +156,7 @@ const SERVICE_REQUIREMENTS: Record<string, ServiceConfigRequirements> = {
     requiresKafkaGroupId: true,
     requiresRedis: true,
     requiresScylla: true,
+    requiresPostgres: false,
   },
 };
 
@@ -200,13 +215,16 @@ export function loadConfig(serviceName: string): AppConfig {
     scyllaLocalDatacenter: process.env.SCYLLA_LOCAL_DATACENTER?.trim() ?? '',
     scyllaKeyspace: process.env.SCYLLA_KEYSPACE?.trim() ?? '',
 
-    // PostgreSQL
-    postgresHost: process.env.DB_HOST ?? 'localhost',
-    postgresPort: readNumber(process.env.DB_PORT) ?? 5439,
-    postgresUser: process.env.DB_USERNAME ?? 'postgres',
-    postgresPassword: process.env.DB_PASSWORD ?? 'postgres',
-    postgresDatabase: process.env.DB_NAME ?? 'zaloclone',
+    // PostgreSQL — no defaults; assertServiceConfig enforces required fields
+    postgresHost: process.env.DB_HOST?.trim(),
+    postgresPort: readNumber(process.env.DB_PORT),
+    postgresUser: process.env.DB_USERNAME?.trim(),
+    postgresPassword: process.env.DB_PASSWORD?.trim(),
+    postgresDatabase: process.env.DB_NAME?.trim(),
     redisUrl: process.env.REDIS_URL?.trim(),
+
+    jwtSecret: process.env.JWT_SECRET?.trim(),
+    jwtRefreshSecret: process.env.JWT_REFRESH_SECRET?.trim(),
 
     // CORS configuration
     allowedOrigins,
@@ -265,8 +283,8 @@ function assertServiceConfig(config: AppConfig): void {
   }
 
   if (requirements.requiresJwt) {
-    assertEnvPresent('JWT_SECRET', process.env.JWT_SECRET);
-    assertEnvPresent('JWT_REFRESH_SECRET', process.env.JWT_REFRESH_SECRET);
+    assertEnvPresent('JWT_SECRET', config.jwtSecret);
+    assertEnvPresent('JWT_REFRESH_SECRET', config.jwtRefreshSecret);
   }
 
   if (requirements.requiresKafka) {
@@ -294,6 +312,12 @@ function assertServiceConfig(config: AppConfig): void {
 
     assertEnvPresent('SCYLLA_LOCAL_DATACENTER', config.scyllaLocalDatacenter);
     assertEnvPresent('SCYLLA_KEYSPACE', config.scyllaKeyspace);
+  }
+
+  if (requirements.requiresPostgres) {
+    assertEnvPresent('DB_HOST', config.postgresHost);
+    assertEnvPresent('DB_PASSWORD', config.postgresPassword);
+    assertEnvPresent('DB_NAME', config.postgresDatabase);
   }
 }
 

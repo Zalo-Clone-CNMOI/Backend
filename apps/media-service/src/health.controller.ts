@@ -20,15 +20,11 @@ export class HealthController {
     return this.healthCheckService.executeHealthChecks('media-service', [
       {
         name: 'kafka',
-        check: async () =>
+        check: () =>
           this.healthCheckService.checkKafka({
             clientId: this.config.kafkaClientId,
             brokers: this.config.kafkaBrokers,
           }),
-      },
-      {
-        name: 'self',
-        check: async () => await Promise.resolve({ status: 'up' }),
       },
     ]);
   }

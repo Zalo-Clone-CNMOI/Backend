@@ -286,15 +286,17 @@ jobs:
                 echo "❌ Up failed for $SERVICE_NAME"
                 PREV_IMAGE=$(cat ".rollback/${SERVICE_NAME}.prev")
                 if [ "$PREV_IMAGE" != "none" ]; then
-                  echo "⏪ Rolling back $SERVICE_NAME..."
+                  echo "⏪ Rolling back $SERVICE_NAME to $PREV_IMAGE..."
                   docker pull "$PREV_IMAGE" 2>/dev/null || true
-                  # Force deploy with previous image
-                  # We use the image name directly here via docker run or retag, 
-                  # but simplest for compose is to try up again if config didn't change, 
-                  # otherwise manual intervention might be needed. 
-                  # For strict image rollback with compose, we'd need to sed the yaml.
-                  # Here we try simple restart or warn.
-                  docker compose -f "$COMPOSE_FILE" up -d --no-deps "$SERVICE_NAME" || true
+                  # Patch the compose file to pin the previous image, deploy, then restore
+                  cp "$COMPOSE_FILE" "${COMPOSE_FILE}.bak"
+                  # Replace the service's image line with the exact previous image digest/tag
+                  sed -i "s|image:.*${SERVICE_NAME}.*|image: ${PREV_IMAGE}|" "$COMPOSE_FILE"
+                  docker compose -f "$COMPOSE_FILE" up -d --no-deps "$SERVICE_NAME" || \
+                    echo "⚠️ Rollback also failed for $SERVICE_NAME — manual intervention required"
+                  mv "${COMPOSE_FILE}.bak" "$COMPOSE_FILE"
+                else
+                  echo "⚠️ No previous image recorded for $SERVICE_NAME — cannot roll back"
                 fi
                 DEPLOYMENT_FAILED=true
                 FAILED_SERVICES="$FAILED_SERVICES $SERVICE_NAME"
@@ -324,8 +326,23 @@ jobs:
             fi
           DEPLOY_SCRIPT
 
-      - name: Wait for containers
-        run: sleep 30
+      - name: Wait for containers to become healthy
+        run: |
+          ssh -o BatchMode=yes -o ConnectTimeout=10 ${{ env.EC2_USER }}@${{ env.EC2_HOST }} << 'WAIT_SCRIPT'
+            set -euo pipefail
+            echo "⏳ Waiting for containers to stabilise (up to 60 s)..."
+            for i in $(seq 1 12); do
+              STARTING=$(docker compose -f app-compose.yml ps --format json 2>/dev/null \
+                | jq -r 'select(.State == "starting") | .Name' 2>/dev/null || true)
+              if [ -z "$STARTING" ]; then
+                echo "✅ All containers have left starting state"
+                exit 0
+              fi
+              echo "Still starting: $STARTING — waiting 5 s..."
+              sleep 5
+            done
+            echo "⚠️ Some containers still starting after 60 s — proceeding to health check"
+          WAIT_SCRIPT
 
       - name: Verify Health
         run: |

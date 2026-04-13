@@ -120,4 +120,40 @@ describe('loadConfig', () => {
       'SCYLLA_CONTACT_POINTS environment variable is required.',
     );
   });
+
+  it('should throw when DB_HOST is missing for postgres-enabled service', () => {
+    process.env.CORS_ORIGIN = 'https://app.example.com';
+    process.env.JWT_SECRET = 'access-secret';
+    process.env.JWT_REFRESH_SECRET = 'refresh-secret';
+    delete process.env.DB_HOST;
+
+    expect(() => loadConfig('sso-service')).toThrow(
+      'DB_HOST environment variable is required.',
+    );
+  });
+
+  it('should throw when DB_PASSWORD is missing for postgres-enabled service', () => {
+    process.env.CORS_ORIGIN = 'https://app.example.com';
+    process.env.JWT_SECRET = 'access-secret';
+    process.env.JWT_REFRESH_SECRET = 'refresh-secret';
+    process.env.DB_HOST = 'db.internal';
+    delete process.env.DB_PASSWORD;
+
+    expect(() => loadConfig('sso-service')).toThrow(
+      'DB_PASSWORD environment variable is required.',
+    );
+  });
+
+  it('should throw when DB_NAME is missing for postgres-enabled service', () => {
+    process.env.CORS_ORIGIN = 'https://app.example.com';
+    process.env.JWT_SECRET = 'access-secret';
+    process.env.JWT_REFRESH_SECRET = 'refresh-secret';
+    process.env.DB_HOST = 'db.internal';
+    process.env.DB_PASSWORD = 'secret';
+    delete process.env.DB_NAME;
+
+    expect(() => loadConfig('sso-service')).toThrow(
+      'DB_NAME environment variable is required.',
+    );
+  });
 });

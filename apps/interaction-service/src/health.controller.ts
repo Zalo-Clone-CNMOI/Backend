@@ -26,34 +26,25 @@ export class HealthController {
     status: 200,
     description: 'Service health status with dependency checks',
   })
-  async check(): Promise<HealthCheckResult> {
-    return await this.healthCheckService.executeHealthChecks(
-      'interaction-service',
-      [
-        {
-          name: 'postgres',
-          check: async () =>
-            this.healthCheckService.checkPostgres(this.dataSource),
-        },
-        {
-          name: 'redis',
-          check: async () =>
-            this.healthCheckService.checkRedis(this.redisService),
-        },
-        {
-          name: 'kafka',
-          check: async () =>
-            this.healthCheckService.checkKafka({
-              clientId: this.config.kafkaClientId,
-              brokers: this.config.kafkaBrokers,
-            }),
-        },
-        {
-          name: 'self',
-          check: async () => await Promise.resolve({ status: 'up' }),
-        },
-      ],
-    );
+  async health(): Promise<HealthCheckResult> {
+    return this.healthCheckService.executeHealthChecks('interaction-service', [
+      {
+        name: 'postgres',
+        check: () => this.healthCheckService.checkPostgres(this.dataSource),
+      },
+      {
+        name: 'redis',
+        check: () => this.healthCheckService.checkRedis(this.redisService),
+      },
+      {
+        name: 'kafka',
+        check: () =>
+          this.healthCheckService.checkKafka({
+            clientId: this.config.kafkaClientId,
+            brokers: this.config.kafkaBrokers,
+          }),
+      },
+    ]);
   }
 
   @Public()

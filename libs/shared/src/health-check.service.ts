@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Kafka } from 'kafkajs';
+import * as net from 'net';
 
 interface HealthCheckDetail {
   [key: string]: unknown;
@@ -65,10 +65,9 @@ export class HealthCheckService {
       checks.map(async ({ name, check }) => {
         const checkStart = Date.now();
         try {
-          const result = await Promise.race([
-            check(),
-            this.timeout(5000), // 5 second timeout
-          ]);
+          const { promise: timeoutPromise, cancel } = this.makeTimeout(5000);
+          const result = await Promise.race([check(), timeoutPromise]);
+          cancel(); // prevent the timer handle from leaking after a successful check
           results[name] = {
             ...result,
             responseTime: Date.now() - checkStart,
@@ -86,14 +85,18 @@ export class HealthCheckService {
       }),
     );
 
-    // Determine overall status
-    const allUp = Object.values(results).every((r) => r.status === 'up');
-    const someDown = Object.values(results).some((r) => r.status === 'down');
+    // Determine overall status:
+    // - healthy  → every check is up
+    // - unhealthy → every check is down
+    // - degraded  → some (but not all) checks are down
+    const statuses = Object.values(results).map((r) => r.status);
+    const allUp = statuses.every((s) => s === 'up');
+    const allDown = statuses.every((s) => s === 'down');
 
     let status: HealthCheckResult['status'];
     if (allUp) {
       status = 'healthy';
-    } else if (someDown) {
+    } else if (allDown) {
       status = 'unhealthy';
     } else {
       status = 'degraded';
@@ -108,13 +111,18 @@ export class HealthCheckService {
     };
   }
 
-  private timeout(ms: number): Promise<never> {
-    return new Promise((_, reject) =>
-      setTimeout(
+  private makeTimeout(ms: number): {
+    promise: Promise<never>;
+    cancel: () => void;
+  } {
+    let handle: ReturnType<typeof setTimeout> | undefined;
+    const promise = new Promise<never>((_, reject) => {
+      handle = setTimeout(
         () => reject(new Error(`Health check timeout after ${ms}ms`)),
         ms,
-      ),
-    );
+      );
+    });
+    return { promise, cancel: () => clearTimeout(handle) };
   }
 
   /**
@@ -163,46 +171,44 @@ export class HealthCheckService {
   }
 
   /**
-   * Kafka health check
+   * Kafka health check — lightweight TCP probe against the first broker.
+   * Avoids the cost of creating a full KafkaJS admin client per invocation
+   * (no metadata fetch, no auth handshake). Sufficient to verify broker reachability.
    */
   async checkKafka(config: KafkaHealthConfig): Promise<{
     status: 'up' | 'down';
     message?: string;
     details?: HealthCheckDetail;
   }> {
-    const admin = new Kafka({
-      clientId: `${config.clientId}-health-check`,
-      brokers: config.brokers,
-      connectionTimeout: 5000,
-      requestTimeout: 5000,
-      retry: {
-        retries: 0,
-      },
-    }).admin();
+    const [host, portStr] = (config.brokers[0] ?? '').split(':');
+    const port = Number(portStr) || 9092;
 
-    try {
-      await admin.connect();
-      const cluster = await admin.describeCluster();
+    return new Promise((resolve) => {
+      const socket = net.createConnection({ host, port });
 
-      return {
-        status: 'up',
-        details: {
-          dependency: 'kafka',
-          probe: 'describeCluster',
-          brokers: cluster.brokers.length,
-          controller: cluster.controller,
-        },
+      const onConnect = () => {
+        socket.destroy();
+        resolve({
+          status: 'up',
+          details: {
+            dependency: 'kafka',
+            probe: 'tcp-connect',
+            broker: config.brokers[0],
+          },
+        });
       };
-    } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error ? error.message : 'Unknown error';
-      return {
-        status: 'down',
-        message: `Dependency kafka unavailable: ${errorMessage}`,
+
+      const onError = (err: Error) => {
+        socket.destroy();
+        resolve({
+          status: 'down',
+          message: `Dependency kafka unavailable: ${err.message}`,
+        });
       };
-    } finally {
-      await admin.disconnect().catch(() => undefined);
-    }
+
+      socket.once('connect', onConnect);
+      socket.once('error', onError);
+    });
   }
 
   /**

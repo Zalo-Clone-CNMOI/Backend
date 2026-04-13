@@ -42,7 +42,7 @@ async function bootstrap() {
   await app.listen(port);
 
   logger.log(`AI Core Service running on port ${port}`);
-  logger.log(`Kafka microservice connected (group: ai-core-service)`);
+  logger.log(`Kafka microservice connected (group: ${config.kafkaGroupId})`);
 }
 
 void bootstrap();

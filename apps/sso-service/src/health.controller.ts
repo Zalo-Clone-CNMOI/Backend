@@ -23,28 +23,22 @@ export class HealthController {
   @Get()
   @ApiOperation({ summary: 'Deep health check with dependency validation' })
   async health(): Promise<HealthCheckResult> {
-    return await this.healthCheckService.executeHealthChecks('sso-service', [
+    return this.healthCheckService.executeHealthChecks('sso-service', [
       {
         name: 'postgres',
-        check: async () =>
-          this.healthCheckService.checkPostgres(this.dataSource),
+        check: () => this.healthCheckService.checkPostgres(this.dataSource),
       },
       {
         name: 'redis',
-        check: async () =>
-          this.healthCheckService.checkRedis(this.redisService),
+        check: () => this.healthCheckService.checkRedis(this.redisService),
       },
       {
         name: 'kafka',
-        check: async () =>
+        check: () =>
           this.healthCheckService.checkKafka({
             clientId: this.config.kafkaClientId,
             brokers: this.config.kafkaBrokers,
           }),
-      },
-      {
-        name: 'self',
-        check: async () => await Promise.resolve({ status: 'up' }),
       },
     ]);
   }

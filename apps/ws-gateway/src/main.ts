@@ -22,7 +22,7 @@ async function bootstrap() {
 
   const adapter = new RedisIoAdapter(app, config.allowedOrigins);
   logger.log('[Bootstrap] Initializing Redis adapter...');
-  await adapter.connectToRedis(config.redisUrl ?? '');
+  await adapter.connectToRedis(config.redisUrl!);
 
   app.useWebSocketAdapter(adapter);
 

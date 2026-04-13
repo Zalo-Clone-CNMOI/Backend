@@ -26,7 +26,7 @@ export class HealthController {
     return this.healthCheckService.executeHealthChecks('chat-service', [
       {
         name: 'kafka',
-        check: async () =>
+        check: () =>
           this.healthCheckService.checkKafka({
             clientId: this.config.kafkaClientId,
             brokers: this.config.kafkaBrokers,
@@ -34,17 +34,11 @@ export class HealthController {
       },
       {
         name: 'redis',
-        check: async () =>
-          this.healthCheckService.checkRedis(this.redisService),
+        check: () => this.healthCheckService.checkRedis(this.redisService),
       },
       {
         name: 'scylla',
-        check: async () =>
-          this.healthCheckService.checkScylla(this.scyllaClient),
-      },
-      {
-        name: 'self',
-        check: async () => await Promise.resolve({ status: 'up' }),
+        check: () => this.healthCheckService.checkScylla(this.scyllaClient),
       },
     ]);
   }

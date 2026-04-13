@@ -30,19 +30,33 @@ export class RedisIoAdapter extends IoAdapter {
     const subClient: RedisClientType = pubClient.duplicate();
 
     pubClient.on('error', (err) => {
+      // CRITICAL: cross-pod pub/sub is broken; broadcast events will not reach other pods
       this.logger.error(
-        `[RedisIoAdapter] Redis pubClient error: ${err instanceof Error ? err.message : String(err)}`,
+        `[RedisIoAdapter] CRITICAL — Redis pubClient error (cross-pod broadcast degraded): ${err instanceof Error ? err.message : String(err)}`,
       );
       this.isRedisConnected = false;
-      this.adapterConstructor = undefined;
+      // Do NOT clear adapterConstructor — the adapter object remains valid and will
+      // resume delivering messages automatically once the client reconnects.
     });
 
     subClient.on('error', (err) => {
+      // CRITICAL: cross-pod pub/sub is broken; broadcast events will not reach other pods
       this.logger.error(
-        `[RedisIoAdapter] Redis subClient error: ${err instanceof Error ? err.message : String(err)}`,
+        `[RedisIoAdapter] CRITICAL — Redis subClient error (cross-pod broadcast degraded): ${err instanceof Error ? err.message : String(err)}`,
       );
       this.isRedisConnected = false;
-      this.adapterConstructor = undefined;
+      // Do NOT clear adapterConstructor — see pubClient note above.
+    });
+
+    pubClient.on('ready', () => {
+      this.logger.log(
+        '[RedisIoAdapter] Redis pubClient ready — cross-pod broadcast restored',
+      );
+      this.isRedisConnected = true;
+    });
+
+    subClient.on('ready', () => {
+      this.logger.log('[RedisIoAdapter] Redis subClient ready');
     });
 
     pubClient.on('connect', () => {
@@ -115,11 +129,13 @@ export class RedisIoAdapter extends IoAdapter {
         server.adapter(this.adapterConstructor);
 
         server.of('/').adapter.on('error', (err) => {
+          // CRITICAL: cross-pod pub/sub is degraded until Redis reconnects.
+          // Do NOT clear adapterConstructor — the adapter object remains valid
+          // and will resume once the underlying Redis clients fire 'ready'.
           this.logger.error(
-            `[RedisIoAdapter] Runtime adapter error: ${err instanceof Error ? err.message : String(err)}`,
+            `[RedisIoAdapter] CRITICAL — Runtime adapter error (cross-pod broadcast degraded): ${err instanceof Error ? err.message : String(err)}`,
           );
           this.isRedisConnected = false;
-          this.adapterConstructor = undefined;
         });
 
         this.logger.log(

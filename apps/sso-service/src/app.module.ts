@@ -27,7 +27,7 @@ import { ThrottlerModule, seconds } from '@nestjs/throttler';
       inject: [APP_CONFIG],
       useFactory: (config: AppConfig) => ({
         throttlers: [{ limit: 5, ttl: seconds(60) }],
-        storage: new ThrottlerStorageRedisService(config.redisUrl!),
+        storage: new ThrottlerStorageRedisService(config.redisUrl),
       }),
     }),
   ],

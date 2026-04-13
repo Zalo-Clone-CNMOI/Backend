@@ -83,7 +83,12 @@ describe('RedisService auth cache helpers', () => {
     );
   });
 
-  it('should consume QR socket binding token exactly once', async () => {
+  it('should consume QR socket binding token exactly once via atomic multi/exec', async () => {
+    // The consume must be atomic (GET + DEL on the same MULTI transaction).
+    // Capture the transaction object returned by multi() so we can assert that
+    // both get() and del() are chained on it — not issued as separate commands.
+    const transactionObjects: Array<{ get: jest.Mock; del: jest.Mock }> = [];
+
     const getMock = jest.fn().mockReturnThis();
     const delMock = jest.fn().mockReturnThis();
     const execMock = jest
@@ -91,19 +96,25 @@ describe('RedisService auth cache helpers', () => {
       .mockResolvedValueOnce(['socket-owner-1', 1])
       .mockResolvedValueOnce([null, 0]);
 
-    redisClient.multi.mockImplementation(() => ({
-      get: getMock,
-      del: delMock,
-      exec: execMock,
-    }));
+    redisClient.multi.mockImplementation(() => {
+      const tx = { get: getMock, del: delMock, exec: execMock };
+      transactionObjects.push(tx);
+      return tx;
+    });
 
     const firstConsume = await service.consumeQrSocketBinding('bind-token-1');
     const secondConsume = await service.consumeQrSocketBinding('bind-token-1');
 
     expect(firstConsume).toBe('socket-owner-1');
     expect(secondConsume).toBeNull();
+
+    // Both get() and del() must be called on the same transaction object
+    // (not as independent client commands), proving atomicity.
+    expect(transactionObjects).toHaveLength(2);
     expect(getMock).toHaveBeenCalledWith('qr:bind:bind-token-1');
     expect(delMock).toHaveBeenCalledWith('qr:bind:bind-token-1');
+    // exec() must be called to commit the transaction
+    expect(execMock).toHaveBeenCalledTimes(2);
   });
 
   it('should return null when consume transaction fails', async () => {
@@ -117,8 +128,8 @@ describe('RedisService auth cache helpers', () => {
       exec: execMock,
     }));
 
-    await expect(service.consumeQrSocketBinding('bind-token-err')).resolves.toBe(
-      null,
-    );
+    await expect(
+      service.consumeQrSocketBinding('bind-token-err'),
+    ).resolves.toBe(null);
   });
 });

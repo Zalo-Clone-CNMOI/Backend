@@ -65,7 +65,9 @@ describe('ChatGateway', () => {
       const [bindingTokenArg, socketIdArg, ttlArg] = redisService
         .setQrSocketBinding.mock.calls[0] as [string, string, number];
 
+      // Token must be a non-empty string with at least 16 characters of entropy
       expect(typeof bindingTokenArg).toBe('string');
+      expect(bindingTokenArg.length).toBeGreaterThanOrEqual(16);
       expect(socketIdArg).toBe('socket-qr-123');
       expect(ttlArg).toBe(90);
 
@@ -130,14 +132,15 @@ describe('ChatGateway', () => {
         90,
       );
 
-      const firstPayload = firstSocketEmit.mock.calls[0][1] as {
-        socketId: string;
-        socketBindingToken: string;
-      };
-      const secondPayload = secondSocketEmit.mock.calls[0][1] as {
-        socketId: string;
-        socketBindingToken: string;
-      };
+      const firstCalls = firstSocketEmit.mock.calls as Array<
+        [string, { socketId: string; socketBindingToken: string }]
+      >;
+      const secondCalls = secondSocketEmit.mock.calls as Array<
+        [string, { socketId: string; socketBindingToken: string }]
+      >;
+
+      const [, firstPayload] = firstCalls[0];
+      const [, secondPayload] = secondCalls[0];
 
       expect(firstPayload.socketId).toBe('socket-owner-1');
       expect(secondPayload.socketId).toBe('socket-owner-2');

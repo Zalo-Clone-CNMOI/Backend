@@ -59,4 +59,45 @@ describe('AuthFanoutConsumer', () => {
       }),
     );
   });
+
+  it('should not emit QR confirmed event to any socket other than the bound one', () => {
+    consumer.onQrConfirmed({
+      sessionId: 'session-3',
+      socketId: 'socket-owner-3',
+      userId: 'user-3',
+      accessToken: 'tok',
+      refreshToken: 'rtok',
+      expiresIn: 900,
+      user: {
+        id: 'user-3',
+        phone: '+84900000003',
+        fullName: 'User Three',
+        email: null,
+        avatarUrl: null,
+      },
+      trace_id: 'trace-exclusion',
+    });
+
+    // emitToSocket must be called exactly once — no broadcast to other sockets
+    expect(gateway.emitToSocket).toHaveBeenCalledTimes(1);
+    const [[calledSocketId]] = gateway.emitToSocket.mock.calls as Array<
+      [string, ...unknown[]]
+    >;
+    expect(calledSocketId).toBe('socket-owner-3');
+  });
+
+  it('should not emit QR rejected event to any socket other than the bound one', () => {
+    consumer.onQrRejected({
+      sessionId: 'session-4',
+      socketId: 'socket-owner-4',
+      reason: 'Rejected',
+      trace_id: 'trace-exclusion-rejected',
+    });
+
+    expect(gateway.emitToSocket).toHaveBeenCalledTimes(1);
+    const [[calledSocketId]] = gateway.emitToSocket.mock.calls as Array<
+      [string, ...unknown[]]
+    >;
+    expect(calledSocketId).toBe('socket-owner-4');
+  });
 });

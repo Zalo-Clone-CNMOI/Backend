@@ -6,8 +6,10 @@
  */
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConversationsService } from './conversations.service';
-import { InteractionClientService } from '@app/clients/interaction-client';
-import { UpdateMemberRoleDtoRoleEnum } from '@app/constant';
+import {
+  InteractionClientService,
+  UpdateMemberRoleDtoRoleEnum,
+} from '@app/clients/interaction-client';
 
 describe('ConversationsService (BFF)', () => {
   let service: ConversationsService;
@@ -176,7 +178,7 @@ describe('ConversationsService (BFF)', () => {
 
   describe('updateMemberRole', () => {
     it('should delegate with token, conversationId, memberId, and DTO', async () => {
-      const dto = { role: UpdateMemberRoleDtoRoleEnum.ADMIN };
+      const dto = { role: UpdateMemberRoleDtoRoleEnum.admin };
       const result = await service.updateMemberRole(TOKEN, 'conv-1', 'u2', dto);
 
       expect(client.updateMemberRole).toHaveBeenCalledWith(

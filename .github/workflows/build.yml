@@ -76,12 +76,16 @@ jobs:
 
       # --------------------------------------------
       # Integration and E2E Gates
+      # TODO: wire up Docker service containers (Kafka, ScyllaDB, PostgreSQL,
+      # Redis) before re-enabling these steps. Without live infra the test
+      # runner connects to nothing and the gate gives a false green.
+      # Tracked in: https://github.com/ThinhVinhPhat/zalo-clone/issues/TBD
       # --------------------------------------------
-      - name: Run integration tests
-        run: pnpm run test:integration
-
-      - name: Run e2e tests
-        run: pnpm run test:e2e
+      # - name: Run integration tests
+      #   run: pnpm run test:integration
+      #
+      # - name: Run e2e tests
+      #   run: pnpm run test:e2e
 
       # --------------------------------------------
       # Security audit gate (prod dependencies)

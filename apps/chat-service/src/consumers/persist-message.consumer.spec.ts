@@ -266,9 +266,9 @@ describe('PersistMessageConsumer', () => {
       expect(repo.insertMessage).toHaveBeenCalledTimes(1);
       expect(repo.markMessageStored).toHaveBeenCalledTimes(1);
 
-      const createdEmits = (publisher.emit.mock.calls as Array<[string]>).filter(
-        ([topic]) => topic === 'chat.message.created',
-      );
+      const createdEmits = (
+        publisher.emit.mock.calls as Array<[string]>
+      ).filter(([topic]) => topic === 'chat.message.created');
       expect(createdEmits).toHaveLength(1);
     });
   });
@@ -373,9 +373,10 @@ describe('PersistMessageConsumer', () => {
       // 2. AiModerationRequest (async)
       // We need to wait for the async fire-and-forget to complete
       // Flush all pending microtasks/macrotasks from fire-and-forget blocks
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
+      // Drain the full microtask queue so fire-and-forget emissions settle.
+      // setImmediate runs after all pending Promises, making this robust to
+      // additional await-depths inside the consumer's async paths.
+      await new Promise((resolve) => setImmediate(resolve));
 
       const emitCalls = publisher.emit.mock.calls as Array<[string, unknown]>;
       expect(emitCalls.some((c) => c[0] === 'chat.message.created')).toBe(true);
@@ -411,9 +412,10 @@ describe('PersistMessageConsumer', () => {
       await expect(consumer.onSend(payload)).resolves.not.toThrow();
 
       // Flush all pending microtasks/macrotasks from fire-and-forget blocks
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
+      // Drain the full microtask queue so fire-and-forget emissions settle.
+      // setImmediate runs after all pending Promises, making this robust to
+      // additional await-depths inside the consumer's async paths.
+      await new Promise((resolve) => setImmediate(resolve));
     });
   });
 
@@ -550,6 +552,8 @@ describe('PersistMessageConsumer', () => {
         'chat.message.deleted',
         expect.anything(),
       );
+      // Cache must not be touched when ownership check blocks the delete
+      expect(cacheService.invalidateRecentMessages).not.toHaveBeenCalled();
     });
   });
 

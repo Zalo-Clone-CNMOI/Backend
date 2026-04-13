@@ -102,7 +102,7 @@ export class AddMembersDto {
 export class UpdateMemberRoleDto {
   @ApiProperty({
     description: 'New role for the member',
-    example: UpdateMemberRoleDtoRoleEnum.admin,
+    example: 'admin',
     enum: UpdateMemberRoleDtoRoleEnum,
   })
   @IsEnum(UpdateMemberRoleDtoRoleEnum, { message: 'Invalid conversation role' })

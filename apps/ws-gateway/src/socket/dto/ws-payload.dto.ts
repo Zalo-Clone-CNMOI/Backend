@@ -71,6 +71,7 @@ export class WsChatSendPayloadDto {
   conversation_id!: string;
 
   @IsString()
+  @IsNotEmpty()
   @MaxLength(WsPayloadLimits.messageBodyMaxLength)
   body!: string;
 
@@ -188,6 +189,7 @@ export class WsAiSmartReplyRequestPayloadDto {
   last_message_id!: string;
 
   @IsString()
+  @IsNotEmpty()
   @MaxLength(WsPayloadLimits.messageBodyMaxLength)
   last_message_body!: string;
 
@@ -225,6 +227,7 @@ export class WsAiTranslateRequestPayloadDto {
   conversation_id!: string;
 
   @IsString()
+  @IsNotEmpty()
   @MaxLength(WsPayloadLimits.messageBodyMaxLength)
   body!: string;
 

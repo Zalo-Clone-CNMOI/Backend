@@ -71,6 +71,10 @@ describe('publishKafkaWithRetry', () => {
     await expect(publishKafkaWithRetry(options)).rejects.toThrow(
       'chat.message.created',
     );
+    const mainTopicCalls = (kafka.emit.mock.calls as unknown[][]).filter(
+      (c) => c[0] === 'chat.message.created',
+    );
+    expect(mainTopicCalls).toHaveLength(2);
 
     expect(kafka.emit).toHaveBeenCalledWith(
       'chat.message.created.dlq',
@@ -78,6 +82,8 @@ describe('publishKafkaWithRetry', () => {
         original_topic: 'chat.message.created',
         producer: 'TestPublisher',
         trace_id: 'trace-fail',
+        retry_attempts: 2,
+        error_message: 'broker down',
       }),
     );
   });
@@ -104,8 +110,11 @@ describe('publishKafkaWithRetry', () => {
 
     await expect(publishKafkaWithRetry(options)).rejects.toThrow();
 
-    expect(kafka.emit).toHaveBeenCalledTimes(1);
+    // maxRetries: 1 → initial + 1 retry = 2 calls to the main topic; no DLQ calls
     const calls = kafka.emit.mock.calls as unknown[][];
+    expect(calls.filter((c) => c[0] === 'chat.message.created')).toHaveLength(
+      2,
+    );
     expect(calls.some((call) => call[0] === 'chat.message.created.dlq')).toBe(
       false,
     );

@@ -1,3 +1,5 @@
+import { WsReactionTypes } from './limits';
+
 export const WsEvents = {
   ChatJoin: 'chat:join',
   ChatLeave: 'chat:leave',
@@ -129,7 +131,7 @@ export interface WsChatMessageDeletedPayload {
 export interface WsChatReactPayload {
   message_id: string;
   conversation_id: string;
-  reaction_type: 'like' | 'love' | 'haha' | 'wow' | 'sad' | 'angry';
+  reaction_type: (typeof WsReactionTypes)[number];
 }
 
 export interface WsChatUnreactPayload {
@@ -141,7 +143,7 @@ export interface WsChatReactionAddedPayload {
   message_id: string;
   conversation_id: string;
   user_id: string;
-  reaction_type: 'like' | 'love' | 'haha' | 'wow' | 'sad' | 'angry';
+  reaction_type: (typeof WsReactionTypes)[number];
 }
 
 export interface WsChatReactionRemovedPayload {

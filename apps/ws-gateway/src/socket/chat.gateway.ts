@@ -16,6 +16,7 @@ import {
 import { WsExceptionFilter } from '@app/interceptors';
 import type { Server, Socket } from 'socket.io';
 import { ClientKafka } from '@nestjs/microservices';
+import { WsException } from '@nestjs/websockets';
 import { JwtService, WsAuthGuard } from '@libs/auth';
 import { RedisService } from '@libs/redis';
 import { randomUUID } from 'crypto';
@@ -238,11 +239,10 @@ export class ChatGateway implements OnModuleInit {
   ): Promise<void> {
     const isLimited = await this.isQrBindRateLimited(socket.id);
     if (isLimited) {
-      socket.emit(WsEvents.WsError, {
+      throw new WsException({
         code: 'RATE_LIMIT_EXCEEDED',
         message: 'Too many QR bind requests. Try again later.',
       });
-      return;
     }
 
     const socketBindingToken = randomUUID();

@@ -1,10 +1,11 @@
-import { Catch, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import { Catch, HttpException, Logger } from '@nestjs/common';
 import type { ArgumentsHost, RpcExceptionFilter } from '@nestjs/common';
 import { BaseRpcExceptionFilter, RpcException } from '@nestjs/microservices';
 import { ErrorCode } from '@app/constant';
 import { BusinessException } from '@app/types';
 import type { Observable } from 'rxjs';
 import { throwError } from 'rxjs';
+import { mapStatusToErrorCode } from './map-status-to-error-code.helper';
 
 interface RpcErrorEnvelope {
   success: false;
@@ -53,7 +54,7 @@ export class RpcAllExceptionsFilter
     } else if (exception instanceof HttpException) {
       const status = exception.getStatus();
       const exceptionResponse = exception.getResponse();
-      code = this.mapStatusToErrorCode(status);
+      code = mapStatusToErrorCode(status);
 
       if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
         const responseObj = exceptionResponse as Record<string, unknown>;
@@ -91,23 +92,4 @@ export class RpcAllExceptionsFilter
     };
   }
 
-  private mapStatusToErrorCode(status: number): ErrorCode {
-    const statusCode = status as HttpStatus;
-    switch (statusCode) {
-      case HttpStatus.BAD_REQUEST:
-        return ErrorCode.BAD_REQUEST;
-      case HttpStatus.UNAUTHORIZED:
-        return ErrorCode.UNAUTHORIZED;
-      case HttpStatus.FORBIDDEN:
-        return ErrorCode.FORBIDDEN;
-      case HttpStatus.NOT_FOUND:
-        return ErrorCode.NOT_FOUND;
-      case HttpStatus.CONFLICT:
-        return ErrorCode.CONFLICT;
-      case HttpStatus.TOO_MANY_REQUESTS:
-        return ErrorCode.TOO_MANY_REQUESTS;
-      default:
-        return ErrorCode.INTERNAL_SERVER_ERROR;
-    }
-  }
 }

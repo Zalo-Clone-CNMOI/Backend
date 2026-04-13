@@ -8,6 +8,7 @@ import {
 } from '@libs/contracts';
 import {
   catchError,
+  defer,
   lastValueFrom,
   retry,
   throwError,
@@ -43,12 +44,19 @@ export async function publishKafkaWithRetry(
 
   const shouldEmitDlq = options.emitDlqOnFailure ?? true;
 
+  let attemptsUsed = 0;
+  let lastBrokerError: unknown;
+
   try {
-    const source$ = options.kafka.emit(options.topic, options.payload).pipe(
+    const source$ = defer(() => {
+      attemptsUsed += 1;
+      return options.kafka.emit(options.topic, options.payload);
+    }).pipe(
       timeout(policy.timeoutMs),
       retry({
         count: policy.maxRetries,
         delay: (error, retryCount) => {
+          lastBrokerError = error;
           const delayMs = Math.min(
             policy.backoffCapMs,
             policy.backoffBaseMs * Math.pow(2, Math.max(0, retryCount - 1)),
@@ -60,6 +68,7 @@ export async function publishKafkaWithRetry(
         },
       }),
       catchError((error: unknown) => {
+        lastBrokerError = error;
         return throwError(
           () =>
             new Error(
@@ -72,7 +81,7 @@ export async function publishKafkaWithRetry(
     await lastValueFrom(source$);
   } catch (error) {
     if (shouldEmitDlq) {
-      await emitToDlq(options, error, policy.maxRetries);
+      await emitToDlq(options, lastBrokerError ?? error, attemptsUsed);
     }
     throw error;
   }

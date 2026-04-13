@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { APP_FILTER } from '@nestjs/core';
+import { RpcAllExceptionsFilter } from '@app/interceptors';
 import { ConfigModule } from '@libs/config';
 import { LoggerModule } from '@libs/logger';
 import { KafkaModule } from '@libs/kafka';
@@ -45,6 +47,7 @@ import {
     NotificationFanoutConsumer,
   ],
   providers: [
+    { provide: APP_FILTER, useClass: RpcAllExceptionsFilter },
     ChatGateway,
     ChatHandler,
     PresenceHandler,

@@ -4,6 +4,7 @@ import { DataSource, Repository } from 'typeorm';
 import { ClientKafka } from '@nestjs/microservices';
 import * as bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
+import { randomBytes } from 'crypto';
 
 import { User } from '@libs/database/entities';
 import { JwtService } from '@libs/auth';
@@ -209,6 +210,24 @@ export class AuthService {
 
     await this.userRepository.update(userId, { lastSeenAt: new Date() });
 
+    const nowEpochSeconds = Math.floor(Date.now() / 1000);
+    const [revokeResult, invalidateResult] = await Promise.allSettled([
+      this.redisService.setTokenRevokedAfter(userId, nowEpochSeconds),
+      this.redisService.invalidateAuthUserCache(userId),
+    ]);
+    if (revokeResult.status === 'rejected') {
+      this.logger.error(
+        `Logout: failed to set revoked-after marker for user ${userId}`,
+        revokeResult.reason,
+      );
+    }
+    if (invalidateResult.status === 'rejected') {
+      this.logger.warn(
+        `Logout: failed to invalidate auth cache for user ${userId}`,
+        invalidateResult.reason,
+      );
+    }
+
     if (dto.deviceId) {
       this.logger.log(`Device ${dto.deviceId} marked for removal`);
     }
@@ -237,6 +256,24 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(dto.newPassword, this.SALT_ROUNDS);
 
     await this.userRepository.update(user.id, { passwordHash });
+
+    const nowEpochSeconds = Math.floor(Date.now() / 1000);
+    const [revokeResult, invalidateResult] = await Promise.allSettled([
+      this.redisService.setTokenRevokedAfter(user.id, nowEpochSeconds),
+      this.redisService.invalidateAuthUserCache(user.id),
+    ]);
+    if (revokeResult.status === 'rejected') {
+      this.logger.error(
+        `ResetPassword: failed to set revoked-after marker for user ${user.id}`,
+        revokeResult.reason,
+      );
+    }
+    if (invalidateResult.status === 'rejected') {
+      this.logger.warn(
+        `ResetPassword: failed to invalidate auth cache for user ${user.id}`,
+        invalidateResult.reason,
+      );
+    }
 
     this.logger.log(`Password reset successful for: ${user.id}`);
 
@@ -289,10 +326,20 @@ export class AuthService {
    * PC calls this to create a QR code for mobile to scan
    */
   async generateQrSession(dto: QrGenerateDto): Promise<QrSessionResponseDto> {
-    this.logger.log(`Generating QR session for socket: ${dto.socketId}`);
+    this.logger.log('Generating QR session');
+
+    const socketId = await this.redisService.consumeQrSocketBinding(
+      dto.socketBindingToken,
+    );
+
+    if (!socketId) {
+      throw BusinessException.badRequest(ErrorCode.QR_SESSION_INVALID);
+    }
+
+    this.logger.log(`QR session bound to verified socket: ${socketId}`);
 
     const sessionId = uuidv4();
-    const qrToken = `qr_${sessionId}_${Date.now()}`;
+    const qrToken = `qr_${sessionId}_${randomBytes(16).toString('hex')}`;
     const now = Date.now();
     const expiresAt = now + this.QR_SESSION_TTL_SECONDS * 1000;
 
@@ -300,7 +347,7 @@ export class AuthService {
       sessionId,
       qrToken,
       status: QrSessionStatus.PENDING,
-      socketId: dto.socketId,
+      socketId,
       pcDeviceInfo: dto.deviceInfo,
       createdAt: now,
       expiresAt,

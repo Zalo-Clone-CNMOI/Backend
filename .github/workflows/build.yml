@@ -1,4 +1,4 @@
-name: Build Check
+name: Release Gate
 
 on:
   pull_request:
@@ -6,12 +6,15 @@ on:
     paths:
       - "apps/**"
       - "libs/**"
+      - "test/**"
       - "package.json"
       - "pnpm-lock.yaml"
+      - "openapitools.json"
+      - ".github/workflows/build.yml"
 
 jobs:
-  lint-and-test:
-    name: Lint & Test
+  release-gate:
+    name: Final Release Gate
     runs-on: ubuntu-latest
 
     steps:
@@ -22,21 +25,22 @@ jobs:
         uses: actions/checkout@v4
 
       # --------------------------------------------
-      # Setup Node.js (NO pnpm cache here)
+      # Install pnpm (must precede setup-node so cache: pnpm resolves the store path)
+      # --------------------------------------------
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 10.11.0
+          run_install: false
+
+      # --------------------------------------------
+      # Setup Node.js with pnpm store cache
       # --------------------------------------------
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-
-      # --------------------------------------------
-      # Install pnpm + auto cache
-      # --------------------------------------------
-      - name: Install pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 9
-          run_install: false
+          cache: pnpm
 
       # --------------------------------------------
       # Install deps
@@ -51,9 +55,15 @@ jobs:
         run: pnpm run lint
 
       # --------------------------------------------
-      # Test with coverage
+      # OpenAPI Codegen Drift Check
       # --------------------------------------------
-      - name: Run tests with coverage
+      - name: Verify OpenAPI codegen is in sync
+        run: pnpm run codegen:check
+
+      # --------------------------------------------
+      # Unit Test Gate
+      # --------------------------------------------
+      - name: Run unit tests with coverage
         run: pnpm run test:ci
 
       - name: Upload coverage report
@@ -63,6 +73,25 @@ jobs:
           name: coverage-report
           path: coverage/
           retention-days: 14
+
+      # --------------------------------------------
+      # Integration and E2E Gates
+      # TODO: wire up Docker service containers (Kafka, ScyllaDB, PostgreSQL,
+      # Redis) before re-enabling these steps. Without live infra the test
+      # runner connects to nothing and the gate gives a false green.
+      # Tracked in: https://github.com/ThinhVinhPhat/zalo-clone/issues/TBD
+      # --------------------------------------------
+      # - name: Run integration tests
+      #   run: pnpm run test:integration
+      #
+      # - name: Run e2e tests
+      #   run: pnpm run test:e2e
+
+      # --------------------------------------------
+      # Security audit gate (prod dependencies)
+      # --------------------------------------------
+      - name: Run production dependency audit
+        run: pnpm run audit:prod
 
       - name: Run build for all services
         run: pnpm run build:all

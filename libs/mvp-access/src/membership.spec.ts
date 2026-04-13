@@ -20,7 +20,6 @@ import { ConversationMember } from '@libs/database/entities';
 
 function createMockRepository() {
   return {
-    findOne: jest.fn(),
     find: jest.fn(),
   };
 }
@@ -51,11 +50,7 @@ describe('ConversationMembershipService', () => {
 
   describe('canUserAccessConversation', () => {
     it('should return true when user is an active member', async () => {
-      repo.findOne.mockResolvedValue({
-        userId: 'user-1',
-        conversationId: 'conv-1',
-        leftAt: null,
-      });
+      repo.find.mockResolvedValue([{ conversationId: 'conv-1' }]);
 
       const result = await service.canUserAccessConversation(
         'user-1',
@@ -63,17 +58,18 @@ describe('ConversationMembershipService', () => {
       );
 
       expect(result).toBe(true);
-      expect(repo.findOne).toHaveBeenCalledWith({
+      expect(repo.find).toHaveBeenCalledWith({
         where: {
           userId: 'user-1',
-          conversationId: 'conv-1',
+          conversationId: expect.anything(),
           leftAt: expect.anything(), // IsNull()
         },
+        select: ['conversationId'],
       });
     });
 
     it('should return false when user is not a member', async () => {
-      repo.findOne.mockResolvedValue(null);
+      repo.find.mockResolvedValue([]);
 
       const result = await service.canUserAccessConversation(
         'user-1',
@@ -85,7 +81,7 @@ describe('ConversationMembershipService', () => {
 
     it('should return false for user who has left (leftAt is set)', async () => {
       // The query includes leftAt: IsNull(), so a left member won't be found
-      repo.findOne.mockResolvedValue(null);
+      repo.find.mockResolvedValue([]);
 
       const result = await service.canUserAccessConversation(
         'user-1',
@@ -96,18 +92,64 @@ describe('ConversationMembershipService', () => {
     });
 
     it('should correctly filter by both userId and conversationId', async () => {
-      repo.findOne.mockResolvedValue(null);
+      repo.find.mockResolvedValue([]);
 
       await service.canUserAccessConversation('attacker', 'private-conv');
 
-      expect(repo.findOne).toHaveBeenCalledWith(
+      expect(repo.find).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
             userId: 'attacker',
-            conversationId: 'private-conv',
+            conversationId: expect.anything(),
           }),
         }),
       );
+    });
+
+    it('should batch concurrent checks for same user into one repository query', async () => {
+      repo.find.mockResolvedValue([{ conversationId: 'conv-1' }]);
+
+      const [conv1, conv2] = await Promise.all([
+        service.canUserAccessConversation('user-1', 'conv-1'),
+        service.canUserAccessConversation('user-1', 'conv-2'),
+      ]);
+
+      expect(conv1).toBe(true);
+      expect(conv2).toBe(false);
+      expect(repo.find).toHaveBeenCalledTimes(1);
+
+      // Verify the single query covered BOTH conversation IDs in one In() clause
+      // so a regression that fires two separate single-id queries would fail here.
+      // Use the public `.value` getter on TypeORM's FindOperator (not `._value`,
+      // which is a private implementation detail subject to change across versions).
+      const [[findArgs]] = repo.find.mock.calls as Array<
+        [{ where: { conversationId: { value: string[] } } }]
+      >;
+      const batchedIds = findArgs.where.conversationId.value;
+      expect(batchedIds).toEqual(expect.arrayContaining(['conv-1', 'conv-2']));
+      expect(batchedIds).toHaveLength(2);
+    });
+
+    it('should reuse short-lived cache for repeated access checks', async () => {
+      repo.find.mockResolvedValue([{ conversationId: 'conv-1' }]);
+
+      const first = await service.canUserAccessConversation('user-1', 'conv-1');
+      const second = await service.canUserAccessConversation(
+        'user-1',
+        'conv-1',
+      );
+
+      expect(first).toBe(true);
+      expect(second).toBe(true);
+      expect(repo.find).toHaveBeenCalledTimes(1);
+    });
+
+    it('should reject when repository access fails during batch flush', async () => {
+      repo.find.mockRejectedValue(new Error('db unavailable'));
+
+      await expect(
+        service.canUserAccessConversation('user-1', 'conv-1'),
+      ).rejects.toThrow('db unavailable');
     });
   });
 

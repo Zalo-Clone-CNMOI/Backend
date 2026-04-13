@@ -5,29 +5,34 @@ import { AppModule } from './app.module';
 import { createSwaggerDocument } from '@app/swagger/swagger';
 import {
   HttpExceptionFilter,
+  RpcAllExceptionsFilter,
   TransformResponseInterceptor,
 } from '@app/interceptors';
 import { JwtAuthGuard } from '@libs/auth';
 import { createKafkaMicroserviceOptions } from '@libs/kafka/kafka.util';
-import { loadConfig } from '@libs/config/app-config';
+import { loadConfig, assertProductionCors } from '@libs/config';
 import { MicroserviceOptions } from '@nestjs/microservices';
 
 async function bootstrap() {
   process.env.SERVICE_NAME ??= 'interaction-service';
-  process.env.KAFKA_GROUP_ID ??= 'interaction-service-consumers';
+
+  const config = loadConfig(process.env.SERVICE_NAME);
+  assertProductionCors(config);
 
   const app = await NestFactory.create(AppModule);
-  const config = loadConfig(process.env.SERVICE_NAME);
 
   const logger = new Logger('Bootstrap');
   app.setGlobalPrefix('api');
 
   app.connectMicroservice<MicroserviceOptions>(
     createKafkaMicroserviceOptions(config),
+    {
+      inheritAppConfig: true,
+    },
   );
 
   app.enableCors({
-    origin: process.env.CORS_ORIGIN?.split(',') ?? '*',
+    origin: config.allowedOrigins,
     credentials: true,
   });
 
@@ -42,7 +47,7 @@ async function bootstrap() {
     }),
   );
 
-  app.useGlobalFilters(new HttpExceptionFilter());
+  app.useGlobalFilters(new HttpExceptionFilter(), new RpcAllExceptionsFilter());
   app.useGlobalInterceptors(new TransformResponseInterceptor());
 
   const jwtAuthGuard = app.get(JwtAuthGuard);

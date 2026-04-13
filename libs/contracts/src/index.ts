@@ -5,5 +5,7 @@ export * from './kafka/media.events';
 export * from './kafka/notification.events';
 export * from './kafka/auth.events';
 export * from './kafka/ai.events';
+export * from './kafka/reliability';
 export * from './ws/events';
+export * from './ws/limits';
 export * from './kafka/interaction.events';

@@ -5,11 +5,13 @@ import { LoggerModule } from '@libs/logger';
 import { KafkaModule } from '@libs/kafka';
 import { ScyllaModule } from '@libs/scylla';
 import { RedisModule } from '@libs/redis';
+import { HealthCheckService } from '@libs/shared';
 import { DatabaseModule, User, ConversationMember } from '@libs/database';
 import { ConversationMembershipModule } from '@libs/mvp-access';
 import { PersistMessageConsumer } from './consumers/persist-message.consumer';
 import { ChatPublisher } from './services/chat.publisher';
 import { MessagesModule } from './modules/messages';
+import { HealthController } from './health.controller';
 
 @Module({
   imports: [
@@ -23,7 +25,7 @@ import { MessagesModule } from './modules/messages';
     ConversationMembershipModule,
     MessagesModule,
   ],
-  controllers: [PersistMessageConsumer],
-  providers: [ChatPublisher],
+  controllers: [PersistMessageConsumer, HealthController],
+  providers: [ChatPublisher, HealthCheckService],
 })
 export class AppModule {}

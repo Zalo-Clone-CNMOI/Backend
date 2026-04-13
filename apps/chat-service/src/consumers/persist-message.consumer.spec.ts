@@ -35,6 +35,9 @@ describe('PersistMessageConsumer', () => {
   let consumer: PersistMessageConsumer;
   let repo: {
     tryBeginMessageProcessing: jest.Mock;
+    getMessageProcessingState: jest.Mock;
+    tryClaimPendingReplay: jest.Mock;
+    restoreMessageProcessingToPending: jest.Mock;
     insertMessage: jest.Mock;
     markMessageStored: jest.Mock;
     clearMessageProcessing: jest.Mock;
@@ -82,6 +85,9 @@ describe('PersistMessageConsumer', () => {
   beforeEach(() => {
     repo = {
       tryBeginMessageProcessing: jest.fn(),
+      getMessageProcessingState: jest.fn(),
+      tryClaimPendingReplay: jest.fn(),
+      restoreMessageProcessingToPending: jest.fn(),
       insertMessage: jest.fn(),
       markMessageStored: jest.fn(),
       clearMessageProcessing: jest.fn(),
@@ -185,24 +191,112 @@ describe('PersistMessageConsumer', () => {
 
       membershipService.canUserAccessConversation.mockResolvedValue(true);
       repo.tryBeginMessageProcessing.mockResolvedValue(false);
+      repo.getMessageProcessingState.mockResolvedValue({
+        message_id: payload.message_id,
+        conversation_id: payload.conversation_id,
+        created_at: payload.sent_at,
+        status: 'stored',
+      });
 
       await consumer.onSend(payload);
 
       expect(repo.insertMessage).not.toHaveBeenCalled();
       expect(repo.markMessageStored).not.toHaveBeenCalled();
       expect(repo.clearMessageProcessing).not.toHaveBeenCalled();
+      expect(repo.tryClaimPendingReplay).not.toHaveBeenCalled();
       expect(publisher.emit).not.toHaveBeenCalled();
     });
-  });
 
-  describe('onSend — race/retry safety', () => {
-    it('should clear processing lock and allow retry when publisher fails', async () => {
+    it('should replay pending message once and mark as stored', async () => {
+      const payload = createMockChatSendCommand();
+
+      membershipService.canUserAccessConversation.mockResolvedValue(true);
+      repo.tryBeginMessageProcessing.mockResolvedValue(false);
+      repo.getMessageProcessingState.mockResolvedValue({
+        message_id: payload.message_id,
+        conversation_id: payload.conversation_id,
+        created_at: payload.sent_at,
+        status: 'pending',
+      });
+      repo.tryClaimPendingReplay.mockResolvedValue(true);
+      repo.getMessage.mockResolvedValue({
+        message_id: payload.message_id,
+        conversation_id: payload.conversation_id,
+        sender_id: payload.sender_id,
+        body: payload.body,
+        created_at: payload.sent_at,
+        attachments: payload.attachments,
+        reply_to_message_id: payload.reply_to_message_id,
+      });
+
+      await consumer.onSend(payload);
+
+      expect(repo.tryClaimPendingReplay).toHaveBeenCalledWith(
+        payload.message_id,
+      );
+      expect(publisher.emit).toHaveBeenCalledWith(
+        'chat.message.created',
+        expect.objectContaining({
+          message_id: payload.message_id,
+          created_at: payload.sent_at,
+        }),
+      );
+      expect(repo.markMessageStored).toHaveBeenCalledWith(payload.message_id);
+      expect(repo.restoreMessageProcessingToPending).not.toHaveBeenCalled();
+    });
+
+    it('should persist only once under concurrent duplicate onSend race', async () => {
       const payload = createMockChatSendCommand();
 
       membershipService.canUserAccessConversation.mockResolvedValue(true);
       repo.tryBeginMessageProcessing
         .mockResolvedValueOnce(true)
-        .mockResolvedValueOnce(true);
+        .mockResolvedValueOnce(false);
+      repo.getMessageProcessingState.mockResolvedValue({
+        message_id: payload.message_id,
+        conversation_id: payload.conversation_id,
+        created_at: payload.sent_at,
+        status: 'stored',
+      });
+      repo.insertMessage.mockResolvedValue(undefined);
+      repo.markMessageStored.mockResolvedValue(undefined);
+
+      await Promise.all([consumer.onSend(payload), consumer.onSend(payload)]);
+
+      expect(repo.insertMessage).toHaveBeenCalledTimes(1);
+      expect(repo.markMessageStored).toHaveBeenCalledTimes(1);
+
+      const createdEmits = (
+        publisher.emit.mock.calls as Array<[string]>
+      ).filter(([topic]) => topic === 'chat.message.created');
+      expect(createdEmits).toHaveLength(1);
+    });
+  });
+
+  describe('onSend — race/retry safety', () => {
+    it('should keep pending marker and replay on retry when publisher fails', async () => {
+      const payload = createMockChatSendCommand();
+
+      membershipService.canUserAccessConversation.mockResolvedValue(true);
+      repo.tryBeginMessageProcessing
+        .mockResolvedValueOnce(true)
+        .mockResolvedValueOnce(false);
+      repo.getMessageProcessingState.mockResolvedValue({
+        message_id: payload.message_id,
+        conversation_id: payload.conversation_id,
+        created_at: payload.sent_at,
+        status: 'pending',
+      });
+      repo.tryClaimPendingReplay.mockResolvedValue(true);
+      repo.getMessage.mockResolvedValue({
+        message_id: payload.message_id,
+        conversation_id: payload.conversation_id,
+        sender_id: payload.sender_id,
+        body: payload.body,
+        created_at: payload.sent_at,
+        attachments: payload.attachments,
+        reply_to_message_id: payload.reply_to_message_id,
+      });
       repo.insertMessage.mockResolvedValue(undefined);
       repo.markMessageStored.mockResolvedValue(undefined);
       repo.clearMessageProcessing.mockResolvedValue(undefined);
@@ -215,12 +309,12 @@ describe('PersistMessageConsumer', () => {
       );
       await consumer.onSend(payload);
 
-      expect(repo.clearMessageProcessing).toHaveBeenCalledTimes(1);
-      expect(repo.clearMessageProcessing).toHaveBeenCalledWith(
-        payload.message_id,
-      );
+      expect(repo.clearMessageProcessing).not.toHaveBeenCalled();
       expect(repo.tryBeginMessageProcessing).toHaveBeenCalledTimes(2);
       expect(repo.markMessageStored).toHaveBeenCalledTimes(1);
+      expect(repo.tryClaimPendingReplay).toHaveBeenCalledWith(
+        payload.message_id,
+      );
       expect(publisher.emit).toHaveBeenCalledWith(
         'chat.message.created',
         expect.objectContaining({ message_id: payload.message_id }),
@@ -278,7 +372,11 @@ describe('PersistMessageConsumer', () => {
       // 1. ChatMessageCreated
       // 2. AiModerationRequest (async)
       // We need to wait for the async fire-and-forget to complete
-      await new Promise((r) => setTimeout(r, 50));
+      // Flush all pending microtasks/macrotasks from fire-and-forget blocks
+      // Drain the full microtask queue so fire-and-forget emissions settle.
+      // setImmediate runs after all pending Promises, making this robust to
+      // additional await-depths inside the consumer's async paths.
+      await new Promise((resolve) => setImmediate(resolve));
 
       const emitCalls = publisher.emit.mock.calls as Array<[string, unknown]>;
       expect(emitCalls.some((c) => c[0] === 'chat.message.created')).toBe(true);
@@ -313,7 +411,11 @@ describe('PersistMessageConsumer', () => {
       // Should not throw
       await expect(consumer.onSend(payload)).resolves.not.toThrow();
 
-      await new Promise((r) => setTimeout(r, 50));
+      // Flush all pending microtasks/macrotasks from fire-and-forget blocks
+      // Drain the full microtask queue so fire-and-forget emissions settle.
+      // setImmediate runs after all pending Promises, making this robust to
+      // additional await-depths inside the consumer's async paths.
+      await new Promise((resolve) => setImmediate(resolve));
     });
   });
 
@@ -371,6 +473,30 @@ describe('PersistMessageConsumer', () => {
         payload.conversation_id,
       );
     });
+
+    it('should block edit when sender is not the message owner', async () => {
+      const payload = {
+        message_id: 'msg-edit-unauthorized',
+        conversation_id: 'conv-1',
+        sender_id: 'user-requester',
+        new_body: 'Edited body',
+        created_at: Date.now() - 1000,
+        edited_at: Date.now(),
+        trace_id: 'test-trace',
+      };
+
+      membershipService.canUserAccessConversation.mockResolvedValue(true);
+      repo.getMessage.mockResolvedValue({ sender_id: 'user-owner' });
+
+      await consumer.onEdit(payload);
+
+      expect(repo.updateMessageBody).not.toHaveBeenCalled();
+      expect(publisher.emit).not.toHaveBeenCalledWith(
+        'chat.message.updated',
+        expect.anything(),
+      );
+      expect(cacheService.invalidateRecentMessages).not.toHaveBeenCalled();
+    });
   });
 
   // ─── onDelete ──────────────────────────────────────────────────────────────
@@ -404,6 +530,30 @@ describe('PersistMessageConsumer', () => {
           sender_id: payload.sender_id,
         }),
       );
+    });
+
+    it('should block delete when sender is not the message owner', async () => {
+      const payload = {
+        message_id: 'msg-del-unauthorized',
+        conversation_id: 'conv-1',
+        sender_id: 'user-requester',
+        created_at: Date.now() - 1000,
+        deleted_at: Date.now(),
+        trace_id: 'test-trace',
+      };
+
+      membershipService.canUserAccessConversation.mockResolvedValue(true);
+      repo.getMessage.mockResolvedValue({ sender_id: 'user-owner' });
+
+      await consumer.onDelete(payload);
+
+      expect(repo.softDeleteMessage).not.toHaveBeenCalled();
+      expect(publisher.emit).not.toHaveBeenCalledWith(
+        'chat.message.deleted',
+        expect.anything(),
+      );
+      // Cache must not be touched when ownership check blocks the delete
+      expect(cacheService.invalidateRecentMessages).not.toHaveBeenCalled();
     });
   });
 
@@ -516,6 +666,7 @@ describe('PersistMessageConsumer', () => {
       confidence: 1,
       provider: 'openai' as const,
       ensemble: false,
+      decision_source: 'model' as const,
       processed_at: Date.now(),
       tokens_used: 0,
       trace_id: 'mod-trace-ttl',
@@ -532,6 +683,7 @@ describe('PersistMessageConsumer', () => {
         confidence: 1,
         provider: 'openai' as const,
         ensemble: false,
+        decision_source: 'model' as const,
         processed_at: Date.now(),
         tokens_used: 0,
         trace_id: 'mod-trace-1',
@@ -580,6 +732,15 @@ describe('PersistMessageConsumer', () => {
           message_id: payload.message_id,
           conversation_id: payload.conversation_id,
           sender_id: payload.sender_id,
+        }),
+      );
+      expect(publisher.emit).toHaveBeenCalledWith(
+        'ai.moderation.enforcement',
+        expect.objectContaining({
+          message_id: payload.message_id,
+          conversation_id: payload.conversation_id,
+          outcome: 'deleted',
+          action: 'soft_delete',
         }),
       );
       expect(cacheService.invalidateRecentMessages).toHaveBeenCalledWith(
@@ -652,6 +813,7 @@ describe('PersistMessageConsumer', () => {
         confidence: 1,
         provider: 'openai' as const,
         ensemble: false,
+        decision_source: 'model' as const,
         processed_at: Date.now(),
         tokens_used: 0,
       };
@@ -688,9 +850,71 @@ describe('PersistMessageConsumer', () => {
       );
       expect(cacheService.setIfAbsent).not.toHaveBeenCalled();
       expect(repo.softDeleteMessage).not.toHaveBeenCalled();
-      expect(publisher.emit).not.toHaveBeenCalled();
+      expect(publisher.emit).toHaveBeenCalledWith(
+        'ai.moderation.enforcement',
+        expect.objectContaining({
+          message_id: payload.message_id,
+          conversation_id: payload.conversation_id,
+          outcome: 'deduplicated',
+          reason: 'delete_event_already_emitted',
+        }),
+      );
+      expect(publisher.emit).toHaveBeenCalledTimes(1);
       expect(cacheService.invalidateRecentMessages).not.toHaveBeenCalled();
       expect(cacheService.delIfValueMatches).not.toHaveBeenCalled();
+    });
+
+    it('should emit deduplicated outcome when delete marker already exists after lock acquisition', async () => {
+      const payload = {
+        message_id: 'msg-moderation-dedupe-after-lock-1',
+        conversation_id: 'conv-dedupe-after-lock-1',
+        sender_id: 'user-dedupe-after-lock-1',
+        created_at: Date.now() - 1000,
+        is_flagged: true,
+        labels: ['spam' as const],
+        confidence: 1,
+        provider: 'openai' as const,
+        ensemble: false,
+        decision_source: 'model' as const,
+        processed_at: Date.now(),
+        tokens_used: 0,
+      };
+
+      repo.trySoftDeleteMessage.mockResolvedValue(true);
+      cacheService.get.mockResolvedValue(true);
+
+      await consumer.onModerationResult(payload);
+
+      expect(cacheService.setIfAbsent).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `${payload.conversation_id}:${payload.message_id}:lock`,
+        ),
+        expect.any(String),
+        120,
+      );
+      expect(cacheService.get).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `${payload.conversation_id}:${payload.message_id}`,
+        ),
+      );
+      expect(publisher.emit).toHaveBeenCalledWith(
+        'ai.moderation.enforcement',
+        expect.objectContaining({
+          message_id: payload.message_id,
+          conversation_id: payload.conversation_id,
+          outcome: 'deduplicated',
+          reason: 'delete_event_already_emitted_after_lock_acquired',
+        }),
+      );
+      expect(publisher.emit).toHaveBeenCalledTimes(1);
+      expect(cacheService.set).not.toHaveBeenCalled();
+      expect(cacheService.invalidateRecentMessages).not.toHaveBeenCalled();
+      expect(cacheService.delIfValueMatches).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `${payload.conversation_id}:${payload.message_id}:lock`,
+        ),
+        expect.any(String),
+      );
     });
 
     it('should re-emit delete event on retry when message already deleted but emit marker is missing', async () => {
@@ -704,6 +928,7 @@ describe('PersistMessageConsumer', () => {
         confidence: 1,
         provider: 'openai' as const,
         ensemble: false,
+        decision_source: 'model' as const,
         processed_at: Date.now(),
         tokens_used: 0,
       };
@@ -753,7 +978,31 @@ describe('PersistMessageConsumer', () => {
         '22222222-2222-4222-8222-222222222222',
         120,
       );
-      expect(publisher.emit).toHaveBeenCalledTimes(2);
+      // First invocation: delete event emit threw, then enforcement outcome emitted
+      expect(publisher.emit).toHaveBeenCalledWith(
+        'chat.message.deleted',
+        expect.objectContaining({ message_id: payload.message_id }),
+      );
+      expect(publisher.emit).toHaveBeenCalledWith(
+        'ai.moderation.enforcement',
+        expect.objectContaining({
+          message_id: payload.message_id,
+          outcome: 'failed',
+          reason: 'chat_message_deleted_emit_failed',
+          action: 'soft_delete',
+        }),
+      );
+      // Second invocation: delete event succeeded, already_deleted outcome emitted
+      expect(publisher.emit).toHaveBeenCalledWith(
+        'ai.moderation.enforcement',
+        expect.objectContaining({
+          message_id: payload.message_id,
+          outcome: 'already_deleted',
+          action: 'soft_delete',
+        }),
+      );
+      // 4 total: 2× chat.message.deleted + 2× ai.moderation.enforcement
+      expect(publisher.emit).toHaveBeenCalledTimes(4);
       expect(cacheService.set).toHaveBeenCalledWith(
         expect.stringContaining(
           `${payload.conversation_id}:${payload.message_id}`,
@@ -788,6 +1037,7 @@ describe('PersistMessageConsumer', () => {
         confidence: 1,
         provider: 'openai' as const,
         ensemble: false,
+        decision_source: 'model' as const,
         processed_at: Date.now(),
         tokens_used: 0,
       };
@@ -808,7 +1058,16 @@ describe('PersistMessageConsumer', () => {
         'Moderation delete event emit lock busy',
       );
 
-      expect(publisher.emit).not.toHaveBeenCalled();
+      expect(publisher.emit).toHaveBeenCalledWith(
+        'ai.moderation.enforcement',
+        expect.objectContaining({
+          message_id: payload.message_id,
+          conversation_id: payload.conversation_id,
+          outcome: 'failed',
+          reason: 'delete_emit_lock_busy',
+        }),
+      );
+      expect(publisher.emit).toHaveBeenCalledTimes(1);
       expect(cacheService.set).not.toHaveBeenCalled();
       expect(cacheService.delIfValueMatches).not.toHaveBeenCalled();
     });
@@ -824,6 +1083,7 @@ describe('PersistMessageConsumer', () => {
         confidence: 1,
         provider: 'openai' as const,
         ensemble: false,
+        decision_source: 'model' as const,
         processed_at: Date.now(),
         tokens_used: 0,
       };
@@ -837,7 +1097,16 @@ describe('PersistMessageConsumer', () => {
         'Moderation delete event emit lock lost before publish',
       );
 
-      expect(publisher.emit).not.toHaveBeenCalled();
+      expect(publisher.emit).toHaveBeenCalledWith(
+        'ai.moderation.enforcement',
+        expect.objectContaining({
+          message_id: payload.message_id,
+          conversation_id: payload.conversation_id,
+          outcome: 'failed',
+          reason: 'delete_emit_lock_lost_before_publish',
+        }),
+      );
+      expect(publisher.emit).toHaveBeenCalledTimes(1);
       expect(cacheService.set).not.toHaveBeenCalled();
       expect(cacheService.delIfValueMatches).toHaveBeenCalledWith(
         expect.stringContaining(
@@ -858,6 +1127,7 @@ describe('PersistMessageConsumer', () => {
         confidence: 1,
         provider: 'openai' as const,
         ensemble: false,
+        decision_source: 'model' as const,
         processed_at: Date.now(),
         tokens_used: 0,
       };
@@ -871,7 +1141,16 @@ describe('PersistMessageConsumer', () => {
         'Moderation delete event emit lock renewal failed',
       );
 
-      expect(publisher.emit).not.toHaveBeenCalled();
+      expect(publisher.emit).toHaveBeenCalledWith(
+        'ai.moderation.enforcement',
+        expect.objectContaining({
+          message_id: payload.message_id,
+          conversation_id: payload.conversation_id,
+          outcome: 'failed',
+          reason: 'delete_emit_lock_renewal_failed',
+        }),
+      );
+      expect(publisher.emit).toHaveBeenCalledTimes(1);
       expect(cacheService.set).not.toHaveBeenCalled();
       expect(cacheService.delIfValueMatches).toHaveBeenCalledWith(
         expect.stringContaining(
@@ -892,6 +1171,7 @@ describe('PersistMessageConsumer', () => {
         confidence: 1,
         provider: 'openai' as const,
         ensemble: false,
+        decision_source: 'model' as const,
         processed_at: Date.now(),
         tokens_used: 0,
       };
@@ -915,7 +1195,16 @@ describe('PersistMessageConsumer', () => {
         payload.message_id,
       );
       expect(repo.softDeleteMessage).not.toHaveBeenCalled();
-      expect(publisher.emit).not.toHaveBeenCalled();
+      expect(publisher.emit).toHaveBeenCalledWith(
+        'ai.moderation.enforcement',
+        expect.objectContaining({
+          message_id: payload.message_id,
+          conversation_id: payload.conversation_id,
+          outcome: 'failed',
+          reason: 'message_not_found',
+        }),
+      );
+      expect(publisher.emit).toHaveBeenCalledTimes(1);
       expect(cacheService.setIfAbsent).not.toHaveBeenCalled();
       expect(cacheService.invalidateRecentMessages).not.toHaveBeenCalled();
       expect(cacheService.delIfValueMatches).not.toHaveBeenCalled();
@@ -932,6 +1221,7 @@ describe('PersistMessageConsumer', () => {
         confidence: 1,
         provider: 'openai' as const,
         ensemble: false,
+        decision_source: 'model' as const,
         processed_at: Date.now(),
         tokens_used: 0,
       };

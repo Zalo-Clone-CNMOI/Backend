@@ -1,4 +1,4 @@
-import { UpdateMemberRoleDtoRoleEnum } from '@app/constant';
+import { UpdateMemberRoleDtoRoleEnum } from '@app/clients/interaction-client';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsNotEmpty,
@@ -102,7 +102,7 @@ export class AddMembersDto {
 export class UpdateMemberRoleDto {
   @ApiProperty({
     description: 'New role for the member',
-    example: UpdateMemberRoleDtoRoleEnum.ADMIN,
+    example: 'admin',
     enum: UpdateMemberRoleDtoRoleEnum,
   })
   @IsEnum(UpdateMemberRoleDtoRoleEnum, { message: 'Invalid conversation role' })

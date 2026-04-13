@@ -28,12 +28,14 @@ export function makeChatMessageSendCommand(
 export function makeChatMessageEditCommand(
   overrides: Record<string, unknown> = {},
 ) {
+  const now = Date.now();
   return {
     message_id: uuid(),
     conversation_id: uuid(),
     sender_id: uuid(),
+    created_at: now,
     new_body: 'Edited message',
-    edited_at: Date.now(),
+    edited_at: now,
     trace_id: `trace-${uuid()}`,
     ...overrides,
   };
@@ -42,11 +44,13 @@ export function makeChatMessageEditCommand(
 export function makeChatMessageDeleteCommand(
   overrides: Record<string, unknown> = {},
 ) {
+  const now = Date.now();
   return {
     message_id: uuid(),
     conversation_id: uuid(),
     sender_id: uuid(),
-    deleted_at: Date.now(),
+    created_at: now,
+    deleted_at: now,
     trace_id: `trace-${uuid()}`,
     ...overrides,
   };

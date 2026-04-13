@@ -8,7 +8,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConversationsController } from './conversations.controller';
 import { ConversationsService } from './conversations.service';
-import { UpdateMemberRoleDtoRoleEnum } from '@app/constant';
+import { UpdateMemberRoleDtoRoleEnum } from '@app/clients/interaction-client';
 
 describe('ConversationsController (BFF)', () => {
   let controller: ConversationsController;
@@ -163,7 +163,7 @@ describe('ConversationsController (BFF)', () => {
 
   describe('PATCH /:conversationId/members/:memberId/role', () => {
     it('should delegate with token, conversationId, memberId, role DTO', async () => {
-      const dto = { role: UpdateMemberRoleDtoRoleEnum.ADMIN };
+      const dto = { role: UpdateMemberRoleDtoRoleEnum.admin };
       const result = await controller.updateMemberRole(
         TOKEN,
         'conv-1',

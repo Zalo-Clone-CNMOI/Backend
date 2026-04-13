@@ -4,10 +4,10 @@ import { MicroserviceOptions } from '@nestjs/microservices';
 import { AppModule } from './app.module';
 import { loadConfig } from '@libs/config';
 import { createKafkaMicroserviceOptions } from '@libs/kafka';
+import { RpcAllExceptionsFilter } from '@app/interceptors';
 
 async function bootstrap() {
   process.env.SERVICE_NAME ??= 'chat-service';
-  process.env.KAFKA_GROUP_ID ??= 'chat-service-persist';
 
   const logger = new Logger('Bootstrap');
   const config = loadConfig(process.env.SERVICE_NAME);
@@ -16,6 +16,9 @@ async function bootstrap() {
 
   app.connectMicroservice<MicroserviceOptions>(
     createKafkaMicroserviceOptions(config),
+    {
+      inheritAppConfig: true,
+    },
   );
 
   app.setGlobalPrefix('api');
@@ -30,6 +33,8 @@ async function bootstrap() {
       },
     }),
   );
+
+  app.useGlobalFilters(new RpcAllExceptionsFilter());
 
   await app.startAllMicroservices();
 

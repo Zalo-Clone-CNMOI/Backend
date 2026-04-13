@@ -1,14 +1,6 @@
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ClientKafka } from '@nestjs/microservices';
-import { KAFKA_CLIENT } from '@libs/kafka';
-import {
-  timeout,
-  retry,
-  timer,
-  catchError,
-  throwError,
-  lastValueFrom,
-} from 'rxjs';
+import { KAFKA_CLIENT, publishKafkaWithRetry } from '@libs/kafka';
 
 @Injectable()
 export class PresencePublisher implements OnModuleInit {
@@ -21,48 +13,12 @@ export class PresencePublisher implements OnModuleInit {
   }
 
   async emit(topic: string, payload: unknown): Promise<void> {
-    const MAX_RETRIES = 3;
-    const TIMEOUT_MS = 5000;
-
-    try {
-      const source$ = this.kafka.emit(topic, payload).pipe(
-        timeout(TIMEOUT_MS),
-
-        retry({
-          count: MAX_RETRIES,
-          delay: (error, retryCount) => {
-            this.logger.warn(
-              `Retry ${retryCount} for topic ${topic} in PresencePublisher due to error: ${error instanceof Error ? error.message : String(error)}`,
-            );
-            return timer(Math.pow(2, retryCount) * 1000);
-          },
-        }),
-
-        catchError((err) => {
-          this.logger.error(
-            `Failed completely to send to ${topic} in PresencePublisher after ${MAX_RETRIES} attempts.`,
-          );
-          return throwError(
-            () =>
-              new Error(
-                `Kafka Emit Failed: ${err instanceof Error ? err.message : String(err)}`,
-              ),
-          );
-        }),
-      );
-
-      await lastValueFrom(source$);
-      return;
-    } catch (error) {
-      this.handleFallback(topic, payload, error);
-    }
-  }
-
-  private handleFallback(topic: string, payload: unknown, error: unknown) {
-    this.logger.error(
-      `Lost Kafka connection in PresencePublisher. Performing fallback for topic ${topic}`,
-    );
-
-    throw error;
+    await publishKafkaWithRetry({
+      kafka: this.kafka,
+      logger: this.logger,
+      topic,
+      payload,
+      producer: PresencePublisher.name,
+    });
   }
 }

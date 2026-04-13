@@ -5,25 +5,22 @@ import {
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
-import { Inject, OnModuleInit, UseGuards } from '@nestjs/common';
+import {
+  Inject,
+  OnModuleInit,
+  UseFilters,
+  UseGuards,
+  UsePipes,
+  ValidationPipe,
+} from '@nestjs/common';
+import { WsExceptionFilter } from '@app/interceptors';
 import type { Server, Socket } from 'socket.io';
 import { ClientKafka } from '@nestjs/microservices';
+import { WsException } from '@nestjs/websockets';
 import { JwtService, WsAuthGuard } from '@libs/auth';
-import {
-  WsEvents,
-  type WsChatJoinPayload,
-  type WsChatSendPayload,
-  type WsPresenceHeartbeatPayload,
-  type WsChatEditPayload,
-  type WsChatDeletePayload,
-  type WsChatReactPayload,
-  type WsChatUnreactPayload,
-  type WsAiSmartReplyRequestPayload,
-  type WsAiSummaryRequestPayload,
-  type WsAiTranslateRequestPayload,
-  type WsAiDocumentQueryRequestPayload,
-  type WsChatTypingPayload,
-} from '@libs/contracts';
+import { RedisService } from '@libs/redis';
+import { randomUUID } from 'crypto';
+import { WsEvents, type WsQrBindIssuedPayload } from '@libs/contracts';
 import { KAFKA_CLIENT } from '@libs/kafka';
 import {
   ChatHandler,
@@ -31,6 +28,20 @@ import {
   AiHandler,
   TypingHandler,
 } from './handlers';
+import {
+  WsAiDocumentQueryRequestPayloadDto,
+  WsAiSmartReplyRequestPayloadDto,
+  WsAiSummaryRequestPayloadDto,
+  WsAiTranslateRequestPayloadDto,
+  WsChatDeletePayloadDto,
+  WsChatEditPayloadDto,
+  WsChatJoinPayloadDto,
+  WsChatReactPayloadDto,
+  WsChatSendPayloadDto,
+  WsChatTypingPayloadDto,
+  WsChatUnreactPayloadDto,
+  WsPresenceHeartbeatPayloadDto,
+} from './dto/ws-payload.dto';
 import type { DefaultEventsMap } from 'socket.io/dist/typed-events';
 
 type SocketData = { userId?: string };
@@ -41,6 +52,17 @@ type AuthedSocket = Socket<
   SocketData
 >;
 
+@UseFilters(WsExceptionFilter)
+@UsePipes(
+  new ValidationPipe({
+    whitelist: true,
+    forbidNonWhitelisted: true,
+    transform: true,
+    transformOptions: {
+      enableImplicitConversion: true,
+    },
+  }),
+)
 @WebSocketGateway()
 export class ChatGateway implements OnModuleInit {
   @WebSocketServer()
@@ -49,6 +71,7 @@ export class ChatGateway implements OnModuleInit {
   constructor(
     @Inject(KAFKA_CLIENT) private readonly kafka: ClientKafka,
     private readonly jwtService: JwtService,
+    private readonly redisService: RedisService,
     private readonly chatHandler: ChatHandler,
     private readonly presenceHandler: PresenceHandler,
     private readonly aiHandler: AiHandler,
@@ -97,7 +120,7 @@ export class ChatGateway implements OnModuleInit {
   @SubscribeMessage(WsEvents.ChatJoin)
   async handleJoin(
     @ConnectedSocket() socket: AuthedSocket,
-    @MessageBody() body: WsChatJoinPayload,
+    @MessageBody() body: WsChatJoinPayloadDto,
   ) {
     return this.chatHandler.handleJoin(socket, body.conversation_id);
   }
@@ -106,7 +129,7 @@ export class ChatGateway implements OnModuleInit {
   @SubscribeMessage(WsEvents.ChatSend)
   async handleSend(
     @ConnectedSocket() socket: AuthedSocket,
-    @MessageBody() body: WsChatSendPayload,
+    @MessageBody() body: WsChatSendPayloadDto,
   ) {
     const result = this.chatHandler.handleSend(socket, body);
     const userId = socket.data.userId;
@@ -120,7 +143,7 @@ export class ChatGateway implements OnModuleInit {
   @SubscribeMessage(WsEvents.ChatEdit)
   async handleEdit(
     @ConnectedSocket() socket: AuthedSocket,
-    @MessageBody() body: WsChatEditPayload,
+    @MessageBody() body: WsChatEditPayloadDto,
   ) {
     return this.chatHandler.handleEdit(socket, body);
   }
@@ -129,7 +152,7 @@ export class ChatGateway implements OnModuleInit {
   @SubscribeMessage(WsEvents.ChatDelete)
   async handleDelete(
     @ConnectedSocket() socket: AuthedSocket,
-    @MessageBody() body: WsChatDeletePayload,
+    @MessageBody() body: WsChatDeletePayloadDto,
   ) {
     return this.chatHandler.handleDelete(socket, body);
   }
@@ -138,7 +161,7 @@ export class ChatGateway implements OnModuleInit {
   @SubscribeMessage(WsEvents.ChatReact)
   async handleReact(
     @ConnectedSocket() socket: AuthedSocket,
-    @MessageBody() body: WsChatReactPayload,
+    @MessageBody() body: WsChatReactPayloadDto,
   ) {
     return this.chatHandler.handleReact(socket, body);
   }
@@ -147,7 +170,7 @@ export class ChatGateway implements OnModuleInit {
   @SubscribeMessage(WsEvents.ChatUnreact)
   async handleUnreact(
     @ConnectedSocket() socket: AuthedSocket,
-    @MessageBody() body: WsChatUnreactPayload,
+    @MessageBody() body: WsChatUnreactPayloadDto,
   ) {
     return this.chatHandler.handleUnreact(socket, body);
   }
@@ -156,7 +179,7 @@ export class ChatGateway implements OnModuleInit {
   @SubscribeMessage(WsEvents.ChatTyping)
   handleTyping(
     @ConnectedSocket() socket: AuthedSocket,
-    @MessageBody() body: WsChatTypingPayload,
+    @MessageBody() body: WsChatTypingPayloadDto,
   ) {
     return this.typingHandler.handleTyping(socket, body);
   }
@@ -167,7 +190,7 @@ export class ChatGateway implements OnModuleInit {
   @SubscribeMessage(WsEvents.PresenceHeartbeat)
   handleHeartbeat(
     @ConnectedSocket() socket: AuthedSocket,
-    @MessageBody() body: WsPresenceHeartbeatPayload,
+    @MessageBody() body: WsPresenceHeartbeatPayloadDto,
   ) {
     return this.presenceHandler.handleHeartbeat(socket, body);
   }
@@ -178,7 +201,7 @@ export class ChatGateway implements OnModuleInit {
   @SubscribeMessage(WsEvents.AiSmartReplyRequest)
   handleAiSmartReply(
     @ConnectedSocket() socket: AuthedSocket,
-    @MessageBody() body: WsAiSmartReplyRequestPayload,
+    @MessageBody() body: WsAiSmartReplyRequestPayloadDto,
   ) {
     return this.aiHandler.handleSmartReply(socket, body);
   }
@@ -187,7 +210,7 @@ export class ChatGateway implements OnModuleInit {
   @SubscribeMessage(WsEvents.AiSummaryRequest)
   handleAiSummary(
     @ConnectedSocket() socket: AuthedSocket,
-    @MessageBody() body: WsAiSummaryRequestPayload,
+    @MessageBody() body: WsAiSummaryRequestPayloadDto,
   ) {
     return this.aiHandler.handleSummary(socket, body);
   }
@@ -196,7 +219,7 @@ export class ChatGateway implements OnModuleInit {
   @SubscribeMessage(WsEvents.AiTranslateRequest)
   handleAiTranslate(
     @ConnectedSocket() socket: AuthedSocket,
-    @MessageBody() body: WsAiTranslateRequestPayload,
+    @MessageBody() body: WsAiTranslateRequestPayloadDto,
   ) {
     return this.aiHandler.handleTranslate(socket, body);
   }
@@ -205,9 +228,48 @@ export class ChatGateway implements OnModuleInit {
   @SubscribeMessage(WsEvents.AiDocumentQueryRequest)
   handleAiDocumentQuery(
     @ConnectedSocket() socket: AuthedSocket,
-    @MessageBody() body: WsAiDocumentQueryRequestPayload,
+    @MessageBody() body: WsAiDocumentQueryRequestPayloadDto,
   ) {
     return this.aiHandler.handleDocumentQuery(socket, body);
+  }
+
+  @SubscribeMessage(WsEvents.QrBindRequest)
+  async handleQrBindRequest(
+    @ConnectedSocket() socket: AuthedSocket,
+  ): Promise<void> {
+    const isLimited = await this.isQrBindRateLimited(socket.id);
+    if (isLimited) {
+      throw new WsException({
+        code: 'RATE_LIMIT_EXCEEDED',
+        message: 'Too many QR bind requests. Try again later.',
+      });
+    }
+
+    const socketBindingToken = randomUUID();
+    const expiresInSeconds = 90;
+
+    await this.redisService.setQrSocketBinding(
+      socketBindingToken,
+      socket.id,
+      expiresInSeconds,
+    );
+
+    const payload: WsQrBindIssuedPayload = {
+      socketId: socket.id,
+      socketBindingToken,
+      expiresInSeconds,
+    };
+
+    socket.emit(WsEvents.QrBindIssued, payload);
+  }
+
+  private async isQrBindRateLimited(socketId: string): Promise<boolean> {
+    const key = `rate:qr-bind:${socketId}`;
+    const count = await this.redisService.incrBy(key, 1);
+    if (count === 1) {
+      await this.redisService.expire(key, 60);
+    }
+    return count > 5;
   }
 
   // ── Broadcast Utilities ──────────────────────────────────────────────

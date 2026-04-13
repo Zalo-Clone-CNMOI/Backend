@@ -14,7 +14,8 @@
           "typescriptThreePlus": true,
           "enumPropertyNaming": "original",
           "useSingleRequestParameter": true,
-          "withNodeImports": true
+          "withNodeImports": true,
+          "suppressGenerationTimestamp": true
         }
       },
       "interaction-client": {
@@ -27,7 +28,8 @@
           "typescriptThreePlus": true,
           "enumPropertyNaming": "original",
           "useSingleRequestParameter": true,
-          "withNodeImports": true
+          "withNodeImports": true,
+          "suppressGenerationTimestamp": true
         }
       },
       "chat-client": {
@@ -40,7 +42,8 @@
           "typescriptThreePlus": true,
           "enumPropertyNaming": "original",
           "useSingleRequestParameter": true,
-          "withNodeImports": true
+          "withNodeImports": true,
+          "suppressGenerationTimestamp": true
         }
       },
       "media-client": {
@@ -53,7 +56,8 @@
           "typescriptThreePlus": true,
           "enumPropertyNaming": "original",
           "useSingleRequestParameter": true,
-          "withNodeImports": true
+          "withNodeImports": true,
+          "suppressGenerationTimestamp": true
         }
       }
     }

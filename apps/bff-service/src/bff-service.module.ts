@@ -1,5 +1,10 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule as NestConfigModule } from '@nestjs/config';
+import {
+  APP_CONFIG,
+  AppConfig,
+  ConfigModule as AppConfigModule,
+} from '@libs/config';
 import { BffServiceController } from './bff-service.controller';
 import { BffServiceService } from './bff-service.service';
 import { AuthModule } from './modules/auth';
@@ -15,16 +20,18 @@ import { LoggerModule } from '@libs/logger';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({
+    NestConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
     }),
+    AppConfigModule,
     LoggerModule,
-    ThrottlerModule.forRoot({
-      throttlers: [{ limit: 5, ttl: seconds(60) }],
-      storage: new ThrottlerStorageRedisService(
-        process.env.REDIS_URL || 'redis://redis:6379',
-      ),
+    ThrottlerModule.forRootAsync({
+      inject: [APP_CONFIG],
+      useFactory: (config: AppConfig) => ({
+        throttlers: [{ limit: 5, ttl: seconds(60) }],
+        storage: new ThrottlerStorageRedisService(config.redisUrl),
+      }),
     }),
     AuthModule,
     UsersModule,

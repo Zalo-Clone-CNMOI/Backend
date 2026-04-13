@@ -60,6 +60,18 @@ export function createMockRedisClient() {
       return entry.value;
     }),
 
+    mGet: jest.fn(async (keys: string[]): Promise<(string | null)[]> => {
+      cleanExpired();
+      return keys.map((key) => {
+        const entry = strings.get(key);
+        if (!entry || isExpired(entry.expiresAt)) {
+          strings.delete(key);
+          return null;
+        }
+        return entry.value;
+      });
+    }),
+
     set: jest.fn(async (key: string, value: string): Promise<void> => {
       strings.set(key, { value, expiresAt: null });
     }),

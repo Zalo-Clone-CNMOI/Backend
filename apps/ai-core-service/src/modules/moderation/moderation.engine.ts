@@ -12,6 +12,7 @@ import type {
   AiModerationResultEvent,
   ModerationLabelType,
   AiProviderType,
+  ModerationDecisionSourceType,
 } from '@libs/contracts';
 
 const toAiProviderType = (provider: string): AiProviderType => {
@@ -29,7 +30,6 @@ const toAiProviderType = (provider: string): AiProviderType => {
 export class ModerationEngine {
   private readonly logger = new Logger(ModerationEngine.name);
   private readonly ensembleEnabled: boolean;
-  private readonly failOpen: boolean;
 
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
@@ -40,9 +40,13 @@ export class ModerationEngine {
     private readonly moderationRepo: Repository<AiModerationLog>,
   ) {
     this.ensembleEnabled = config.aiModerationEnsemble === true;
-    this.failOpen = config.aiModerationFailOpen === true;
+    if (config.aiModerationFailOpen === true) {
+      this.logger.warn(
+        'aiModerationFailOpen=true is ignored; moderation fallback is enforced fail-closed',
+      );
+    }
     this.logger.log(
-      `Moderation engine initialized (ensemble: ${this.ensembleEnabled}, failOpen: ${this.failOpen})`,
+      `Moderation engine initialized (ensemble: ${this.ensembleEnabled}, failClosed: true)`,
     );
   }
 
@@ -97,6 +101,8 @@ export class ModerationEngine {
         confidence: parsed.confidence,
         provider: toAiProviderType(result.provider),
         ensemble: this.ensembleEnabled,
+        decision_source: parsed.decision_source,
+        failure_reason: parsed.failure_reason,
         processed_at: Date.now(),
         tokens_used: result.tokensIn + result.tokensOut,
         trace_id: event.trace_id,
@@ -121,9 +127,12 @@ export class ModerationEngine {
         conversation_id: event.conversation_id,
         sender_id: event.sender_id,
         created_at: event.created_at,
-        ...this.fallbackModeration(),
+        ...this.fallbackModeration('fallback_provider_failure'),
         provider: 'openai' as const,
         ensemble: false,
+        decision_source: 'fallback_provider_failure',
+        failure_reason:
+          error instanceof Error ? error.message : 'provider_request_failed',
         processed_at: Date.now(),
         tokens_used: 0,
         trace_id: event.trace_id,
@@ -135,6 +144,8 @@ export class ModerationEngine {
     is_flagged: boolean;
     labels: ModerationLabelType[];
     confidence: number;
+    decision_source: ModerationDecisionSourceType;
+    failure_reason?: string;
   } {
     try {
       const json = JSON.parse(content);
@@ -144,32 +155,37 @@ export class ModerationEngine {
           ? (json.labels as ModerationLabelType[])
           : ['clean' as ModerationLabelType],
         confidence: typeof json.confidence === 'number' ? json.confidence : 0,
+        decision_source: 'model',
       };
     } catch {
       this.logger.warn(
         'Failed to parse moderation response, applying fallback moderation policy',
       );
-      return this.fallbackModeration();
+      return this.fallbackModeration('fallback_parse_failure');
     }
   }
 
-  private fallbackModeration(): {
+  private fallbackModeration(
+    source: Extract<
+      ModerationDecisionSourceType,
+      'fallback_provider_failure' | 'fallback_parse_failure'
+    >,
+  ): {
     is_flagged: boolean;
     labels: ModerationLabelType[];
     confidence: number;
+    decision_source: ModerationDecisionSourceType;
+    failure_reason: string;
   } {
-    if (this.failOpen) {
-      return {
-        is_flagged: false,
-        labels: ['clean' as ModerationLabelType],
-        confidence: 0,
-      };
-    }
-
     return {
       is_flagged: true,
       labels: ['spam' as ModerationLabelType],
       confidence: 1,
+      decision_source: source,
+      failure_reason:
+        source === 'fallback_parse_failure'
+          ? 'moderation_response_parse_failed'
+          : 'moderation_provider_failed',
     };
   }
 }

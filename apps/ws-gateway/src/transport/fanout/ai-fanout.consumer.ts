@@ -3,6 +3,7 @@ import { EventPattern, Payload } from '@nestjs/microservices';
 import {
   KafkaTopics,
   WsEvents,
+  type AiModerationEnforcementEvent,
   type AiModerationResultEvent,
   type AiSmartReplyResultEvent,
   type AiSummaryResultEvent,
@@ -33,6 +34,30 @@ export class AiFanoutConsumer {
         confidence: payload.confidence,
       });
     }
+  }
+
+  /**
+   * Handle moderation enforcement outcomes.
+   * Broadcast to conversation room for consistent moderation UX state.
+   */
+  @EventPattern(KafkaTopics.AiModerationEnforcement)
+  onAiModerationEnforcement(@Payload() payload: AiModerationEnforcementEvent) {
+    this.gateway.broadcastToConversation(
+      payload.conversation_id,
+      WsEvents.AiModerationEnforcement,
+      {
+        message_id: payload.message_id,
+        conversation_id: payload.conversation_id,
+        sender_id: payload.sender_id,
+        action: payload.action,
+        outcome: payload.outcome,
+        reason: payload.reason,
+        is_flagged: payload.is_flagged,
+        labels: payload.labels,
+        confidence: payload.confidence,
+        enforced_at: payload.enforced_at,
+      },
+    );
   }
 
   /**

@@ -35,6 +35,7 @@ export const KafkaTopics = {
   // ── AI Core Topics ──────────────────────────────────────────────────
   AiModerationRequest: 'ai.moderation.request',
   AiModerationResult: 'ai.moderation.result',
+  AiModerationEnforcement: 'ai.moderation.enforcement',
   AiSmartReplyRequest: 'ai.smart-reply.request',
   AiSmartReplyResult: 'ai.smart-reply.result',
   AiSummaryRequest: 'ai.summary.request',

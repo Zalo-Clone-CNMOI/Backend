@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/require-await */
 /**
  * Unit tests for SSO AuthService
  *
@@ -44,6 +43,9 @@ describe('AuthService', () => {
     getQrSession: jest.Mock;
     confirmQrSession: jest.Mock;
     rejectQrSession: jest.Mock;
+    consumeQrSocketBinding: jest.Mock;
+    setTokenRevokedAfter: jest.Mock;
+    invalidateAuthUserCache: jest.Mock;
   };
   let kafkaClient: { emit: jest.Mock };
   let dataSource: { transaction: jest.Mock };
@@ -75,10 +77,17 @@ describe('AuthService', () => {
       getQrSession: jest.fn(),
       confirmQrSession: jest.fn(),
       rejectQrSession: jest.fn(),
+      consumeQrSocketBinding: jest.fn(),
+      setTokenRevokedAfter: jest.fn(),
+      invalidateAuthUserCache: jest.fn(),
     };
 
     kafkaClient = { emit: jest.fn() };
 
+    /* eslint-disable @typescript-eslint/require-await, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call */
+    // `cb` has no type annotation — jest.Mock is unparameterized here, so the
+    // three unsafe-* rules fire on `return cb({...})`, and require-await fires
+    // because the async wrapper contains no await keyword.
     dataSource = {
       transaction: jest.fn().mockImplementation(async (cb) => {
         return cb({
@@ -86,6 +95,7 @@ describe('AuthService', () => {
         });
       }),
     };
+    /* eslint-enable @typescript-eslint/require-await, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call */
 
     firebaseService = {
       verifyIdToken: jest.fn(),
@@ -215,10 +225,13 @@ describe('AuthService', () => {
 
       expect(result).toHaveProperty('user');
       expect(result).toHaveProperty('tokens');
-      expect(userRepository.update).toHaveBeenCalledWith(
-        mockUser.id,
-        expect.objectContaining({ lastSeenAt: expect.any(Date) }),
-      );
+      expect(userRepository.update).toHaveBeenCalled();
+      const loginUpdateCall = userRepository.update.mock.calls[0] as [
+        string,
+        { lastSeenAt: Date },
+      ];
+      expect(loginUpdateCall[0]).toBe(mockUser.id);
+      expect(loginUpdateCall[1].lastSeenAt).toBeInstanceOf(Date);
     });
 
     it('should throw UNAUTHORIZED for non-existent phone', async () => {
@@ -330,15 +343,52 @@ describe('AuthService', () => {
   describe('logout', () => {
     it('should update lastSeenAt on logout', async () => {
       await service.logout('user-123', {});
-      expect(userRepository.update).toHaveBeenCalledWith(
+      expect(userRepository.update).toHaveBeenCalled();
+      const logoutUpdateCall = userRepository.update.mock.calls[0] as [
+        string,
+        { lastSeenAt: Date },
+      ];
+      expect(logoutUpdateCall[0]).toBe('user-123');
+      expect(logoutUpdateCall[1].lastSeenAt).toBeInstanceOf(Date);
+      expect(redisService.setTokenRevokedAfter).toHaveBeenCalledWith(
         'user-123',
-        expect.objectContaining({ lastSeenAt: expect.any(Date) }),
+        expect.any(Number),
+      );
+      expect(redisService.invalidateAuthUserCache).toHaveBeenCalledWith(
+        'user-123',
       );
     });
 
     it('should handle logout with deviceId', async () => {
       await service.logout('user-123', { deviceId: 'device-xyz' });
       expect(userRepository.update).toHaveBeenCalled();
+    });
+
+    it('should complete logout even when setTokenRevokedAfter rejects', async () => {
+      redisService.setTokenRevokedAfter.mockRejectedValue(
+        new Error('redis down'),
+      );
+      redisService.invalidateAuthUserCache.mockResolvedValue(undefined);
+
+      // Must not throw — allSettled absorbs individual Redis failures
+      await expect(service.logout('user-123', {})).resolves.toBeUndefined();
+      expect(userRepository.update).toHaveBeenCalled();
+      const logoutFailureUpdateCall = userRepository.update.mock.calls[0] as [
+        string,
+        { lastSeenAt: Date },
+      ];
+      expect(logoutFailureUpdateCall[0]).toBe('user-123');
+      expect(logoutFailureUpdateCall[1].lastSeenAt).toBeInstanceOf(Date);
+    });
+
+    it('should complete logout even when invalidateAuthUserCache rejects', async () => {
+      redisService.setTokenRevokedAfter.mockResolvedValue(undefined);
+      redisService.invalidateAuthUserCache.mockRejectedValue(
+        new Error('redis down'),
+      );
+
+      await expect(service.logout('user-123', {})).resolves.toBeUndefined();
+      expect(redisService.setTokenRevokedAfter).toHaveBeenCalled();
     });
   });
 
@@ -361,11 +411,19 @@ describe('AuthService', () => {
       });
 
       expect(result.message).toBeDefined();
-      expect(userRepository.update).toHaveBeenCalledWith(
+      expect(userRepository.update).toHaveBeenCalled();
+      const resetPasswordUpdateCall = userRepository.update.mock.calls[0] as [
+        string,
+        { passwordHash: string },
+      ];
+      expect(resetPasswordUpdateCall[0]).toBe(mockUser.id);
+      expect(typeof resetPasswordUpdateCall[1].passwordHash).toBe('string');
+      expect(redisService.setTokenRevokedAfter).toHaveBeenCalledWith(
         mockUser.id,
-        expect.objectContaining({
-          passwordHash: expect.any(String),
-        }),
+        expect.any(Number),
+      );
+      expect(redisService.invalidateAuthUserCache).toHaveBeenCalledWith(
+        mockUser.id,
       );
     });
 
@@ -388,11 +446,12 @@ describe('AuthService', () => {
   // ─── QR Session Flow ──────────────────────────────────────────────────────
 
   describe('generateQrSession', () => {
-    it('should create a QR session in Redis', async () => {
+    it('should create a QR session in Redis bound to the verified socket', async () => {
+      redisService.consumeQrSocketBinding.mockResolvedValue('socket-abc');
       redisService.setQrSession.mockResolvedValue(undefined);
 
       const result = await service.generateQrSession({
-        socketId: 'socket-abc',
+        socketBindingToken: '6e1b4a96-f6d2-4e8a-b3e5-d88d8b99f8cb',
       });
 
       expect(result).toHaveProperty('sessionId');
@@ -405,6 +464,43 @@ describe('AuthService', () => {
           status: 'PENDING',
         }),
       );
+    });
+
+    it('should reject when socket binding token is missing or already consumed', async () => {
+      redisService.consumeQrSocketBinding.mockResolvedValue(null);
+
+      await expect(
+        service.generateQrSession({
+          socketBindingToken: '6e1b4a96-f6d2-4e8a-b3e5-d88d8b99f8cb',
+        }),
+      ).rejects.toThrow(BusinessException);
+
+      expect(redisService.setQrSession).not.toHaveBeenCalled();
+    });
+
+    it('should reject replayed socket binding token after first successful consume', async () => {
+      redisService.consumeQrSocketBinding
+        .mockResolvedValueOnce('socket-abc')
+        .mockResolvedValueOnce(null);
+      redisService.setQrSession.mockResolvedValue(undefined);
+
+      await expect(
+        service.generateQrSession({
+          socketBindingToken: 'binding-token-once',
+        }),
+      ).resolves.toEqual(
+        expect.objectContaining({
+          expiresInSeconds: 300,
+        }),
+      );
+
+      await expect(
+        service.generateQrSession({
+          socketBindingToken: 'binding-token-once',
+        }),
+      ).rejects.toThrow(BusinessException);
+
+      expect(redisService.setQrSession).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -449,7 +545,11 @@ describe('AuthService', () => {
         session,
       });
 
-      // dataSource.transaction callback receives a manager
+      // dataSource.transaction callback receives a manager.
+      // The async wrapper has no await (it returns the callback's Promise
+      // directly), so require-await fires; no-unsafe-assignment fires because
+      // jest.fn() returns jest.Mock<any, any, any>.
+
       dataSource.transaction.mockImplementation(
         async (cb: (manager: { findOne: jest.Mock }) => Promise<unknown>) => {
           return cb({

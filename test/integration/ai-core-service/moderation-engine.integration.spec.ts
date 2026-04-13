@@ -21,13 +21,13 @@ import type { AiModerationRequestEvent } from '@libs/contracts';
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function makeGateway() {
-  return { complete: jest.fn() } as jest.Mocked<AiGatewayService>;
+  return { complete: jest.fn() } as unknown as jest.Mocked<AiGatewayService>;
 }
 
 function makeMetrics() {
   return {
     recordRequest: jest.fn(),
-  } as jest.Mocked<AiMetricsService>;
+  } as unknown as jest.Mocked<AiMetricsService>;
 }
 
 function makeRepo() {
@@ -47,6 +47,7 @@ function makeEvent(
     message_id: 'msg-001',
     conversation_id: 'conv-001',
     sender_id: 'user-001',
+    created_at: Date.now(),
     body: 'This is a normal message',
     requested_at: Date.now(),
     trace_id: 'trace-test',
@@ -261,14 +262,16 @@ describe('ModerationEngine (integration)', () => {
   // ── Failure resilience ────────────────────────────────────────────
 
   describe('failure resilience', () => {
-    it('does not throw when LLM call fails — returns safe default', async () => {
+    it('does not throw when LLM call fails — returns fail-closed fallback', async () => {
       gateway.complete.mockRejectedValue(new Error('Network error'));
 
       await expect(engine.moderate(makeEvent())).resolves.toEqual(
         expect.objectContaining({
-          is_flagged: false,
-          labels: ['clean'],
-          confidence: 0,
+          is_flagged: true,
+          labels: ['spam'],
+          confidence: 1,
+          decision_source: 'fallback_provider_failure',
+          failure_reason: 'Network error',
           tokens_used: 0,
         }),
       );

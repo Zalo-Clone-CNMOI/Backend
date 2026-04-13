@@ -4,10 +4,10 @@ import { MicroserviceOptions } from '@nestjs/microservices';
 import { AppModule } from './app.module';
 import { loadConfig } from '@libs/config';
 import { createKafkaMicroserviceOptions } from '@libs/kafka';
+import { RpcAllExceptionsFilter } from '@app/interceptors';
 
 async function bootstrap() {
   process.env.SERVICE_NAME ??= 'ai-core-service';
-  process.env.KAFKA_GROUP_ID ??= 'ai-core-service';
 
   const logger = new Logger('Bootstrap');
   const config = loadConfig(process.env.SERVICE_NAME);
@@ -16,6 +16,9 @@ async function bootstrap() {
 
   app.connectMicroservice<MicroserviceOptions>(
     createKafkaMicroserviceOptions(config),
+    {
+      inheritAppConfig: true,
+    },
   );
 
   app.setGlobalPrefix('api');
@@ -31,13 +34,15 @@ async function bootstrap() {
     }),
   );
 
+  app.useGlobalFilters(new RpcAllExceptionsFilter());
+
   await app.startAllMicroservices();
 
   const port = Number(process.env.PORT ?? 5005);
   await app.listen(port);
 
   logger.log(`AI Core Service running on port ${port}`);
-  logger.log(`Kafka microservice connected (group: ai-core-service)`);
+  logger.log(`Kafka microservice connected (group: ${config.kafkaGroupId})`);
 }
 
 void bootstrap();

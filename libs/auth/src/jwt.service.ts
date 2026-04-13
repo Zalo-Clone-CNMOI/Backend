@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
 import { ErrorCode } from '@app/constant';
 import { BusinessException, JwtPayload, TokenPair } from '@app/types';
@@ -13,48 +13,46 @@ export interface JwtUser {
  */
 @Injectable()
 export class JwtService {
-  private readonly logger = new Logger(JwtService.name);
+  // Secrets cached at construction — eliminates per-request process.env reads
+  // and provides a single throw-site for misconfiguration.
+  private readonly _accessSecret: string;
+  private readonly _refreshSecret: string;
+  private readonly _accessExpiresIn: string;
+  private readonly _refreshExpiresIn: string;
+
+  constructor() {
+    this._accessSecret = process.env.JWT_SECRET?.trim() ?? '';
+    this._refreshSecret = process.env.JWT_REFRESH_SECRET?.trim() ?? '';
+    this._accessExpiresIn = process.env.JWT_ACCESS_EXPIRES_IN ?? '15m';
+    this._refreshExpiresIn = process.env.JWT_REFRESH_EXPIRES_IN ?? '7d';
+  }
 
   private get accessSecret(): string {
-    const secret = process.env.JWT_SECRET;
-
-    if (secret) {
-      return secret;
-    }
-
-    const isTestEnv = process.env.NODE_ENV === 'test';
-    if (isTestEnv && process.env.JWT_SECRET) {
-      this.logger.warn(
-        'Using legacy JWT_SECRET fallback in test environment. Set JWT_SECRET for production-safe config.',
+    if (!this._accessSecret) {
+      throw new Error(
+        'JWT_SECRET environment variable is required. ' +
+          'Set JWT_SECRET for production use.',
       );
-      return process.env.JWT_SECRET;
     }
-
-    throw new Error(
-      'JWT_SECRET environment variable is required. ' +
-        'Set JWT_SECRET for production use.',
-    );
+    return this._accessSecret;
   }
 
   private get refreshSecret(): string {
-    const secret = process.env.JWT_REFRESH_SECRET;
-
-    if (!secret) {
+    if (!this._refreshSecret) {
       throw new Error(
         'JWT_REFRESH_SECRET environment variable is required. ' +
           'Generate a secure secret for production use.',
       );
     }
-
-    return secret;
+    return this._refreshSecret;
   }
 
   private get accessExpiresIn(): string {
-    return process.env.JWT_ACCESS_EXPIRES_IN ?? '15m';
+    return this._accessExpiresIn;
   }
 
   private get refreshExpiresIn(): string {
-    return process.env.JWT_REFRESH_EXPIRES_IN ?? '7d';
+    return this._refreshExpiresIn;
   }
 
   /**

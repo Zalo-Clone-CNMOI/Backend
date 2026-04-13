@@ -251,6 +251,72 @@ describe('ChatHandler', () => {
         expect.objectContaining({ attachments }),
       );
     });
+
+    it('should reject attachment when uploadedById is null', async () => {
+      const socket = createMockSocket();
+      const attachments = [
+        {
+          key: 'private/uploads/img-null-owner.png',
+          type: 'image' as const,
+          name: 'img-null-owner.png',
+          size: 1024,
+          content_type: 'image/png',
+        },
+      ];
+
+      mediaFileRepo.find.mockResolvedValue([
+        {
+          key: 'private/uploads/img-null-owner.png',
+          uploadedById: null,
+          status: 'uploaded',
+        },
+      ]);
+
+      const body = makeSendPayload({ attachments });
+      membership.canUserAccessConversation.mockResolvedValue(true);
+
+      await handler.handleSend(socket, body);
+
+      expect(kafka.emit).not.toHaveBeenCalled();
+      expect(socket.emit).toHaveBeenCalledWith(WsEvents.ChatAck, {
+        message_id: body.message_id,
+        status: 'rejected',
+        reason: 'attachment_not_owned',
+      });
+    });
+
+    it('should reject attachment when uploadedById is empty string', async () => {
+      const socket = createMockSocket();
+      const attachments = [
+        {
+          key: 'private/uploads/img-empty-owner.png',
+          type: 'image' as const,
+          name: 'img-empty-owner.png',
+          size: 1024,
+          content_type: 'image/png',
+        },
+      ];
+
+      mediaFileRepo.find.mockResolvedValue([
+        {
+          key: 'private/uploads/img-empty-owner.png',
+          uploadedById: '   ',
+          status: 'uploaded',
+        },
+      ]);
+
+      const body = makeSendPayload({ attachments });
+      membership.canUserAccessConversation.mockResolvedValue(true);
+
+      await handler.handleSend(socket, body);
+
+      expect(kafka.emit).not.toHaveBeenCalled();
+      expect(socket.emit).toHaveBeenCalledWith(WsEvents.ChatAck, {
+        message_id: body.message_id,
+        status: 'rejected',
+        reason: 'attachment_not_owned',
+      });
+    });
   });
 
   // ── handleEdit ────────────────────────────────────────────────────────

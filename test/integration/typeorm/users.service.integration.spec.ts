@@ -14,7 +14,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { UsersService } from '../../../apps/sso-service/src/modules/users/users.service';
-import { User, Friendship } from '@libs/database';
+import { User, Friendship, MediaFile } from '@libs/database';
 import { CacheService } from '@libs/redis';
 import { REDIS_CLIENT } from '@libs/redis/redis.tokens';
 import {
@@ -30,12 +30,14 @@ describe('UsersService (integration)', () => {
   let service: UsersService;
   let userRepo: ReturnType<typeof createMockRepository>;
   let friendshipRepo: ReturnType<typeof createMockRepository>;
+  let mediaFileRepo: ReturnType<typeof createMockRepository>;
   let redis: ReturnType<typeof createMockRedisClient>;
   let cache: CacheService;
 
   beforeAll(async () => {
     userRepo = createMockRepository();
     friendshipRepo = createMockRepository();
+    mediaFileRepo = createMockRepository();
     redis = createMockRedisClient();
 
     module = await Test.createTestingModule({
@@ -43,6 +45,7 @@ describe('UsersService (integration)', () => {
         UsersService,
         { provide: getRepositoryToken(User), useValue: userRepo },
         { provide: getRepositoryToken(Friendship), useValue: friendshipRepo },
+        { provide: getRepositoryToken(MediaFile), useValue: mediaFileRepo },
         CacheService,
         { provide: REDIS_CLIENT, useValue: redis.client },
       ],

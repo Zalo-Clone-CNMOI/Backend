@@ -8,16 +8,19 @@ import {
   TransformResponseInterceptor,
 } from '@app/interceptors';
 import { JwtAuthGuard } from '@libs/auth';
+import { loadConfig, assertProductionCors } from '@libs/config';
 
 async function bootstrap() {
   process.env.SERVICE_NAME ??= 'sso-service';
+  const config = loadConfig(process.env.SERVICE_NAME);
+  assertProductionCors(config);
 
   const app = await NestFactory.create(AppModule);
   const logger = new Logger('Bootstrap');
   app.setGlobalPrefix('api');
 
   app.enableCors({
-    origin: process.env.CORS_ORIGIN?.split(',') ?? '*',
+    origin: config.allowedOrigins,
     credentials: true,
   });
 

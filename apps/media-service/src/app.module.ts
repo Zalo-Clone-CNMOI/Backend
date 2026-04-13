@@ -7,6 +7,7 @@ import { DatabaseModule, MediaFile } from '@libs/database';
 import { ConversationMembershipModule } from '@libs/mvp-access';
 import { ScheduleModule } from '@nestjs/schedule';
 import { S3Module } from '@libs/s3';
+import { HealthCheckService } from '@libs/shared';
 import { HealthController } from './health.controller';
 import { MediaController } from './media/media.controller';
 import { MediaService } from './media/media.service';
@@ -39,6 +40,6 @@ import { OrphanedFileCleanupTask } from './tasks/cleanup.task';
     }),
   ],
   controllers: [HealthController, MediaController, MediaConsumer],
-  providers: [MediaService, OrphanedFileCleanupTask],
+  providers: [MediaService, OrphanedFileCleanupTask, HealthCheckService],
 })
 export class AppModule {}

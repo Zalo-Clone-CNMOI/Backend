@@ -2,15 +2,15 @@ import { NestFactory } from '@nestjs/core';
 import { Logger } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { RedisIoAdapter } from './socket/redis-io.adapter';
-import { loadConfig } from '@libs/config';
+import { loadConfig, assertProductionCors } from '@libs/config';
 import { createKafkaMicroserviceOptions } from '@libs/kafka';
 
 async function bootstrap() {
   const logger = new Logger('WsGatewayBootstrap');
   process.env.SERVICE_NAME ??= 'ws-gateway';
-  process.env.KAFKA_GROUP_ID ??= 'ws-gateway-fanout';
 
   const config = loadConfig(process.env.SERVICE_NAME);
+  assertProductionCors(config);
 
   logger.log('[Bootstrap] Creating Nest application for ws-gateway...');
   const app = await NestFactory.create(AppModule);
@@ -20,20 +20,16 @@ async function bootstrap() {
     credentials: true,
   });
 
-  const redisUrl = process.env.REDIS_URL;
-  const adapter = new RedisIoAdapter(app);
-
-  if (redisUrl) {
-    logger.log('[Bootstrap] Initializing Redis adapter...');
-    await adapter.connectToRedis();
-  } else {
-    logger.warn('[Bootstrap] REDIS_URL not set. Using in-memory adapter.');
-  }
+  const adapter = new RedisIoAdapter(app, config.allowedOrigins);
+  logger.log('[Bootstrap] Initializing Redis adapter...');
+  await adapter.connectToRedis(config.redisUrl!);
 
   app.useWebSocketAdapter(adapter);
 
   logger.log('[Bootstrap] Connecting Kafka microservice(s)...');
-  app.connectMicroservice(createKafkaMicroserviceOptions(config));
+  app.connectMicroservice(createKafkaMicroserviceOptions(config), {
+    inheritAppConfig: true,
+  });
   await app.startAllMicroservices();
   logger.log('[Bootstrap] Kafka microservices started.');
 

@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
-import { ConfigModule } from '@libs/config';
+import { APP_CONFIG, AppConfig, ConfigModule } from '@libs/config';
 import { LoggerModule } from '@libs/logger';
 import { DatabaseModule } from '@libs/database';
 import { AuthModule as SharedAuthModule, JwtAuthGuard } from '@libs/auth';
@@ -23,11 +23,12 @@ import { ThrottlerModule, seconds } from '@nestjs/throttler';
     AuthModule,
     UsersModule,
     DeviceTokensModule,
-    ThrottlerModule.forRoot({
-      throttlers: [{ limit: 5, ttl: seconds(60) }],
-      storage: new ThrottlerStorageRedisService(
-        process.env.REDIS_URL || 'redis://redis:6379',
-      ),
+    ThrottlerModule.forRootAsync({
+      inject: [APP_CONFIG],
+      useFactory: (config: AppConfig) => ({
+        throttlers: [{ limit: 5, ttl: seconds(60) }],
+        storage: new ThrottlerStorageRedisService(config.redisUrl),
+      }),
     }),
   ],
   controllers: [HealthController],

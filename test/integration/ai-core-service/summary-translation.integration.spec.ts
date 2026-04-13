@@ -25,13 +25,13 @@ import type {
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function makeGateway() {
-  return { complete: jest.fn() } as jest.Mocked<AiGatewayService>;
+  return { complete: jest.fn() } as unknown as jest.Mocked<AiGatewayService>;
 }
 
 function makeMetrics() {
   return {
     recordRequest: jest.fn(),
-  } as jest.Mocked<AiMetricsService>;
+  } as unknown as jest.Mocked<AiMetricsService>;
 }
 
 function makeRedis() {
@@ -42,7 +42,7 @@ function makeRedis() {
     incrBy: jest.fn().mockResolvedValue(0),
     ttl: jest.fn().mockResolvedValue(-1),
     expire: jest.fn().mockResolvedValue(1),
-  } as jest.Mocked<RedisService>;
+  } as unknown as jest.Mocked<RedisService>;
 }
 
 function makeLlmResult(

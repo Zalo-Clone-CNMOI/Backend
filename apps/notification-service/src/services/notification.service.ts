@@ -82,7 +82,7 @@ export class NotificationService {
         sent_at: Date.now(),
         trace_id,
       };
-      this.publisher.emit(KafkaTopics.NotificationSent, sentEvent);
+      await this.publisher.emit(KafkaTopics.NotificationSent, sentEvent);
     } else {
       const failedEvent: NotificationFailedEvent = {
         provider: 'fcm',
@@ -95,7 +95,7 @@ export class NotificationService {
         failed_at: Date.now(),
         trace_id,
       };
-      this.publisher.emit(KafkaTopics.NotificationFailed, failedEvent);
+      await this.publisher.emit(KafkaTopics.NotificationFailed, failedEvent);
     }
   }
 

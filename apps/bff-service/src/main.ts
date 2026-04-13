@@ -2,9 +2,17 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { BffServiceModule } from './bff-service.module';
-import { TransformResponseInterceptor } from '@app/interceptors/transform-response.interceptor';
+import {
+  HttpExceptionFilter,
+  TransformResponseInterceptor,
+} from '@app/interceptors';
+import { loadConfig, assertProductionCors } from '@libs/config';
 
 async function bootstrap() {
+  process.env.SERVICE_NAME ??= 'bff-service';
+  const appConfig = loadConfig(process.env.SERVICE_NAME);
+  assertProductionCors(appConfig);
+
   const app = await NestFactory.create(BffServiceModule);
   const logger = new Logger('BFF-Service');
 
@@ -13,7 +21,7 @@ async function bootstrap() {
 
   // CORS configuration
   app.enableCors({
-    origin: process.env.CORS_ORIGIN?.split(',') || '*',
+    origin: appConfig.allowedOrigins,
     credentials: true,
   });
 
@@ -30,7 +38,7 @@ async function bootstrap() {
   );
 
   // Swagger documentation
-  const config = new DocumentBuilder()
+  const swaggerConfig = new DocumentBuilder()
     .setTitle('BFF Service API')
     .setDescription(
       'Backend for Frontend service that proxies requests to microservices',
@@ -46,10 +54,11 @@ async function bootstrap() {
       'BearerAuth',
     )
     .build();
-  const document = SwaggerModule.createDocument(app, config);
+  const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('docs', app, document);
   logger.log('Swagger documentation available at /docs');
 
+  app.useGlobalFilters(new HttpExceptionFilter());
   app.useGlobalInterceptors(new TransformResponseInterceptor());
 
   const port = Number(process.env.PORT) || 3000;

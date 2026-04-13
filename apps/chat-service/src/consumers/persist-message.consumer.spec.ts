@@ -345,7 +345,10 @@ describe('PersistMessageConsumer', () => {
       // 1. ChatMessageCreated
       // 2. AiModerationRequest (async)
       // We need to wait for the async fire-and-forget to complete
-      await new Promise((r) => setTimeout(r, 50));
+      // Flush all pending microtasks/macrotasks from fire-and-forget blocks
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
 
       const emitCalls = publisher.emit.mock.calls as Array<[string, unknown]>;
       expect(emitCalls.some((c) => c[0] === 'chat.message.created')).toBe(true);
@@ -380,7 +383,10 @@ describe('PersistMessageConsumer', () => {
       // Should not throw
       await expect(consumer.onSend(payload)).resolves.not.toThrow();
 
-      await new Promise((r) => setTimeout(r, 50));
+      // Flush all pending microtasks/macrotasks from fire-and-forget blocks
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
     });
   });
 
@@ -767,9 +773,71 @@ describe('PersistMessageConsumer', () => {
       );
       expect(cacheService.setIfAbsent).not.toHaveBeenCalled();
       expect(repo.softDeleteMessage).not.toHaveBeenCalled();
-      expect(publisher.emit).not.toHaveBeenCalled();
+      expect(publisher.emit).toHaveBeenCalledWith(
+        'ai.moderation.enforcement',
+        expect.objectContaining({
+          message_id: payload.message_id,
+          conversation_id: payload.conversation_id,
+          outcome: 'deduplicated',
+          reason: 'delete_event_already_emitted',
+        }),
+      );
+      expect(publisher.emit).toHaveBeenCalledTimes(1);
       expect(cacheService.invalidateRecentMessages).not.toHaveBeenCalled();
       expect(cacheService.delIfValueMatches).not.toHaveBeenCalled();
+    });
+
+    it('should emit deduplicated outcome when delete marker already exists after lock acquisition', async () => {
+      const payload = {
+        message_id: 'msg-moderation-dedupe-after-lock-1',
+        conversation_id: 'conv-dedupe-after-lock-1',
+        sender_id: 'user-dedupe-after-lock-1',
+        created_at: Date.now() - 1000,
+        is_flagged: true,
+        labels: ['spam' as const],
+        confidence: 1,
+        provider: 'openai' as const,
+        ensemble: false,
+        decision_source: 'model' as const,
+        processed_at: Date.now(),
+        tokens_used: 0,
+      };
+
+      repo.trySoftDeleteMessage.mockResolvedValue(true);
+      cacheService.get.mockResolvedValue(true);
+
+      await consumer.onModerationResult(payload);
+
+      expect(cacheService.setIfAbsent).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `${payload.conversation_id}:${payload.message_id}:lock`,
+        ),
+        expect.any(String),
+        120,
+      );
+      expect(cacheService.get).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `${payload.conversation_id}:${payload.message_id}`,
+        ),
+      );
+      expect(publisher.emit).toHaveBeenCalledWith(
+        'ai.moderation.enforcement',
+        expect.objectContaining({
+          message_id: payload.message_id,
+          conversation_id: payload.conversation_id,
+          outcome: 'deduplicated',
+          reason: 'delete_event_already_emitted_after_lock_acquired',
+        }),
+      );
+      expect(publisher.emit).toHaveBeenCalledTimes(1);
+      expect(cacheService.set).not.toHaveBeenCalled();
+      expect(cacheService.invalidateRecentMessages).not.toHaveBeenCalled();
+      expect(cacheService.delIfValueMatches).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `${payload.conversation_id}:${payload.message_id}:lock`,
+        ),
+        expect.any(String),
+      );
     });
 
     it('should re-emit delete event on retry when message already deleted but emit marker is missing', async () => {
@@ -833,7 +901,21 @@ describe('PersistMessageConsumer', () => {
         '22222222-2222-4222-8222-222222222222',
         120,
       );
-      expect(publisher.emit).toHaveBeenCalledTimes(3);
+      // First invocation: delete event emit threw, then enforcement outcome emitted
+      expect(publisher.emit).toHaveBeenCalledWith(
+        'chat.message.deleted',
+        expect.objectContaining({ message_id: payload.message_id }),
+      );
+      expect(publisher.emit).toHaveBeenCalledWith(
+        'ai.moderation.enforcement',
+        expect.objectContaining({
+          message_id: payload.message_id,
+          outcome: 'failed',
+          reason: 'chat_message_deleted_emit_failed',
+          action: 'soft_delete',
+        }),
+      );
+      // Second invocation: delete event succeeded, already_deleted outcome emitted
       expect(publisher.emit).toHaveBeenCalledWith(
         'ai.moderation.enforcement',
         expect.objectContaining({
@@ -842,6 +924,8 @@ describe('PersistMessageConsumer', () => {
           action: 'soft_delete',
         }),
       );
+      // 4 total: 2× chat.message.deleted + 2× ai.moderation.enforcement
+      expect(publisher.emit).toHaveBeenCalledTimes(4);
       expect(cacheService.set).toHaveBeenCalledWith(
         expect.stringContaining(
           `${payload.conversation_id}:${payload.message_id}`,
@@ -897,7 +981,16 @@ describe('PersistMessageConsumer', () => {
         'Moderation delete event emit lock busy',
       );
 
-      expect(publisher.emit).not.toHaveBeenCalled();
+      expect(publisher.emit).toHaveBeenCalledWith(
+        'ai.moderation.enforcement',
+        expect.objectContaining({
+          message_id: payload.message_id,
+          conversation_id: payload.conversation_id,
+          outcome: 'failed',
+          reason: 'delete_emit_lock_busy',
+        }),
+      );
+      expect(publisher.emit).toHaveBeenCalledTimes(1);
       expect(cacheService.set).not.toHaveBeenCalled();
       expect(cacheService.delIfValueMatches).not.toHaveBeenCalled();
     });
@@ -927,7 +1020,16 @@ describe('PersistMessageConsumer', () => {
         'Moderation delete event emit lock lost before publish',
       );
 
-      expect(publisher.emit).not.toHaveBeenCalled();
+      expect(publisher.emit).toHaveBeenCalledWith(
+        'ai.moderation.enforcement',
+        expect.objectContaining({
+          message_id: payload.message_id,
+          conversation_id: payload.conversation_id,
+          outcome: 'failed',
+          reason: 'delete_emit_lock_lost_before_publish',
+        }),
+      );
+      expect(publisher.emit).toHaveBeenCalledTimes(1);
       expect(cacheService.set).not.toHaveBeenCalled();
       expect(cacheService.delIfValueMatches).toHaveBeenCalledWith(
         expect.stringContaining(
@@ -962,7 +1064,16 @@ describe('PersistMessageConsumer', () => {
         'Moderation delete event emit lock renewal failed',
       );
 
-      expect(publisher.emit).not.toHaveBeenCalled();
+      expect(publisher.emit).toHaveBeenCalledWith(
+        'ai.moderation.enforcement',
+        expect.objectContaining({
+          message_id: payload.message_id,
+          conversation_id: payload.conversation_id,
+          outcome: 'failed',
+          reason: 'delete_emit_lock_renewal_failed',
+        }),
+      );
+      expect(publisher.emit).toHaveBeenCalledTimes(1);
       expect(cacheService.set).not.toHaveBeenCalled();
       expect(cacheService.delIfValueMatches).toHaveBeenCalledWith(
         expect.stringContaining(
@@ -1007,7 +1118,16 @@ describe('PersistMessageConsumer', () => {
         payload.message_id,
       );
       expect(repo.softDeleteMessage).not.toHaveBeenCalled();
-      expect(publisher.emit).not.toHaveBeenCalled();
+      expect(publisher.emit).toHaveBeenCalledWith(
+        'ai.moderation.enforcement',
+        expect.objectContaining({
+          message_id: payload.message_id,
+          conversation_id: payload.conversation_id,
+          outcome: 'failed',
+          reason: 'message_not_found',
+        }),
+      );
+      expect(publisher.emit).toHaveBeenCalledTimes(1);
       expect(cacheService.setIfAbsent).not.toHaveBeenCalled();
       expect(cacheService.invalidateRecentMessages).not.toHaveBeenCalled();
       expect(cacheService.delIfValueMatches).not.toHaveBeenCalled();

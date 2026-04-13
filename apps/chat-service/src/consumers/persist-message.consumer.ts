@@ -20,6 +20,8 @@ import {
   AiModerationRequestEvent,
   type AiModerationResultEvent,
   type AiModerationEnforcementEvent,
+  type ModerationEnforcementOutcomeType,
+  type ModerationEnforcementReasonType,
 } from '@libs/contracts';
 import { APP_CONFIG, type AppConfig } from '@libs/config';
 import { MessageRepository } from '@libs/scylla';
@@ -403,17 +405,18 @@ export class PersistMessageConsumer {
       }
     })();
 
-    // ── Cache invalidation ───────────────────────────────────────────
+    // ── Cache invalidation (fire-and-forget: non-blocking by design so the
+    //    message-send critical path is not delayed by a Redis round-trip) ──────
     void (async () => {
       try {
         await this.cacheService.invalidateRecentMessages(params.conversationId);
+        this.logger.debug(`[${params.traceId}] Cache invalidated`, {
+          conversationId: params.conversationId,
+        });
       } catch (err) {
         this.logger.error(`[${params.traceId}] Cache invalidation failed`, err);
       }
     })();
-    this.logger.debug(`[${params.traceId}] Cache invalidated`, {
-      conversationId: params.conversationId,
-    });
   }
 
   @EventPattern(KafkaTopics.AiModerationResult)
@@ -433,8 +436,9 @@ export class PersistMessageConsumer {
     let shouldEmitDeleteEvent = false;
     let deletedPreviously = false;
     let emitLockAcquired = false;
-    let emitLockToken: string | null = null;
+    let emitLockToken = '';
     let emitLockRenewTimer: NodeJS.Timeout | null = null;
+    let failureReason: ModerationEnforcementReasonType | null = null;
 
     try {
       const applied = await this.repo.trySoftDeleteMessage(
@@ -452,6 +456,7 @@ export class PersistMessageConsumer {
         );
 
         if (!message) {
+          failureReason = 'message_not_found';
           this.logger.error(
             `[${traceId}] Moderation enforcement failed: message not found`,
             {
@@ -478,6 +483,12 @@ export class PersistMessageConsumer {
                 deletedAt: message.deleted_at,
               },
             );
+            await this.emitEnforcementOutcome(
+              payload,
+              traceId,
+              'deduplicated',
+              'delete_event_already_emitted',
+            );
             return;
           }
 
@@ -492,6 +503,7 @@ export class PersistMessageConsumer {
 
           shouldEmitDeleteEvent = true;
         } else {
+          failureReason = 'conditional_delete_not_applied';
           this.logger.error(
             `[${traceId}] Moderation enforcement failed: conditional delete not applied`,
             {
@@ -527,9 +539,16 @@ export class PersistMessageConsumer {
               conversationId: payload.conversation_id,
             },
           );
+          await this.emitEnforcementOutcome(
+            payload,
+            traceId,
+            'deduplicated',
+            'delete_event_already_emitted_after_lock_contention',
+          );
           return;
         }
 
+        failureReason = 'delete_emit_lock_busy';
         this.logger.warn(
           `[${traceId}] Moderation delete event emit lock is busy`,
           {
@@ -550,6 +569,12 @@ export class PersistMessageConsumer {
             conversationId: payload.conversation_id,
           },
         );
+        await this.emitEnforcementOutcome(
+          payload,
+          traceId,
+          'deduplicated',
+          'delete_event_already_emitted_after_lock_acquired',
+        );
         return;
       }
 
@@ -559,7 +584,7 @@ export class PersistMessageConsumer {
       );
 
       emitLockRenewTimer = setInterval(() => {
-        if (!emitLockToken) {
+        if (!emitLockAcquired) {
           return;
         }
 
@@ -611,6 +636,7 @@ export class PersistMessageConsumer {
           this.moderationDeleteEventLockTtlSeconds,
         );
       if (lockRenewStatusBeforeEmit === CACHE_LOCK_RENEW_STATUS.Mismatch) {
+        failureReason = 'delete_emit_lock_lost_before_publish';
         this.logger.warn(
           `[${traceId}] Moderation delete event lock lost before publish`,
           {
@@ -624,6 +650,7 @@ export class PersistMessageConsumer {
       }
 
       if (lockRenewStatusBeforeEmit === CACHE_LOCK_RENEW_STATUS.Error) {
+        failureReason = 'delete_emit_lock_renewal_failed';
         this.logger.error(
           `[${traceId}] Moderation delete event lock renewal failed before publish`,
           {
@@ -642,39 +669,25 @@ export class PersistMessageConsumer {
         trace_id: traceId,
       };
 
+      failureReason = 'chat_message_deleted_emit_failed';
       await this.publisher.emit(KafkaTopics.ChatMessageDeleted, event);
+
+      failureReason = 'dedup_marker_write_failed';
       await this.cacheService.set(
         deleteEmitKey,
         true,
         MODERATION_DELETE_EVENT_TTL_SECONDS,
       );
 
-      const enforcementEvent: AiModerationEnforcementEvent = {
-        message_id: payload.message_id,
-        conversation_id: payload.conversation_id,
-        sender_id: payload.sender_id,
-        created_at: payload.created_at,
-        is_flagged: payload.is_flagged,
-        labels: payload.labels,
-        confidence: payload.confidence,
-        provider: payload.provider,
-        action: 'soft_delete',
-        outcome: deletedPreviously ? 'already_deleted' : 'deleted',
-        reason: deletedPreviously
+      failureReason = null;
+      await this.emitEnforcementOutcome(
+        payload,
+        traceId,
+        deletedPreviously ? 'already_deleted' : 'deleted',
+        deletedPreviously
           ? 'message_was_already_deleted'
           : 'conditional_delete_applied',
-        enforced_at: Date.now(),
-        trace_id: traceId,
-      };
-
-      await this.publisher
-        .emit(KafkaTopics.AiModerationEnforcement, enforcementEvent)
-        .catch((emitErr) => {
-          this.logger.error(
-            `[${traceId}] Failed to emit moderation enforcement outcome`,
-            emitErr,
-          );
-        });
+      );
 
       await this.cacheService
         .invalidateRecentMessages(payload.conversation_id)
@@ -691,6 +704,12 @@ export class PersistMessageConsumer {
         labels: payload.labels,
       });
     } catch (error) {
+      await this.emitEnforcementOutcome(
+        payload,
+        traceId,
+        'failed',
+        failureReason ?? 'unexpected',
+      );
       this.logger.error(`[${traceId}] Moderation enforcement failed`, {
         messageId: payload.message_id,
         error: error instanceof Error ? error.message : String(error),
@@ -701,7 +720,7 @@ export class PersistMessageConsumer {
         clearInterval(emitLockRenewTimer);
       }
 
-      if (emitLockAcquired && emitLockToken) {
+      if (emitLockAcquired) {
         await this.cacheService
           .delIfValueMatches(deleteEmitLockKey, emitLockToken)
           .catch((lockErr) => {
@@ -712,6 +731,48 @@ export class PersistMessageConsumer {
           });
       }
     }
+  }
+
+  private async emitEnforcementOutcome(
+    payload: AiModerationResultEvent,
+    traceId: string,
+    outcome: ModerationEnforcementOutcomeType,
+    reason: ModerationEnforcementReasonType,
+  ): Promise<void> {
+    const enforcementEvent: AiModerationEnforcementEvent = {
+      message_id: payload.message_id,
+      conversation_id: payload.conversation_id,
+      sender_id: payload.sender_id,
+      created_at: payload.created_at,
+      is_flagged: payload.is_flagged,
+      labels: payload.labels,
+      confidence: payload.confidence,
+      provider: payload.provider,
+      action: 'soft_delete',
+      outcome,
+      reason,
+      enforced_at: Date.now(),
+      trace_id: traceId,
+    };
+
+    await this.publisher
+      .emit(KafkaTopics.AiModerationEnforcement, enforcementEvent)
+      .catch((emitErr) => {
+        const emitErrorStack =
+          emitErr instanceof Error
+            ? (emitErr.stack ?? emitErr.message)
+            : String(emitErr);
+        // Fix [2]: bump telemetry so a Kafka failure here is not silently lost
+        this.bumpConsistencyCounter('replay', {
+          traceId,
+          context: 'enforcement_outcome_emit_failed',
+          outcome,
+        });
+        this.logger.error(
+          `[${traceId}] Failed to emit moderation enforcement outcome`,
+          emitErrorStack,
+        );
+      });
   }
 
   private bumpConsistencyCounter(

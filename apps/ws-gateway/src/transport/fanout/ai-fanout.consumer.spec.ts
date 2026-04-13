@@ -93,5 +93,48 @@ describe('AiFanoutConsumer', () => {
       );
       expect(gateway.emitToUser).not.toHaveBeenCalled();
     });
+
+    it.each([
+      {
+        outcome: 'deduplicated' as const,
+        reason: 'delete_event_already_emitted_after_lock_acquired' as const,
+      },
+      {
+        outcome: 'failed' as const,
+        reason: 'delete_emit_lock_busy' as const,
+      },
+    ])(
+      'should broadcast $outcome moderation enforcement outcome',
+      ({ outcome, reason }) => {
+        consumer.onAiModerationEnforcement({
+          message_id: 'msg-4',
+          conversation_id: 'conv-4',
+          sender_id: 'user-4',
+          created_at: Date.now(),
+          is_flagged: true,
+          labels: ['spam'],
+          confidence: 1,
+          provider: 'openai',
+          action: 'soft_delete',
+          outcome,
+          reason,
+          enforced_at: Date.now(),
+        });
+
+        expect(gateway.broadcastToConversation).toHaveBeenCalledWith(
+          'conv-4',
+          WsEvents.AiModerationEnforcement,
+          expect.objectContaining({
+            message_id: 'msg-4',
+            conversation_id: 'conv-4',
+            outcome,
+            reason,
+            action: 'soft_delete',
+          }),
+        );
+        // failed/deduplicated outcomes must NOT individually notify the sender
+        expect(gateway.emitToUser).not.toHaveBeenCalled();
+      },
+    );
   });
 });

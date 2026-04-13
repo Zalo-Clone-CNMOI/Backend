@@ -35,6 +35,21 @@ export type ModerationEnforcementOutcomeType =
   | 'deduplicated'
   | 'failed';
 
+export type ModerationEnforcementReasonType =
+  | 'delete_event_already_emitted'
+  | 'delete_event_already_emitted_after_lock_contention'
+  | 'delete_event_already_emitted_after_lock_acquired'
+  | 'message_not_found'
+  | 'conditional_delete_not_applied'
+  | 'delete_emit_lock_busy'
+  | 'delete_emit_lock_lost_before_publish'
+  | 'delete_emit_lock_renewal_failed'
+  | 'chat_message_deleted_emit_failed'
+  | 'dedup_marker_write_failed'
+  | 'conditional_delete_applied'
+  | 'message_was_already_deleted'
+  | 'unexpected';
+
 // ── Moderation ─────────────────────────────────────────────────────────────
 
 export interface AiModerationRequestEvent {
@@ -75,7 +90,7 @@ export interface AiModerationEnforcementEvent {
   provider: AiProviderType;
   action: ModerationEnforcementActionType;
   outcome: ModerationEnforcementOutcomeType;
-  reason?: string;
+  reason?: ModerationEnforcementReasonType;
   enforced_at: number;
   trace_id?: string;
 }

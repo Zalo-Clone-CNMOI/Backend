@@ -210,6 +210,24 @@ export class AuthService {
 
     await this.userRepository.update(userId, { lastSeenAt: new Date() });
 
+    const nowEpochSeconds = Math.floor(Date.now() / 1000);
+    const [revokeResult, invalidateResult] = await Promise.allSettled([
+      this.redisService.setTokenRevokedAfter(userId, nowEpochSeconds),
+      this.redisService.invalidateAuthUserCache(userId),
+    ]);
+    if (revokeResult.status === 'rejected') {
+      this.logger.error(
+        `Logout: failed to set revoked-after marker for user ${userId}`,
+        revokeResult.reason,
+      );
+    }
+    if (invalidateResult.status === 'rejected') {
+      this.logger.warn(
+        `Logout: failed to invalidate auth cache for user ${userId}`,
+        invalidateResult.reason,
+      );
+    }
+
     if (dto.deviceId) {
       this.logger.log(`Device ${dto.deviceId} marked for removal`);
     }
@@ -238,6 +256,24 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(dto.newPassword, this.SALT_ROUNDS);
 
     await this.userRepository.update(user.id, { passwordHash });
+
+    const nowEpochSeconds = Math.floor(Date.now() / 1000);
+    const [revokeResult, invalidateResult] = await Promise.allSettled([
+      this.redisService.setTokenRevokedAfter(user.id, nowEpochSeconds),
+      this.redisService.invalidateAuthUserCache(user.id),
+    ]);
+    if (revokeResult.status === 'rejected') {
+      this.logger.error(
+        `ResetPassword: failed to set revoked-after marker for user ${user.id}`,
+        revokeResult.reason,
+      );
+    }
+    if (invalidateResult.status === 'rejected') {
+      this.logger.warn(
+        `ResetPassword: failed to invalidate auth cache for user ${user.id}`,
+        invalidateResult.reason,
+      );
+    }
 
     this.logger.log(`Password reset successful for: ${user.id}`);
 

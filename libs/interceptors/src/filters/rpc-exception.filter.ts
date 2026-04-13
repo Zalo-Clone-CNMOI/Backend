@@ -91,5 +91,4 @@ export class RpcAllExceptionsFilter
       timestamp: new Date().toISOString(),
     };
   }
-
 }

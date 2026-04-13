@@ -15,9 +15,13 @@ export class RedisService implements OnModuleDestroy {
   private readonly QR_SESSION_PREFIX = 'qr:session:';
   private readonly QR_CONFIRM_LOCK_PREFIX = 'qr:confirm:';
   private readonly QR_SOCKET_BINDING_PREFIX = 'qr:bind:';
+  private readonly AUTH_USER_CACHE_PREFIX = 'auth:user:cache:';
+  private readonly AUTH_TOKEN_REVOKED_AFTER_PREFIX = 'auth:user:revoked-after:';
 
   // Default TTL: 5 minutes
   private readonly QR_SESSION_TTL = 300;
+  private readonly AUTH_USER_CACHE_TTL = 60;
+  private readonly AUTH_TOKEN_REVOKED_AFTER_TTL = 60 * 60 * 24 * 8;
 
   constructor(
     @Inject(REDIS_CLIENT)
@@ -208,6 +212,57 @@ export class RedisService implements OnModuleDestroy {
     await this.redisClient.del(key);
   }
 
+  async getAuthUserCache<T>(userId: string): Promise<T | null> {
+    const key = this.getAuthUserCacheKey(userId);
+    const value = await this.redisClient.get(key);
+    if (!value) {
+      return null;
+    }
+
+    try {
+      return JSON.parse(value) as T;
+    } catch {
+      await this.redisClient.del(key);
+      return null;
+    }
+  }
+
+  async setAuthUserCache<T>(
+    userId: string,
+    payload: T,
+    ttlSeconds = this.AUTH_USER_CACHE_TTL,
+  ): Promise<void> {
+    const key = this.getAuthUserCacheKey(userId);
+    await this.redisClient.setEx(key, ttlSeconds, JSON.stringify(payload));
+  }
+
+  async invalidateAuthUserCache(userId: string): Promise<void> {
+    await this.redisClient.del(this.getAuthUserCacheKey(userId));
+  }
+
+  async getTokenRevokedAfter(userId: string): Promise<number | null> {
+    const key = this.getTokenRevokedAfterKey(userId);
+    const value = await this.redisClient.get(key);
+    if (!value) {
+      return null;
+    }
+
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  async setTokenRevokedAfter(
+    userId: string,
+    epochSeconds: number,
+  ): Promise<void> {
+    const key = this.getTokenRevokedAfterKey(userId);
+    await this.redisClient.setEx(
+      key,
+      this.AUTH_TOKEN_REVOKED_AFTER_TTL,
+      String(epochSeconds),
+    );
+  }
+
   /**
    * Increment a key by a given amount (atomic)
    */
@@ -240,5 +295,13 @@ export class RedisService implements OnModuleDestroy {
 
   private getQrSocketBindingKey(token: string): string {
     return `${this.QR_SOCKET_BINDING_PREFIX}${token}`;
+  }
+
+  private getAuthUserCacheKey(userId: string): string {
+    return `${this.AUTH_USER_CACHE_PREFIX}${userId}`;
+  }
+
+  private getTokenRevokedAfterKey(userId: string): string {
+    return `${this.AUTH_TOKEN_REVOKED_AFTER_PREFIX}${userId}`;
   }
 }

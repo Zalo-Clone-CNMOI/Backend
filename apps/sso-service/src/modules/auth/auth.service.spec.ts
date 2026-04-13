@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/require-await */
 /**
  * Unit tests for SSO AuthService
  *
@@ -45,6 +44,8 @@ describe('AuthService', () => {
     confirmQrSession: jest.Mock;
     rejectQrSession: jest.Mock;
     consumeQrSocketBinding: jest.Mock;
+    setTokenRevokedAfter: jest.Mock;
+    invalidateAuthUserCache: jest.Mock;
   };
   let kafkaClient: { emit: jest.Mock };
   let dataSource: { transaction: jest.Mock };
@@ -77,10 +78,16 @@ describe('AuthService', () => {
       confirmQrSession: jest.fn(),
       rejectQrSession: jest.fn(),
       consumeQrSocketBinding: jest.fn(),
+      setTokenRevokedAfter: jest.fn(),
+      invalidateAuthUserCache: jest.fn(),
     };
 
     kafkaClient = { emit: jest.fn() };
 
+    /* eslint-disable @typescript-eslint/require-await, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment */
+    // `cb` has no type annotation — jest.Mock is unparameterized here, so the
+    // three unsafe-* rules fire on `return cb({...})`, and require-await fires
+    // because the async wrapper contains no await keyword.
     dataSource = {
       transaction: jest.fn().mockImplementation(async (cb) => {
         return cb({
@@ -88,6 +95,7 @@ describe('AuthService', () => {
         });
       }),
     };
+    /* eslint-enable @typescript-eslint/require-await, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment */
 
     firebaseService = {
       verifyIdToken: jest.fn(),
@@ -336,11 +344,42 @@ describe('AuthService', () => {
         'user-123',
         expect.objectContaining({ lastSeenAt: expect.any(Date) }),
       );
+      expect(redisService.setTokenRevokedAfter).toHaveBeenCalledWith(
+        'user-123',
+        expect.any(Number),
+      );
+      expect(redisService.invalidateAuthUserCache).toHaveBeenCalledWith(
+        'user-123',
+      );
     });
 
     it('should handle logout with deviceId', async () => {
       await service.logout('user-123', { deviceId: 'device-xyz' });
       expect(userRepository.update).toHaveBeenCalled();
+    });
+
+    it('should complete logout even when setTokenRevokedAfter rejects', async () => {
+      redisService.setTokenRevokedAfter.mockRejectedValue(
+        new Error('redis down'),
+      );
+      redisService.invalidateAuthUserCache.mockResolvedValue(undefined);
+
+      // Must not throw — allSettled absorbs individual Redis failures
+      await expect(service.logout('user-123', {})).resolves.toBeUndefined();
+      expect(userRepository.update).toHaveBeenCalledWith(
+        'user-123',
+        expect.objectContaining({ lastSeenAt: expect.any(Date) }),
+      );
+    });
+
+    it('should complete logout even when invalidateAuthUserCache rejects', async () => {
+      redisService.setTokenRevokedAfter.mockResolvedValue(undefined);
+      redisService.invalidateAuthUserCache.mockRejectedValue(
+        new Error('redis down'),
+      );
+
+      await expect(service.logout('user-123', {})).resolves.toBeUndefined();
+      expect(redisService.setTokenRevokedAfter).toHaveBeenCalled();
     });
   });
 
@@ -368,6 +407,13 @@ describe('AuthService', () => {
         expect.objectContaining({
           passwordHash: expect.any(String),
         }),
+      );
+      expect(redisService.setTokenRevokedAfter).toHaveBeenCalledWith(
+        mockUser.id,
+        expect.any(Number),
+      );
+      expect(redisService.invalidateAuthUserCache).toHaveBeenCalledWith(
+        mockUser.id,
       );
     });
 
@@ -464,7 +510,11 @@ describe('AuthService', () => {
         session,
       });
 
-      // dataSource.transaction callback receives a manager
+      // dataSource.transaction callback receives a manager.
+      // The async wrapper has no await (it returns the callback's Promise
+      // directly), so require-await fires; no-unsafe-assignment fires because
+      // jest.fn() returns jest.Mock<any, any, any>.
+      /* eslint-disable @typescript-eslint/require-await, @typescript-eslint/no-unsafe-assignment */
       dataSource.transaction.mockImplementation(
         async (cb: (manager: { findOne: jest.Mock }) => Promise<unknown>) => {
           return cb({
@@ -472,6 +522,7 @@ describe('AuthService', () => {
           });
         },
       );
+      /* eslint-enable @typescript-eslint/require-await, @typescript-eslint/no-unsafe-assignment */
 
       const result = await service.confirmQrSession(mockUser.id, {
         sessionId: session.sessionId,

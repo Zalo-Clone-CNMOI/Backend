@@ -1,9 +1,4 @@
-import {
-  Catch,
-  ArgumentsHost,
-  HttpException,
-  Logger,
-} from '@nestjs/common';
+import { Catch, ArgumentsHost, HttpException, Logger } from '@nestjs/common';
 import type { ExceptionFilter } from '@nestjs/common';
 import { WsException } from '@nestjs/websockets';
 import type { Socket } from 'socket.io';
@@ -106,5 +101,4 @@ export class WsExceptionFilter implements ExceptionFilter {
       timestamp,
     };
   }
-
 }

@@ -13,6 +13,16 @@ import { BusinessException, AuthenticatedUser } from '@app/types';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '@libs/database';
+import { RedisService } from '@libs/redis';
+
+interface AuthGuardCachedUser {
+  id: string;
+  phone: string;
+  email: string | null;
+  fullName: string;
+  avatarUrl: string | null;
+  status: UserStatus;
+}
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
@@ -21,6 +31,7 @@ export class JwtAuthGuard implements CanActivate {
   constructor(
     private readonly jwtService: JwtService,
     private readonly reflector: Reflector,
+    private readonly redisService: RedisService,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
   ) {}
@@ -45,15 +56,33 @@ export class JwtAuthGuard implements CanActivate {
 
     try {
       const payload = this.jwtService.verifyAccessToken(token);
+      await this.assertTokenNotRevoked(payload.sub, payload.iat);
 
-      // Fetch user from database
-      const user = await this.userRepository.findOne({
-        where: { id: payload.sub },
-        select: ['id', 'phone', 'email', 'fullName', 'avatarUrl', 'status'],
-      });
+      const cachedUser = await this.safeGetAuthUserCache(payload.sub);
+
+      let user = cachedUser;
 
       if (!user) {
-        throw new BusinessException(ErrorCode.USER_NOT_FOUND);
+        // Fetch user from database only when cache misses.
+        const dbUser = await this.userRepository.findOne({
+          where: { id: payload.sub },
+          select: ['id', 'phone', 'email', 'fullName', 'avatarUrl', 'status'],
+        });
+
+        if (!dbUser) {
+          throw new BusinessException(ErrorCode.USER_NOT_FOUND);
+        }
+
+        user = {
+          id: dbUser.id,
+          phone: dbUser.phone,
+          email: dbUser.email,
+          fullName: dbUser.fullName,
+          avatarUrl: dbUser.avatarUrl,
+          status: dbUser.status,
+        };
+
+        await this.safeSetAuthUserCache(payload.sub, user);
       }
 
       if (user.status !== UserStatus.ACTIVE) {
@@ -80,6 +109,61 @@ export class JwtAuthGuard implements CanActivate {
       }
       this.logger.error('JWT verification failed', error);
       throw new BusinessException(ErrorCode.AUTH_TOKEN_INVALID);
+    }
+  }
+
+  private async assertTokenNotRevoked(
+    userId: string,
+    tokenIat?: number,
+  ): Promise<void> {
+    const revokedAfter = await this.safeGetTokenRevokedAfter(userId);
+    if (revokedAfter === null) {
+      return;
+    }
+
+    if (!tokenIat || tokenIat <= revokedAfter) {
+      throw new BusinessException(ErrorCode.AUTH_TOKEN_INVALID);
+    }
+  }
+
+  private async safeGetAuthUserCache(
+    userId: string,
+  ): Promise<AuthGuardCachedUser | null> {
+    try {
+      return await this.redisService.getAuthUserCache<AuthGuardCachedUser>(
+        userId,
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Auth cache read failed for user ${userId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return null;
+    }
+  }
+
+  private async safeSetAuthUserCache(
+    userId: string,
+    payload: AuthGuardCachedUser,
+  ): Promise<void> {
+    try {
+      await this.redisService.setAuthUserCache(userId, payload);
+    } catch (error) {
+      this.logger.warn(
+        `Auth cache write failed for user ${userId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  private async safeGetTokenRevokedAfter(
+    userId: string,
+  ): Promise<number | null> {
+    try {
+      return await this.redisService.getTokenRevokedAfter(userId);
+    } catch (error) {
+      this.logger.warn(
+        `Token revocation lookup failed for user ${userId} — revocation check bypassed (fail-open): ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return null;
     }
   }
 

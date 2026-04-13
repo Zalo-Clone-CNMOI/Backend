@@ -51,6 +51,12 @@ jobs:
         run: pnpm run lint
 
       # --------------------------------------------
+      # Security audit gate (prod dependencies)
+      # --------------------------------------------
+      - name: Run production dependency audit
+        run: pnpm run audit:prod
+
+      # --------------------------------------------
       # Test with coverage
       # --------------------------------------------
       - name: Run tests with coverage

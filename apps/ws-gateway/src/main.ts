@@ -8,7 +8,6 @@ import { createKafkaMicroserviceOptions } from '@libs/kafka';
 async function bootstrap() {
   const logger = new Logger('WsGatewayBootstrap');
   process.env.SERVICE_NAME ??= 'ws-gateway';
-  process.env.KAFKA_GROUP_ID ??= 'ws-gateway-fanout';
 
   const config = loadConfig(process.env.SERVICE_NAME);
   assertProductionCors(config);
@@ -21,15 +20,9 @@ async function bootstrap() {
     credentials: true,
   });
 
-  const redisUrl = process.env.REDIS_URL;
   const adapter = new RedisIoAdapter(app, config.allowedOrigins);
-
-  if (redisUrl) {
-    logger.log('[Bootstrap] Initializing Redis adapter...');
-    await adapter.connectToRedis();
-  } else {
-    logger.warn('[Bootstrap] REDIS_URL not set. Using in-memory adapter.');
-  }
+  logger.log('[Bootstrap] Initializing Redis adapter...');
+  await adapter.connectToRedis(config.redisUrl ?? '');
 
   app.useWebSocketAdapter(adapter);
 

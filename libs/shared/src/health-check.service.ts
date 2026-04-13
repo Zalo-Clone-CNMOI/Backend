@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Kafka } from 'kafkajs';
 
 interface HealthCheckDetail {
   [key: string]: unknown;
@@ -12,13 +13,9 @@ interface RedisClient {
   ping(): Promise<unknown>;
 }
 
-interface KafkaClusterInfo {
-  brokers: unknown[];
-  controller: unknown;
-}
-
-interface KafkaAdmin {
-  describeCluster(): Promise<KafkaClusterInfo>;
+interface KafkaHealthConfig {
+  clientId: string;
+  brokers: string[];
 }
 
 interface ScyllaClient {
@@ -140,18 +137,27 @@ export class HealthCheckService {
   /**
    * Redis health check
    */
-  async checkRedis(
-    client: RedisClient,
-  ): Promise<{ status: 'up' | 'down'; message?: string }> {
+  async checkRedis(client: RedisClient): Promise<{
+    status: 'up' | 'down';
+    message?: string;
+    details?: HealthCheckDetail;
+  }> {
     try {
-      await client.ping();
-      return { status: 'up' };
+      const pong = await client.ping();
+      return {
+        status: 'up',
+        details: {
+          dependency: 'redis',
+          probe: 'PING',
+          response: pong,
+        },
+      };
     } catch (error: unknown) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
       return {
         status: 'down',
-        message: `Redis connection failed: ${errorMessage}`,
+        message: `Dependency redis unavailable: ${errorMessage}`,
       };
     }
   }
@@ -159,16 +165,30 @@ export class HealthCheckService {
   /**
    * Kafka health check
    */
-  async checkKafka(admin: KafkaAdmin): Promise<{
+  async checkKafka(config: KafkaHealthConfig): Promise<{
     status: 'up' | 'down';
     message?: string;
     details?: HealthCheckDetail;
   }> {
+    const admin = new Kafka({
+      clientId: `${config.clientId}-health-check`,
+      brokers: config.brokers,
+      connectionTimeout: 5000,
+      requestTimeout: 5000,
+      retry: {
+        retries: 0,
+      },
+    }).admin();
+
     try {
+      await admin.connect();
       const cluster = await admin.describeCluster();
+
       return {
         status: 'up',
         details: {
+          dependency: 'kafka',
+          probe: 'describeCluster',
           brokers: cluster.brokers.length,
           controller: cluster.controller,
         },
@@ -178,26 +198,36 @@ export class HealthCheckService {
         error instanceof Error ? error.message : 'Unknown error';
       return {
         status: 'down',
-        message: `Kafka connection failed: ${errorMessage}`,
+        message: `Dependency kafka unavailable: ${errorMessage}`,
       };
+    } finally {
+      await admin.disconnect().catch(() => undefined);
     }
   }
 
   /**
    * ScyllaDB health check
    */
-  async checkScylla(
-    client: ScyllaClient,
-  ): Promise<{ status: 'up' | 'down'; message?: string }> {
+  async checkScylla(client: ScyllaClient): Promise<{
+    status: 'up' | 'down';
+    message?: string;
+    details?: HealthCheckDetail;
+  }> {
     try {
       await client.execute('SELECT now() FROM system.local');
-      return { status: 'up' };
+      return {
+        status: 'up',
+        details: {
+          dependency: 'scylla',
+          probe: 'SELECT now() FROM system.local',
+        },
+      };
     } catch (error: unknown) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
       return {
         status: 'down',
-        message: `ScyllaDB connection failed: ${errorMessage}`,
+        message: `Dependency scylla unavailable: ${errorMessage}`,
       };
     }
   }

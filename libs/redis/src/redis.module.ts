@@ -18,8 +18,11 @@ export class RedisModule {
           provide: REDIS_CLIENT,
           inject: [APP_CONFIG],
           useFactory: async (config: AppConfig): Promise<RedisClientType> => {
-            const url =
-              config.redisUrl || process.env.REDIS_URL || 'redis://redis:6379';
+            if (!config.redisUrl) {
+              throw new Error('REDIS_URL environment variable is required.');
+            }
+
+            const url = config.redisUrl;
 
             const client = createClient({ url }) as RedisClientType;
 

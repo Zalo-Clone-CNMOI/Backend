@@ -19,14 +19,9 @@ export class RedisIoAdapter extends IoAdapter {
     super(app);
   }
 
-  async connectToRedis(): Promise<void> {
-    const url = process.env.REDIS_URL;
-
-    if (!url) {
-      this.logger.warn(
-        '[RedisIoAdapter] REDIS_URL is not set - Socket.IO will use in-memory adapter.',
-      );
-      return;
+  async connectToRedis(url: string): Promise<void> {
+    if (!url.trim()) {
+      throw new Error('REDIS_URL is required for ws-gateway Redis adapter.');
     }
 
     this.logger.log(`[RedisIoAdapter] Connecting to Redis at: ${url}`);
@@ -85,7 +80,7 @@ export class RedisIoAdapter extends IoAdapter {
       );
     } catch (err) {
       this.logger.error(
-        '[RedisIoAdapter] Failed to connect to Redis - falling back to in-memory adapter.',
+        '[RedisIoAdapter] Failed to connect to Redis.',
         err instanceof Error ? err.stack : String(err),
       );
       this.isRedisConnected = false;
@@ -99,6 +94,8 @@ export class RedisIoAdapter extends IoAdapter {
           `[RedisIoAdapter] Error during cleanup: ${cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr)}`,
         );
       }
+
+      throw err;
     }
   }
 

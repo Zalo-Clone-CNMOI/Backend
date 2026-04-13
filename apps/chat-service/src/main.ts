@@ -8,7 +8,6 @@ import { RpcAllExceptionsFilter } from '@app/interceptors';
 
 async function bootstrap() {
   process.env.SERVICE_NAME ??= 'chat-service';
-  process.env.KAFKA_GROUP_ID ??= 'chat-service-persist';
 
   const logger = new Logger('Bootstrap');
   const config = loadConfig(process.env.SERVICE_NAME);

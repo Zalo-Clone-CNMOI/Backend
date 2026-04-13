@@ -117,6 +117,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm run lint
+      - run: pnpm run audit:prod
       - run: pnpm run build:all
 
   build:

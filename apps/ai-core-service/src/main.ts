@@ -8,7 +8,6 @@ import { RpcAllExceptionsFilter } from '@app/interceptors';
 
 async function bootstrap() {
   process.env.SERVICE_NAME ??= 'ai-core-service';
-  process.env.KAFKA_GROUP_ID ??= 'ai-core-service';
 
   const logger = new Logger('Bootstrap');
   const config = loadConfig(process.env.SERVICE_NAME);

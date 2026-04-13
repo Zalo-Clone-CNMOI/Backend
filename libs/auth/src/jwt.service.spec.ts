@@ -320,8 +320,6 @@ describe('JwtService', () => {
   describe('environment variable validation', () => {
     it('should throw if JWT_SECRET is missing', () => {
       const origAccess = process.env.JWT_SECRET;
-      const origSecret = process.env.JWT_SECRET;
-      delete process.env.JWT_SECRET;
       delete process.env.JWT_SECRET;
 
       const svc = new JwtService();
@@ -329,8 +327,9 @@ describe('JwtService', () => {
         'JWT_SECRET',
       );
 
-      process.env.JWT_SECRET = origAccess;
-      if (origSecret) process.env.JWT_SECRET = origSecret;
+      if (origAccess) {
+        process.env.JWT_SECRET = origAccess;
+      }
     });
 
     it('should throw if JWT_REFRESH_SECRET is missing', () => {
@@ -345,24 +344,18 @@ describe('JwtService', () => {
       process.env.JWT_REFRESH_SECRET = orig;
     });
 
-    it('should fall back to JWT_SECRET if JWT_SECRET is absent', () => {
+    it('should throw if JWT_SECRET is empty', () => {
       const origAccess = process.env.JWT_SECRET;
-      delete process.env.JWT_SECRET;
-      process.env.JWT_SECRET = 'fallback-secret';
+      process.env.JWT_SECRET = '';
 
       const svc = new JwtService();
-      const result = svc.generateTokenPair('user-123', '+84901234567');
-      expect(result.accessToken).toBeDefined();
+      expect(() => svc.generateTokenPair('user-123', '+84901234567')).toThrow(
+        'JWT_SECRET',
+      );
 
-      // Verify it was signed with fallback secret
-      const payload = jwt.verify(
-        result.accessToken,
-        'fallback-secret',
-      ) as jwt.JwtPayload;
-      expect(payload.sub).toBe('user-123');
-
-      process.env.JWT_SECRET = origAccess;
-      delete process.env.JWT_SECRET;
+      if (origAccess) {
+        process.env.JWT_SECRET = origAccess;
+      }
     });
   });
 });

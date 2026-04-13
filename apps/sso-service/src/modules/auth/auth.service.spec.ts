@@ -84,7 +84,7 @@ describe('AuthService', () => {
 
     kafkaClient = { emit: jest.fn() };
 
-    /* eslint-disable @typescript-eslint/require-await, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment */
+    /* eslint-disable @typescript-eslint/require-await, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call */
     // `cb` has no type annotation — jest.Mock is unparameterized here, so the
     // three unsafe-* rules fire on `return cb({...})`, and require-await fires
     // because the async wrapper contains no await keyword.
@@ -95,7 +95,7 @@ describe('AuthService', () => {
         });
       }),
     };
-    /* eslint-enable @typescript-eslint/require-await, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment */
+    /* eslint-enable @typescript-eslint/require-await, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call */
 
     firebaseService = {
       verifyIdToken: jest.fn(),
@@ -225,10 +225,13 @@ describe('AuthService', () => {
 
       expect(result).toHaveProperty('user');
       expect(result).toHaveProperty('tokens');
-      expect(userRepository.update).toHaveBeenCalledWith(
-        mockUser.id,
-        expect.objectContaining({ lastSeenAt: expect.any(Date) }),
-      );
+      expect(userRepository.update).toHaveBeenCalled();
+      const loginUpdateCall = userRepository.update.mock.calls[0] as [
+        string,
+        { lastSeenAt: Date },
+      ];
+      expect(loginUpdateCall[0]).toBe(mockUser.id);
+      expect(loginUpdateCall[1].lastSeenAt).toBeInstanceOf(Date);
     });
 
     it('should throw UNAUTHORIZED for non-existent phone', async () => {
@@ -340,10 +343,13 @@ describe('AuthService', () => {
   describe('logout', () => {
     it('should update lastSeenAt on logout', async () => {
       await service.logout('user-123', {});
-      expect(userRepository.update).toHaveBeenCalledWith(
-        'user-123',
-        expect.objectContaining({ lastSeenAt: expect.any(Date) }),
-      );
+      expect(userRepository.update).toHaveBeenCalled();
+      const logoutUpdateCall = userRepository.update.mock.calls[0] as [
+        string,
+        { lastSeenAt: Date },
+      ];
+      expect(logoutUpdateCall[0]).toBe('user-123');
+      expect(logoutUpdateCall[1].lastSeenAt).toBeInstanceOf(Date);
       expect(redisService.setTokenRevokedAfter).toHaveBeenCalledWith(
         'user-123',
         expect.any(Number),
@@ -366,10 +372,13 @@ describe('AuthService', () => {
 
       // Must not throw — allSettled absorbs individual Redis failures
       await expect(service.logout('user-123', {})).resolves.toBeUndefined();
-      expect(userRepository.update).toHaveBeenCalledWith(
-        'user-123',
-        expect.objectContaining({ lastSeenAt: expect.any(Date) }),
-      );
+      expect(userRepository.update).toHaveBeenCalled();
+      const logoutFailureUpdateCall = userRepository.update.mock.calls[0] as [
+        string,
+        { lastSeenAt: Date },
+      ];
+      expect(logoutFailureUpdateCall[0]).toBe('user-123');
+      expect(logoutFailureUpdateCall[1].lastSeenAt).toBeInstanceOf(Date);
     });
 
     it('should complete logout even when invalidateAuthUserCache rejects', async () => {
@@ -402,12 +411,13 @@ describe('AuthService', () => {
       });
 
       expect(result.message).toBeDefined();
-      expect(userRepository.update).toHaveBeenCalledWith(
-        mockUser.id,
-        expect.objectContaining({
-          passwordHash: expect.any(String),
-        }),
-      );
+      expect(userRepository.update).toHaveBeenCalled();
+      const resetPasswordUpdateCall = userRepository.update.mock.calls[0] as [
+        string,
+        { passwordHash: string },
+      ];
+      expect(resetPasswordUpdateCall[0]).toBe(mockUser.id);
+      expect(typeof resetPasswordUpdateCall[1].passwordHash).toBe('string');
       expect(redisService.setTokenRevokedAfter).toHaveBeenCalledWith(
         mockUser.id,
         expect.any(Number),
@@ -514,7 +524,7 @@ describe('AuthService', () => {
       // The async wrapper has no await (it returns the callback's Promise
       // directly), so require-await fires; no-unsafe-assignment fires because
       // jest.fn() returns jest.Mock<any, any, any>.
-      /* eslint-disable @typescript-eslint/require-await, @typescript-eslint/no-unsafe-assignment */
+
       dataSource.transaction.mockImplementation(
         async (cb: (manager: { findOne: jest.Mock }) => Promise<unknown>) => {
           return cb({
@@ -522,7 +532,6 @@ describe('AuthService', () => {
           });
         },
       );
-      /* eslint-enable @typescript-eslint/require-await, @typescript-eslint/no-unsafe-assignment */
 
       const result = await service.confirmQrSession(mockUser.id, {
         sessionId: session.sessionId,

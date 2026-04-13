@@ -6,6 +6,7 @@ describe('RedisService auth cache helpers', () => {
     get: jest.fn(),
     setEx: jest.fn().mockResolvedValue(undefined),
     del: jest.fn().mockResolvedValue(undefined),
+    ping: jest.fn().mockResolvedValue('PONG'),
   };
 
   let service: RedisService;
@@ -43,14 +44,14 @@ describe('RedisService auth cache helpers', () => {
   });
 
   it('should set and read token revoked-after marker', async () => {
-    await service.setTokenRevokedAfter('user-1', 1700000000, 120);
+    await service.setTokenRevokedAfter('user-1', 1700000000);
     redisClient.get.mockResolvedValueOnce('1700000000');
 
     const result = await service.getTokenRevokedAfter('user-1');
 
     expect(redisClient.setEx).toHaveBeenCalledWith(
       'auth:user:revoked-after:user-1',
-      120,
+      691200,
       '1700000000',
     );
     expect(result).toBe(1700000000);
@@ -62,5 +63,12 @@ describe('RedisService auth cache helpers', () => {
     const result = await service.getTokenRevokedAfter('user-1');
 
     expect(result).toBeNull();
+  });
+
+  it('should proxy redis ping', async () => {
+    const result = await service.ping();
+
+    expect(result).toBe('PONG');
+    expect(redisClient.ping).toHaveBeenCalled();
   });
 });

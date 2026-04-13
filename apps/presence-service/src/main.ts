@@ -6,7 +6,6 @@ import { RpcAllExceptionsFilter } from '@app/interceptors';
 
 async function bootstrap() {
   process.env.SERVICE_NAME ??= 'presence-service';
-  process.env.KAFKA_GROUP_ID ??= 'presence-service-state';
 
   const config = loadConfig(process.env.SERVICE_NAME);
   const app = await NestFactory.createMicroservice(

@@ -15,7 +15,6 @@ import { MicroserviceOptions } from '@nestjs/microservices';
 
 async function bootstrap() {
   process.env.SERVICE_NAME ??= 'interaction-service';
-  process.env.KAFKA_GROUP_ID ??= 'interaction-service-consumers';
 
   const config = loadConfig(process.env.SERVICE_NAME);
   assertProductionCors(config);

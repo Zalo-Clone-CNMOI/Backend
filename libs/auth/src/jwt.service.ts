@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
 import { ErrorCode } from '@app/constant';
 import { BusinessException, JwtPayload, TokenPair } from '@app/types';
@@ -13,21 +13,11 @@ export interface JwtUser {
  */
 @Injectable()
 export class JwtService {
-  private readonly logger = new Logger(JwtService.name);
-
   private get accessSecret(): string {
     const secret = process.env.JWT_SECRET;
 
     if (secret) {
       return secret;
-    }
-
-    const isTestEnv = process.env.NODE_ENV === 'test';
-    if (isTestEnv && process.env.JWT_SECRET) {
-      this.logger.warn(
-        'Using legacy JWT_SECRET fallback in test environment. Set JWT_SECRET for production-safe config.',
-      );
-      return process.env.JWT_SECRET;
     }
 
     throw new Error(

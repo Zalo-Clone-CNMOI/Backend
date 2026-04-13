@@ -212,6 +212,10 @@ export class RedisService implements OnModuleDestroy {
     await this.redisClient.del(key);
   }
 
+  async ping(): Promise<string> {
+    return this.redisClient.ping();
+  }
+
   async getAuthUserCache<T>(userId: string): Promise<T | null> {
     const key = this.getAuthUserCacheKey(userId);
     const value = await this.redisClient.get(key);

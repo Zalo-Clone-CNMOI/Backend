@@ -1,9 +1,11 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Inject } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { Public } from '@app/decorator';
 import { HealthCheckService, HealthCheckResult } from '@libs/shared';
+import { APP_CONFIG, AppConfig } from '@libs/config';
+import { RedisService } from '@libs/redis';
 
 @ApiTags('Health')
 @Controller('health')
@@ -12,6 +14,9 @@ export class HealthController {
     @InjectDataSource()
     private readonly dataSource: DataSource,
     private readonly healthCheckService: HealthCheckService,
+    private readonly redisService: RedisService,
+    @Inject(APP_CONFIG)
+    private readonly config: AppConfig,
   ) {}
 
   @Public()
@@ -29,6 +34,19 @@ export class HealthController {
           name: 'postgres',
           check: async () =>
             this.healthCheckService.checkPostgres(this.dataSource),
+        },
+        {
+          name: 'redis',
+          check: async () =>
+            this.healthCheckService.checkRedis(this.redisService),
+        },
+        {
+          name: 'kafka',
+          check: async () =>
+            this.healthCheckService.checkKafka({
+              clientId: this.config.kafkaClientId,
+              brokers: this.config.kafkaBrokers,
+            }),
         },
         {
           name: 'self',

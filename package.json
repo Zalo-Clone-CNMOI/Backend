@@ -48,7 +48,7 @@
     "test:leaks": "jest --detectOpenHandles --runInBand --no-cache",
     "test:integration": "jest --config ./test/jest-e2e.json --testPathPattern=integration --forceExit --no-cache",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config ./apps/be/test/jest-e2e.json",
+    "test:e2e": "jest --config ./test/jest-e2e.json --testPathPattern=e2e-spec --forceExit --no-cache",
     "audit:prod": "pnpm audit --audit-level=high --prod",
     "typeorm": "npx ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js",
     "seed": "npx ts-node -r tsconfig-paths/register libs/database/src/seed.ts",

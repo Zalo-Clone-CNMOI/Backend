@@ -317,8 +317,10 @@ describe('Chat MessagesService', () => {
     });
 
     it('should use localhost format for local CDN', async () => {
-      const originalCdn = process.env.CDN_BASE_URL;
-      process.env.CDN_BASE_URL = 'http://localhost:4566';
+      const originalEndpoint = process.env.S3_ENDPOINT;
+      const originalBucket = process.env.S3_BUCKET;
+      process.env.S3_ENDPOINT = 'http://localhost:4566';
+      process.env.S3_BUCKET = 'be-media';
 
       const localService = new MessagesService(
         messageRepository as unknown as MessageRepository,
@@ -349,10 +351,11 @@ describe('Chat MessagesService', () => {
 
       // Localhost format includes bucket in path
       expect(result.items[0].attachments![0].url).toMatch(
-        /localhost.*\/.*test\.jpg/,
+        /localhost.*\/be-media\/test\.jpg/,
       );
 
-      process.env.CDN_BASE_URL = originalCdn;
+      process.env.S3_ENDPOINT = originalEndpoint;
+      process.env.S3_BUCKET = originalBucket;
     });
   });
 });

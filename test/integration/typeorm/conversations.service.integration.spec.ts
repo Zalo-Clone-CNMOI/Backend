@@ -684,6 +684,9 @@ describe('ConversationsService (integration)', () => {
 
   describe('markAsRead', () => {
     it('should throw when not a member', async () => {
+      const qb = createMockQueryBuilder();
+      qb.execute.mockResolvedValue({ affected: 0 });
+      memberRepo.createQueryBuilder.mockReturnValue(qb);
       memberRepo.findOne.mockResolvedValue(null);
 
       await expect(service.markAsRead(USER_ID, CONV_ID)).rejects.toThrow();
@@ -691,16 +694,18 @@ describe('ConversationsService (integration)', () => {
 
     it('should update lastReadAt for valid member', async () => {
       const membership = makeMember();
+      const qb = createMockQueryBuilder();
+      qb.execute.mockResolvedValue({ affected: 1 });
+      memberRepo.createQueryBuilder.mockReturnValue(qb);
       memberRepo.findOne.mockResolvedValue(membership);
-      memberRepo.save.mockResolvedValue({
-        ...membership,
-        lastReadAt: new Date(),
-      });
 
       const result = await service.markAsRead(USER_ID, CONV_ID);
 
       expect(result.message).toContain('read');
-      expect(memberRepo.save).toHaveBeenCalled();
+      expect(memberRepo.createQueryBuilder).toHaveBeenCalled();
+      expect(redis.client.del).toHaveBeenCalledWith(
+        `conversation:unread:${USER_ID}:${CONV_ID}`,
+      );
     });
   });
 });

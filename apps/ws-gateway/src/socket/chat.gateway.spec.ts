@@ -1,5 +1,6 @@
 import { ChatGateway } from './chat.gateway';
 import { WsEvents } from '@libs/contracts';
+import { WsException } from '@nestjs/websockets';
 
 describe('ChatGateway', () => {
   type QrBindSocket = Parameters<ChatGateway['handleQrBindRequest']>[0];
@@ -83,7 +84,7 @@ describe('ChatGateway', () => {
       expect(emittedPayload.expiresInSeconds).toBe(90);
     });
 
-    it('should emit error and skip token issuance when rate limit is exceeded', async () => {
+    it('should throw rate-limit exception and skip token issuance when rate limit is exceeded', async () => {
       redisService.incrBy.mockResolvedValue(6); // over the 5 req/min limit
       const emitMock = jest.fn();
       const socket = {
@@ -91,13 +92,12 @@ describe('ChatGateway', () => {
         emit: emitMock,
       } as unknown as QrBindSocket;
 
-      await gateway.handleQrBindRequest(socket);
+      await expect(gateway.handleQrBindRequest(socket)).rejects.toBeInstanceOf(
+        WsException,
+      );
 
       expect(redisService.setQrSocketBinding).not.toHaveBeenCalled();
-      expect(emitMock).toHaveBeenCalledWith(
-        WsEvents.WsError,
-        expect.objectContaining({ code: 'RATE_LIMIT_EXCEEDED' }),
-      );
+      expect(emitMock).not.toHaveBeenCalled();
     });
   });
 });

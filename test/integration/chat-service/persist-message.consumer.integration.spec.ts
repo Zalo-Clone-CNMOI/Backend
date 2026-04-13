@@ -14,6 +14,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { PersistMessageConsumer } from '../../../apps/chat-service/src/consumers/persist-message.consumer';
 import { MessageRepository } from '@libs/scylla';
 import { SCYLLA_CLIENT } from '@libs/scylla/scylla.tokens';
+import { APP_CONFIG } from '@libs/config';
 import { CacheService } from '@libs/redis';
 import { REDIS_CLIENT } from '@libs/redis/redis.tokens';
 import { ConversationMembershipService } from '@libs/mvp-access';
@@ -53,6 +54,12 @@ describe('PersistMessageConsumer (integration)', () => {
     module = await Test.createTestingModule({
       controllers: [PersistMessageConsumer],
       providers: [
+        {
+          provide: APP_CONFIG,
+          useValue: {
+            chatModerationDeleteLockTtlSeconds: 120,
+          },
+        },
         MessageRepository,
         { provide: SCYLLA_CLIENT, useValue: scylla.client },
         {
@@ -84,7 +91,9 @@ describe('PersistMessageConsumer (integration)', () => {
   });
 
   afterAll(async () => {
-    await module.close();
+    if (module) {
+      await module.close();
+    }
   });
 
   beforeEach(() => {
@@ -97,6 +106,28 @@ describe('PersistMessageConsumer (integration)', () => {
       membershipService.canUserAccessConversation as jest.Mock
     ).mockResolvedValue(true);
   });
+
+  const seedMessageForMutation = (params: {
+    conversationId: string;
+    messageId: string;
+    senderId: string;
+    createdAt: number;
+    body?: string;
+  }) => {
+    const rows = scylla.stores.messages.get(params.conversationId) ?? [];
+    rows.push({
+      conversation_id: params.conversationId,
+      created_at: params.createdAt,
+      message_id: params.messageId,
+      sender_id: params.senderId,
+      body: params.body ?? 'Original message',
+      attachments: null,
+      reply_to_message_id: null,
+      edited_at: null,
+      deleted_at: null,
+    });
+    scylla.stores.messages.set(params.conversationId, rows);
+  };
 
   // ─── onSend ───────────────────────────────────────────
 
@@ -227,6 +258,13 @@ describe('PersistMessageConsumer (integration)', () => {
       const cmd = makeChatMessageEditCommand();
       const publisher = module.get(ChatPublisher);
 
+      seedMessageForMutation({
+        conversationId: cmd.conversation_id,
+        messageId: cmd.message_id,
+        senderId: cmd.sender_id,
+        createdAt: cmd.created_at,
+      });
+
       await consumer.onEdit(cmd);
 
       // Verify UPDATE query
@@ -249,6 +287,13 @@ describe('PersistMessageConsumer (integration)', () => {
     it('should invalidate cache after edit', async () => {
       const cmd = makeChatMessageEditCommand();
 
+      seedMessageForMutation({
+        conversationId: cmd.conversation_id,
+        messageId: cmd.message_id,
+        senderId: cmd.sender_id,
+        createdAt: cmd.created_at,
+      });
+
       await consumer.onEdit(cmd);
 
       // Wait for async cache op
@@ -264,6 +309,13 @@ describe('PersistMessageConsumer (integration)', () => {
     it('should soft-delete message and emit ChatMessageDeleted', async () => {
       const cmd = makeChatMessageDeleteCommand();
       const publisher = module.get(ChatPublisher);
+
+      seedMessageForMutation({
+        conversationId: cmd.conversation_id,
+        messageId: cmd.message_id,
+        senderId: cmd.sender_id,
+        createdAt: cmd.created_at,
+      });
 
       await consumer.onDelete(cmd);
 

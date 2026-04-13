@@ -43,7 +43,7 @@ function makeRedis(): jest.Mocked<RedisService> {
     incrBy: jest.fn().mockResolvedValue(100),
     ttl: jest.fn().mockResolvedValue(3600),
     expire: jest.fn().mockResolvedValue(true),
-  } as jest.Mocked<RedisService>;
+  } as unknown as jest.Mocked<RedisService>;
 }
 
 function makeResult(

@@ -23,7 +23,10 @@ import { User, Friendship } from '@libs/database';
 import { CacheService } from '@libs/redis';
 import { REDIS_CLIENT } from '@libs/redis/redis.tokens';
 import { KAFKA_CLIENT } from '@libs/kafka';
-import { createMockRepository } from '../../helpers/test-database.helper';
+import {
+  createMockRepository,
+  createMockQueryBuilder,
+} from '../../helpers/test-database.helper';
 import { createMockRedisClient } from '../../helpers/mock-redis.helper';
 import { createMockKafkaClient } from '../../helpers/mock-kafka.helper';
 import { FriendshipStatus, UserStatus } from '@app/constant';
@@ -74,18 +77,7 @@ describe('FriendsService (integration)', () => {
 
   describe('getFriends', () => {
     it('should return empty list when no friends', async () => {
-      const qb = jest.fn();
-      const chainable = [
-        'leftJoinAndSelect',
-        'where',
-        'andWhere',
-        'orderBy',
-        'skip',
-        'take',
-      ];
-      for (const m of chainable) {
-        qb[m] = jest.fn().mockReturnValue(qb);
-      }
+      const qb = createMockQueryBuilder();
       qb.getManyAndCount = jest.fn().mockResolvedValue([[], 0]);
       friendshipRepo.createQueryBuilder.mockReturnValue(qb);
 
@@ -118,18 +110,7 @@ describe('FriendsService (integration)', () => {
         },
       };
 
-      const qb = jest.fn();
-      const chainable = [
-        'leftJoinAndSelect',
-        'where',
-        'andWhere',
-        'orderBy',
-        'skip',
-        'take',
-      ];
-      for (const m of chainable) {
-        qb[m] = jest.fn().mockReturnValue(qb);
-      }
+      const qb = createMockQueryBuilder();
       qb.getManyAndCount = jest.fn().mockResolvedValue([[friendship], 1]);
       friendshipRepo.createQueryBuilder.mockReturnValue(qb);
 
@@ -142,18 +123,7 @@ describe('FriendsService (integration)', () => {
     });
 
     it('should respect pagination', async () => {
-      const qb = jest.fn();
-      const chainable = [
-        'leftJoinAndSelect',
-        'where',
-        'andWhere',
-        'orderBy',
-        'skip',
-        'take',
-      ];
-      for (const m of chainable) {
-        qb[m] = jest.fn().mockReturnValue(qb);
-      }
+      const qb = createMockQueryBuilder();
       qb.getManyAndCount = jest.fn().mockResolvedValue([[], 25]);
       friendshipRepo.createQueryBuilder.mockReturnValue(qb);
 

@@ -14,6 +14,7 @@ import { ExecutionContext } from '@nestjs/common';
 
 interface MockSocket {
   data: { userId?: string };
+  emit: jest.Mock;
   handshake: {
     headers: { authorization?: string };
     auth: { token?: string };
@@ -46,6 +47,7 @@ describe('WsAuthGuard', () => {
     it('should return true and set socket.data.userId', () => {
       const socket: MockSocket = {
         data: {},
+        emit: jest.fn(),
         handshake: {
           headers: { authorization: 'Bearer valid-jwt-token' },
           auth: {},
@@ -71,6 +73,7 @@ describe('WsAuthGuard', () => {
     it('should extract token from handshake.auth.token when no header', () => {
       const socket: MockSocket = {
         data: {},
+        emit: jest.fn(),
         handshake: {
           headers: {},
           auth: { token: 'raw-jwt-token' },
@@ -96,6 +99,7 @@ describe('WsAuthGuard', () => {
     it('should return false when no authorization and no auth.token', () => {
       const socket: MockSocket = {
         data: {},
+        emit: jest.fn(),
         handshake: {
           headers: {},
           auth: {},
@@ -111,6 +115,7 @@ describe('WsAuthGuard', () => {
     it('should return false when authorization header is undefined', () => {
       const socket: MockSocket = {
         data: {},
+        emit: jest.fn(),
         handshake: {
           headers: { authorization: undefined },
           auth: { token: undefined },
@@ -129,6 +134,7 @@ describe('WsAuthGuard', () => {
     it('should throw (or return false) when verifyToken throws', () => {
       const socket: MockSocket = {
         data: {},
+        emit: jest.fn(),
         handshake: {
           headers: { authorization: 'Bearer invalid-token' },
           auth: {},
@@ -149,6 +155,7 @@ describe('WsAuthGuard', () => {
     it('should strip "Bearer " prefix from authorization header', () => {
       const socket: MockSocket = {
         data: {},
+        emit: jest.fn(),
         handshake: {
           headers: { authorization: 'Bearer my-token-123' },
           auth: {},
@@ -168,6 +175,7 @@ describe('WsAuthGuard', () => {
     it('should use raw token from auth.token without stripping', () => {
       const socket: MockSocket = {
         data: {},
+        emit: jest.fn(),
         handshake: {
           headers: {},
           auth: { token: 'raw-no-bearer-prefix' },

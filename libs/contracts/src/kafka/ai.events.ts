@@ -36,6 +36,10 @@ export type ModerationEnforcementOutcomeType =
   | 'failed';
 
 export type ModerationEnforcementReasonType =
+  | 'fallback_decision_source'
+  | 'warn_only_mode'
+  | 'below_confidence_threshold'
+  | 'label_not_high_risk'
   | 'delete_event_already_emitted'
   | 'delete_event_already_emitted_after_lock_contention'
   | 'delete_event_already_emitted_after_lock_acquired'

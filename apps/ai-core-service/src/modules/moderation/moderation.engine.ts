@@ -148,7 +148,8 @@ export class ModerationEngine {
     failure_reason?: string;
   } {
     try {
-      const json = JSON.parse(content);
+      const candidate = this.extractJsonCandidate(content);
+      const json = JSON.parse(candidate);
       return {
         is_flagged: !!json.is_flagged,
         labels: Array.isArray(json.labels)
@@ -163,6 +164,26 @@ export class ModerationEngine {
       );
       return this.fallbackModeration('fallback_parse_failure');
     }
+  }
+
+  private extractJsonCandidate(content: string): string {
+    const trimmed = content.trim();
+    if (!trimmed) {
+      return trimmed;
+    }
+
+    const fencedMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+    if (fencedMatch?.[1]) {
+      return fencedMatch[1].trim();
+    }
+
+    const firstBrace = trimmed.indexOf('{');
+    const lastBrace = trimmed.lastIndexOf('}');
+    if (firstBrace >= 0 && lastBrace > firstBrace) {
+      return trimmed.slice(firstBrace, lastBrace + 1);
+    }
+
+    return trimmed;
   }
 
   private fallbackModeration(

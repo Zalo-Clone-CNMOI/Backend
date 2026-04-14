@@ -15,7 +15,11 @@ describe('loadConfig', () => {
 
   beforeEach(() => {
     process.env = { ...originalEnv };
+    process.env.NODE_ENV = 'test';
     delete process.env.CHAT_MODERATION_DELETE_LOCK_TTL_SECONDS;
+    delete process.env.CHAT_MODERATION_WARN_ONLY;
+    delete process.env.CHAT_MODERATION_ENFORCE_MIN_CONFIDENCE;
+    delete process.env.CHAT_MODERATION_HIGH_RISK_LABELS;
     applyChatServiceBaselineEnv();
   });
 
@@ -53,6 +57,62 @@ describe('loadConfig', () => {
     const config = loadConfig('chat-service');
 
     expect(config.chatModerationDeleteLockTtlSeconds).toBe(120);
+  });
+
+  it('should enable moderation warn-only by default in development', () => {
+    process.env.NODE_ENV = 'development';
+
+    const config = loadConfig('chat-service');
+
+    expect(config.chatModerationWarnOnly).toBe(true);
+  });
+
+  it('should enable moderation warn-only by default in staging', () => {
+    process.env.NODE_ENV = 'staging';
+
+    const config = loadConfig('chat-service');
+
+    expect(config.chatModerationWarnOnly).toBe(true);
+  });
+
+  it('should disable moderation warn-only by default in production', () => {
+    process.env.NODE_ENV = 'production';
+
+    const config = loadConfig('chat-service');
+
+    expect(config.chatModerationWarnOnly).toBe(false);
+  });
+
+  it('should honor explicit moderation warn-only override in development', () => {
+    process.env.NODE_ENV = 'development';
+    process.env.CHAT_MODERATION_WARN_ONLY = 'false';
+
+    const config = loadConfig('chat-service');
+
+    expect(config.chatModerationWarnOnly).toBe(false);
+  });
+
+  it('should clamp moderation confidence threshold to [0, 1]', () => {
+    process.env.CHAT_MODERATION_ENFORCE_MIN_CONFIDENCE = '1.5';
+
+    const highConfig = loadConfig('chat-service');
+    expect(highConfig.chatModerationEnforceMinConfidence).toBe(1);
+
+    process.env.CHAT_MODERATION_ENFORCE_MIN_CONFIDENCE = '-0.2';
+    const lowConfig = loadConfig('chat-service');
+    expect(lowConfig.chatModerationEnforceMinConfidence).toBe(0);
+  });
+
+  it('should parse moderation high-risk labels from CSV', () => {
+    process.env.CHAT_MODERATION_HIGH_RISK_LABELS = 'spam,toxic,violence';
+
+    const config = loadConfig('chat-service');
+
+    expect(config.chatModerationHighRiskLabels).toEqual([
+      'spam',
+      'toxic',
+      'violence',
+    ]);
   });
 
   it('should throw when HTTP service CORS_ORIGIN is missing', () => {

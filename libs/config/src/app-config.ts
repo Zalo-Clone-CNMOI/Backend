@@ -54,6 +54,9 @@ export interface AppConfig {
 
   // Chat Service moderation delete emit lock TTL (seconds)
   chatModerationDeleteLockTtlSeconds?: number;
+  chatModerationWarnOnly?: boolean;
+  chatModerationEnforceMinConfidence?: number;
+  chatModerationHighRiskLabels?: string[];
 }
 
 interface ServiceConfigRequirements {
@@ -180,6 +183,25 @@ function readPositiveInteger(
   return Math.min(Math.max(normalized, min), max);
 }
 
+function readBoolean(value: string | undefined): boolean | undefined {
+  if (value === undefined || value === '') return undefined;
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  return undefined;
+}
+
+function readClampedNumber(
+  value: string | undefined,
+  min: number,
+  max: number,
+): number | undefined {
+  if (value === undefined || value === '') return undefined;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return undefined;
+
+  return Math.min(Math.max(parsed, min), max);
+}
+
 function readCsv(value: string | undefined): string[] {
   if (!value?.trim()) {
     return [];
@@ -199,6 +221,8 @@ function assertEnvPresent(name: string, value: string | undefined): void {
 
 export function loadConfig(serviceName: string): AppConfig {
   const nodeEnv = process.env.NODE_ENV ?? 'development';
+  const moderationWarnOnlyDefault =
+    nodeEnv === 'development' || nodeEnv === 'staging';
   const kafkaBrokers = readCsv(process.env.KAFKA_BROKERS);
   const allowedOrigins = readCsv(process.env.CORS_ORIGIN);
 
@@ -261,6 +285,18 @@ export function loadConfig(serviceName: string): AppConfig {
         30,
         900,
       ) ?? 120,
+    chatModerationWarnOnly:
+      readBoolean(process.env.CHAT_MODERATION_WARN_ONLY) ??
+      moderationWarnOnlyDefault,
+    chatModerationEnforceMinConfidence:
+      readClampedNumber(
+        process.env.CHAT_MODERATION_ENFORCE_MIN_CONFIDENCE,
+        0,
+        1,
+      ) ?? 0.8,
+    chatModerationHighRiskLabels: readCsv(
+      process.env.CHAT_MODERATION_HIGH_RISK_LABELS,
+    ),
   };
 
   assertServiceConfig(config);

@@ -22,6 +22,7 @@ import {
   type AiModerationEnforcementEvent,
   type ModerationEnforcementOutcomeType,
   type ModerationEnforcementReasonType,
+  type ModerationLabelType,
 } from '@libs/contracts';
 import { APP_CONFIG, type AppConfig } from '@libs/config';
 import { MessageRepository } from '@libs/scylla';
@@ -43,11 +44,24 @@ const MODERATION_DELETE_EVENT_LOCK_TTL_SECONDS = 120;
 const MIN_MODERATION_DELETE_EVENT_LOCK_TTL_SECONDS = 30;
 const MAX_MODERATION_DELETE_EVENT_LOCK_TTL_SECONDS = 900;
 const MIN_LOCK_RENEW_INTERVAL_MS = 5000;
+const DEFAULT_HIGH_RISK_MODERATION_LABELS: ReadonlySet<ModerationLabelType> =
+  new Set<ModerationLabelType>([
+    'spam',
+    'toxic',
+    'harassment',
+    'hate_speech',
+    'sexual',
+    'violence',
+    'self_harm',
+  ]);
 
 @Controller()
 export class PersistMessageConsumer {
   private readonly logger = new Logger(PersistMessageConsumer.name);
   private readonly moderationDeleteEventLockTtlSeconds: number;
+  private readonly moderationWarnOnly: boolean;
+  private readonly moderationEnforceMinConfidence: number;
+  private readonly moderationHighRiskLabels: ReadonlySet<ModerationLabelType>;
   private readonly consistencyCounters: Record<
     'duplicate' | 'replay' | 'timestamp_mismatch',
     number
@@ -68,6 +82,21 @@ export class PersistMessageConsumer {
     @InjectRepository(ConversationMember)
     private readonly conversationMemberRepo: Repository<ConversationMember>,
   ) {
+    this.moderationWarnOnly = this.config.chatModerationWarnOnly === true;
+    this.moderationEnforceMinConfidence =
+      this.config.chatModerationEnforceMinConfidence ?? 0.8;
+
+    const configuredHighRiskLabels =
+      this.config.chatModerationHighRiskLabels?.filter(
+        (label): label is ModerationLabelType =>
+          DEFAULT_HIGH_RISK_MODERATION_LABELS.has(label as ModerationLabelType),
+      ) ?? [];
+
+    this.moderationHighRiskLabels =
+      configuredHighRiskLabels.length > 0
+        ? new Set<ModerationLabelType>(configuredHighRiskLabels)
+        : DEFAULT_HIGH_RISK_MODERATION_LABELS;
+
     const configuredTtl = this.config.chatModerationDeleteLockTtlSeconds;
     if (configuredTtl === undefined || !Number.isFinite(configuredTtl)) {
       this.moderationDeleteEventLockTtlSeconds =
@@ -426,6 +455,50 @@ export class PersistMessageConsumer {
     }
 
     const traceId = payload.trace_id || `mod:${payload.message_id}`;
+    if (payload.decision_source !== 'model') {
+      this.logger.warn(
+        `[${traceId}] Skipping moderation enforcement for fallback decision source`,
+        {
+          messageId: payload.message_id,
+          conversationId: payload.conversation_id,
+          decisionSource: payload.decision_source,
+          failureReason: payload.failure_reason,
+        },
+      );
+      await this.emitEnforcementOutcome(
+        payload,
+        traceId,
+        'not_flagged',
+        'fallback_decision_source',
+        'none',
+      );
+      return;
+    }
+
+    const enforcementSkipReason = this.getPolicySkipReason(payload);
+    if (enforcementSkipReason) {
+      this.logger.warn(
+        `[${traceId}] Moderation enforcement skipped by policy`,
+        {
+          messageId: payload.message_id,
+          conversationId: payload.conversation_id,
+          reason: enforcementSkipReason,
+          confidence: payload.confidence,
+          labels: payload.labels,
+          threshold: this.moderationEnforceMinConfidence,
+          warnOnly: this.moderationWarnOnly,
+        },
+      );
+      await this.emitEnforcementOutcome(
+        payload,
+        traceId,
+        'not_flagged',
+        enforcementSkipReason,
+        'none',
+      );
+      return;
+    }
+
     if (!this.isValidEpochTimestamp(payload.created_at)) {
       this.logPoisonPayload('AiModerationResult', traceId, {
         messageId: payload.message_id,
@@ -747,7 +820,8 @@ export class PersistMessageConsumer {
     payload: AiModerationResultEvent,
     traceId: string,
     outcome: ModerationEnforcementOutcomeType,
-    reason: ModerationEnforcementReasonType,
+    reason?: ModerationEnforcementReasonType,
+    action: 'none' | 'soft_delete' = 'soft_delete',
   ): Promise<void> {
     const enforcementEvent: AiModerationEnforcementEvent = {
       message_id: payload.message_id,
@@ -758,7 +832,7 @@ export class PersistMessageConsumer {
       labels: payload.labels,
       confidence: payload.confidence,
       provider: payload.provider,
-      action: 'soft_delete',
+      action,
       outcome,
       reason,
       enforced_at: Date.now(),
@@ -806,6 +880,31 @@ export class PersistMessageConsumer {
 
   private isValidEpochTimestamp(value: unknown): value is number {
     return typeof value === 'number' && Number.isFinite(value) && value > 0;
+  }
+
+  private hasHighRiskLabel(labels: ModerationLabelType[]): boolean {
+    return labels.some((label) => this.moderationHighRiskLabels.has(label));
+  }
+
+  private getPolicySkipReason(
+    payload: AiModerationResultEvent,
+  ): Extract<
+    ModerationEnforcementReasonType,
+    'warn_only_mode' | 'below_confidence_threshold' | 'label_not_high_risk'
+  > | null {
+    if (this.moderationWarnOnly) {
+      return 'warn_only_mode';
+    }
+
+    if (payload.confidence < this.moderationEnforceMinConfidence) {
+      return 'below_confidence_threshold';
+    }
+
+    if (!this.hasHighRiskLabel(payload.labels)) {
+      return 'label_not_high_risk';
+    }
+
+    return null;
   }
 
   private isNonRetryableBindError(error: unknown): boolean {

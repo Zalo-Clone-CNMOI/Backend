@@ -147,6 +147,26 @@ describe('ModerationEngine', () => {
       expect(result.labels).toContain('clean');
     });
 
+    it('parses moderation JSON when provider wraps response in markdown code fence', async () => {
+      gateway.complete.mockResolvedValue({
+        content:
+          '```json\n{"is_flagged":false,"labels":["clean"],"confidence":0.91}\n```',
+        tokensIn: 35,
+        tokensOut: 12,
+        model: 'gpt-4o',
+        provider: 'openai',
+        latencyMs: 75,
+      });
+      moderationRepo.create.mockReturnValue({});
+      moderationRepo.save.mockResolvedValue({});
+
+      const result = await engine.moderate(makeRequest({ body: 'Xin chao' }));
+
+      expect(result.is_flagged).toBe(false);
+      expect(result.labels).toEqual(['clean']);
+      expect(result.decision_source).toBe('model');
+    });
+
     it('persists the moderation log to the database', async () => {
       const llmResult = {
         content: JSON.stringify({

@@ -29,8 +29,8 @@ export class MessagesService {
     private readonly messageRepository: MessageRepository,
     private readonly cacheService: CacheService,
   ) {
-    const bucket = process.env.S3_BUCKET ?? 'zalo-bucket';
-    const region = process.env.AWS_REGION ?? 'ca-central-1';
+    const bucket = process.env.S3_BUCKET ?? 'onn-bucket-23';
+    const region = process.env.AWS_REGION ?? 'ap-southeast-1';
     const endpoint = process.env.S3_ENDPOINT;
     this.cdnBaseUrl = endpoint
       ? endpoint
@@ -174,7 +174,7 @@ export class MessagesService {
   private toAttachmentResponse(
     attachment: MessageAttachment,
   ): AttachmentResponseDto {
-    const bucket = process.env.S3_BUCKET ?? 'zalo-bucket';
+    const bucket = process.env.S3_BUCKET ?? 'onn-bucket-23';
     const visibility =
       attachment.visibility ?? inferMediaVisibility(attachment.content_type);
 

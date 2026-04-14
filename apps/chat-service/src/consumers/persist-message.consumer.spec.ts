@@ -817,6 +817,155 @@ describe('PersistMessageConsumer', () => {
       expect(publisher.emit).not.toHaveBeenCalled();
     });
 
+    it('should not soft-delete when moderation decision source is fallback', async () => {
+      const payload = {
+        message_id: 'msg-mod-fallback-skip',
+        conversation_id: 'conv-mod-fallback-skip',
+        sender_id: 'user-mod-fallback-skip',
+        created_at: Date.now() - 1000,
+        is_flagged: true,
+        labels: ['spam' as const],
+        confidence: 1,
+        provider: 'openai' as const,
+        ensemble: false,
+        decision_source: 'fallback_provider_failure' as const,
+        failure_reason: 'provider timeout',
+        processed_at: Date.now(),
+        tokens_used: 0,
+        trace_id: 'mod-trace-fallback-skip',
+      };
+
+      await consumer.onModerationResult(payload);
+
+      expect(repo.trySoftDeleteMessage).not.toHaveBeenCalled();
+      expect(cacheService.setIfAbsent).not.toHaveBeenCalled();
+
+      const emitCalls = publisher.emit.mock.calls as Array<[string, unknown]>;
+      const deletedCalls = emitCalls.filter(
+        ([topic]) => topic === 'chat.message.deleted',
+      );
+      expect(deletedCalls).toHaveLength(0);
+
+      expect(publisher.emit).toHaveBeenCalledWith(
+        'ai.moderation.enforcement',
+        expect.objectContaining({
+          message_id: payload.message_id,
+          conversation_id: payload.conversation_id,
+          outcome: 'not_flagged',
+          action: 'none',
+          reason: 'fallback_decision_source',
+        }),
+      );
+    });
+
+    it('should skip soft-delete when confidence is below configured threshold', async () => {
+      appConfig.chatModerationWarnOnly = false;
+      appConfig.chatModerationEnforceMinConfidence = 0.95;
+      appConfig.chatModerationHighRiskLabels = ['spam', 'toxic'];
+      rebuildConsumer();
+
+      const payload = {
+        message_id: 'msg-mod-low-confidence',
+        conversation_id: 'conv-mod-low-confidence',
+        sender_id: 'user-mod-low-confidence',
+        created_at: Date.now() - 1000,
+        is_flagged: true,
+        labels: ['spam' as const],
+        confidence: 0.7,
+        provider: 'openai' as const,
+        ensemble: false,
+        decision_source: 'model' as const,
+        processed_at: Date.now(),
+        tokens_used: 0,
+        trace_id: 'mod-trace-low-confidence',
+      };
+
+      await consumer.onModerationResult(payload);
+
+      expect(repo.trySoftDeleteMessage).not.toHaveBeenCalled();
+      expect(publisher.emit).toHaveBeenCalledWith(
+        'ai.moderation.enforcement',
+        expect.objectContaining({
+          message_id: payload.message_id,
+          action: 'none',
+          outcome: 'not_flagged',
+          reason: 'below_confidence_threshold',
+        }),
+      );
+    });
+
+    it('should skip soft-delete when flagged labels are not high-risk', async () => {
+      appConfig.chatModerationWarnOnly = false;
+      appConfig.chatModerationEnforceMinConfidence = 0.7;
+      appConfig.chatModerationHighRiskLabels = ['spam', 'violence'];
+      rebuildConsumer();
+
+      const payload = {
+        message_id: 'msg-mod-low-risk-label',
+        conversation_id: 'conv-mod-low-risk-label',
+        sender_id: 'user-mod-low-risk-label',
+        created_at: Date.now() - 1000,
+        is_flagged: true,
+        labels: ['clean' as const],
+        confidence: 0.99,
+        provider: 'openai' as const,
+        ensemble: false,
+        decision_source: 'model' as const,
+        processed_at: Date.now(),
+        tokens_used: 0,
+        trace_id: 'mod-trace-low-risk-label',
+      };
+
+      await consumer.onModerationResult(payload);
+
+      expect(repo.trySoftDeleteMessage).not.toHaveBeenCalled();
+      expect(publisher.emit).toHaveBeenCalledWith(
+        'ai.moderation.enforcement',
+        expect.objectContaining({
+          message_id: payload.message_id,
+          action: 'none',
+          outcome: 'not_flagged',
+          reason: 'label_not_high_risk',
+        }),
+      );
+    });
+
+    it('should skip soft-delete in warn-only mode for staging/dev QA', async () => {
+      appConfig.chatModerationWarnOnly = true;
+      appConfig.chatModerationEnforceMinConfidence = 0.1;
+      appConfig.chatModerationHighRiskLabels = ['spam', 'toxic'];
+      rebuildConsumer();
+
+      const payload = {
+        message_id: 'msg-mod-warn-only',
+        conversation_id: 'conv-mod-warn-only',
+        sender_id: 'user-mod-warn-only',
+        created_at: Date.now() - 1000,
+        is_flagged: true,
+        labels: ['spam' as const],
+        confidence: 1,
+        provider: 'openai' as const,
+        ensemble: false,
+        decision_source: 'model' as const,
+        processed_at: Date.now(),
+        tokens_used: 0,
+        trace_id: 'mod-trace-warn-only',
+      };
+
+      await consumer.onModerationResult(payload);
+
+      expect(repo.trySoftDeleteMessage).not.toHaveBeenCalled();
+      expect(publisher.emit).toHaveBeenCalledWith(
+        'ai.moderation.enforcement',
+        expect.objectContaining({
+          message_id: payload.message_id,
+          action: 'none',
+          outcome: 'not_flagged',
+          reason: 'warn_only_mode',
+        }),
+      );
+    });
+
     it('should use custom configured lock TTL for moderation emit lock', async () => {
       appConfig.chatModerationDeleteLockTtlSeconds = 300;
       rebuildConsumer();

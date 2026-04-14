@@ -174,7 +174,7 @@ export class MessagesService {
   private toAttachmentResponse(
     attachment: MessageAttachment,
   ): AttachmentResponseDto {
-    const bucket = process.env.S3_BUCKET ?? 'be-media';
+    const bucket = process.env.S3_BUCKET ?? 'zalo-bucket';
     const visibility =
       attachment.visibility ?? inferMediaVisibility(attachment.content_type);
 

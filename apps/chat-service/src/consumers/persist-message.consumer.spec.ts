@@ -497,6 +497,29 @@ describe('PersistMessageConsumer', () => {
       );
       expect(cacheService.invalidateRecentMessages).not.toHaveBeenCalled();
     });
+
+    it('should skip poison edit payload when created_at is missing', async () => {
+      const payload = {
+        message_id: 'msg-edit-poison',
+        conversation_id: 'conv-1',
+        sender_id: 'user-1',
+        new_body: 'Edited body',
+        edited_at: Date.now(),
+        trace_id: 'test-trace',
+      } as unknown as Parameters<typeof consumer.onEdit>[0];
+
+      await expect(consumer.onEdit(payload)).resolves.not.toThrow();
+
+      expect(
+        membershipService.canUserAccessConversation,
+      ).not.toHaveBeenCalled();
+      expect(repo.getMessage).not.toHaveBeenCalled();
+      expect(repo.updateMessageBody).not.toHaveBeenCalled();
+      expect(publisher.emit).not.toHaveBeenCalledWith(
+        'chat.message.updated',
+        expect.anything(),
+      );
+    });
   });
 
   // ─── onDelete ──────────────────────────────────────────────────────────────
@@ -554,6 +577,28 @@ describe('PersistMessageConsumer', () => {
       );
       // Cache must not be touched when ownership check blocks the delete
       expect(cacheService.invalidateRecentMessages).not.toHaveBeenCalled();
+    });
+
+    it('should skip poison delete payload when created_at is missing', async () => {
+      const payload = {
+        message_id: 'msg-del-poison',
+        conversation_id: 'conv-1',
+        sender_id: 'user-1',
+        deleted_at: Date.now(),
+        trace_id: 'test-trace',
+      } as unknown as Parameters<typeof consumer.onDelete>[0];
+
+      await expect(consumer.onDelete(payload)).resolves.not.toThrow();
+
+      expect(
+        membershipService.canUserAccessConversation,
+      ).not.toHaveBeenCalled();
+      expect(repo.getMessage).not.toHaveBeenCalled();
+      expect(repo.softDeleteMessage).not.toHaveBeenCalled();
+      expect(publisher.emit).not.toHaveBeenCalledWith(
+        'chat.message.deleted',
+        expect.anything(),
+      );
     });
   });
 
@@ -746,6 +791,30 @@ describe('PersistMessageConsumer', () => {
       expect(cacheService.invalidateRecentMessages).toHaveBeenCalledWith(
         payload.conversation_id,
       );
+    });
+
+    it('should skip poison moderation payload when created_at is missing', async () => {
+      const payload = {
+        message_id: 'msg-mod-poison',
+        conversation_id: 'conv-mod',
+        sender_id: 'user-mod',
+        is_flagged: true,
+        labels: ['spam' as const],
+        confidence: 1,
+        provider: 'openai' as const,
+        ensemble: false,
+        decision_source: 'model' as const,
+        processed_at: Date.now(),
+        tokens_used: 0,
+        trace_id: 'mod-trace-poison',
+      } as unknown as Parameters<typeof consumer.onModerationResult>[0];
+
+      await expect(consumer.onModerationResult(payload)).resolves.not.toThrow();
+
+      expect(repo.trySoftDeleteMessage).not.toHaveBeenCalled();
+      expect(repo.getMessage).not.toHaveBeenCalled();
+      expect(cacheService.setIfAbsent).not.toHaveBeenCalled();
+      expect(publisher.emit).not.toHaveBeenCalled();
     });
 
     it('should use custom configured lock TTL for moderation emit lock', async () => {

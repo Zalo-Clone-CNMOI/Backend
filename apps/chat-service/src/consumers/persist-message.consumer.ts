@@ -426,6 +426,16 @@ export class PersistMessageConsumer {
     }
 
     const traceId = payload.trace_id || `mod:${payload.message_id}`;
+    if (!this.isValidEpochTimestamp(payload.created_at)) {
+      this.logPoisonPayload('AiModerationResult', traceId, {
+        messageId: payload.message_id,
+        conversationId: payload.conversation_id,
+        createdAt: payload.created_at,
+        reason: 'missing_or_invalid_created_at',
+      });
+      return;
+    }
+
     const deletedAt = Date.now();
     const deleteEmitKey = this.getModerationDeleteEmitKey(
       payload.conversation_id,
@@ -794,16 +804,53 @@ export class PersistMessageConsumer {
     return `moderation:delete-event-emitted:${conversationId}:${messageId}`;
   }
 
+  private isValidEpochTimestamp(value: unknown): value is number {
+    return typeof value === 'number' && Number.isFinite(value) && value > 0;
+  }
+
+  private isNonRetryableBindError(error: unknown): boolean {
+    if (!(error instanceof Error)) {
+      return false;
+    }
+
+    return /Unexpected unset value for bind variable/i.test(error.message);
+  }
+
+  private logPoisonPayload(
+    context: string,
+    traceId: string,
+    fields: Record<string, unknown>,
+  ): void {
+    this.bumpConsistencyCounter('replay', {
+      traceId,
+      context: `${context}_poison_payload`,
+      ...fields,
+    });
+    this.logger.error(`[${traceId}] ${context} skipped poison payload`, fields);
+  }
+
   @EventPattern(KafkaTopics.ChatMessageEdit)
   async onEdit(@Payload() payload: ChatMessageEditCommand) {
     const startTime = Date.now();
     const editedAt = payload.edited_at ?? startTime;
     const traceId = payload.trace_id || `trace-${Date.now()}-${Math.random()}`;
+    const createdAt = payload.created_at;
 
     this.logger.debug(`[${traceId}] ChatMessageEdit started`, {
       messageId: payload.message_id,
       conversationId: payload.conversation_id,
+      createdAt,
     });
+
+    if (!this.isValidEpochTimestamp(createdAt)) {
+      this.logPoisonPayload('ChatMessageEdit', traceId, {
+        messageId: payload.message_id,
+        conversationId: payload.conversation_id,
+        createdAt,
+        reason: 'missing_or_invalid_created_at',
+      });
+      return;
+    }
 
     try {
       const hasAccess = await ensureConversationAccess({
@@ -825,7 +872,7 @@ export class PersistMessageConsumer {
         traceId,
         senderId: payload.sender_id,
         conversationId: payload.conversation_id,
-        createdAt: payload.created_at,
+        createdAt,
         messageId: payload.message_id,
         action: 'edit',
       });
@@ -835,7 +882,7 @@ export class PersistMessageConsumer {
 
       await this.repo.updateMessageBody(
         payload.conversation_id,
-        payload.created_at,
+        createdAt,
         payload.message_id,
         payload.new_body,
         editedAt,
@@ -866,6 +913,17 @@ export class PersistMessageConsumer {
         }
       })();
     } catch (error) {
+      if (this.isNonRetryableBindError(error)) {
+        this.logPoisonPayload('ChatMessageEdit', traceId, {
+          messageId: payload.message_id,
+          conversationId: payload.conversation_id,
+          createdAt,
+          reason: 'non_retryable_bind_error',
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return;
+      }
+
       this.logger.error(`[${traceId}] ChatMessageEdit failed`, {
         messageId: payload.message_id,
         error: error instanceof Error ? error.message : String(error),
@@ -879,11 +937,23 @@ export class PersistMessageConsumer {
     const startTime = Date.now();
     const deletedAt = payload.deleted_at ?? startTime;
     const traceId = payload.trace_id || `trace-${Date.now()}-${Math.random()}`;
+    const createdAt = payload.created_at;
 
     this.logger.debug(`[${traceId}] ChatMessageDelete started`, {
       messageId: payload.message_id,
       conversationId: payload.conversation_id,
+      createdAt,
     });
+
+    if (!this.isValidEpochTimestamp(createdAt)) {
+      this.logPoisonPayload('ChatMessageDelete', traceId, {
+        messageId: payload.message_id,
+        conversationId: payload.conversation_id,
+        createdAt,
+        reason: 'missing_or_invalid_created_at',
+      });
+      return;
+    }
 
     try {
       const hasAccess = await ensureConversationAccess({
@@ -905,7 +975,7 @@ export class PersistMessageConsumer {
         traceId,
         senderId: payload.sender_id,
         conversationId: payload.conversation_id,
-        createdAt: payload.created_at,
+        createdAt,
         messageId: payload.message_id,
         action: 'delete',
       });
@@ -915,7 +985,7 @@ export class PersistMessageConsumer {
 
       await this.repo.softDeleteMessage(
         payload.conversation_id,
-        payload.created_at,
+        createdAt,
         payload.message_id,
         deletedAt,
       );
@@ -944,6 +1014,17 @@ export class PersistMessageConsumer {
         }
       })();
     } catch (error) {
+      if (this.isNonRetryableBindError(error)) {
+        this.logPoisonPayload('ChatMessageDelete', traceId, {
+          messageId: payload.message_id,
+          conversationId: payload.conversation_id,
+          createdAt,
+          reason: 'non_retryable_bind_error',
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return;
+      }
+
       this.logger.error(`[${traceId}] ChatMessageDelete failed`, {
         messageId: payload.message_id,
         error: error instanceof Error ? error.message : String(error),

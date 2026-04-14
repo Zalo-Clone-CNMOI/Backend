@@ -18,6 +18,9 @@ services:
       INTERACTION_SERVICE_URL: http://interaction-service:5004/api
       MEDIA_SERVICE_URL: http://media-service:3003/api
       JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1h}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000,http://localhost:3001,http://localhost:8081}
       KAFKA_BROKERS: kafka:29092
       KAFKA_CLIENT_ID: bff-service

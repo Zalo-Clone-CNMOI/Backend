@@ -47,6 +47,10 @@ export class JwtAuthGuard implements CanActivate {
       return true;
     }
 
+    if (context.getType<'http' | 'rpc' | 'ws'>() !== 'http') {
+      return true;
+    }
+
     const request = context.switchToHttp().getRequest<Request>();
     const token = this.extractTokenFromHeader(request);
 

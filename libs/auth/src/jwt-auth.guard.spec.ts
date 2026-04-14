@@ -83,12 +83,32 @@ describe('JwtAuthGuard', () => {
       }),
       getHandler: () => ({}),
       getClass: () => ({}),
+      getType: () => 'http',
+    } as ExecutionContext;
+  }
+
+  function createMockRpcExecutionContext(): ExecutionContext {
+    return {
+      getHandler: () => ({}),
+      getClass: () => ({}),
+      getType: () => 'rpc',
     } as ExecutionContext;
   }
 
   // ─── Public Routes ─────────────────────────────────────────────────────────
 
   describe('public routes', () => {
+    it('should bypass non-http contexts', async () => {
+      (reflector.getAllAndOverride as jest.Mock).mockReturnValue(false);
+
+      const ctx = createMockRpcExecutionContext();
+      const result = await guard.canActivate(ctx);
+
+      expect(result).toBe(true);
+      expect(jwtService.verifyAccessToken).not.toHaveBeenCalled();
+      expect(userRepository.findOne).not.toHaveBeenCalled();
+    });
+
     it('should allow access to @Public() routes without token', async () => {
       (reflector.getAllAndOverride as jest.Mock).mockReturnValue(true);
 
@@ -243,6 +263,7 @@ describe('JwtAuthGuard', () => {
         }),
         getHandler: () => ({}),
         getClass: () => ({}),
+        getType: () => 'http',
       } as ExecutionContext;
 
       const result = await guard.canActivate(ctx);
@@ -316,6 +337,7 @@ describe('JwtAuthGuard', () => {
         }),
         getHandler: () => ({}),
         getClass: () => ({}),
+        getType: () => 'http',
       } as ExecutionContext;
 
       const result = await guard.canActivate(ctx);

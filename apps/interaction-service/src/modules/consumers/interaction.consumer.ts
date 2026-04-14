@@ -4,6 +4,7 @@ import { Inject } from '@nestjs/common';
 import { KafkaTopics, type ChatMessageCreatedEvent } from '@libs/contracts';
 import { RedisClientType } from 'redis';
 import { REDIS_CLIENT } from '@libs/redis/redis.tokens';
+import { Public } from '@app/decorator';
 
 interface LastMessage {
   message_id: string;
@@ -14,6 +15,7 @@ interface LastMessage {
 }
 
 @Controller()
+@Public()
 export class InteractionConsumer {
   private readonly logger = new Logger(InteractionConsumer.name);
 

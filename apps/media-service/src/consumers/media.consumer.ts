@@ -31,13 +31,14 @@ export class MediaConsumer {
     this.logger.log(`MediaUploadRequested: key=${event.key}`);
 
     try {
+      const bucket = event.bucket ?? this.s3Config.bucket;
       await this.mediaFileRepo
         .createQueryBuilder()
         .insert()
         .into(MediaFile)
         .values({
           key: event.key,
-          bucket: event.bucket,
+          bucket,
           contentType: event.content_type,
           status: 'pending',
           visibility: event.visibility ?? 'public',
@@ -64,21 +65,25 @@ export class MediaConsumer {
     this.logger.log(`MediaUploaded: key=${event.key}`);
 
     try {
-      const result = await this.mediaFileRepo.update(
-        { key: event.key },
-        { status: 'uploaded' },
-      );
+      const bucket = event.bucket ?? this.s3Config.bucket;
+      const existingFile = await this.mediaFileRepo.findOne({
+        where: { key: event.key },
+      });
 
-      if (result.affected === 0) {
+      if (existingFile) {
+        existingFile.status = 'uploaded';
+        existingFile.bucket = existingFile.bucket ?? bucket;
+        await this.mediaFileRepo.save(existingFile);
+      } else {
         this.logger.warn(
           `No pending MediaFile found for key=${event.key}, creating uploaded record`,
         );
         const mediaFile = this.mediaFileRepo.create({
           key: event.key,
-          bucket: event.bucket,
+          bucket,
           status: 'uploaded',
           contentType: 'application/octet-stream',
-          uploadedById: null,
+          uploadedById: event.trace_id ?? null,
           sizeBytes: null,
           conversationId: null,
           thumbnailKey: null,

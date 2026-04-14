@@ -31,7 +31,7 @@ import type {
   PresignUploadResponseDto,
 } from './dto/presign-upload.dto';
 import type { PresignDownloadResponseDto } from './dto/presign-download.dto';
-import * as sharp from 'sharp';
+import sharp from 'sharp';
 import { Readable } from 'stream';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -118,32 +118,39 @@ export class MediaService implements OnModuleInit {
       );
       throw new BadRequestException(`File not found on S3: ${key}`);
     }
-    try {
-      const visibility = inferMediaVisibility(contentType);
-      await this.mediaFileRepo
-        .createQueryBuilder()
-        .insert()
-        .into(MediaFile)
-        .values({
-          key,
-          bucket: this.s3Config.bucket,
-          contentType,
-          status: 'uploaded',
-          visibility,
-          uploadedById: userId ?? null,
-          conversationId: conversationId ?? null,
-          sizeBytes: null,
-          thumbnailKey: null,
-        })
-        .orUpdate(['status', 'uploadedById'], ['key'])
-        .execute();
-      this.logger.log(`MediaFile upserted to uploaded (sync): key=${key}`);
-    } catch (error) {
-      this.logger.error(
-        `Failed to sync upsert MediaFile for key=${key}`,
-        error instanceof Error ? error.stack : String(error),
-      );
+    const visibility = inferMediaVisibility(contentType);
+    const existingFile = await this.mediaFileRepo.findOne({
+      where: { key },
+    });
+
+    if (existingFile) {
+      Object.assign(existingFile, {
+        bucket: existingFile.bucket ?? this.s3Config.bucket,
+        contentType,
+        status: 'uploaded',
+        visibility,
+        uploadedById: userId ?? existingFile.uploadedById ?? null,
+        conversationId: conversationId ?? existingFile.conversationId ?? null,
+        sizeBytes: existingFile.sizeBytes ?? null,
+        thumbnailKey: existingFile.thumbnailKey ?? null,
+      });
+      await this.mediaFileRepo.save(existingFile);
+    } else {
+      const mediaFile = this.mediaFileRepo.create({
+        key,
+        bucket: this.s3Config.bucket,
+        contentType,
+        status: 'uploaded',
+        visibility,
+        uploadedById: userId ?? null,
+        conversationId: conversationId ?? null,
+        sizeBytes: null,
+        thumbnailKey: null,
+      });
+      await this.mediaFileRepo.save(mediaFile);
     }
+
+    this.logger.log(`MediaFile upserted to uploaded (sync): key=${key}`);
 
     const event: MediaUploadedEvent = {
       key,

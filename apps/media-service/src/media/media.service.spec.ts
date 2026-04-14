@@ -45,7 +45,11 @@ describe('MediaService', () => {
     };
 
     mediaFileRepo = {
+      create: jest.fn<MediaFile, [Partial<MediaFile>]>(
+        (value) => value as MediaFile,
+      ),
       findOne: jest.fn(),
+      save: jest.fn().mockResolvedValue(undefined),
     };
 
     membershipService = {
@@ -142,8 +146,17 @@ describe('MediaService', () => {
 
   describe('confirmUploaded', () => {
     it('should emit MediaUploaded Kafka event', async () => {
+      mediaFileRepo.findOne.mockResolvedValue(null);
       await service.confirmUploaded('images/photo.jpg', 'text/plain');
 
+      expect(mediaFileRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          key: 'images/photo.jpg',
+          bucket: 'test-bucket',
+          status: 'uploaded',
+          uploadedById: null,
+        }),
+      );
       expect(kafka.emit).toHaveBeenCalledWith(
         KafkaTopics.MediaUploaded,
         expect.objectContaining({
@@ -155,6 +168,7 @@ describe('MediaService', () => {
     });
 
     it('should return empty object for non-image types', async () => {
+      mediaFileRepo.findOne.mockResolvedValue(null);
       const result = await service.confirmUploaded(
         'files/doc.pdf',
         'application/pdf',
@@ -164,6 +178,7 @@ describe('MediaService', () => {
     });
 
     it('should generate thumbnail for image content types', async () => {
+      mediaFileRepo.findOne.mockResolvedValue(null);
       // Mock S3 GetObject returning a minimal valid JPEG buffer
       const jpegBuffer = Buffer.from([
         0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46,
@@ -192,6 +207,7 @@ describe('MediaService', () => {
     });
 
     it('should NOT generate thumbnail for gif images', async () => {
+      mediaFileRepo.findOne.mockResolvedValue(null);
       const result = await service.confirmUploaded(
         'images/anim.gif',
         'image/gif',
@@ -203,6 +219,7 @@ describe('MediaService', () => {
     });
 
     it('should NOT generate thumbnail for svg images', async () => {
+      mediaFileRepo.findOne.mockResolvedValue(null);
       const result = await service.confirmUploaded(
         'images/icon.svg',
         'image/svg+xml',
@@ -213,6 +230,7 @@ describe('MediaService', () => {
     });
 
     it('should return empty on thumbnail generation failure', async () => {
+      mediaFileRepo.findOne.mockResolvedValue(null);
       s3Client.send.mockRejectedValue(new Error('S3 read error'));
 
       const result = await service.confirmUploaded(
@@ -225,6 +243,7 @@ describe('MediaService', () => {
     });
 
     it('should emit AiDocumentUpload event for PDF with conversationId', async () => {
+      mediaFileRepo.findOne.mockResolvedValue(null);
       await service.confirmUploaded(
         'docs/report.pdf',
         'application/pdf',
@@ -244,6 +263,7 @@ describe('MediaService', () => {
     });
 
     it('should emit AiDocumentUpload event for docx with conversationId', async () => {
+      mediaFileRepo.findOne.mockResolvedValue(null);
       await service.confirmUploaded(
         'docs/doc.docx',
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -261,6 +281,7 @@ describe('MediaService', () => {
     });
 
     it('should NOT emit AiDocumentUpload without conversationId', async () => {
+      mediaFileRepo.findOne.mockResolvedValue(null);
       await service.confirmUploaded(
         'docs/report.pdf',
         'application/pdf',
@@ -276,6 +297,7 @@ describe('MediaService', () => {
     });
 
     it('should NOT emit AiDocumentUpload without userId', async () => {
+      mediaFileRepo.findOne.mockResolvedValue(null);
       await service.confirmUploaded(
         'docs/report.pdf',
         'application/pdf',
@@ -290,6 +312,7 @@ describe('MediaService', () => {
     });
 
     it('should NOT emit AiDocumentUpload for non-document types', async () => {
+      mediaFileRepo.findOne.mockResolvedValue(null);
       await service.confirmUploaded(
         'files/video.mp4',
         'video/mp4',
@@ -304,12 +327,22 @@ describe('MediaService', () => {
     });
 
     it('should set trace_id to userId in MediaUploaded event', async () => {
+      mediaFileRepo.findOne.mockResolvedValue(null);
       await service.confirmUploaded('file.txt', 'text/plain', 'user-42');
 
       expect(kafka.emit).toHaveBeenCalledWith(
         KafkaTopics.MediaUploaded,
         expect.objectContaining({ trace_id: 'user-42' }),
       );
+    });
+
+    it('should rethrow database errors instead of masking them', async () => {
+      mediaFileRepo.findOne.mockResolvedValue(null);
+      mediaFileRepo.save.mockRejectedValue(new Error('DB insert failed'));
+
+      await expect(
+        service.confirmUploaded('images/photo.jpg', 'image/jpeg'),
+      ).rejects.toThrow('DB insert failed');
     });
   });
 

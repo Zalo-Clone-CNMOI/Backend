@@ -8,12 +8,32 @@ import {
 } from '@nestjs/swagger';
 import { MessagesService } from './messages.service';
 import { AccessToken } from '@app/decorator';
+import { FindMessageDto } from './dto/find-message.dto';
 
 @ApiTags('Messages')
 @ApiBearerAuth('BearerAuth')
 @Controller('messages')
 export class MessagesController {
   constructor(private readonly messagesService: MessagesService) {}
+
+  @Get(':conversationId/search')
+  @ApiOperation({ summary: 'Search messages in a conversation by keyword' })
+  @ApiResponse({ status: 200, description: 'Matched messages' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async searchMessages(
+    @AccessToken() token: string,
+    @Param('conversationId') conversationId: string,
+    @Query() dto: FindMessageDto,
+  ) {
+    return this.messagesService.searchMessages(
+      token,
+      conversationId,
+      dto.q,
+      dto.senderId,
+      dto.from,
+      dto.to,
+    );
+  }
 
   @Get(':conversationId')
   @ApiOperation({ summary: 'Get messages for a conversation' })

@@ -36,4 +36,22 @@ export class MessagesService {
   async getMessageReactions(accessToken: string, messageId: string) {
     return this.chatClient.getMessageReactions(accessToken, messageId);
   }
+
+  async searchMessages(
+    accessToken: string,
+    conversationId: string,
+    q?: string,
+    senderId?: string,
+    from?: number,
+    to?: number,
+  ) {
+    return this.chatClient.searchMessages(
+      accessToken,
+      conversationId,
+      q,
+      senderId,
+      from,
+      to,
+    );
+  }
 }

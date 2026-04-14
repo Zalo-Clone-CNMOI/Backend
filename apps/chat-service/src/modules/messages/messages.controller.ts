@@ -16,15 +16,44 @@ import {
 import { MessagesService } from './messages.service';
 import {
   GetMessagesQueryDto,
+  SearchMessagesQueryDto,
   MessageListResponseDto,
   MessageResponseDto,
   MessageReactionsResponseDto,
+  MessageSearchResponseDto,
 } from './dto';
 
 @ApiTags('Messages')
 @Controller('v1/messages')
 export class MessagesController {
   constructor(private readonly messagesService: MessagesService) {}
+
+  @Get(':conversationId/search')
+  @ApiOperation({ summary: 'Search messages in a conversation by keyword' })
+  @ApiParam({ name: 'conversationId', description: 'Conversation ID' })
+  @ApiQuery({ name: 'q', required: false, description: 'Keyword to search' })
+  @ApiQuery({
+    name: 'senderId',
+    required: false,
+    description: 'Filter by sender UUID',
+  })
+  @ApiQuery({
+    name: 'from',
+    required: false,
+    description: 'Filter from timestamp (epoch ms)',
+  })
+  @ApiQuery({
+    name: 'to',
+    required: false,
+    description: 'Filter to timestamp (epoch ms)',
+  })
+  @ApiResponse({ status: 200, type: MessageSearchResponseDto })
+  async searchMessages(
+    @Param('conversationId', ParseUUIDPipe) conversationId: string,
+    @Query() query: SearchMessagesQueryDto,
+  ): Promise<MessageSearchResponseDto> {
+    return this.messagesService.searchMessages(conversationId, query);
+  }
 
   @Get(':conversationId')
   @ApiOperation({

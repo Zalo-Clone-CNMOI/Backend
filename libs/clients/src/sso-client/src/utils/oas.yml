@@ -570,9 +570,9 @@ components:
           example: 'Hello, I am a software developer'
         avatarUrl:
           type: string
-          format: uri
-          description: Avatar URL
-          example: 'https://example.com/avatar.jpg'
+          pattern: '^(public|private)/[-A-Za-z0-9._/]+$'
+          description: Avatar media key
+          example: 'public/550e8400-e29b-41d4-a716-446655440000-avatar.jpg'
         dateOfBirth:
           type: string
           format: date

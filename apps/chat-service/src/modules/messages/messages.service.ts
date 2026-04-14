@@ -10,8 +10,10 @@ import type {
 } from '@app/types/interfaces/chat.interface';
 import {
   GetMessagesQueryDto,
+  SearchMessagesQueryDto,
   MessageResponseDto,
   MessageListResponseDto,
+  MessageSearchResponseDto,
   AttachmentResponseDto,
   MessageReactionsResponseDto,
   MessageReactionDto,
@@ -75,6 +77,28 @@ export class MessagesService {
     }
 
     return response;
+  }
+
+  async searchMessages(
+    conversationId: string,
+    query: SearchMessagesQueryDto,
+  ): Promise<MessageSearchResponseDto> {
+    const all = await this.messageRepository.getAllMessages(conversationId);
+
+    const keyword = query.q?.trim().toLowerCase() || undefined;
+
+    const matched = all.filter((msg) => {
+      if (msg.deleted_at) return false;
+      if (keyword !== undefined && !msg.body.toLowerCase().includes(keyword))
+        return false;
+      if (query.senderId && msg.sender_id !== query.senderId) return false;
+      if (query.from !== undefined && msg.created_at < query.from) return false;
+      if (query.to !== undefined && msg.created_at > query.to) return false;
+      return true;
+    });
+
+    const items = matched.map((msg) => this.toMessageResponse(msg));
+    return { items, total: items.length };
   }
 
   async getMessage(

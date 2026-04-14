@@ -19,8 +19,11 @@ export class UserProfileResponseDto {
   @ApiPropertyOptional({ description: 'Full name', example: 'Nguyễn Văn A' })
   fullName?: string;
 
-  @ApiPropertyOptional({ description: 'Avatar URL' })
+  @ApiPropertyOptional({ description: 'Avatar media key stored in profile' })
   avatarUrl?: string | null;
+
+  @ApiPropertyOptional({ description: 'Signed URL resolved from avatar key' })
+  avatarResolvedUrl?: string;
 
   @ApiPropertyOptional({ description: 'Bio' })
   bio?: string | null;
@@ -48,7 +51,7 @@ export class PublicUserResponseDto {
   @ApiPropertyOptional({ description: 'Full name' })
   fullName?: string;
 
-  @ApiPropertyOptional({ description: 'Avatar URL' })
+  @ApiPropertyOptional({ description: 'Avatar media key stored in profile' })
   avatarUrl?: string | null;
 
   @ApiPropertyOptional({ description: 'Bio' })

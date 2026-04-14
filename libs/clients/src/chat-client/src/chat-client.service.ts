@@ -5,6 +5,7 @@ import type {
   MessageListResponseDto,
   MessageResponseDto,
   MessageReactionsResponseDto,
+  MessageSearchResponseDto,
 } from './client/generated';
 
 @Injectable()
@@ -70,6 +71,28 @@ export class ChatClientService extends BaseHttpClient {
       return response.data;
     } catch (error) {
       this.handleError('getMessage', error);
+    }
+  }
+
+  /**
+   * Search messages in a conversation by keyword
+   */
+  async searchMessages(
+    accessToken: string,
+    conversationId: string,
+    q?: string,
+    senderId?: string,
+    from?: number,
+    to?: number,
+  ): Promise<MessageSearchResponseDto> {
+    try {
+      const response = await this.messagesApi.searchMessages(
+        { conversationId, q, senderId, from, to },
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      return response.data;
+    } catch (error) {
+      this.handleError('searchMessages', error);
     }
   }
 

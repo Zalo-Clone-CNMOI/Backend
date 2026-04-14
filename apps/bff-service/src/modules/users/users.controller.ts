@@ -67,6 +67,10 @@ export class UsersController {
     type: UserProfileResponseDto,
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({
+    status: 403,
+    description: 'No permission to use this media key',
+  })
   @ApiResponse({ status: 409, description: 'Email already in use' })
   async updateMyProfile(
     @Headers('authorization') authorization: string,

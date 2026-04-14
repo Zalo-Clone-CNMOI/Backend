@@ -9,6 +9,59 @@ servers:
   - url: http://localhost:5002/api
     description: Local development server
 paths:
+  /v1/messages/{conversationId}/search:
+    get:
+      tags:
+        - Messages
+      summary: Search messages in a conversation by keyword
+      operationId: searchMessages
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          description: Conversation ID
+          schema:
+            type: string
+            format: uuid
+        - name: q
+          in: query
+          required: false
+          description: Keyword to search in message body
+          schema:
+            type: string
+        - name: senderId
+          in: query
+          required: false
+          description: Filter by sender UUID
+          schema:
+            type: string
+            format: uuid
+        - name: from
+          in: query
+          required: false
+          description: Filter messages created after this timestamp (epoch ms)
+          schema:
+            type: integer
+            format: int64
+        - name: to
+          in: query
+          required: false
+          description: Filter messages created before this timestamp (epoch ms)
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Matched messages
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageSearchResponseDto'
+        '400':
+          description: Invalid conversation ID
+        '401':
+          description: Unauthorized
+
   /v1/messages/{conversationId}:
     get:
       tags:
@@ -278,6 +331,21 @@ components:
           items:
             type: string
           description: User IDs who used this reaction
+
+    MessageSearchResponseDto:
+      type: object
+      required:
+        - items
+        - total
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MessageResponseDto'
+          description: Matched messages
+        total:
+          type: integer
+          description: Total number of matched messages
 
     MessageReactionsResponseDto:
       type: object

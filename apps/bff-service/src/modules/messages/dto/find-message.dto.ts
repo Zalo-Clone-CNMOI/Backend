@@ -1,31 +1,8 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, IsPositive, Max, IsUUID } from 'class-validator';
+import { IsOptional, IsString, IsUUID, IsPositive } from 'class-validator';
 import { Type } from 'class-transformer';
 
-export class GetMessagesQueryDto {
-  @ApiPropertyOptional({
-    description: 'Number of messages to fetch',
-    example: 50,
-    default: 50,
-    minimum: 1,
-    maximum: 100,
-  })
-  @IsOptional()
-  @Type(() => Number)
-  @IsPositive()
-  @Max(100)
-  limit?: number = 50;
-
-  @ApiPropertyOptional({
-    description: 'Cursor for pagination (base64 encoded timestamp)',
-    example: 'MTcwNjE2MjgwMDAwMA==',
-  })
-  @IsOptional()
-  @IsString()
-  cursor?: string;
-}
-
-export class SearchMessagesQueryDto {
+export class FindMessageDto {
   @ApiPropertyOptional({
     description: 'Keyword to search in message body',
     example: 'Thì đó',
@@ -35,7 +12,7 @@ export class SearchMessagesQueryDto {
   q?: string;
 
   @ApiPropertyOptional({
-    description: 'Filter by sender ID (UUID)',
+    description: 'Filter by sender UUID',
     example: '00000000-0000-0000-0000-000000000001',
   })
   @IsOptional()
@@ -45,6 +22,7 @@ export class SearchMessagesQueryDto {
   @ApiPropertyOptional({
     description: 'Filter messages created after this timestamp (epoch ms)',
     example: 1700000000000,
+    type: Number,
   })
   @IsOptional()
   @Type(() => Number)
@@ -54,6 +32,7 @@ export class SearchMessagesQueryDto {
   @ApiPropertyOptional({
     description: 'Filter messages created before this timestamp (epoch ms)',
     example: 1714000000000,
+    type: Number,
   })
   @IsOptional()
   @Type(() => Number)

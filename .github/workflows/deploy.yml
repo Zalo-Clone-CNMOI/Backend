@@ -7,6 +7,7 @@ on:
       - "apps/**"
       - "libs/**"
       - "package.json"
+      - "pnpm-workspace.yaml"
       - "pnpm-lock.yaml"
       - "infra-compose.yml"
       - "db-compose.yml"
@@ -93,7 +94,7 @@ jobs:
 
           any=false
           for s in bff sso interaction media chat ws presence notification ai; do
-            if echo "$CHANGED" | grep -qE "apps/$s-|libs/|package.json|pnpm-lock.yaml|app-compose.yml"; then
+            if echo "$CHANGED" | grep -qE "apps/$s-|libs/|package.json|pnpm-workspace.yaml|pnpm-lock.yaml|app-compose.yml"; then
               echo "$s=true" >> $GITHUB_OUTPUT
               any=true
             else
@@ -110,7 +111,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v2
         with:
-          version: 9
+          version: 10.11.0
+          run_install: false
       - uses: actions/setup-node@v4
         with:
           node-version: 20

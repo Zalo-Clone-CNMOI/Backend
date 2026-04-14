@@ -123,7 +123,26 @@ export interface MessageListResponseDto {
     'hasMore': boolean;
 }
 /**
- * 
+ *
+ * @export
+ * @interface MessageSearchResponseDto
+ */
+export interface MessageSearchResponseDto {
+    /**
+     * Matched messages
+     * @type {Array<MessageResponseDto>}
+     * @memberof MessageSearchResponseDto
+     */
+    'items': Array<MessageResponseDto>;
+    /**
+     * Total number of matched messages
+     * @type {number}
+     * @memberof MessageSearchResponseDto
+     */
+    'total': number;
+}
+/**
+ *
  * @export
  * @interface MessageReactionDto
  */
@@ -411,7 +430,56 @@ export const MessagesApiAxiosParamCreator = function (configuration?: Configurat
             await setBearerAuthToObject(localVarHeaderParameter, configuration)
 
 
-    
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         *
+         * @summary Search messages in a conversation by keyword
+         * @param {string} conversationId Conversation ID
+         * @param {string} [q] Keyword to search in message body
+         * @param {string} [senderId] Filter by sender UUID
+         * @param {number} [from] Filter messages created after this timestamp (epoch ms)
+         * @param {number} [to] Filter messages created before this timestamp (epoch ms)
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        searchMessages: async (conversationId: string, q?: string, senderId?: string, from?: number, to?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            assertParamExists('searchMessages', 'conversationId', conversationId)
+            const localVarPath = `/v1/messages/{conversationId}/search`
+                .replace(`{${"conversationId"}}`, encodeURIComponent(String(conversationId)));
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            await setBearerAuthToObject(localVarHeaderParameter, configuration)
+
+            if (q !== undefined) {
+                localVarQueryParameter['q'] = q;
+            }
+            if (senderId !== undefined) {
+                localVarQueryParameter['senderId'] = senderId;
+            }
+            if (from !== undefined) {
+                localVarQueryParameter['from'] = from;
+            }
+            if (to !== undefined) {
+                localVarQueryParameter['to'] = to;
+            }
+
             setSearchParams(localVarUrlObj, localVarQueryParameter);
             let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
             localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
@@ -474,6 +542,12 @@ export const MessagesApiFp = function(configuration?: Configuration) {
             const localVarOperationServerBasePath = operationServerMap['MessagesApi.getReactions']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
+        async searchMessages(conversationId: string, q?: string, senderId?: string, from?: number, to?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<MessageSearchResponseDto>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.searchMessages(conversationId, q, senderId, from, to, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['MessagesApi.searchMessages']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
     }
 };
 
@@ -513,6 +587,9 @@ export const MessagesApiFactory = function (configuration?: Configuration, baseP
          */
         getReactions(requestParameters: MessagesApiGetReactionsRequest, options?: RawAxiosRequestConfig): AxiosPromise<MessageReactionsResponseDto> {
             return localVarFp.getReactions(requestParameters.messageId, options).then((request) => request(axios, basePath));
+        },
+        searchMessages(requestParameters: MessagesApiSearchMessagesRequest, options?: RawAxiosRequestConfig): AxiosPromise<MessageSearchResponseDto> {
+            return localVarFp.searchMessages(requestParameters.conversationId, requestParameters.q, requestParameters.senderId, requestParameters.from, requestParameters.to, options).then((request) => request(axios, basePath));
         },
     };
 };
@@ -588,6 +665,19 @@ export interface MessagesApiGetReactionsRequest {
 }
 
 /**
+ * Request parameters for searchMessages operation in MessagesApi.
+ * @export
+ * @interface MessagesApiSearchMessagesRequest
+ */
+export interface MessagesApiSearchMessagesRequest {
+    readonly conversationId: string
+    readonly q?: string
+    readonly senderId?: string
+    readonly from?: number
+    readonly to?: number
+}
+
+/**
  * MessagesApi - object-oriented interface
  * @export
  * @class MessagesApi
@@ -629,7 +719,10 @@ export class MessagesApi extends BaseAPI {
     public getReactions(requestParameters: MessagesApiGetReactionsRequest, options?: RawAxiosRequestConfig) {
         return MessagesApiFp(this.configuration).getReactions(requestParameters.messageId, options).then((request) => request(this.axios, this.basePath));
     }
-}
 
+    public searchMessages(requestParameters: MessagesApiSearchMessagesRequest, options?: RawAxiosRequestConfig) {
+        return MessagesApiFp(this.configuration).searchMessages(requestParameters.conversationId, requestParameters.q, requestParameters.senderId, requestParameters.from, requestParameters.to, options).then((request) => request(this.axios, this.basePath));
+    }
+}
 
 

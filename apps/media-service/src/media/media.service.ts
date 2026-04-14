@@ -135,7 +135,7 @@ export class MediaService implements OnModuleInit {
           sizeBytes: null,
           thumbnailKey: null,
         })
-        .orUpdate(['status'], ['key'])
+        .orUpdate(['status', 'uploadedById'], ['key'])
         .execute();
       this.logger.log(`MediaFile upserted to uploaded (sync): key=${key}`);
     } catch (error) {

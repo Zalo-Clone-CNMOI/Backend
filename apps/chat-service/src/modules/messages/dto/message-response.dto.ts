@@ -113,3 +113,11 @@ export class MessageReactionsResponseDto {
   @ApiProperty({ description: 'Reaction summary', type: [ReactionSummaryDto] })
   summary: ReactionSummaryDto[];
 }
+
+export class MessageSearchResponseDto {
+  @ApiProperty({ description: 'Matched messages', type: [MessageResponseDto] })
+  items: MessageResponseDto[];
+
+  @ApiProperty({ description: 'Total number of matched messages', example: 3 })
+  total: number;
+}

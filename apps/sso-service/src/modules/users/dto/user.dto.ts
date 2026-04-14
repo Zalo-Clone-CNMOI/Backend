@@ -7,7 +7,7 @@ import {
   IsDateString,
   IsEnum,
   MinLength,
-  IsUrl,
+  Matches,
 } from 'class-validator';
 import { Gender } from '@app/constant';
 
@@ -43,11 +43,15 @@ export class UpdateProfileDto {
   bio?: string;
 
   @ApiPropertyOptional({
-    description: 'Avatar URL',
-    example: 'https://example.com/avatar.jpg',
+    description: 'Avatar media key',
+    example: 'public/550e8400-e29b-41d4-a716-446655440000-avatar.jpg',
   })
   @IsOptional()
-  @IsUrl({}, { message: 'Invalid avatar URL' })
+  @IsString({ message: 'Invalid avatar key' })
+  @Matches(/^(public|private)\/[-A-Za-z0-9._/]+$/, {
+    message:
+      'Avatar key must start with public/ or private/ and contain only valid key characters',
+  })
   avatarUrl?: string;
 
   @ApiPropertyOptional({

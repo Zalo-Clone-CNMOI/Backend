@@ -230,6 +230,45 @@ describe('SSO UsersService', () => {
         bio: 'New bio',
       });
     });
+
+    it('should update avatar using media key when ownership is valid', async () => {
+      const mockUser = createMockUser();
+      userRepository.findOne
+        .mockResolvedValueOnce(mockUser)
+        .mockResolvedValueOnce({ ...mockUser, avatarUrl: 'public/avatar.jpg' });
+
+      mediaFileRepository.findOne.mockResolvedValue({
+        key: 'public/avatar.jpg',
+        uploadedById: 'user-1',
+        status: 'uploaded',
+      });
+
+      await service.updateMyProfile('user-1', {
+        avatarUrl: 'public/avatar.jpg',
+      });
+
+      expect(userRepository.update).toHaveBeenCalledWith(
+        'user-1',
+        expect.objectContaining({
+          avatarUrl: 'public/avatar.jpg',
+        }),
+      );
+    });
+
+    it('should reject avatar key when media ownership validation fails', async () => {
+      const mockUser = createMockUser();
+      userRepository.findOne
+        .mockResolvedValueOnce(mockUser)
+        .mockResolvedValueOnce(mockUser);
+
+      mediaFileRepository.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.updateMyProfile('user-1', {
+          avatarUrl: 'public/missing-avatar.jpg',
+        }),
+      ).rejects.toThrow();
+    });
   });
 
   // ─── getUserById ────────────────────────────────────────

@@ -167,6 +167,18 @@ export class MessageRepository {
     return { items, next_cursor: nextCursor, has_more: hasMore };
   }
 
+  async getAllMessages(
+    conversationId: string,
+    limit = 500,
+  ): Promise<PersistedMessage[]> {
+    const result = await this.client.execute(
+      `SELECT * FROM messages_by_conversation WHERE conversation_id = ? ORDER BY created_at DESC LIMIT ?`,
+      [conversationId, limit],
+      { prepare: true },
+    );
+    return result.rows.map((row) => this.rowToMessage(row));
+  }
+
   async getMessage(
     conversationId: string,
     createdAt: number,

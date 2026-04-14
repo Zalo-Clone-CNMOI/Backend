@@ -95,12 +95,18 @@ export class UsersService {
     if (dto.bio !== undefined) updateData.bio = dto.bio;
     if (dto.avatarUrl !== undefined) {
       const file = await this.mediaFileRepo.findOne({
-        where: { key: dto.avatarUrl },
+        where: {
+          key: dto.avatarUrl,
+          uploadedById: userId,
+          status: 'uploaded',
+        },
       });
-      if (!file || file.uploadedById !== userId || file.status !== 'uploaded') {
-        throw BusinessException.badRequest(ErrorCode.MEDIA_PERMISSION_DENIED);
+
+      if (!file) {
+        throw new BusinessException(ErrorCode.MEDIA_PERMISSION_DENIED);
       }
-      updateData.avatarUrl = dto.avatarUrl;
+
+      updateData.avatarUrl = file.key;
     }
     if (dto.gender !== undefined) updateData.gender = dto.gender;
     if (dto.dateOfBirth !== undefined) {

@@ -428,7 +428,7 @@ export class AuthService {
           ErrorCode.QR_SESSION_ALREADY_PROCESSED,
         );
       }
-      throw BusinessException.notFound(ErrorCode.QR_SESSION_NOT_FOUND);
+      throw BusinessException.unauthorized(ErrorCode.QR_SESSION_INVALID);
     }
 
     const session = result.session!;

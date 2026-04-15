@@ -309,11 +309,11 @@ export interface QrConfirmDto {
  */
 export interface QrGenerateDto {
     /**
-     * WebSocket socket ID of the PC client
+     * Socket binding token from socket.io connection (QrBindIssued event)
      * @type {string}
      * @memberof QrGenerateDto
      */
-    'socketId': string;
+    'socketBindingToken': string;
     /**
      * PC device information (browser, OS)
      * @type {string}
@@ -697,7 +697,7 @@ export interface UpdateProfileDto {
      */
     'bio'?: string;
     /**
-     * Avatar URL
+     * Avatar media key
      * @type {string}
      * @memberof UpdateProfileDto
      */

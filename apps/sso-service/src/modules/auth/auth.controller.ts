@@ -151,7 +151,7 @@ export class AuthController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Invalid request - socketId is required',
+    description: 'Invalid request - socketBindingToken is required or invalid',
   })
   @ApiResponse({ status: 429, description: 'Too many requests' })
   async generateQrSession(

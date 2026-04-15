@@ -153,7 +153,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/QrSessionResponseDto'
         '400':
-          description: Invalid request - socketId is required
+          description: Invalid request - socketBindingToken is required or invalid
         '429':
           description: Too many requests - rate limit exceeded
   /auth/qr/status/{sessionId}:
@@ -773,12 +773,13 @@ components:
     QrGenerateDto:
       type: object
       required:
-        - socketId
+        - socketBindingToken
       properties:
-        socketId:
+        socketBindingToken:
           type: string
-          description: WebSocket socket ID of the PC client
-          example: 'abc123xyz'
+          format: uuid
+          description: Socket binding token from socket.io connection (QrBindIssued event)
+          example: '550e8400-e29b-41d4-a716-446655440000'
         deviceInfo:
           type: string
           description: PC device information (browser, OS)

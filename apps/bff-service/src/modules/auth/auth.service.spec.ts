@@ -106,9 +106,13 @@ describe('BFF AuthService', () => {
       expiresAt: 'e',
     });
 
-    await service.qrGenerate({ socketId: 'sock' });
+    await service.qrGenerate({
+      socketBindingToken: '550e8400-e29b-41d4-a716-446655440000',
+    });
 
-    expect(ssoClient.qrGenerate).toHaveBeenCalledWith({ socketId: 'sock' });
+    expect(ssoClient.qrGenerate).toHaveBeenCalledWith({
+      socketBindingToken: '550e8400-e29b-41d4-a716-446655440000',
+    });
   });
 
   it('should delegate qrStatus() to ssoClient', async () => {

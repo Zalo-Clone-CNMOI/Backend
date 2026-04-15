@@ -80,7 +80,9 @@ export class AuthService {
    * Generate QR session for PC login
    */
   async qrGenerate(dto: QrGenerateDto): Promise<QrSessionResponseDto> {
-    this.logger.log(`QR session generation for socket: ${dto.socketId}`);
+    this.logger.log(
+      `QR session generation for socket binding token: ${dto.socketBindingToken}`,
+    );
     return this.ssoClient.qrGenerate(dto);
   }
 

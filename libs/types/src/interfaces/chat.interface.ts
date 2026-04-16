@@ -21,6 +21,14 @@ export interface PersistedMessage {
   reply_to_message_id?: string;
   edited_at?: number;
   deleted_at?: number;
+  forwarded_from?: {
+    source_message_id: string;
+    source_conversation_id: string;
+    source_sender_id: string;
+    source_sender_name_snapshot: string;
+    source_created_at: number;
+    source_type: 'text' | 'image' | 'file' | 'mixed';
+  };
 }
 
 export interface MessageReaction {

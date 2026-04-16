@@ -138,6 +138,7 @@ export class MessagesController {
   private static decodeUserId(token: string): string {
     try {
       const parts = token.split('.');
+      if (parts.length < 3) throw new Error('Malformed JWT');
       const payload = JSON.parse(
         Buffer.from(parts[1], 'base64url').toString(),
       ) as { sub?: string };

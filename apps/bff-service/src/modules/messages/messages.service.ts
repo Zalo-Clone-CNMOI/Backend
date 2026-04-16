@@ -2,10 +2,10 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
-  Logger,
   NotFoundException,
   OnModuleInit,
 } from '@nestjs/common';
+import { lastValueFrom } from 'rxjs';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ClientKafka } from '@nestjs/microservices';
@@ -36,13 +36,12 @@ function deriveSourceType(
   const types = new Set(atts.map((a) => a.type));
   if (hasText) return 'mixed';
   if (types.size === 1 && types.has('image')) return 'image';
+  if (types.size > 1) return 'mixed';
   return 'file';
 }
 
 @Injectable()
 export class MessagesService implements OnModuleInit {
-  private readonly logger = new Logger(MessagesService.name);
-
   constructor(
     private readonly chatClient: ChatClientService,
     private readonly mediaClient: MediaClientService,
@@ -155,13 +154,21 @@ export class MessagesService implements OnModuleInit {
         forward_id: dto.forward_id,
         trace_id: `bff:${dto.forward_id}:${target.message_id}`,
       };
-      void this.kafka.emit(KafkaTopics.ChatMessageForward, cmd);
-
-      results.push({
-        message_id: target.message_id,
-        conversation_id: target.conversation_id,
-        status: 'accepted',
-      });
+      try {
+        await lastValueFrom(this.kafka.emit(KafkaTopics.ChatMessageForward, cmd));
+        results.push({
+          message_id: target.message_id,
+          conversation_id: target.conversation_id,
+          status: 'accepted',
+        });
+      } catch {
+        results.push({
+          message_id: target.message_id,
+          conversation_id: target.conversation_id,
+          status: 'rejected',
+          reason: 'kafka_error',
+        });
+      }
     }
 
     return { forward_id: dto.forward_id, results };

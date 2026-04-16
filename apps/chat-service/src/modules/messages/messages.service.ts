@@ -117,9 +117,7 @@ export class MessagesService {
     return this.toMessageResponse(message);
   }
 
-  async getMessageById(
-    messageId: string,
-  ): Promise<MessageResponseDto | null> {
+  async getMessageById(messageId: string): Promise<MessageResponseDto | null> {
     const ref = await this.messageRepository.getMessageById(messageId);
     if (!ref) return null;
 
@@ -184,6 +182,7 @@ export class MessagesService {
       editedAt: message.edited_at,
       deletedAt: message.deleted_at,
       isDeleted: !!message.deleted_at,
+      forwardedFrom: message.forwarded_from,
     };
   }
 

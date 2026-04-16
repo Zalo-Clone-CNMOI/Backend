@@ -90,7 +90,7 @@ describe('PersistMessageConsumer', () => {
       restoreMessageProcessingToPending: jest.fn(),
       insertMessage: jest.fn(),
       markMessageStored: jest.fn(),
-      clearMessageProcessing: jest.fn(),
+      clearMessageProcessing: jest.fn().mockResolvedValue(undefined),
       trySoftDeleteMessage: jest.fn(),
       updateMessageBody: jest.fn(),
       softDeleteMessage: jest.fn(),

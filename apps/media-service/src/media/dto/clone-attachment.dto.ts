@@ -1,5 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Matches,
+  MaxLength,
+} from 'class-validator';
 
 export class CloneAttachmentRequestDto {
   @ApiProperty({
@@ -8,6 +14,10 @@ export class CloneAttachmentRequestDto {
   })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(1024)
+  @Matches(/^[\w\-./@]+$/, {
+    message: 'source_key contains invalid characters',
+  })
   source_key!: string;
 
   @ApiPropertyOptional({

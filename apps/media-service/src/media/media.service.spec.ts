@@ -413,7 +413,7 @@ describe('MediaService.cloneAttachment', () => {
       bucket: 'test-bucket',
       contentType: 'image/jpeg',
       visibility: 'private',
-      uploadedById: 'sender-1',
+      uploadedById: 'user-2',
       conversationId: 'conv-src',
       sizeBytes: 51200,
       thumbnailKey: null,

@@ -5,31 +5,28 @@ import {
   IsArray,
   IsNotEmpty,
   IsString,
+  IsUUID,
   MaxLength,
   ValidateNested,
 } from 'class-validator';
 
 export class ForwardTargetDto {
-  @IsString()
+  @IsUUID()
   @IsNotEmpty()
-  @MaxLength(128)
   message_id!: string;
 
-  @IsString()
+  @IsUUID()
   @IsNotEmpty()
-  @MaxLength(128)
   conversation_id!: string;
 }
 
 export class ForwardMessageDto {
-  @IsString()
+  @IsUUID()
   @IsNotEmpty()
-  @MaxLength(128)
   forward_id!: string;
 
-  @IsString()
+  @IsUUID()
   @IsNotEmpty()
-  @MaxLength(128)
   source_message_id!: string;
 
   @IsArray()

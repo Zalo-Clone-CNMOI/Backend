@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Inject,
   Injectable,
   Logger,
@@ -85,6 +86,11 @@ export class MediaService implements OnModuleInit {
     });
     if (!sourceFile) {
       throw new BadRequestException(`Source file not found: ${dto.source_key}`);
+    }
+
+    const canAccess = await this.canUserAccessFile(dto.source_key, userId);
+    if (!canAccess) {
+      throw new ForbiddenException('You do not have access to this file');
     }
 
     const prefix = sourceFile.visibility === 'public' ? 'public/' : 'private/';

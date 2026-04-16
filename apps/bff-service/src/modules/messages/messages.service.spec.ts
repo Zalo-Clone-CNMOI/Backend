@@ -5,6 +5,7 @@
  * to ChatClientService.
  */
 import 'reflect-metadata';
+import { of } from 'rxjs';
 import { Test, TestingModule } from '@nestjs/testing';
 import { MessagesService } from './messages.service';
 import { ChatClientService } from '@app/clients';
@@ -33,7 +34,10 @@ describe('BFF MessagesService', () => {
     const mediaClient = { cloneAttachment: jest.fn() };
     const membershipService = { canUserAccessConversation: jest.fn() };
     const userRepo = { findOne: jest.fn() };
-    const kafka = { emit: jest.fn(), connect: jest.fn().mockResolvedValue(undefined) };
+    const kafka = {
+      emit: jest.fn().mockReturnValue(of(undefined)),
+      connect: jest.fn().mockResolvedValue(undefined),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -139,7 +143,13 @@ describe('BFF MessagesService', () => {
 });
 
 describe('MessagesService.forwardMessage', () => {
-  let fwdChatClient: { getMessageById: jest.Mock; getMessages: jest.Mock; getMessage: jest.Mock; getMessageReactions: jest.Mock; searchMessages: jest.Mock };
+  let fwdChatClient: {
+    getMessageById: jest.Mock;
+    getMessages: jest.Mock;
+    getMessage: jest.Mock;
+    getMessageReactions: jest.Mock;
+    searchMessages: jest.Mock;
+  };
   let mediaClient: { cloneAttachment: jest.Mock };
   let membershipService: { canUserAccessConversation: jest.Mock };
   let userRepo: { findOne: jest.Mock };
@@ -149,12 +159,17 @@ describe('MessagesService.forwardMessage', () => {
   const ACCESS_TOKEN = 'bearer-test-token';
   const USER_ID = 'user-forwarder';
 
-  const makeDto = (overrides: Partial<ForwardMessageDto> = {}): ForwardMessageDto => ({
-    forward_id: 'fwd-001',
-    source_message_id: 'src-msg-001',
-    targets: [{ message_id: 'new-msg-001', conversation_id: 'target-conv-001' }],
-    ...overrides,
-  } as ForwardMessageDto);
+  const makeDto = (
+    overrides: Partial<ForwardMessageDto> = {},
+  ): ForwardMessageDto =>
+    ({
+      forward_id: 'fwd-001',
+      source_message_id: 'src-msg-001',
+      targets: [
+        { message_id: 'new-msg-001', conversation_id: 'target-conv-001' },
+      ],
+      ...overrides,
+    }) as ForwardMessageDto;
 
   const sourceMessage = {
     messageId: 'src-msg-001',
@@ -177,7 +192,10 @@ describe('MessagesService.forwardMessage', () => {
     mediaClient = { cloneAttachment: jest.fn() };
     membershipService = { canUserAccessConversation: jest.fn() };
     userRepo = { findOne: jest.fn() };
-    kafka = { emit: jest.fn(), connect: jest.fn().mockResolvedValue(undefined) };
+    kafka = {
+      emit: jest.fn().mockReturnValue(of(undefined)),
+      connect: jest.fn().mockResolvedValue(undefined),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -196,14 +214,18 @@ describe('MessagesService.forwardMessage', () => {
   it('should throw NotFoundException when source message not found', async () => {
     fwdChatClient.getMessageById.mockResolvedValue(null);
 
-    await expect(fwdService.forwardMessage(makeDto(), ACCESS_TOKEN, USER_ID)).rejects.toThrow(NotFoundException);
+    await expect(
+      fwdService.forwardMessage(makeDto(), ACCESS_TOKEN, USER_ID),
+    ).rejects.toThrow(NotFoundException);
   });
 
   it('should throw ForbiddenException when user cannot read source conversation', async () => {
     fwdChatClient.getMessageById.mockResolvedValue(sourceMessage);
     membershipService.canUserAccessConversation.mockResolvedValue(false);
 
-    await expect(fwdService.forwardMessage(makeDto(), ACCESS_TOKEN, USER_ID)).rejects.toThrow(ForbiddenException);
+    await expect(
+      fwdService.forwardMessage(makeDto(), ACCESS_TOKEN, USER_ID),
+    ).rejects.toThrow(ForbiddenException);
   });
 
   it('should emit Kafka command and return accepted for valid target', async () => {
@@ -211,7 +233,11 @@ describe('MessagesService.forwardMessage', () => {
     membershipService.canUserAccessConversation.mockResolvedValue(true);
     userRepo.findOne.mockResolvedValue({ fullName: 'Original Sender' });
 
-    const result = await fwdService.forwardMessage(makeDto(), ACCESS_TOKEN, USER_ID);
+    const result = await fwdService.forwardMessage(
+      makeDto(),
+      ACCESS_TOKEN,
+      USER_ID,
+    );
 
     expect(kafka.emit).toHaveBeenCalledWith(
       KafkaTopics.ChatMessageForward,
@@ -247,16 +273,23 @@ describe('MessagesService.forwardMessage', () => {
     userRepo.findOne.mockResolvedValue({ fullName: 'Original Sender' });
 
     membershipService.canUserAccessConversation
-      .mockResolvedValueOnce(true)   // source access
-      .mockResolvedValueOnce(true)   // conv-ok
+      .mockResolvedValueOnce(true) // source access
+      .mockResolvedValueOnce(true) // conv-ok
       .mockResolvedValueOnce(false); // conv-bad
 
     const result = await fwdService.forwardMessage(dto, ACCESS_TOKEN, USER_ID);
 
     expect(kafka.emit).toHaveBeenCalledTimes(1);
     expect(result.results).toHaveLength(2);
-    expect(result.results[0]).toMatchObject({ message_id: 'msg-ok', status: 'accepted' });
-    expect(result.results[1]).toMatchObject({ message_id: 'msg-bad', status: 'rejected', reason: 'not_member' });
+    expect(result.results[0]).toMatchObject({
+      message_id: 'msg-ok',
+      status: 'accepted',
+    });
+    expect(result.results[1]).toMatchObject({
+      message_id: 'msg-bad',
+      status: 'rejected',
+      reason: 'not_member',
+    });
   });
 
   it('should clone attachments and use cloned keys in Kafka command', async () => {
@@ -264,7 +297,16 @@ describe('MessagesService.forwardMessage', () => {
       ...sourceMessage,
       body: '',
       attachments: [
-        { key: 'private/orig.jpg', type: 'image', name: 'photo.jpg', size: 50000, contentType: 'image/jpeg', thumbnailKey: null, visibility: 'private', url: null },
+        {
+          key: 'private/orig.jpg',
+          type: 'image',
+          name: 'photo.jpg',
+          size: 50000,
+          contentType: 'image/jpeg',
+          thumbnailKey: null,
+          visibility: 'private',
+          url: null,
+        },
       ],
     };
     fwdChatClient.getMessageById.mockResolvedValue(sourceWithAttachments);
@@ -286,7 +328,9 @@ describe('MessagesService.forwardMessage', () => {
     expect(kafka.emit).toHaveBeenCalledWith(
       KafkaTopics.ChatMessageForward,
       expect.objectContaining({
-        attachments: [expect.objectContaining({ key: 'private/fwd-clone.jpg' })],
+        attachments: [
+          expect.objectContaining({ key: 'private/fwd-clone.jpg' }),
+        ],
       }),
     );
   });

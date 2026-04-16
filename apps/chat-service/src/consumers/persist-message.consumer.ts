@@ -1306,6 +1306,11 @@ export class PersistMessageConsumer {
         traceId,
       });
     } catch (error) {
+      await this.repo.clearMessageProcessing(payload.message_id).catch(() => {
+        this.logger.error(
+          `[${traceId}] Failed to clear idempotency lock for forwarded message: ${payload.message_id}`,
+        );
+      });
       this.logger.error(`[${traceId}] ChatMessageForward failed`, {
         messageId: payload.message_id,
         error: error instanceof Error ? error.message : String(error),

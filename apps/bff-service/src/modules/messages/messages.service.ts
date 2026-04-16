@@ -13,9 +13,17 @@ import { KAFKA_CLIENT } from '@libs/kafka';
 import { User } from '@libs/database';
 import { ConversationMembershipService } from '@libs/mvp-access';
 import { KafkaTopics } from '@libs/contracts';
-import type { ForwardedFrom, ChatMessageForwardCommand, MessageAttachment } from '@libs/contracts';
+import type {
+  ForwardedFrom,
+  ChatMessageForwardCommand,
+  MessageAttachment,
+} from '@libs/contracts';
 import { ChatClientService, MediaClientService } from '@app/clients';
-import type { ForwardMessageDto, ForwardMessageResultDto, ForwardTargetResultDto } from './dto/forward-message.dto';
+import type {
+  ForwardMessageDto,
+  ForwardMessageResultDto,
+  ForwardTargetResultDto,
+} from './dto/forward-message.dto';
 
 interface AttachmentItem {
   key: string;
@@ -60,7 +68,12 @@ export class MessagesService implements OnModuleInit {
     cursor?: string,
     limit?: number,
   ) {
-    return this.chatClient.getMessages(accessToken, conversationId, cursor, limit);
+    return this.chatClient.getMessages(
+      accessToken,
+      conversationId,
+      cursor,
+      limit,
+    );
   }
 
   async getMessage(
@@ -69,7 +82,12 @@ export class MessagesService implements OnModuleInit {
     createdAt: number,
     messageId: string,
   ) {
-    return this.chatClient.getMessage(accessToken, conversationId, createdAt, messageId);
+    return this.chatClient.getMessage(
+      accessToken,
+      conversationId,
+      createdAt,
+      messageId,
+    );
   }
 
   async getMessageReactions(accessToken: string, messageId: string) {
@@ -84,7 +102,14 @@ export class MessagesService implements OnModuleInit {
     from?: number,
     to?: number,
   ) {
-    return this.chatClient.searchMessages(accessToken, conversationId, q, senderId, from, to);
+    return this.chatClient.searchMessages(
+      accessToken,
+      conversationId,
+      q,
+      senderId,
+      from,
+      to,
+    );
   }
 
   async forwardMessage(
@@ -92,7 +117,10 @@ export class MessagesService implements OnModuleInit {
     accessToken: string,
     userId: string,
   ): Promise<ForwardMessageResultDto> {
-    const source = await this.chatClient.getMessageById(accessToken, dto.source_message_id);
+    const source = await this.chatClient.getMessageById(
+      accessToken,
+      dto.source_message_id,
+    );
     if (!source) {
       throw new NotFoundException('Source message not found');
     }
@@ -100,15 +128,18 @@ export class MessagesService implements OnModuleInit {
       throw new NotFoundException('Source message has been deleted');
     }
 
-    const canReadSource = await this.membershipService.canUserAccessConversation(
-      userId,
-      source.conversationId,
-    );
+    const canReadSource =
+      await this.membershipService.canUserAccessConversation(
+        userId,
+        source.conversationId,
+      );
     if (!canReadSource) {
       throw new ForbiddenException('Cannot access source conversation');
     }
 
-    const senderUser = await this.userRepo.findOne({ where: { id: source.senderId } });
+    const senderUser = await this.userRepo.findOne({
+      where: { id: source.senderId },
+    });
     const senderNameSnapshot = senderUser?.fullName ?? 'Unknown';
 
     const forwardedFrom: ForwardedFrom = {
@@ -155,7 +186,9 @@ export class MessagesService implements OnModuleInit {
         trace_id: `bff:${dto.forward_id}:${target.message_id}`,
       };
       try {
-        await lastValueFrom(this.kafka.emit(KafkaTopics.ChatMessageForward, cmd));
+        await lastValueFrom(
+          this.kafka.emit(KafkaTopics.ChatMessageForward, cmd),
+        );
         results.push({
           message_id: target.message_id,
           conversation_id: target.conversation_id,

@@ -5,6 +5,7 @@ import {
   GetObjectCommand,
   DeleteObjectCommand,
   HeadObjectCommand,
+  CopyObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { v4 as uuidv4 } from 'uuid';
@@ -234,6 +235,27 @@ export class S3Service {
       }
       throw error;
     }
+  }
+
+  /**
+   * Copy an existing S3 object to a new key within the same bucket
+   */
+  async copy(
+    sourceKey: string,
+    destKey: string,
+    options?: { sourceBucket?: string; destBucket?: string },
+  ): Promise<void> {
+    const sourceBucket = options?.sourceBucket ?? this.config.bucket;
+    const destBucket = options?.destBucket ?? this.config.bucket;
+
+    const cmd = new CopyObjectCommand({
+      Bucket: destBucket,
+      CopySource: `${sourceBucket}/${sourceKey}`,
+      Key: destKey,
+    });
+
+    await this.s3.send(cmd);
+    this.logger.log(`File copied: ${sourceKey} → ${destKey}`);
   }
 
   /**

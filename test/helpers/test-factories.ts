@@ -154,6 +154,35 @@ export function createMockAuthenticatedUser(
   };
 }
 
+// ─── Chat Forward Command Factory ────────────────────────────────────────────
+
+export function createMockChatForwardCommand(
+  overrides: Record<string, unknown> = {},
+) {
+  const sourceMessageId = uuidv4();
+  const sourceConversationId = uuidv4();
+  const sourceSenderId = uuidv4();
+  return {
+    message_id: uuidv4(),
+    conversation_id: uuidv4(),
+    sender_id: uuidv4(),
+    sent_at: Date.now(),
+    body: 'Hello from original sender',
+    attachments: undefined,
+    forwarded_from: {
+      source_message_id: sourceMessageId,
+      source_conversation_id: sourceConversationId,
+      source_sender_id: sourceSenderId,
+      source_sender_name_snapshot: 'Original Sender',
+      source_created_at: Date.now() - 60_000,
+      source_type: 'text',
+    },
+    forward_id: uuidv4(),
+    trace_id: `bff:${uuidv4()}:${uuidv4()}`,
+    ...overrides,
+  };
+}
+
 // ─── Mock Socket Factory ─────────────────────────────────────────────────────
 
 export function createMockSocket(overrides: Record<string, unknown> = {}) {

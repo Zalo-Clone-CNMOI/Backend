@@ -17,6 +17,15 @@ interface LastMessage {
   body: string;
   created_at: number;
   has_attachments: boolean;
+  message_type?:
+    | 'text'
+    | 'image'
+    | 'video'
+    | 'audio'
+    | 'document'
+    | 'mixed'
+    | 'deleted'
+    | 'unknown';
   last_event_at?: number;
   last_event_type?: 'created' | 'updated' | 'deleted';
 }
@@ -66,6 +75,7 @@ export class InteractionConsumer {
         body,
         created_at,
         has_attachments: !!attachments?.length,
+        message_type: this.resolveCreatedMessageType(body, attachments),
         last_event_at: created_at,
         last_event_type: 'created',
       };
@@ -119,6 +129,7 @@ export class InteractionConsumer {
       const updatedLastMessage: LastMessage = {
         ...cached,
         body,
+        message_type: this.resolveUpdatedMessageType(cached, body),
         last_event_at: edited_at,
         last_event_type: 'updated',
       };
@@ -170,6 +181,7 @@ export class InteractionConsumer {
         ...cached,
         body: '',
         has_attachments: false,
+        message_type: 'deleted',
         last_event_at: deleted_at,
         last_event_type: 'deleted',
       };
@@ -301,6 +313,17 @@ export class InteractionConsumer {
       parsed.last_event_at === undefined ||
       typeof parsed.last_event_at === 'number';
 
+    const validMessageType =
+      parsed.message_type === undefined ||
+      parsed.message_type === 'text' ||
+      parsed.message_type === 'image' ||
+      parsed.message_type === 'video' ||
+      parsed.message_type === 'audio' ||
+      parsed.message_type === 'document' ||
+      parsed.message_type === 'mixed' ||
+      parsed.message_type === 'deleted' ||
+      parsed.message_type === 'unknown';
+
     return (
       typeof parsed.message_id === 'string' &&
       typeof parsed.sender_id === 'string' &&
@@ -308,7 +331,42 @@ export class InteractionConsumer {
       typeof parsed.created_at === 'number' &&
       typeof parsed.has_attachments === 'boolean' &&
       validLastEventAt &&
+      validMessageType &&
       validEventType
     );
+  }
+
+  private resolveCreatedMessageType(
+    body: string,
+    attachments?: ChatMessageCreatedEvent['attachments'],
+  ): NonNullable<LastMessage['message_type']> {
+    if (attachments && attachments.length > 0) {
+      const attachmentTypes = Array.from(
+        new Set(attachments.map((a) => a.type)),
+      );
+
+      if (attachmentTypes.length === 1) {
+        return attachmentTypes[0];
+      }
+
+      return 'mixed';
+    }
+
+    return body.trim().length > 0 ? 'text' : 'unknown';
+  }
+
+  private resolveUpdatedMessageType(
+    snapshot: LastMessage,
+    body: string,
+  ): NonNullable<LastMessage['message_type']> {
+    if (snapshot.message_type && snapshot.message_type !== 'deleted') {
+      return snapshot.message_type;
+    }
+
+    if (snapshot.has_attachments) {
+      return 'unknown';
+    }
+
+    return body.trim().length > 0 ? 'text' : 'unknown';
   }
 }

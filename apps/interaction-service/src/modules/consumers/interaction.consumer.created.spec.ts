@@ -52,6 +52,7 @@ describe('InteractionConsumer onChatMessageCreated', () => {
         body: 'Hello world',
         created_at: 1000,
         has_attachments: true,
+        message_type: 'image',
         last_event_at: 1000,
         last_event_type: 'created',
       }),
@@ -143,5 +144,28 @@ describe('InteractionConsumer onChatMessageCreated', () => {
 
     expect(redis.del).toHaveBeenCalledWith('conversation:last:conv-1');
     expect(redis.set).toHaveBeenCalledTimes(1);
+  });
+
+  it('should classify attachment-only message as video for preview type', async () => {
+    redis.get.mockResolvedValue(null);
+
+    await consumer.onChatMessageCreated({
+      ...event,
+      body: '',
+      attachments: [
+        {
+          key: 'k-video',
+          type: 'video',
+          name: '1000042358.mp4',
+          size: 100,
+          content_type: 'video/mp4',
+        },
+      ],
+    });
+
+    expect(redis.set).toHaveBeenCalledWith(
+      'conversation:last:conv-1',
+      expect.stringContaining('"message_type":"video"'),
+    );
   });
 });

@@ -148,6 +148,7 @@ describe('ConversationsService lastMessage projection', () => {
           body: 'Latest preview',
           created_at: 1700000000000,
           has_attachments: false,
+          message_type: 'text',
         }),
       ])
       .mockResolvedValueOnce(['7']);
@@ -161,6 +162,7 @@ describe('ConversationsService lastMessage projection', () => {
       expect.objectContaining({
         id: 'msg-latest',
         content: 'Latest preview',
+        type: 'text',
         senderId: uuid(3),
         senderName: 'Member 2',
         createdAt: new Date(1700000000000),
@@ -193,6 +195,7 @@ describe('ConversationsService lastMessage projection', () => {
           body: '',
           created_at: 1700000000100,
           has_attachments: false,
+          message_type: 'deleted',
         }),
       ])
       .mockResolvedValueOnce(['0']);
@@ -206,6 +209,7 @@ describe('ConversationsService lastMessage projection', () => {
       expect.objectContaining({
         id: 'msg-deleted',
         content: '',
+        type: 'deleted',
         senderId: uuid(3),
       }),
     );
@@ -244,10 +248,95 @@ describe('ConversationsService lastMessage projection', () => {
     expect(result.items[0].lastMessage).toEqual({
       id: uuid(3),
       content: 'New messages',
+      type: 'unknown',
       senderId: uuid(3),
       senderName: 'Member 2',
       createdAt: fallbackDate,
     });
     expect(result.items[0].unreadCount).toBe(2);
+  });
+
+  it('should map attachment-only snapshot to video type for FE rendering', async () => {
+    const mockConv = createMockConversation();
+    const mockQb = {
+      innerJoin: jest.fn().mockReturnThis(),
+      leftJoinAndSelect: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      addOrderBy: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(),
+      take: jest.fn().mockReturnThis(),
+      getManyAndCount: jest.fn().mockResolvedValue([[mockConv], 1]),
+    };
+    conversationRepository.createQueryBuilder.mockReturnValue(mockQb);
+    memberRepository.find.mockResolvedValue([
+      createMockMember({ conversationId: uuid(1), userId: uuid(2) }),
+    ]);
+
+    redisClient.mGet
+      .mockResolvedValueOnce([
+        JSON.stringify({
+          message_id: 'msg-video',
+          sender_id: uuid(3),
+          body: '1000042358.mp4',
+          created_at: 1700000000999,
+          has_attachments: true,
+          message_type: 'video',
+        }),
+      ])
+      .mockResolvedValueOnce(['0']);
+
+    const result = await service.getConversations(uuid(2), {
+      page: 1,
+      limit: 20,
+    });
+
+    expect(result.items[0].lastMessage).toEqual(
+      expect.objectContaining({
+        id: 'msg-video',
+        content: '1000042358.mp4',
+        type: 'video',
+      }),
+    );
+  });
+
+  it('should fallback attachment snapshot without message_type to unknown', async () => {
+    const mockConv = createMockConversation();
+    const mockQb = {
+      innerJoin: jest.fn().mockReturnThis(),
+      leftJoinAndSelect: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      addOrderBy: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(),
+      take: jest.fn().mockReturnThis(),
+      getManyAndCount: jest.fn().mockResolvedValue([[mockConv], 1]),
+    };
+    conversationRepository.createQueryBuilder.mockReturnValue(mockQb);
+    memberRepository.find.mockResolvedValue([
+      createMockMember({ conversationId: uuid(1), userId: uuid(2) }),
+    ]);
+
+    redisClient.mGet
+      .mockResolvedValueOnce([
+        JSON.stringify({
+          message_id: 'msg-legacy-attachment',
+          sender_id: uuid(3),
+          body: 'legacy-file.mp4',
+          created_at: 1700000000222,
+          has_attachments: true,
+        }),
+      ])
+      .mockResolvedValueOnce(['0']);
+
+    const result = await service.getConversations(uuid(2), {
+      page: 1,
+      limit: 20,
+    });
+
+    expect(result.items[0].lastMessage).toEqual(
+      expect.objectContaining({
+        id: 'msg-legacy-attachment',
+        type: 'unknown',
+      }),
+    );
   });
 });

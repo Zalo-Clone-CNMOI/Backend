@@ -41,6 +41,29 @@ export class LastMessageDto {
 
   @ApiProperty({ description: 'Has attachments' })
   has_attachments: boolean;
+
+  @ApiProperty({
+    description: 'Message preview type',
+    enum: [
+      'text',
+      'image',
+      'video',
+      'audio',
+      'document',
+      'mixed',
+      'deleted',
+      'unknown',
+    ],
+  })
+  message_type:
+    | 'text'
+    | 'image'
+    | 'video'
+    | 'audio'
+    | 'document'
+    | 'mixed'
+    | 'deleted'
+    | 'unknown';
 }
 
 /**
@@ -63,6 +86,15 @@ export class ConversationListItemDto {
   lastMessage: {
     id: string;
     content: string;
+    type:
+      | 'text'
+      | 'image'
+      | 'video'
+      | 'audio'
+      | 'document'
+      | 'mixed'
+      | 'deleted'
+      | 'unknown';
     senderId: string;
     senderName: string;
     createdAt: Date;

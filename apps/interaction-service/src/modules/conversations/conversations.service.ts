@@ -47,6 +47,15 @@ interface LastMessage {
   body: string;
   created_at: number;
   has_attachments: boolean;
+  message_type?:
+    | 'text'
+    | 'image'
+    | 'video'
+    | 'audio'
+    | 'document'
+    | 'mixed'
+    | 'deleted'
+    | 'unknown';
 }
 
 @Injectable()
@@ -136,6 +145,15 @@ export class ConversationsService {
       let lastMessage: {
         id: string;
         content: string;
+        type:
+          | 'text'
+          | 'image'
+          | 'video'
+          | 'audio'
+          | 'document'
+          | 'mixed'
+          | 'deleted'
+          | 'unknown';
         senderId: string;
         senderName: string;
         createdAt: Date;
@@ -145,6 +163,7 @@ export class ConversationsService {
         lastMessage = {
           id: lastMessageRaw.message_id,
           content: lastMessageRaw.body,
+          type: this.resolveLastMessageType(lastMessageRaw),
           senderId: lastMessageRaw.sender_id,
           senderName: memberMap.get(lastMessageRaw.sender_id) || 'Unknown',
           createdAt: new Date(lastMessageRaw.created_at),
@@ -156,6 +175,7 @@ export class ConversationsService {
             c.type === ConversationType.GROUP
               ? 'New messages'
               : 'No messages yet',
+          type: 'unknown',
           senderId: c.lastMessageId,
           senderName: memberMap.get(c.lastMessageId) || 'Unknown',
           createdAt: c.lastMessageAt,
@@ -832,5 +852,27 @@ export class ConversationsService {
       nickname: member.nickname,
       joinedAt: member.joinedAt,
     };
+  }
+
+  private resolveLastMessageType(
+    snapshot: LastMessage,
+  ):
+    | 'text'
+    | 'image'
+    | 'video'
+    | 'audio'
+    | 'document'
+    | 'mixed'
+    | 'deleted'
+    | 'unknown' {
+    if (snapshot.message_type) {
+      return snapshot.message_type;
+    }
+
+    if (snapshot.has_attachments) {
+      return 'unknown';
+    }
+
+    return snapshot.body.trim().length > 0 ? 'text' : 'unknown';
   }
 }

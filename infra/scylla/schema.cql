@@ -23,8 +23,9 @@ CREATE TABLE IF NOT EXISTS messages_by_conversation (
     message_id text,
     sender_id text,
     body text,
-    attachments text,           -- JSON array of attachments
+    attachments text,           -- JSON array of MessageAttachment
     reply_to_message_id text,   -- ID của tin nhắn được reply
+    forwarded_from text,        -- JSON: ForwardedFrom (null for regular messages)
     edited_at bigint,
     deleted_at bigint,
     PRIMARY KEY ((conversation_id), created_at, message_id)
@@ -44,6 +45,20 @@ CREATE TABLE IF NOT EXISTS idempotency_by_message_id (
     created_at bigint,
     status text                 -- pending, stored, failed
 ) WITH default_time_to_live = 604800; -- TTL 7 days
+
+-- =============================================================================
+-- MESSAGE LOOKUP BY ID
+-- =============================================================================
+
+-- Table: messages_by_id
+-- Reverse lookup: message_id → (conversation_id, created_at)
+-- Populated by insertMessage(). Enables O(1) source lookup for forward flow.
+-- No TTL — messages are retained indefinitely.
+CREATE TABLE IF NOT EXISTS messages_by_id (
+    message_id text PRIMARY KEY,
+    conversation_id text,
+    created_at bigint
+) WITH default_time_to_live = 0;
 
 -- =============================================================================
 -- MESSAGE REACTIONS DOMAIN

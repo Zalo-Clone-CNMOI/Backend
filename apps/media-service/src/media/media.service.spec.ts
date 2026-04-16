@@ -392,7 +392,7 @@ describe('MediaService.cloneAttachment', () => {
         { provide: S3_CLIENT, useValue: {} },
         { provide: S3_CONFIG, useValue: s3Config },
         { provide: getRepositoryToken(MediaFile), useValue: mediaFileRepo },
-        { provide: ConversationMembershipService, useValue: { canUserAccessConversation: jest.fn() } },
+        { provide: ConversationMembershipService, useValue: { canUserAccessConversation: jest.fn().mockResolvedValue(true) } },
       ],
     }).compile();
 

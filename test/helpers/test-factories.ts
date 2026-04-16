@@ -3,6 +3,7 @@
  * Used across all test suites to avoid duplication.
  */
 import { v4 as uuidv4 } from 'uuid';
+import type { ChatMessageForwardCommand } from '@libs/contracts';
 
 // ─── User Factory ────────────────────────────────────────────────────────────
 
@@ -157,8 +158,8 @@ export function createMockAuthenticatedUser(
 // ─── Chat Forward Command Factory ────────────────────────────────────────────
 
 export function createMockChatForwardCommand(
-  overrides: Record<string, unknown> = {},
-) {
+  overrides: Partial<ChatMessageForwardCommand> = {},
+): ChatMessageForwardCommand {
   const sourceMessageId = uuidv4();
   const sourceConversationId = uuidv4();
   const sourceSenderId = uuidv4();

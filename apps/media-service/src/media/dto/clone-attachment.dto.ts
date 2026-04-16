@@ -3,6 +3,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  IsUUID,
   Matches,
   MaxLength,
 } from 'class-validator';
@@ -24,7 +25,7 @@ export class CloneAttachmentRequestDto {
     description: 'Target conversation ID for access control',
     example: 'conv-uuid',
   })
-  @IsString()
+  @IsUUID()
   @IsOptional()
   conversation_id?: string;
 }

@@ -168,24 +168,25 @@ export class MessagesService implements OnModuleInit {
         continue;
       }
 
-      const clonedAttachments = await this.cloneAttachments(
-        source.attachments ?? [],
-        userId,
-        target.conversation_id,
-      );
-
-      const cmd: ChatMessageForwardCommand = {
-        message_id: target.message_id,
-        conversation_id: target.conversation_id,
-        sender_id: userId,
-        sent_at: Date.now(),
-        body: source.body ?? '',
-        attachments: clonedAttachments,
-        forwarded_from: forwardedFrom,
-        forward_id: dto.forward_id,
-        trace_id: `bff:${dto.forward_id}:${target.message_id}`,
-      };
       try {
+        const clonedAttachments = await this.cloneAttachments(
+          source.attachments ?? [],
+          userId,
+          target.conversation_id,
+        );
+
+        const cmd: ChatMessageForwardCommand = {
+          message_id: target.message_id,
+          conversation_id: target.conversation_id,
+          sender_id: userId,
+          sent_at: Date.now(),
+          body: source.body ?? '',
+          attachments: clonedAttachments,
+          forwarded_from: forwardedFrom,
+          forward_id: dto.forward_id,
+          trace_id: `bff:${dto.forward_id}:${target.message_id}`,
+        };
+
         await lastValueFrom(
           this.kafka.emit(KafkaTopics.ChatMessageForward, cmd),
         );
@@ -199,7 +200,7 @@ export class MessagesService implements OnModuleInit {
           message_id: target.message_id,
           conversation_id: target.conversation_id,
           status: 'rejected',
-          reason: 'kafka_error',
+          reason: 'dispatch_error',
         });
       }
     }

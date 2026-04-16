@@ -117,26 +117,36 @@ export class MessageRepository {
       ? JSON.stringify(message.forwarded_from)
       : null;
 
-    await this.client.execute(
-      `INSERT INTO messages_by_conversation
-       (conversation_id, created_at, message_id, sender_id, body, attachments, reply_to_message_id, forwarded_from)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    // Logged BATCH ensures both tables are written atomically.
+    // If the coordinator fails after the batch log is written, the batch
+    // will be replayed by the cluster on recovery.
+    await this.client.batch(
       [
-        message.conversation_id,
-        message.created_at,
-        message.message_id,
-        message.sender_id,
-        message.body,
-        attachmentsJson,
-        message.reply_to_message_id || null,
-        forwardedFromJson,
+        {
+          query: `INSERT INTO messages_by_conversation
+                  (conversation_id, created_at, message_id, sender_id, body, attachments, reply_to_message_id, forwarded_from)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          params: [
+            message.conversation_id,
+            message.created_at,
+            message.message_id,
+            message.sender_id,
+            message.body,
+            attachmentsJson,
+            message.reply_to_message_id || null,
+            forwardedFromJson,
+          ],
+        },
+        {
+          query:
+            'INSERT INTO messages_by_id (message_id, conversation_id, created_at) VALUES (?, ?, ?)',
+          params: [
+            message.message_id,
+            message.conversation_id,
+            message.created_at,
+          ],
+        },
       ],
-      { prepare: true },
-    );
-
-    await this.client.execute(
-      'INSERT INTO messages_by_id (message_id, conversation_id, created_at) VALUES (?, ?, ?)',
-      [message.message_id, message.conversation_id, message.created_at],
       { prepare: true },
     );
   }
@@ -404,7 +414,9 @@ export class MessageRepository {
     let forwarded_from: PersistedMessage['forwarded_from'] | undefined;
     if (forwardedFromRaw) {
       try {
-        forwarded_from = JSON.parse(forwardedFromRaw) as PersistedMessage['forwarded_from'];
+        forwarded_from = JSON.parse(
+          forwardedFromRaw,
+        ) as PersistedMessage['forwarded_from'];
       } catch {
         forwarded_from = undefined;
       }

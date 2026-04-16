@@ -1468,7 +1468,7 @@ describe('PersistMessageConsumer', () => {
       repo.insertMessage.mockResolvedValue(undefined);
       repo.markMessageStored.mockResolvedValue(undefined);
 
-      await consumer.onForward(payload as any);
+      await consumer.onForward(payload);
 
       expect(repo.insertMessage).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -1502,7 +1502,7 @@ describe('PersistMessageConsumer', () => {
         status: 'stored',
       });
 
-      await consumer.onForward(payload as any);
+      await consumer.onForward(payload);
 
       expect(repo.insertMessage).not.toHaveBeenCalled();
       expect(publisher.emit).not.toHaveBeenCalled();
@@ -1515,7 +1515,7 @@ describe('PersistMessageConsumer', () => {
 
       membershipService.canUserAccessConversation.mockResolvedValue(false);
 
-      await consumer.onForward(payload as any);
+      await consumer.onForward(payload);
 
       expect(repo.tryBeginMessageProcessing).not.toHaveBeenCalled();
       expect(repo.insertMessage).not.toHaveBeenCalled();
@@ -1532,7 +1532,7 @@ describe('PersistMessageConsumer', () => {
       repo.tryBeginMessageProcessing.mockResolvedValue(true);
       repo.insertMessage.mockRejectedValue(insertError);
 
-      await expect(consumer.onForward(payload as any)).rejects.toThrow(
+      await expect(consumer.onForward(payload)).rejects.toThrow(
         'ScyllaDB write failed',
       );
 

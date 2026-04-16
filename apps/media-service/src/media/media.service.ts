@@ -93,6 +93,19 @@ export class MediaService implements OnModuleInit {
       throw new ForbiddenException('You do not have access to this file');
     }
 
+    if (dto.conversation_id) {
+      const canAccessDest =
+        await this.membershipService.canUserAccessConversation(
+          userId,
+          dto.conversation_id,
+        );
+      if (!canAccessDest) {
+        throw new ForbiddenException(
+          'You do not have access to the destination conversation',
+        );
+      }
+    }
+
     const prefix = sourceFile.visibility === 'public' ? 'public/' : 'private/';
     const clonedKey = `${prefix}fwd-${uuidv4()}`;
 

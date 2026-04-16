@@ -16,7 +16,7 @@ export class CloneAttachmentRequestDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(1024)
-  @Matches(/^[\w\-./@]+$/, {
+  @Matches(/^(?!.*\.\.)([\w\-./@]+)$/, {
     message: 'source_key contains invalid characters',
   })
   source_key!: string;

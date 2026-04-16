@@ -135,6 +135,12 @@ export class MessagesController {
     return this.messagesService.forwardMessage(body, accessToken, userId);
   }
 
+  /**
+   * Decodes the `sub` claim from the JWT payload without re-verifying the
+   * signature. Signature validation is performed upstream by the API gateway
+   * before the request reaches this service, so the token is already trusted
+   * at this point. We only need to extract the user identity from it.
+   */
   private static decodeUserId(token: string): string {
     try {
       const parts = token.split('.');

@@ -4,9 +4,7 @@ import {
   ArrayMinSize,
   IsArray,
   IsNotEmpty,
-  IsString,
   IsUUID,
-  MaxLength,
   ValidateNested,
 } from 'class-validator';
 

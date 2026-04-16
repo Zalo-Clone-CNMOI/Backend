@@ -52,6 +52,8 @@ type AuthedSocket = Socket<
   SocketData
 >;
 
+const AUTHENTICATED_CLIENTS_ROOM = 'auth:clients';
+
 @UseFilters(WsExceptionFilter)
 @UsePipes(
   new ValidationPipe({
@@ -99,6 +101,7 @@ export class ChatGateway implements OnModuleInit {
       );
 
       socket.data.userId = user.userId;
+      void socket.join(AUTHENTICATED_CLIENTS_ROOM);
       void socket.join(`user:${user.userId}`);
 
       this.presenceHandler.handleConnect(socket, user.userId);
@@ -284,6 +287,10 @@ export class ChatGateway implements OnModuleInit {
 
   broadcastToAll(event: string, payload: unknown) {
     this.server.emit(event, payload);
+  }
+
+  broadcastToAuthenticated(event: string, payload: unknown) {
+    this.server.to(AUTHENTICATED_CLIENTS_ROOM).emit(event, payload);
   }
 
   /**

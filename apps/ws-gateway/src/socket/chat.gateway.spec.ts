@@ -52,6 +52,52 @@ describe('ChatGateway', () => {
     );
   });
 
+  describe('handleConnection', () => {
+    it('should join authenticated rooms and emit connect presence when token is valid', () => {
+      jwtService.verifyToken.mockReturnValue({ userId: 'user-1' });
+      const join = jest.fn();
+      const socket = {
+        id: 'socket-1',
+        handshake: {
+          headers: { authorization: 'Bearer valid-token' },
+          auth: {},
+        },
+        data: {},
+        join,
+      } as never;
+
+      gateway.handleConnection(socket);
+
+      expect(join).toHaveBeenCalledWith('auth:clients');
+      expect(join).toHaveBeenCalledWith('user:user-1');
+      expect(presenceHandler.handleConnect).toHaveBeenCalledWith(
+        socket,
+        'user-1',
+      );
+    });
+
+    it('should not emit connect presence when token is invalid', () => {
+      jwtService.verifyToken.mockImplementation(() => {
+        throw new Error('invalid token');
+      });
+      const join = jest.fn();
+      const socket = {
+        id: 'socket-2',
+        handshake: {
+          headers: { authorization: 'Bearer invalid-token' },
+          auth: {},
+        },
+        data: {},
+        join,
+      } as never;
+
+      gateway.handleConnection(socket);
+
+      expect(join).not.toHaveBeenCalledWith('auth:clients');
+      expect(presenceHandler.handleConnect).not.toHaveBeenCalled();
+    });
+  });
+
   describe('handleQrBindRequest', () => {
     it('should issue one-time socket binding token and emit it to requesting socket', async () => {
       const emitMock = jest.fn();

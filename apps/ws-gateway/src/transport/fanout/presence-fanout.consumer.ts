@@ -17,6 +17,6 @@ export class PresenceFanoutConsumer {
    */
   @EventPattern(KafkaTopics.PresenceUpdated)
   onPresenceUpdated(@Payload() payload: PresenceUpdatedEvent) {
-    this.gateway.broadcastToAll(WsEvents.PresenceUpdate, payload);
+    this.gateway.broadcastToAuthenticated(WsEvents.PresenceUpdate, payload);
   }
 }

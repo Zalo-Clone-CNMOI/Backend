@@ -26,8 +26,11 @@ export class PresenceConsumer implements OnModuleInit {
     setInterval(() => {
       void (async () => {
         try {
-          const expired = await this.store.cleanupExpired(Date.now());
-          for (const event of expired) {
+          const now = Date.now();
+          const expired = await this.store.cleanupExpired(now);
+          const reconciled = await this.store.reconcileStaleSockets(now);
+
+          for (const event of [...expired, ...reconciled]) {
             await this.publisher.emit(KafkaTopics.PresenceUpdated, event);
           }
         } catch (error) {
@@ -80,13 +83,14 @@ export class PresenceConsumer implements OnModuleInit {
 
   @EventPattern(KafkaTopics.PresenceHeartbeat)
   async onHeartbeat(@Payload() payload: PresenceHeartbeatCommand) {
-    const { user_id, socket_id, ts, trace_id } = payload;
+    const { user_id, socket_id, trace_id } = payload;
+    const receivedAt = Date.now();
 
     try {
       const result = await this.store.heartbeat(
         user_id,
         socket_id,
-        ts,
+        receivedAt,
         trace_id,
       );
 

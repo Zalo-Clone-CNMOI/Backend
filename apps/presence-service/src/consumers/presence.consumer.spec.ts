@@ -98,6 +98,7 @@ describe('PresenceConsumer', () => {
             markOffline: jest.fn(),
             heartbeat: jest.fn(),
             cleanupExpired: jest.fn(),
+            reconcileStaleSockets: jest.fn(),
           },
         },
         {
@@ -188,16 +189,19 @@ describe('PresenceConsumer', () => {
     it('should call store.heartbeat and record success', async () => {
       const cmd = makeHeartbeatCmd();
       store.heartbeat.mockResolvedValue({ success: true, socketCount: 1 });
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(1700000000000);
 
       await consumer.onHeartbeat(cmd);
 
       expect(store.heartbeat).toHaveBeenCalledWith(
         cmd.user_id,
         cmd.socket_id,
-        cmd.ts,
+        1700000000000,
         cmd.trace_id,
       );
       expect(metrics.recordHeartbeat).toHaveBeenCalledWith('success');
+
+      nowSpy.mockRestore();
     });
 
     it('should warn and record failure when socket not found', async () => {
@@ -309,6 +313,7 @@ describe('PresenceConsumer', () => {
 
       // Verify interval was created (implicitly by running timers)
       store.cleanupExpired.mockResolvedValue([]);
+      store.reconcileStaleSockets.mockResolvedValue([]);
 
       jest.advanceTimersByTime(5000);
 
@@ -325,6 +330,7 @@ describe('PresenceConsumer', () => {
       });
 
       store.cleanupExpired.mockResolvedValue([expiredEvent]);
+      store.reconcileStaleSockets.mockResolvedValue([]);
 
       consumer.onModuleInit();
 
@@ -337,6 +343,27 @@ describe('PresenceConsumer', () => {
       expect(publisher.emit).toHaveBeenCalledWith(
         KafkaTopics.PresenceUpdated,
         expiredEvent,
+      );
+    });
+
+    it('should emit events from stale-socket reconciliation', async () => {
+      const reconciledEvent = makePresenceEvent({
+        status: 'offline',
+        source: 'ttl_expire',
+        offline_reason: 'ttl_expire',
+      });
+
+      store.cleanupExpired.mockResolvedValue([]);
+      store.reconcileStaleSockets.mockResolvedValue([reconciledEvent]);
+
+      consumer.onModuleInit();
+
+      jest.advanceTimersByTime(5000);
+      await jest.advanceTimersByTimeAsync(0);
+
+      expect(publisher.emit).toHaveBeenCalledWith(
+        KafkaTopics.PresenceUpdated,
+        reconciledEvent,
       );
     });
 

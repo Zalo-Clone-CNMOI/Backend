@@ -21,6 +21,10 @@ function createMockRedis() {
     scan: jest.fn(),
     hGetAll: jest.fn(),
     sCard: jest.fn(),
+    sMembers: jest.fn(),
+    exists: jest.fn(),
+    sRem: jest.fn(),
+    del: jest.fn(),
   };
 }
 
@@ -511,6 +515,68 @@ describe('PresenceStore', () => {
       redis.scan.mockRejectedValue(new Error('Redis error'));
 
       const events = await store.cleanupExpired(NOW);
+      expect(events).toHaveLength(0);
+    });
+  });
+
+  // ── reconcileStaleSockets ─────────────────────────────────────────────
+
+  describe('reconcileStaleSockets', () => {
+    beforeEach(async () => {
+      await store.onModuleInit();
+    });
+
+    it('should remove stale socket ids and emit offline when user drops to zero sockets', async () => {
+      redis.scan.mockResolvedValueOnce({
+        cursor: 0,
+        keys: ['presence:user:user-1:sockets'],
+      });
+      redis.sMembers.mockResolvedValueOnce(['sock-stale']);
+      redis.exists.mockResolvedValueOnce(0);
+      redis.sRem.mockResolvedValueOnce(1);
+      redis.sCard.mockResolvedValueOnce(0);
+      redis.del.mockResolvedValueOnce(1);
+
+      const events = await store.reconcileStaleSockets(NOW);
+
+      expect(events).toHaveLength(1);
+      expect(events[0].user_id).toBe('user-1');
+      expect(events[0].status).toBe('offline');
+      expect(events[0].source).toBe('ttl_expire');
+      expect(events[0].offline_reason).toBe('ttl_expire');
+      expect(redis.sRem).toHaveBeenCalledWith('presence:user:user-1:sockets', [
+        'sock-stale',
+      ]);
+    });
+
+    it('should not emit offline when user still has active sockets', async () => {
+      redis.scan.mockResolvedValueOnce({
+        cursor: 0,
+        keys: ['presence:user:user-2:sockets'],
+      });
+      redis.sMembers.mockResolvedValueOnce(['sock-stale', 'sock-active']);
+      redis.exists.mockResolvedValueOnce(0).mockResolvedValueOnce(1);
+      redis.sRem.mockResolvedValueOnce(1);
+      redis.sCard.mockResolvedValueOnce(1);
+
+      const events = await store.reconcileStaleSockets(NOW);
+
+      expect(events).toHaveLength(0);
+      expect(redis.del).not.toHaveBeenCalled();
+    });
+
+    it('should return empty array in degraded mode', async () => {
+      redis.scriptLoad.mockRejectedValue(new Error('Connection refused'));
+      await store.onModuleInit();
+
+      const events = await store.reconcileStaleSockets(NOW);
+      expect(events).toHaveLength(0);
+    });
+
+    it('should handle reconcile scan errors gracefully', async () => {
+      redis.scan.mockRejectedValue(new Error('scan failed'));
+
+      const events = await store.reconcileStaleSockets(NOW);
       expect(events).toHaveLength(0);
     });
   });

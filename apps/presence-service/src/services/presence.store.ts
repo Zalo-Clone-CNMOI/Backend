@@ -435,6 +435,87 @@ export class PresenceStore implements OnModuleInit {
   }
 
   /**
+   * Reconcile stale socket ids left behind in user socket sets when socket
+   * metadata keys have already expired.
+   */
+  async reconcileStaleSockets(now: number): Promise<PresenceUpdatedEvent[]> {
+    if (this.degradedMode) {
+      return [];
+    }
+
+    const events: PresenceUpdatedEvent[] = [];
+    const pattern = `${REDIS_PREFIX}user:*:sockets`;
+    let cursor = 0;
+
+    try {
+      do {
+        const scanResult = await this.redis.scan(cursor, {
+          MATCH: pattern,
+          COUNT: 100,
+        });
+
+        cursor = scanResult.cursor;
+
+        for (const userSocketsKey of scanResult.keys) {
+          const userId = this.extractUserIdFromSocketsKey(userSocketsKey);
+          if (!userId) continue;
+
+          const socketIds = await this.redis.sMembers(userSocketsKey);
+          if (socketIds.length === 0) continue;
+
+          const staleSocketIds: string[] = [];
+          for (const socketId of socketIds) {
+            const exists = await this.redis.exists(SOCKET_META_KEY(socketId));
+            if (exists === 0) {
+              staleSocketIds.push(socketId);
+            }
+          }
+
+          if (staleSocketIds.length === 0) continue;
+
+          const previousCount = socketIds.length;
+          await this.redis.sRem(userSocketsKey, staleSocketIds);
+          const socketCount = await this.redis.sCard(userSocketsKey);
+
+          if (socketCount === 0) {
+            await this.redis.del(userSocketsKey);
+          }
+
+          this.metrics.updateActiveSockets(socketCount);
+
+          if (previousCount > 0 && socketCount === 0) {
+            events.push(
+              this.buildEvent(
+                userId,
+                'offline',
+                now,
+                now,
+                'ttl_expire',
+                socketCount,
+                undefined,
+                'ttl_expire',
+              ),
+            );
+          }
+        }
+      } while (cursor !== 0);
+    } catch (error) {
+      this.logger.error(
+        '[RECONCILE] Error while reconciling stale sockets',
+        error,
+      );
+    }
+
+    if (events.length > 0) {
+      this.logger.log(
+        `[RECONCILE] Reconciled stale sockets for ${events.length} users`,
+      );
+    }
+
+    return events;
+  }
+
+  /**
    * Get current socket count for a user (for debugging/metrics)
    */
   async getSocketCount(userId: string): Promise<number> {
@@ -452,6 +533,18 @@ export class PresenceStore implements OnModuleInit {
    */
   async isUserOnline(userId: string): Promise<boolean> {
     return (await this.getSocketCount(userId)) > 0;
+  }
+
+  private extractUserIdFromSocketsKey(key: string): string | null {
+    const prefix = `${REDIS_PREFIX}user:`;
+    const suffix = ':sockets';
+
+    if (!key.startsWith(prefix) || !key.endsWith(suffix)) {
+      return null;
+    }
+
+    const userId = key.slice(prefix.length, -suffix.length);
+    return userId.length > 0 ? userId : null;
   }
 
   private buildEvent(

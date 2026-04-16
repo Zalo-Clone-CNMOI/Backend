@@ -13,7 +13,7 @@
  * - Cache invalidation (non-blocking)
  */
 import { PersistMessageConsumer } from './persist-message.consumer';
-import { createMockChatSendCommand } from '../../../../test/helpers';
+import { createMockChatSendCommand, createMockChatForwardCommand } from '../../../../test/helpers';
 import * as crypto from 'crypto';
 import { CACHE_LOCK_RENEW_STATUS } from '@libs/redis';
 import type { AppConfig } from '@libs/config';
@@ -1454,6 +1454,89 @@ describe('PersistMessageConsumer', () => {
       expect(publisher.emit).not.toHaveBeenCalled();
       expect(cacheService.invalidateRecentMessages).not.toHaveBeenCalled();
       expect(cacheService.delIfValueMatches).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── onForward ─────────────────────────────────────────────────────────────
+
+  describe('onForward — happy path', () => {
+    it('should persist forwarded message and emit ChatMessageCreated with forwarded_from', async () => {
+      const payload = createMockChatForwardCommand();
+
+      membershipService.canUserAccessConversation.mockResolvedValue(true);
+      repo.tryBeginMessageProcessing.mockResolvedValue(true);
+      repo.insertMessage.mockResolvedValue(undefined);
+      repo.markMessageStored.mockResolvedValue(undefined);
+
+      await consumer.onForward(payload as any);
+
+      expect(repo.insertMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message_id: payload.message_id,
+          conversation_id: payload.conversation_id,
+          sender_id: payload.sender_id,
+          forwarded_from: payload.forwarded_from,
+        }),
+      );
+      expect(publisher.emit).toHaveBeenCalledWith(
+        'chat.message.created',
+        expect.objectContaining({
+          message_id: payload.message_id,
+          forwarded_from: payload.forwarded_from,
+        }),
+      );
+      expect(repo.markMessageStored).toHaveBeenCalledWith(payload.message_id);
+    });
+  });
+
+  describe('onForward — idempotency', () => {
+    it('should skip processing when tryBeginMessageProcessing returns false', async () => {
+      const payload = createMockChatForwardCommand();
+
+      membershipService.canUserAccessConversation.mockResolvedValue(true);
+      repo.tryBeginMessageProcessing.mockResolvedValue(false);
+      repo.getMessageProcessingState.mockResolvedValue({
+        message_id: payload.message_id,
+        conversation_id: payload.conversation_id,
+        created_at: payload.sent_at,
+        status: 'stored',
+      });
+
+      await consumer.onForward(payload as any);
+
+      expect(repo.insertMessage).not.toHaveBeenCalled();
+      expect(publisher.emit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('onForward — access denied', () => {
+    it('should skip processing when sender has no access to conversation', async () => {
+      const payload = createMockChatForwardCommand();
+
+      membershipService.canUserAccessConversation.mockResolvedValue(false);
+
+      await consumer.onForward(payload as any);
+
+      expect(repo.tryBeginMessageProcessing).not.toHaveBeenCalled();
+      expect(repo.insertMessage).not.toHaveBeenCalled();
+      expect(publisher.emit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('onForward — error propagation', () => {
+    it('should rethrow error when insertMessage fails', async () => {
+      const payload = createMockChatForwardCommand();
+      const insertError = new Error('ScyllaDB write failed');
+
+      membershipService.canUserAccessConversation.mockResolvedValue(true);
+      repo.tryBeginMessageProcessing.mockResolvedValue(true);
+      repo.insertMessage.mockRejectedValue(insertError);
+
+      await expect(consumer.onForward(payload as any)).rejects.toThrow(
+        'ScyllaDB write failed',
+      );
+
+      expect(publisher.emit).not.toHaveBeenCalled();
     });
   });
 });

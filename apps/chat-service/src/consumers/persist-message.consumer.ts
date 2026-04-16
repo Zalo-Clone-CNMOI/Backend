@@ -15,6 +15,7 @@ import {
   type ChatReactionAddedEvent,
   type ChatReactionRemoveCommand,
   type ChatReactionRemovedEvent,
+  type ChatMessageForwardCommand,
   type NotificationRequestedEvent,
   NotificationType,
   AiModerationRequestEvent,
@@ -1212,6 +1213,101 @@ export class PersistMessageConsumer {
       this.logger.error(`[${traceId}] ChatReactionRemove failed`, {
         messageId: payload.message_id,
         userId: payload.user_id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  @EventPattern(KafkaTopics.ChatMessageForward)
+  async onForward(@Payload() payload: ChatMessageForwardCommand) {
+    const startTime = Date.now();
+    const createdAt =
+      Number.isFinite(payload.sent_at) && payload.sent_at > 0
+        ? payload.sent_at
+        : startTime;
+    const traceId = payload.trace_id || `trace-${Date.now()}-${Math.random()}`;
+
+    this.logger.debug(`[${traceId}] ChatMessageForward started`, {
+      messageId: payload.message_id,
+      conversationId: payload.conversation_id,
+      senderId: payload.sender_id,
+      forwardId: payload.forward_id,
+    });
+
+    try {
+      const hasAccess = await ensureConversationAccess({
+        membershipService: this.membershipService,
+        logger: this.logger,
+        traceId,
+        senderId: payload.sender_id,
+        conversationId: payload.conversation_id,
+        action: 'message',
+        messageId: payload.message_id,
+      });
+      if (!hasAccess) {
+        return;
+      }
+
+      const acquired = await this.repo.tryBeginMessageProcessing(
+        payload.message_id,
+        payload.conversation_id,
+        createdAt,
+      );
+      if (!acquired) {
+        const existingState = await this.repo.getMessageProcessingState(
+          payload.message_id,
+        );
+        this.logger.debug(
+          `[${traceId}] Forward message already processed (idempotent)`,
+          {
+            messageId: payload.message_id,
+            status: existingState?.status ?? 'unknown',
+          },
+        );
+        return;
+      }
+
+      await this.repo.insertMessage({
+        message_id: payload.message_id,
+        conversation_id: payload.conversation_id,
+        sender_id: payload.sender_id,
+        body: payload.body,
+        created_at: createdAt,
+        attachments: payload.attachments,
+        forwarded_from: payload.forwarded_from,
+      });
+
+      const event: ChatMessageCreatedEvent = {
+        message_id: payload.message_id,
+        conversation_id: payload.conversation_id,
+        sender_id: payload.sender_id,
+        body: payload.body,
+        created_at: createdAt,
+        attachments: payload.attachments,
+        forwarded_from: payload.forwarded_from,
+        trace_id: traceId,
+      };
+
+      await this.publisher.emit(KafkaTopics.ChatMessageCreated, event);
+      await this.repo.markMessageStored(payload.message_id);
+
+      this.logger.log(`[${traceId}] ChatMessageForward completed`, {
+        messageId: payload.message_id,
+        duration: Date.now() - startTime,
+      });
+
+      await this.handlePostMessagePersist({
+        conversationId: payload.conversation_id,
+        senderId: payload.sender_id,
+        body: payload.body,
+        messageId: payload.message_id,
+        createdAt,
+        traceId,
+      });
+    } catch (error) {
+      this.logger.error(`[${traceId}] ChatMessageForward failed`, {
+        messageId: payload.message_id,
         error: error instanceof Error ? error.message : String(error),
       });
       throw error;

@@ -117,6 +117,22 @@ export class MessagesService {
     return this.toMessageResponse(message);
   }
 
+  async getMessageById(
+    messageId: string,
+  ): Promise<MessageResponseDto | null> {
+    const ref = await this.messageRepository.getMessageById(messageId);
+    if (!ref) return null;
+
+    const message = await this.messageRepository.getMessage(
+      ref.conversation_id,
+      ref.created_at,
+      messageId,
+    );
+    if (!message) return null;
+
+    return this.toMessageResponse(message);
+  }
+
   async getMessageReactions(
     messageId: string,
   ): Promise<MessageReactionsResponseDto> {

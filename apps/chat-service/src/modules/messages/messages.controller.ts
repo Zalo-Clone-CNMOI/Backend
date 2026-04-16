@@ -28,6 +28,20 @@ import {
 export class MessagesController {
   constructor(private readonly messagesService: MessagesService) {}
 
+  @Get('lookup/:messageId')
+  @ApiOperation({ summary: 'Look up a single message by message ID only (uses messages_by_id index)' })
+  @ApiParam({ name: 'messageId', description: 'Message ID' })
+  @ApiResponse({ status: 200, type: MessageResponseDto })
+  async getMessageById(
+    @Param('messageId', ParseUUIDPipe) messageId: string,
+  ): Promise<MessageResponseDto> {
+    const message = await this.messagesService.getMessageById(messageId);
+    if (!message) {
+      throw new NotFoundException('Message not found');
+    }
+    return message;
+  }
+
   @Get(':conversationId/search')
   @ApiOperation({ summary: 'Search messages in a conversation by keyword' })
   @ApiParam({ name: 'conversationId', description: 'Conversation ID' })

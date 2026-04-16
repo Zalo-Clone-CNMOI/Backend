@@ -1,4 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject } from '@nestjs/common';
+import { HttpService } from '@nestjs/axios';
 import { MessagesApi } from './client/generated';
 import { BaseHttpClient } from '../../base-http-client';
 import type {
@@ -7,20 +8,20 @@ import type {
   MessageReactionsResponseDto,
   MessageSearchResponseDto,
 } from './client/generated';
+import type { ChatClientConfig } from './utils/providers';
 
 @Injectable()
 export class ChatClientService extends BaseHttpClient {
   protected readonly logger = new Logger(ChatClientService.name);
 
-  constructor(private readonly messagesApi: MessagesApi) {
+  constructor(
+    private readonly messagesApi: MessagesApi,
+    @Inject('CHAT_CLIENT_CONFIG') private readonly config: ChatClientConfig,
+    private readonly httpService: HttpService,
+  ) {
     super();
   }
 
-  // ==================== MESSAGE METHODS ====================
-
-  /**
-   * Get messages for a conversation with cursor pagination
-   */
   async getMessages(
     accessToken: string,
     conversationId: string,
@@ -29,16 +30,8 @@ export class ChatClientService extends BaseHttpClient {
   ): Promise<MessageListResponseDto> {
     try {
       const response = await this.messagesApi.getMessages(
-        {
-          conversationId,
-          cursor,
-          limit,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        },
+        { conversationId, cursor, limit },
+        { headers: { Authorization: `Bearer ${accessToken}` } },
       );
       return response.data;
     } catch (error) {
@@ -46,9 +39,6 @@ export class ChatClientService extends BaseHttpClient {
     }
   }
 
-  /**
-   * Get a single message by ID
-   */
   async getMessage(
     accessToken: string,
     conversationId: string,
@@ -57,16 +47,8 @@ export class ChatClientService extends BaseHttpClient {
   ): Promise<MessageResponseDto> {
     try {
       const response = await this.messagesApi.getMessage(
-        {
-          conversationId,
-          createdAt: createdAt.toString(),
-          messageId,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        },
+        { conversationId, createdAt: createdAt.toString(), messageId },
+        { headers: { Authorization: `Bearer ${accessToken}` } },
       );
       return response.data;
     } catch (error) {
@@ -74,9 +56,6 @@ export class ChatClientService extends BaseHttpClient {
     }
   }
 
-  /**
-   * Search messages in a conversation by keyword
-   */
   async searchMessages(
     accessToken: string,
     conversationId: string,
@@ -96,27 +75,42 @@ export class ChatClientService extends BaseHttpClient {
     }
   }
 
-  /**
-   * Get reactions for a message
-   */
   async getMessageReactions(
     accessToken: string,
     messageId: string,
   ): Promise<MessageReactionsResponseDto> {
     try {
       const response = await this.messagesApi.getReactions(
-        {
-          messageId,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        },
+        { messageId },
+        { headers: { Authorization: `Bearer ${accessToken}` } },
       );
       return response.data;
     } catch (error) {
       this.handleError('getMessageReactions', error);
+    }
+  }
+
+  async getMessageById(
+    accessToken: string,
+    messageId: string,
+  ): Promise<MessageResponseDto | null> {
+    try {
+      const response =
+        await this.httpService.axiosRef.get<MessageResponseDto>(
+          `${this.config.baseUrl}/v1/messages/lookup/${messageId}`,
+          { headers: { Authorization: `Bearer ${accessToken}` } },
+        );
+      return response.data;
+    } catch (error: unknown) {
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'response' in error &&
+        (error as { response?: { status?: number } }).response?.status === 404
+      ) {
+        return null;
+      }
+      this.handleError('getMessageById', error);
     }
   }
 }

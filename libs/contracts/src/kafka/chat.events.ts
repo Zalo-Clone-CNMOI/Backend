@@ -22,14 +22,14 @@ export interface ForwardedFrom {
 }
 
 export interface ChatMessageForwardCommand {
-  message_id: string;               // target-specific UUID, BFF-generated
-  conversation_id: string;          // target conversation
+  message_id: string; // target-specific UUID, BFF-generated
+  conversation_id: string; // target conversation
   sender_id: string;
   sent_at: number;
-  body: string;                     // original message body
+  body: string; // original message body
   attachments?: MessageAttachment[]; // cloned keys from media-service
   forwarded_from: ForwardedFrom;
-  forward_id: string;               // idempotency across the whole forward operation
+  forward_id: string; // idempotency across the whole forward operation
   trace_id?: string;
 }
 

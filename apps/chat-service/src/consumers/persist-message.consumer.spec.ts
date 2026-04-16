@@ -13,7 +13,10 @@
  * - Cache invalidation (non-blocking)
  */
 import { PersistMessageConsumer } from './persist-message.consumer';
-import { createMockChatSendCommand, createMockChatForwardCommand } from '../../../../test/helpers';
+import {
+  createMockChatSendCommand,
+  createMockChatForwardCommand,
+} from '../../../../test/helpers';
 import * as crypto from 'crypto';
 import { CACHE_LOCK_RENEW_STATUS } from '@libs/redis';
 import type { AppConfig } from '@libs/config';

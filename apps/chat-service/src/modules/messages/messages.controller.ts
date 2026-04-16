@@ -1,17 +1,24 @@
 import {
+  Body,
   Controller,
   Get,
+  Headers,
   Param,
+  Post,
   Query,
   ParseUUIDPipe,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import {
+  ApiBody,
+  ApiHeader,
   ApiTags,
   ApiOperation,
   ApiResponse,
   ApiParam,
   ApiQuery,
+  ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { MessagesService } from './messages.service';
 import {
@@ -21,6 +28,8 @@ import {
   MessageResponseDto,
   MessageReactionsResponseDto,
   MessageSearchResponseDto,
+  ForwardMessageDto,
+  ForwardMessageResultDto,
 } from './dto';
 
 @ApiTags('Messages')
@@ -37,7 +46,10 @@ export class MessagesController {
    * verified the requesting user's identity.
    */
   @Get('lookup/:messageId')
-  @ApiOperation({ summary: 'Look up a single message by message ID only (uses messages_by_id index)' })
+  @ApiOperation({
+    summary:
+      'Look up a single message by message ID only (uses messages_by_id index)',
+  })
   @ApiParam({ name: 'messageId', description: 'Message ID' })
   @ApiResponse({ status: 200, type: MessageResponseDto })
   async getMessageById(
@@ -48,6 +60,26 @@ export class MessagesController {
       throw new NotFoundException('Message not found');
     }
     return message;
+  }
+
+  @Post('forward')
+  @ApiOperation({ summary: 'Forward a message to one or more conversations' })
+  @ApiHeader({
+    name: 'x-user-id',
+    required: true,
+    description: 'Authenticated user id performing forward',
+  })
+  @ApiBody({ type: ForwardMessageDto })
+  @ApiResponse({ status: 201, type: ForwardMessageResultDto })
+  @ApiUnauthorizedResponse({ description: 'Missing x-user-id header' })
+  async forwardMessage(
+    @Body() body: ForwardMessageDto,
+    @Headers('x-user-id') userId?: string,
+  ): Promise<ForwardMessageResultDto> {
+    if (!userId) {
+      throw new UnauthorizedException('Missing x-user-id header');
+    }
+    return this.messagesService.forwardMessage(body, userId);
   }
 
   @Get(':conversationId/search')

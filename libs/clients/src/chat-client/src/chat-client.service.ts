@@ -1,24 +1,20 @@
-import { Injectable, Logger, Inject } from '@nestjs/common';
-import { HttpService } from '@nestjs/axios';
+import { Injectable, Logger } from '@nestjs/common';
 import { MessagesApi } from './client/generated';
 import { BaseHttpClient } from '../../base-http-client';
 import type {
+  ForwardMessageDto,
+  ForwardMessageResultDto,
   MessageListResponseDto,
-  MessageResponseDto,
   MessageReactionsResponseDto,
+  MessageResponseDto,
   MessageSearchResponseDto,
 } from './client/generated';
-import type { ChatClientConfig } from './utils/providers';
 
 @Injectable()
 export class ChatClientService extends BaseHttpClient {
   protected readonly logger = new Logger(ChatClientService.name);
 
-  constructor(
-    private readonly messagesApi: MessagesApi,
-    @Inject('CHAT_CLIENT_CONFIG') private readonly config: ChatClientConfig,
-    private readonly httpService: HttpService,
-  ) {
+  constructor(private readonly messagesApi: MessagesApi) {
     super();
   }
 
@@ -90,27 +86,19 @@ export class ChatClientService extends BaseHttpClient {
     }
   }
 
-  async getMessageById(
+  async forwardMessage(
     accessToken: string,
-    messageId: string,
-  ): Promise<MessageResponseDto | null> {
+    dto: ForwardMessageDto,
+    userId: string,
+  ): Promise<ForwardMessageResultDto> {
     try {
-      const response =
-        await this.httpService.axiosRef.get<MessageResponseDto>(
-          `${this.config.baseUrl}/v1/messages/lookup/${messageId}`,
-          { headers: { Authorization: `Bearer ${accessToken}` } },
-        );
+      const response = await this.messagesApi.forwardMessage(
+        { xUserId: userId, forwardMessageDto: dto },
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
       return response.data;
-    } catch (error: unknown) {
-      if (
-        typeof error === 'object' &&
-        error !== null &&
-        'response' in error &&
-        (error as { response?: { status?: number } }).response?.status === 404
-      ) {
-        return null;
-      }
-      this.handleError('getMessageById', error);
+    } catch (error) {
+      this.handleError('forwardMessage', error);
     }
   }
 }

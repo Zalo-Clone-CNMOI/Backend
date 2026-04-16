@@ -9,6 +9,12 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { MessagesService } from './messages.service';
 import { MessageRepository } from '@libs/scylla';
 import { CacheService } from '@libs/redis';
+import { MediaClientService } from '@app/clients';
+import { ConversationMembershipService } from '@libs/mvp-access';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { User } from '@libs/database';
+import { KAFKA_CLIENT } from '@libs/kafka';
+import { of } from 'rxjs';
 
 // Helpers
 const createMockMessage = (overrides: Record<string, unknown> = {}) => ({
@@ -28,11 +34,16 @@ describe('Chat MessagesService', () => {
   let service: MessagesService;
   let messageRepository: Record<string, jest.Mock>;
   let cacheService: Record<string, jest.Mock>;
+  let mediaClient: Record<string, jest.Mock>;
+  let membershipService: Record<string, jest.Mock>;
+  let userRepo: Record<string, jest.Mock>;
+  let kafka: Record<string, jest.Mock>;
 
   beforeEach(async () => {
     messageRepository = {
       getMessages: jest.fn(),
       getMessage: jest.fn(),
+      getMessageById: jest.fn(),
       getReactions: jest.fn(),
     };
 
@@ -41,11 +52,23 @@ describe('Chat MessagesService', () => {
       setRecentMessages: jest.fn().mockResolvedValue(undefined),
     };
 
+    mediaClient = { cloneAttachment: jest.fn() };
+    membershipService = { canUserAccessConversation: jest.fn() };
+    userRepo = { findOne: jest.fn() };
+    kafka = {
+      emit: jest.fn().mockReturnValue(of(undefined)),
+      connect: jest.fn().mockResolvedValue(undefined),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         MessagesService,
         { provide: MessageRepository, useValue: messageRepository },
         { provide: CacheService, useValue: cacheService },
+        { provide: MediaClientService, useValue: mediaClient },
+        { provide: ConversationMembershipService, useValue: membershipService },
+        { provide: getRepositoryToken(User), useValue: userRepo },
+        { provide: KAFKA_CLIENT, useValue: kafka },
       ],
     }).compile();
 
@@ -325,6 +348,10 @@ describe('Chat MessagesService', () => {
       const localService = new MessagesService(
         messageRepository as unknown as MessageRepository,
         cacheService as unknown as CacheService,
+        mediaClient as unknown as MediaClientService,
+        membershipService as unknown as ConversationMembershipService,
+        userRepo as unknown as never,
+        kafka as unknown as never,
       );
 
       const msg = createMockMessage({

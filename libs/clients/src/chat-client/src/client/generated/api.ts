@@ -100,6 +100,110 @@ export enum AttachmentType {
 /**
  * 
  * @export
+ * @interface ForwardMessageDto
+ */
+export interface ForwardMessageDto {
+    /**
+     * Forward operation idempotency key
+     * @type {string}
+     * @memberof ForwardMessageDto
+     */
+    'forward_id': string;
+    /**
+     * Source message ID to forward
+     * @type {string}
+     * @memberof ForwardMessageDto
+     */
+    'source_message_id': string;
+    /**
+     * 
+     * @type {Array<ForwardTargetDto>}
+     * @memberof ForwardMessageDto
+     */
+    'targets': Array<ForwardTargetDto>;
+}
+/**
+ * 
+ * @export
+ * @interface ForwardMessageResultDto
+ */
+export interface ForwardMessageResultDto {
+    /**
+     * Forward operation idempotency key
+     * @type {string}
+     * @memberof ForwardMessageResultDto
+     */
+    'forward_id': string;
+    /**
+     * 
+     * @type {Array<ForwardTargetResultDto>}
+     * @memberof ForwardMessageResultDto
+     */
+    'results': Array<ForwardTargetResultDto>;
+}
+/**
+ * 
+ * @export
+ * @interface ForwardTargetDto
+ */
+export interface ForwardTargetDto {
+    /**
+     * Target message ID
+     * @type {string}
+     * @memberof ForwardTargetDto
+     */
+    'message_id': string;
+    /**
+     * Target conversation ID
+     * @type {string}
+     * @memberof ForwardTargetDto
+     */
+    'conversation_id': string;
+}
+/**
+ * 
+ * @export
+ * @interface ForwardTargetResultDto
+ */
+export interface ForwardTargetResultDto {
+    /**
+     * Target message ID
+     * @type {string}
+     * @memberof ForwardTargetResultDto
+     */
+    'message_id': string;
+    /**
+     * Target conversation ID
+     * @type {string}
+     * @memberof ForwardTargetResultDto
+     */
+    'conversation_id': string;
+    /**
+     * 
+     * @type {string}
+     * @memberof ForwardTargetResultDto
+     */
+    'status': ForwardTargetResultDtoStatusEnum;
+    /**
+     * Rejection reason
+     * @type {string}
+     * @memberof ForwardTargetResultDto
+     */
+    'reason'?: string;
+}
+
+/**
+    * @export
+    * @enum {string}
+    */
+export enum ForwardTargetResultDtoStatusEnum {
+    accepted = 'accepted',
+    rejected = 'rejected'
+}
+
+/**
+ * 
+ * @export
  * @interface MessageListResponseDto
  */
 export interface MessageListResponseDto {
@@ -123,26 +227,7 @@ export interface MessageListResponseDto {
     'hasMore': boolean;
 }
 /**
- *
- * @export
- * @interface MessageSearchResponseDto
- */
-export interface MessageSearchResponseDto {
-    /**
-     * Matched messages
-     * @type {Array<MessageResponseDto>}
-     * @memberof MessageSearchResponseDto
-     */
-    'items': Array<MessageResponseDto>;
-    /**
-     * Total number of matched messages
-     * @type {number}
-     * @memberof MessageSearchResponseDto
-     */
-    'total': number;
-}
-/**
- *
+ * 
  * @export
  * @interface MessageReactionDto
  */
@@ -263,6 +348,25 @@ export interface MessageResponseDto {
 /**
  * 
  * @export
+ * @interface MessageSearchResponseDto
+ */
+export interface MessageSearchResponseDto {
+    /**
+     * Matched messages
+     * @type {Array<MessageResponseDto>}
+     * @memberof MessageSearchResponseDto
+     */
+    'items': Array<MessageResponseDto>;
+    /**
+     * Total number of matched messages
+     * @type {number}
+     * @memberof MessageSearchResponseDto
+     */
+    'total': number;
+}
+/**
+ * 
+ * @export
  * @interface ReactionSummaryDto
  */
 export interface ReactionSummaryDto {
@@ -308,6 +412,53 @@ export enum ReactionType {
  */
 export const MessagesApiAxiosParamCreator = function (configuration?: Configuration) {
     return {
+        /**
+         * 
+         * @summary Forward a message to one or more conversations
+         * @param {string} xUserId Authenticated user id performing forward
+         * @param {ForwardMessageDto} forwardMessageDto 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        forwardMessage: async (xUserId: string, forwardMessageDto: ForwardMessageDto, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'xUserId' is not null or undefined
+            assertParamExists('forwardMessage', 'xUserId', xUserId)
+            // verify required parameter 'forwardMessageDto' is not null or undefined
+            assertParamExists('forwardMessage', 'forwardMessageDto', forwardMessageDto)
+            const localVarPath = `/v1/messages/forward`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication BearerAuth required
+            // http bearer authentication required
+            await setBearerAuthToObject(localVarHeaderParameter, configuration)
+
+            if (xUserId != null) {
+                localVarHeaderParameter['x-user-id'] = String(xUserId);
+            }
+
+
+    
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(forwardMessageDto, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
         /**
          * 
          * @summary Get a single message by ID
@@ -430,7 +581,7 @@ export const MessagesApiAxiosParamCreator = function (configuration?: Configurat
             await setBearerAuthToObject(localVarHeaderParameter, configuration)
 
 
-
+    
             setSearchParams(localVarUrlObj, localVarQueryParameter);
             let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
             localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
@@ -441,7 +592,7 @@ export const MessagesApiAxiosParamCreator = function (configuration?: Configurat
             };
         },
         /**
-         *
+         * 
          * @summary Search messages in a conversation by keyword
          * @param {string} conversationId Conversation ID
          * @param {string} [q] Keyword to search in message body
@@ -452,9 +603,11 @@ export const MessagesApiAxiosParamCreator = function (configuration?: Configurat
          * @throws {RequiredError}
          */
         searchMessages: async (conversationId: string, q?: string, senderId?: string, from?: number, to?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'conversationId' is not null or undefined
             assertParamExists('searchMessages', 'conversationId', conversationId)
             const localVarPath = `/v1/messages/{conversationId}/search`
                 .replace(`{${"conversationId"}}`, encodeURIComponent(String(conversationId)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
             let baseOptions;
             if (configuration) {
@@ -465,21 +618,28 @@ export const MessagesApiAxiosParamCreator = function (configuration?: Configurat
             const localVarHeaderParameter = {} as any;
             const localVarQueryParameter = {} as any;
 
+            // authentication BearerAuth required
+            // http bearer authentication required
             await setBearerAuthToObject(localVarHeaderParameter, configuration)
 
             if (q !== undefined) {
                 localVarQueryParameter['q'] = q;
             }
+
             if (senderId !== undefined) {
                 localVarQueryParameter['senderId'] = senderId;
             }
+
             if (from !== undefined) {
                 localVarQueryParameter['from'] = from;
             }
+
             if (to !== undefined) {
                 localVarQueryParameter['to'] = to;
             }
 
+
+    
             setSearchParams(localVarUrlObj, localVarQueryParameter);
             let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
             localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
@@ -499,6 +659,20 @@ export const MessagesApiAxiosParamCreator = function (configuration?: Configurat
 export const MessagesApiFp = function(configuration?: Configuration) {
     const localVarAxiosParamCreator = MessagesApiAxiosParamCreator(configuration)
     return {
+        /**
+         * 
+         * @summary Forward a message to one or more conversations
+         * @param {string} xUserId Authenticated user id performing forward
+         * @param {ForwardMessageDto} forwardMessageDto 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async forwardMessage(xUserId: string, forwardMessageDto: ForwardMessageDto, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ForwardMessageResultDto>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.forwardMessage(xUserId, forwardMessageDto, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['MessagesApi.forwardMessage']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
         /**
          * 
          * @summary Get a single message by ID
@@ -542,6 +716,17 @@ export const MessagesApiFp = function(configuration?: Configuration) {
             const localVarOperationServerBasePath = operationServerMap['MessagesApi.getReactions']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
+        /**
+         * 
+         * @summary Search messages in a conversation by keyword
+         * @param {string} conversationId Conversation ID
+         * @param {string} [q] Keyword to search in message body
+         * @param {string} [senderId] Filter by sender UUID
+         * @param {number} [from] Filter messages created after this timestamp (epoch ms)
+         * @param {number} [to] Filter messages created before this timestamp (epoch ms)
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
         async searchMessages(conversationId: string, q?: string, senderId?: string, from?: number, to?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<MessageSearchResponseDto>> {
             const localVarAxiosArgs = await localVarAxiosParamCreator.searchMessages(conversationId, q, senderId, from, to, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
@@ -558,6 +743,16 @@ export const MessagesApiFp = function(configuration?: Configuration) {
 export const MessagesApiFactory = function (configuration?: Configuration, basePath?: string, axios?: AxiosInstance) {
     const localVarFp = MessagesApiFp(configuration)
     return {
+        /**
+         * 
+         * @summary Forward a message to one or more conversations
+         * @param {MessagesApiForwardMessageRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        forwardMessage(requestParameters: MessagesApiForwardMessageRequest, options?: RawAxiosRequestConfig): AxiosPromise<ForwardMessageResultDto> {
+            return localVarFp.forwardMessage(requestParameters.xUserId, requestParameters.forwardMessageDto, options).then((request) => request(axios, basePath));
+        },
         /**
          * 
          * @summary Get a single message by ID
@@ -588,11 +783,39 @@ export const MessagesApiFactory = function (configuration?: Configuration, baseP
         getReactions(requestParameters: MessagesApiGetReactionsRequest, options?: RawAxiosRequestConfig): AxiosPromise<MessageReactionsResponseDto> {
             return localVarFp.getReactions(requestParameters.messageId, options).then((request) => request(axios, basePath));
         },
+        /**
+         * 
+         * @summary Search messages in a conversation by keyword
+         * @param {MessagesApiSearchMessagesRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
         searchMessages(requestParameters: MessagesApiSearchMessagesRequest, options?: RawAxiosRequestConfig): AxiosPromise<MessageSearchResponseDto> {
             return localVarFp.searchMessages(requestParameters.conversationId, requestParameters.q, requestParameters.senderId, requestParameters.from, requestParameters.to, options).then((request) => request(axios, basePath));
         },
     };
 };
+
+/**
+ * Request parameters for forwardMessage operation in MessagesApi.
+ * @export
+ * @interface MessagesApiForwardMessageRequest
+ */
+export interface MessagesApiForwardMessageRequest {
+    /**
+     * Authenticated user id performing forward
+     * @type {string}
+     * @memberof MessagesApiForwardMessage
+     */
+    readonly xUserId: string
+
+    /**
+     * 
+     * @type {ForwardMessageDto}
+     * @memberof MessagesApiForwardMessage
+     */
+    readonly forwardMessageDto: ForwardMessageDto
+}
 
 /**
  * Request parameters for getMessage operation in MessagesApi.
@@ -670,10 +893,39 @@ export interface MessagesApiGetReactionsRequest {
  * @interface MessagesApiSearchMessagesRequest
  */
 export interface MessagesApiSearchMessagesRequest {
+    /**
+     * Conversation ID
+     * @type {string}
+     * @memberof MessagesApiSearchMessages
+     */
     readonly conversationId: string
+
+    /**
+     * Keyword to search in message body
+     * @type {string}
+     * @memberof MessagesApiSearchMessages
+     */
     readonly q?: string
+
+    /**
+     * Filter by sender UUID
+     * @type {string}
+     * @memberof MessagesApiSearchMessages
+     */
     readonly senderId?: string
+
+    /**
+     * Filter messages created after this timestamp (epoch ms)
+     * @type {number}
+     * @memberof MessagesApiSearchMessages
+     */
     readonly from?: number
+
+    /**
+     * Filter messages created before this timestamp (epoch ms)
+     * @type {number}
+     * @memberof MessagesApiSearchMessages
+     */
     readonly to?: number
 }
 
@@ -684,6 +936,18 @@ export interface MessagesApiSearchMessagesRequest {
  * @extends {BaseAPI}
  */
 export class MessagesApi extends BaseAPI {
+    /**
+     * 
+     * @summary Forward a message to one or more conversations
+     * @param {MessagesApiForwardMessageRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof MessagesApi
+     */
+    public forwardMessage(requestParameters: MessagesApiForwardMessageRequest, options?: RawAxiosRequestConfig) {
+        return MessagesApiFp(this.configuration).forwardMessage(requestParameters.xUserId, requestParameters.forwardMessageDto, options).then((request) => request(this.axios, this.basePath));
+    }
+
     /**
      * 
      * @summary Get a single message by ID
@@ -720,9 +984,18 @@ export class MessagesApi extends BaseAPI {
         return MessagesApiFp(this.configuration).getReactions(requestParameters.messageId, options).then((request) => request(this.axios, this.basePath));
     }
 
+    /**
+     * 
+     * @summary Search messages in a conversation by keyword
+     * @param {MessagesApiSearchMessagesRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof MessagesApi
+     */
     public searchMessages(requestParameters: MessagesApiSearchMessagesRequest, options?: RawAxiosRequestConfig) {
         return MessagesApiFp(this.configuration).searchMessages(requestParameters.conversationId, requestParameters.q, requestParameters.senderId, requestParameters.from, requestParameters.to, options).then((request) => request(this.axios, this.basePath));
     }
 }
+
 
 

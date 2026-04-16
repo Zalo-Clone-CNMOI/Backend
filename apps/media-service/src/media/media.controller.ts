@@ -132,9 +132,14 @@ export class MediaController {
   @Post('clone')
   @ApiOperation({
     summary: 'Clone a media attachment',
-    description: 'Copies an S3 object to a new key and creates a new MediaFile record. Used by the forward message flow.',
+    description:
+      'Copies an S3 object to a new key and creates a new MediaFile record. Used by the forward message flow.',
   })
-  @ApiHeader({ name: 'x-user-id', required: true, description: 'ID of the user performing the forward' })
+  @ApiHeader({
+    name: 'x-user-id',
+    required: true,
+    description: 'ID of the user performing the forward',
+  })
   @ApiBody({ type: CloneAttachmentRequestDto })
   @ApiResponse({ status: 201, type: CloneAttachmentResponseDto })
   @ApiUnauthorizedResponse({ description: 'Missing x-user-id header' })

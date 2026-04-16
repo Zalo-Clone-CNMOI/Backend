@@ -360,7 +360,11 @@ describe('MediaService', () => {
 
 describe('MediaService.cloneAttachment', () => {
   let service: MediaService;
-  let s3Service: { copy: jest.Mock; exists: jest.Mock; presignUpload: jest.Mock };
+  let s3Service: {
+    copy: jest.Mock;
+    exists: jest.Mock;
+    presignUpload: jest.Mock;
+  };
   let mediaFileRepo: { findOne: jest.Mock; create: jest.Mock; save: jest.Mock };
   let s3Config: { bucket: string; region: string };
 
@@ -373,7 +377,9 @@ describe('MediaService.cloneAttachment', () => {
 
     mediaFileRepo = {
       findOne: jest.fn(),
-      create: jest.fn<MediaFile, [Partial<MediaFile>]>((data) => data as MediaFile),
+      create: jest.fn<MediaFile, [Partial<MediaFile>]>(
+        (data) => data as MediaFile,
+      ),
       save: jest.fn().mockResolvedValue(undefined),
     };
 
@@ -392,7 +398,12 @@ describe('MediaService.cloneAttachment', () => {
         { provide: S3_CLIENT, useValue: {} },
         { provide: S3_CONFIG, useValue: s3Config },
         { provide: getRepositoryToken(MediaFile), useValue: mediaFileRepo },
-        { provide: ConversationMembershipService, useValue: { canUserAccessConversation: jest.fn().mockResolvedValue(true) } },
+        {
+          provide: ConversationMembershipService,
+          useValue: {
+            canUserAccessConversation: jest.fn().mockResolvedValue(true),
+          },
+        },
       ],
     }).compile();
 

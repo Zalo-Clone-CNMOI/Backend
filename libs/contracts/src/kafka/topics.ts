@@ -5,6 +5,7 @@ export const KafkaTopics = {
   ChatMessageUpdated: 'chat.message.updated',
   ChatMessageDelete: 'chat.message.delete',
   ChatMessageDeleted: 'chat.message.deleted',
+  ChatMessageForward: 'chat.message.forward',
   ChatReactionAdd: 'chat.reaction.add',
   ChatReactionAdded: 'chat.reaction.added',
   ChatReactionRemove: 'chat.reaction.remove',

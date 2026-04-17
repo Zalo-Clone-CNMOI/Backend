@@ -2,9 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { MessagesApi } from './client/generated';
 import { BaseHttpClient } from '../../base-http-client';
 import type {
+  ForwardMessageDto,
+  ForwardMessageResultDto,
   MessageListResponseDto,
-  MessageResponseDto,
   MessageReactionsResponseDto,
+  MessageResponseDto,
   MessageSearchResponseDto,
 } from './client/generated';
 
@@ -16,11 +18,6 @@ export class ChatClientService extends BaseHttpClient {
     super();
   }
 
-  // ==================== MESSAGE METHODS ====================
-
-  /**
-   * Get messages for a conversation with cursor pagination
-   */
   async getMessages(
     accessToken: string,
     conversationId: string,
@@ -29,16 +26,8 @@ export class ChatClientService extends BaseHttpClient {
   ): Promise<MessageListResponseDto> {
     try {
       const response = await this.messagesApi.getMessages(
-        {
-          conversationId,
-          cursor,
-          limit,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        },
+        { conversationId, cursor, limit },
+        { headers: { Authorization: `Bearer ${accessToken}` } },
       );
       return response.data;
     } catch (error) {
@@ -46,9 +35,6 @@ export class ChatClientService extends BaseHttpClient {
     }
   }
 
-  /**
-   * Get a single message by ID
-   */
   async getMessage(
     accessToken: string,
     conversationId: string,
@@ -57,16 +43,8 @@ export class ChatClientService extends BaseHttpClient {
   ): Promise<MessageResponseDto> {
     try {
       const response = await this.messagesApi.getMessage(
-        {
-          conversationId,
-          createdAt: createdAt.toString(),
-          messageId,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        },
+        { conversationId, createdAt: createdAt.toString(), messageId },
+        { headers: { Authorization: `Bearer ${accessToken}` } },
       );
       return response.data;
     } catch (error) {
@@ -74,9 +52,6 @@ export class ChatClientService extends BaseHttpClient {
     }
   }
 
-  /**
-   * Search messages in a conversation by keyword
-   */
   async searchMessages(
     accessToken: string,
     conversationId: string,
@@ -96,27 +71,34 @@ export class ChatClientService extends BaseHttpClient {
     }
   }
 
-  /**
-   * Get reactions for a message
-   */
   async getMessageReactions(
     accessToken: string,
     messageId: string,
   ): Promise<MessageReactionsResponseDto> {
     try {
       const response = await this.messagesApi.getReactions(
-        {
-          messageId,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        },
+        { messageId },
+        { headers: { Authorization: `Bearer ${accessToken}` } },
       );
       return response.data;
     } catch (error) {
       this.handleError('getMessageReactions', error);
+    }
+  }
+
+  async forwardMessage(
+    accessToken: string,
+    dto: ForwardMessageDto,
+    userId: string,
+  ): Promise<ForwardMessageResultDto> {
+    try {
+      const response = await this.messagesApi.forwardMessage(
+        { xUserId: userId, forwardMessageDto: dto },
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      return response.data;
+    } catch (error) {
+      this.handleError('forwardMessage', error);
     }
   }
 }

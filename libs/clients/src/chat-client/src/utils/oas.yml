@@ -9,6 +9,40 @@ servers:
   - url: http://localhost:5002/api
     description: Local development server
 paths:
+  /v1/messages/forward:
+    post:
+      tags:
+        - Messages
+      summary: Forward a message to one or more conversations
+      operationId: forwardMessage
+      parameters:
+        - name: x-user-id
+          in: header
+          required: true
+          description: Authenticated user id performing forward
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForwardMessageDto'
+      responses:
+        '201':
+          description: Forward operation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForwardMessageResultDto'
+        '401':
+          description: Missing x-user-id header
+        '403':
+          description: Forbidden
+        '404':
+          description: Source message not found
+
   /v1/messages/{conversationId}/search:
     get:
       tags:
@@ -174,6 +208,82 @@ components:
       bearerFormat: JWT
 
   schemas:
+    ForwardTargetDto:
+      type: object
+      required:
+        - message_id
+        - conversation_id
+      properties:
+        message_id:
+          type: string
+          format: uuid
+          description: Target message ID
+        conversation_id:
+          type: string
+          format: uuid
+          description: Target conversation ID
+
+    ForwardMessageDto:
+      type: object
+      required:
+        - forward_id
+        - source_message_id
+        - targets
+      properties:
+        forward_id:
+          type: string
+          format: uuid
+          description: Forward operation idempotency key
+        source_message_id:
+          type: string
+          format: uuid
+          description: Source message ID to forward
+        targets:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/ForwardTargetDto'
+
+    ForwardTargetResultDto:
+      type: object
+      required:
+        - message_id
+        - conversation_id
+        - status
+      properties:
+        message_id:
+          type: string
+          format: uuid
+          description: Target message ID
+        conversation_id:
+          type: string
+          format: uuid
+          description: Target conversation ID
+        status:
+          type: string
+          enum:
+            - accepted
+            - rejected
+        reason:
+          type: string
+          description: Rejection reason
+
+    ForwardMessageResultDto:
+      type: object
+      required:
+        - forward_id
+        - results
+      properties:
+        forward_id:
+          type: string
+          format: uuid
+          description: Forward operation idempotency key
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ForwardTargetResultDto'
+
     AttachmentType:
       type: string
       enum:

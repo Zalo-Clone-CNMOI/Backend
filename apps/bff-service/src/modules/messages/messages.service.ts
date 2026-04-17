@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { ChatClientService } from '@app/clients';
+import type {
+  ForwardMessageDto,
+  ForwardMessageResultDto,
+} from './dto/forward-message.dto';
 
 @Injectable()
 export class MessagesService {
@@ -53,5 +57,26 @@ export class MessagesService {
       from,
       to,
     );
+  }
+
+  async forwardMessage(
+    dto: ForwardMessageDto,
+    accessToken: string,
+    userId: string,
+  ): Promise<ForwardMessageResultDto> {
+    const client: Pick<ChatClientService, 'forwardMessage'> = this.chatClient;
+    const payload = {
+      forward_id: dto.forward_id,
+      source_message_id: dto.source_message_id,
+      targets: dto.targets.map((target) => ({
+        message_id: target.message_id,
+        conversation_id: target.conversation_id,
+      })),
+    };
+    return (await client.forwardMessage(
+      accessToken,
+      payload,
+      userId,
+    )) as ForwardMessageResultDto;
   }
 }

@@ -1,14 +1,29 @@
-import { Controller, Get, Param, Query, ParseIntPipe } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Query,
+  ParseIntPipe,
+  UnauthorizedException,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
   ApiTags,
   ApiQuery,
   ApiResponse,
+  ApiBody,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { MessagesService } from './messages.service';
 import { AccessToken } from '@app/decorator';
 import { FindMessageDto } from './dto/find-message.dto';
+import {
+  ForwardMessageDto,
+  ForwardMessageResultDto,
+} from './dto/forward-message.dto';
 
 @ApiTags('Messages')
 @ApiBearerAuth('BearerAuth')
@@ -105,5 +120,35 @@ export class MessagesController {
     @Param('messageId') messageId: string,
   ) {
     return this.messagesService.getMessageReactions(token, messageId);
+  }
+
+  @Post('forward')
+  @Throttle({ default: { ttl: 60_000, limit: 20 } })
+  @ApiOperation({ summary: 'Forward a message to one or more conversations' })
+  @ApiBody({ type: ForwardMessageDto })
+  @ApiResponse({ status: 201, description: 'Forward operation result' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  @ApiResponse({ status: 404, description: 'Source message not found' })
+  async forwardMessage(
+    @Body() body: ForwardMessageDto,
+    @AccessToken() accessToken: string,
+  ): Promise<ForwardMessageResultDto> {
+    const userId = MessagesController.decodeUserId(accessToken);
+    return this.messagesService.forwardMessage(body, accessToken, userId);
+  }
+
+  private static decodeUserId(token: string): string {
+    try {
+      const parts = token.split('.');
+      if (parts.length < 3) throw new Error('Malformed JWT');
+      const payload = JSON.parse(
+        Buffer.from(parts[1], 'base64url').toString(),
+      ) as { sub?: string };
+      if (!payload.sub) throw new Error('Missing sub');
+      return payload.sub;
+    } catch {
+      throw new UnauthorizedException('Invalid token');
+    }
   }
 }

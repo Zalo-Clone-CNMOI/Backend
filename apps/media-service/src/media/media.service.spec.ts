@@ -8,6 +8,7 @@
  */
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { BadRequestException } from '@nestjs/common';
 import { MediaService } from './media.service';
 import { S3Service, S3_CLIENT, S3_CONFIG } from '@libs/s3';
 import { KAFKA_CLIENT } from '@libs/kafka';
@@ -354,5 +355,125 @@ describe('MediaService', () => {
 
       expect(kafka.connect).toHaveBeenCalled();
     });
+  });
+});
+
+describe('MediaService.cloneAttachment', () => {
+  let service: MediaService;
+  let s3Service: {
+    copy: jest.Mock;
+    exists: jest.Mock;
+    presignUpload: jest.Mock;
+  };
+  let mediaFileRepo: { findOne: jest.Mock; create: jest.Mock; save: jest.Mock };
+  let s3Config: { bucket: string; region: string };
+
+  beforeEach(async () => {
+    s3Service = {
+      copy: jest.fn().mockResolvedValue(undefined),
+      exists: jest.fn().mockResolvedValue(true),
+      presignUpload: jest.fn(),
+    };
+
+    mediaFileRepo = {
+      findOne: jest.fn(),
+      create: jest.fn<MediaFile, [Partial<MediaFile>]>(
+        (data) => data as MediaFile,
+      ),
+      save: jest.fn().mockResolvedValue(undefined),
+    };
+
+    s3Config = { bucket: 'test-bucket', region: 'us-east-1' };
+
+    const kafka = {
+      connect: jest.fn().mockResolvedValue(undefined),
+      emit: jest.fn().mockReturnValue({ subscribe: jest.fn() }),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        MediaService,
+        { provide: KAFKA_CLIENT, useValue: kafka },
+        { provide: S3Service, useValue: s3Service },
+        { provide: S3_CLIENT, useValue: {} },
+        { provide: S3_CONFIG, useValue: s3Config },
+        { provide: getRepositoryToken(MediaFile), useValue: mediaFileRepo },
+        {
+          provide: ConversationMembershipService,
+          useValue: {
+            canUserAccessConversation: jest.fn().mockResolvedValue(true),
+          },
+        },
+      ],
+    }).compile();
+
+    service = module.get<MediaService>(MediaService);
+  });
+
+  it('should throw BadRequestException when source file not found', async () => {
+    mediaFileRepo.findOne.mockResolvedValue(null);
+
+    await expect(
+      service.cloneAttachment({ source_key: 'private/missing.jpg' }, 'user-1'),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('should copy S3 object and create new MediaFile record', async () => {
+    const sourceFile = {
+      key: 'private/orig-123.jpg',
+      bucket: 'test-bucket',
+      contentType: 'image/jpeg',
+      visibility: 'private',
+      uploadedById: 'user-2',
+      conversationId: 'conv-src',
+      sizeBytes: 51200,
+      thumbnailKey: null,
+      status: 'uploaded',
+    };
+    mediaFileRepo.findOne.mockResolvedValue(sourceFile);
+
+    const result = await service.cloneAttachment(
+      { source_key: 'private/orig-123.jpg', conversation_id: 'conv-target' },
+      'user-2',
+    );
+
+    expect(s3Service.copy).toHaveBeenCalledWith(
+      'private/orig-123.jpg',
+      expect.stringMatching(/^private\/fwd-/),
+    );
+    expect(mediaFileRepo.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contentType: 'image/jpeg',
+        visibility: 'private',
+        uploadedById: 'user-2',
+        conversationId: 'conv-target',
+        status: 'uploaded',
+      }),
+    );
+    expect(result.visibility).toBe('private');
+    expect(result.cloned_key).toMatch(/^private\/fwd-/);
+    expect(result.content_type).toBe('image/jpeg');
+  });
+
+  it('should return cloned_key with public prefix for public files', async () => {
+    const sourceFile = {
+      key: 'public/photo.png',
+      bucket: 'test-bucket',
+      contentType: 'image/png',
+      visibility: 'public',
+      uploadedById: 'sender-1',
+      conversationId: null,
+      sizeBytes: 10240,
+      thumbnailKey: null,
+      status: 'uploaded',
+    };
+    mediaFileRepo.findOne.mockResolvedValue(sourceFile);
+
+    const result = await service.cloneAttachment(
+      { source_key: 'public/photo.png' },
+      'user-2',
+    );
+
+    expect(result.cloned_key).toMatch(/^public\/fwd-/);
   });
 });

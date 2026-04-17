@@ -26,6 +26,10 @@ import {
 } from './dto/confirm-upload.dto';
 import { PresignDownloadRequestDto } from './dto/presign-download.dto';
 import { PresignDownloadResponseDto } from './dto/presign-download.dto';
+import {
+  CloneAttachmentRequestDto,
+  CloneAttachmentResponseDto,
+} from './dto/clone-attachment.dto';
 import { MediaService } from './media.service';
 
 @ApiTags('Media')
@@ -123,5 +127,29 @@ export class MediaController {
     }
 
     return this.media.presignDownload(body.key);
+  }
+
+  @Post('clone')
+  @ApiOperation({
+    summary: 'Clone a media attachment',
+    description:
+      'Copies an S3 object to a new key and creates a new MediaFile record. Used by the forward message flow.',
+  })
+  @ApiHeader({
+    name: 'x-user-id',
+    required: true,
+    description: 'ID of the user performing the forward',
+  })
+  @ApiBody({ type: CloneAttachmentRequestDto })
+  @ApiResponse({ status: 201, type: CloneAttachmentResponseDto })
+  @ApiUnauthorizedResponse({ description: 'Missing x-user-id header' })
+  async cloneAttachment(
+    @Body() body: CloneAttachmentRequestDto,
+    @Headers('x-user-id') userId?: string,
+  ): Promise<CloneAttachmentResponseDto> {
+    if (!userId) {
+      throw new UnauthorizedException('Missing x-user-id header');
+    }
+    return this.media.cloneAttachment(body, userId);
   }
 }

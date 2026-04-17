@@ -1,4 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject } from '@nestjs/common';
+import { HttpService } from '@nestjs/axios';
 import { MediaApi } from './client/generated';
 import { BaseHttpClient } from '../../base-http-client';
 import type {
@@ -9,12 +10,29 @@ import type {
   PresignDownloadRequestDto,
   PresignDownloadResponseDto,
 } from './client/generated';
+import type { MediaClientConfig } from './utils/providers';
+
+export interface CloneAttachmentRequest {
+  source_key: string;
+  conversation_id?: string;
+}
+
+export interface CloneAttachmentResponse {
+  cloned_key: string;
+  visibility: 'public' | 'private';
+  content_type: string;
+  size_bytes: number | null;
+}
 
 @Injectable()
 export class MediaClientService extends BaseHttpClient {
   protected readonly logger = new Logger(MediaClientService.name);
 
-  constructor(private readonly mediaApi: MediaApi) {
+  constructor(
+    private readonly mediaApi: MediaApi,
+    @Inject('MEDIA_CLIENT_CONFIG') private readonly config: MediaClientConfig,
+    private readonly httpService: HttpService,
+  ) {
     super();
   }
 
@@ -60,6 +78,23 @@ export class MediaClientService extends BaseHttpClient {
       return response.data;
     } catch (error) {
       this.handleError('presignDownload', error);
+    }
+  }
+
+  async cloneAttachment(
+    dto: CloneAttachmentRequest,
+    userId: string,
+  ): Promise<CloneAttachmentResponse> {
+    try {
+      const response =
+        await this.httpService.axiosRef.post<CloneAttachmentResponse>(
+          `${this.config.baseUrl}/v1/media/clone`,
+          dto,
+          { headers: { 'x-user-id': userId } },
+        );
+      return response.data;
+    } catch (error) {
+      this.handleError('cloneAttachment', error);
     }
   }
 }

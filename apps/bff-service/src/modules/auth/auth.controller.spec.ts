@@ -192,7 +192,9 @@ describe('BFF AuthController', () => {
   describe('QR endpoints', () => {
     describe('POST /auth/qr/generate', () => {
       it('should delegate to authService.qrGenerate', async () => {
-        const dto = { socketId: 'socket-abc' };
+        const dto = {
+          socketBindingToken: '6e1b4a96-f6d2-4e8a-b3e5-d88d8b99f8cb',
+        };
         const response = {
           sessionId: 'session-uuid',
           qrToken: 'qr-token',

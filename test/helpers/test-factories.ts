@@ -3,6 +3,7 @@
  * Used across all test suites to avoid duplication.
  */
 import { v4 as uuidv4 } from 'uuid';
+import type { ChatMessageForwardCommand } from '@libs/contracts';
 
 // ─── User Factory ────────────────────────────────────────────────────────────
 
@@ -150,6 +151,35 @@ export function createMockAuthenticatedUser(
     fullName: 'Test User',
     avatarUrl: undefined,
     status: 'active',
+    ...overrides,
+  };
+}
+
+// ─── Chat Forward Command Factory ────────────────────────────────────────────
+
+export function createMockChatForwardCommand(
+  overrides: Partial<ChatMessageForwardCommand> = {},
+): ChatMessageForwardCommand {
+  const sourceMessageId = uuidv4();
+  const sourceConversationId = uuidv4();
+  const sourceSenderId = uuidv4();
+  return {
+    message_id: uuidv4(),
+    conversation_id: uuidv4(),
+    sender_id: uuidv4(),
+    sent_at: Date.now(),
+    body: 'Hello from original sender',
+    attachments: undefined,
+    forwarded_from: {
+      source_message_id: sourceMessageId,
+      source_conversation_id: sourceConversationId,
+      source_sender_id: sourceSenderId,
+      source_sender_name_snapshot: 'Original Sender',
+      source_created_at: Date.now() - 60_000,
+      source_type: 'text',
+    },
+    forward_id: uuidv4(),
+    trace_id: `bff:${uuidv4()}:${uuidv4()}`,
     ...overrides,
   };
 }

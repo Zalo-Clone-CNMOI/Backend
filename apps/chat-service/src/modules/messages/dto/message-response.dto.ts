@@ -79,6 +79,16 @@ export class MessageResponseDto {
 
   @ApiProperty({ description: 'Whether message is deleted' })
   isDeleted: boolean;
+
+  @ApiPropertyOptional({ description: 'Forwarded message metadata' })
+  forwardedFrom?: {
+    source_message_id: string;
+    source_conversation_id: string;
+    source_sender_id: string;
+    source_sender_name_snapshot: string;
+    source_created_at: number;
+    source_type: 'text' | 'image' | 'file' | 'mixed';
+  };
 }
 
 export class MessageListResponseDto {

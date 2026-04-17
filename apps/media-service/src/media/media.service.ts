@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Inject,
   Injectable,
   Logger,
@@ -31,6 +32,10 @@ import type {
   PresignUploadResponseDto,
 } from './dto/presign-upload.dto';
 import type { PresignDownloadResponseDto } from './dto/presign-download.dto';
+import type {
+  CloneAttachmentRequestDto,
+  CloneAttachmentResponseDto,
+} from './dto/clone-attachment.dto';
 import sharp from 'sharp';
 import { Readable } from 'stream';
 import { v4 as uuidv4 } from 'uuid';
@@ -70,6 +75,63 @@ export class MediaService implements OnModuleInit {
       );
     }
     return false;
+  }
+
+  async cloneAttachment(
+    dto: CloneAttachmentRequestDto,
+    userId: string,
+  ): Promise<CloneAttachmentResponseDto> {
+    const sourceFile = await this.mediaFileRepo.findOne({
+      where: { key: dto.source_key },
+    });
+    if (!sourceFile) {
+      throw new BadRequestException(`Source file not found: ${dto.source_key}`);
+    }
+
+    const canAccess = await this.canUserAccessFile(dto.source_key, userId);
+    if (!canAccess) {
+      throw new ForbiddenException('You do not have access to this file');
+    }
+
+    if (dto.conversation_id) {
+      const canAccessDest =
+        await this.membershipService.canUserAccessConversation(
+          userId,
+          dto.conversation_id,
+        );
+      if (!canAccessDest) {
+        throw new ForbiddenException(
+          'You do not have access to the destination conversation',
+        );
+      }
+    }
+
+    const prefix = sourceFile.visibility === 'public' ? 'public/' : 'private/';
+    const clonedKey = `${prefix}fwd-${uuidv4()}`;
+
+    await this.s3Service.copy(dto.source_key, clonedKey);
+
+    const clonedFile = this.mediaFileRepo.create({
+      key: clonedKey,
+      bucket: this.s3Config.bucket,
+      contentType: sourceFile.contentType,
+      status: 'uploaded' as const,
+      visibility: sourceFile.visibility,
+      uploadedById: userId,
+      conversationId: dto.conversation_id ?? null,
+      sizeBytes: sourceFile.sizeBytes,
+      thumbnailKey: null,
+    });
+    await this.mediaFileRepo.save(clonedFile);
+
+    this.logger.log(`Attachment cloned: ${dto.source_key} → ${clonedKey}`);
+
+    return {
+      cloned_key: clonedKey,
+      visibility: sourceFile.visibility,
+      content_type: sourceFile.contentType,
+      size_bytes: sourceFile.sizeBytes,
+    };
   }
 
   async presignUpload(

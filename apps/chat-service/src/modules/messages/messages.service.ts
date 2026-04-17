@@ -1,7 +1,24 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+  OnModuleInit,
+} from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { MessageRepository } from '@libs/scylla';
 import { CacheService } from '@libs/redis';
+import { ClientKafka } from '@nestjs/microservices';
+import { lastValueFrom } from 'rxjs';
+import { KAFKA_CLIENT } from '@libs/kafka';
+import { User } from '@libs/database';
+import { ConversationMembershipService } from '@libs/mvp-access';
 import { inferMediaVisibility } from '@app/constant';
+import { MediaClientService } from '@app/clients';
+import { KafkaTopics } from '@libs/contracts';
+import type { ForwardedFrom, ChatMessageForwardCommand } from '@libs/contracts';
 import type {
   PersistedMessage,
   MessageAttachment,
@@ -9,6 +26,9 @@ import type {
   CursorPaginatedResult,
 } from '@app/types/interfaces/chat.interface';
 import {
+  ForwardMessageDto,
+  ForwardMessageResultDto,
+  ForwardTargetResultDto,
   GetMessagesQueryDto,
   SearchMessagesQueryDto,
   MessageResponseDto,
@@ -20,14 +40,41 @@ import {
   ReactionSummaryDto,
 } from './dto';
 
+interface AttachmentItem {
+  key: string;
+  type: string;
+  name: string;
+  size: number;
+  contentType: string;
+  thumbnailKey?: string | null;
+}
+
+function deriveSourceType(
+  body: string | null | undefined,
+  attachments: AttachmentItem[] | undefined,
+): 'text' | 'image' | 'file' | 'mixed' {
+  const hasText = !!body?.trim();
+  const atts = attachments ?? [];
+  if (atts.length === 0) return 'text';
+  const types = new Set(atts.map((a) => a.type));
+  if (hasText) return 'mixed';
+  if (types.size === 1 && types.has('image')) return 'image';
+  if (types.size > 1) return 'mixed';
+  return 'file';
+}
+
 @Injectable()
-export class MessagesService {
+export class MessagesService implements OnModuleInit {
   private readonly logger = new Logger(MessagesService.name);
   private readonly cdnBaseUrl: string;
 
   constructor(
     private readonly messageRepository: MessageRepository,
     private readonly cacheService: CacheService,
+    private readonly mediaClient: MediaClientService,
+    private readonly membershipService: ConversationMembershipService,
+    @InjectRepository(User) private readonly userRepo: Repository<User>,
+    @Inject(KAFKA_CLIENT) private readonly kafka: ClientKafka,
   ) {
     const bucket = process.env.S3_BUCKET ?? 'onn-bucket-23';
     const region = process.env.AWS_REGION ?? 'ap-southeast-1';
@@ -35,6 +82,10 @@ export class MessagesService {
     this.cdnBaseUrl = endpoint
       ? endpoint
       : `https://${bucket}.s3.${region}.amazonaws.com`;
+  }
+
+  async onModuleInit() {
+    await this.kafka.connect();
   }
 
   async getMessages(
@@ -117,6 +168,112 @@ export class MessagesService {
     return this.toMessageResponse(message);
   }
 
+  async getMessageById(messageId: string): Promise<MessageResponseDto | null> {
+    const ref = await this.messageRepository.getMessageById(messageId);
+    if (!ref) return null;
+
+    const message = await this.messageRepository.getMessage(
+      ref.conversation_id,
+      ref.created_at,
+      messageId,
+    );
+    if (!message) return null;
+
+    return this.toMessageResponse(message);
+  }
+
+  async forwardMessage(
+    dto: ForwardMessageDto,
+    userId: string,
+  ): Promise<ForwardMessageResultDto> {
+    const source = await this.getMessageById(dto.source_message_id);
+    if (!source) {
+      throw new NotFoundException('Source message not found');
+    }
+    if (source.isDeleted) {
+      throw new NotFoundException('Source message has been deleted');
+    }
+
+    const canReadSource =
+      await this.membershipService.canUserAccessConversation(
+        userId,
+        source.conversationId,
+      );
+    if (!canReadSource) {
+      throw new ForbiddenException('Cannot access source conversation');
+    }
+
+    const senderUser = await this.userRepo.findOne({
+      where: { id: source.senderId },
+    });
+    const senderNameSnapshot = senderUser?.fullName ?? 'Unknown';
+
+    const forwardedFrom: ForwardedFrom = {
+      source_message_id: source.messageId,
+      source_conversation_id: source.conversationId,
+      source_sender_id: source.senderId,
+      source_sender_name_snapshot: senderNameSnapshot,
+      source_created_at: source.createdAt,
+      source_type: deriveSourceType(source.body, source.attachments),
+    };
+
+    const results: ForwardTargetResultDto[] = [];
+
+    for (const target of dto.targets) {
+      const canSend = await this.membershipService.canUserAccessConversation(
+        userId,
+        target.conversation_id,
+      );
+      if (!canSend) {
+        results.push({
+          message_id: target.message_id,
+          conversation_id: target.conversation_id,
+          status: 'rejected',
+          reason: 'not_member',
+        });
+        continue;
+      }
+
+      try {
+        const clonedAttachments = await this.cloneAttachments(
+          source.attachments ?? [],
+          userId,
+          target.conversation_id,
+        );
+
+        const cmd: ChatMessageForwardCommand = {
+          message_id: target.message_id,
+          conversation_id: target.conversation_id,
+          sender_id: userId,
+          sent_at: Date.now(),
+          body: source.body ?? '',
+          attachments: clonedAttachments,
+          forwarded_from: forwardedFrom,
+          forward_id: dto.forward_id,
+          trace_id: `bff:${dto.forward_id}:${target.message_id}`,
+        };
+
+        await lastValueFrom(
+          this.kafka.emit(KafkaTopics.ChatMessageForward, cmd),
+        );
+        results.push({
+          message_id: target.message_id,
+          conversation_id: target.conversation_id,
+          status: 'accepted',
+        });
+      } catch {
+        results.push({
+          message_id: target.message_id,
+          conversation_id: target.conversation_id,
+          status: 'rejected',
+          reason: 'dispatch_error',
+        });
+      }
+    }
+
+    return { forward_id: dto.forward_id, results };
+  }
+
   async getMessageReactions(
     messageId: string,
   ): Promise<MessageReactionsResponseDto> {
@@ -168,7 +325,34 @@ export class MessagesService {
       editedAt: message.edited_at,
       deletedAt: message.deleted_at,
       isDeleted: !!message.deleted_at,
+      forwardedFrom: message.forwarded_from,
     };
+  }
+
+  private async cloneAttachments(
+    attachments: AttachmentItem[],
+    userId: string,
+    conversationId: string,
+  ): Promise<MessageAttachment[]> {
+    if (attachments.length === 0) return [];
+
+    return Promise.all(
+      attachments.map(async (att) => {
+        const cloned = await this.mediaClient.cloneAttachment(
+          { source_key: att.key, conversation_id: conversationId },
+          userId,
+        );
+        return {
+          key: cloned.cloned_key,
+          type: att.type as MessageAttachment['type'],
+          name: att.name,
+          size: att.size,
+          content_type: att.contentType,
+          thumbnail_key: att.thumbnailKey ?? undefined,
+          visibility: cloned.visibility,
+        } satisfies MessageAttachment;
+      }),
+    );
   }
 
   private toAttachmentResponse(

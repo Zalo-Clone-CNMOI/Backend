@@ -113,18 +113,39 @@ export class MessageRepository {
       ? JSON.stringify(message.attachments)
       : null;
 
-    await this.client.execute(
-      `INSERT INTO messages_by_conversation 
-       (conversation_id, created_at, message_id, sender_id, body, attachments, reply_to_message_id) 
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    const forwardedFromJson = message.forwarded_from
+      ? JSON.stringify(message.forwarded_from)
+      : null;
+
+    // Logged BATCH ensures both tables are written atomically.
+    // If the coordinator fails after the batch log is written, the batch
+    // will be replayed by the cluster on recovery.
+    await this.client.batch(
       [
-        message.conversation_id,
-        message.created_at,
-        message.message_id,
-        message.sender_id,
-        message.body,
-        attachmentsJson,
-        message.reply_to_message_id || null,
+        {
+          query: `INSERT INTO messages_by_conversation
+                  (conversation_id, created_at, message_id, sender_id, body, attachments, reply_to_message_id, forwarded_from)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          params: [
+            message.conversation_id,
+            message.created_at,
+            message.message_id,
+            message.sender_id,
+            message.body,
+            attachmentsJson,
+            message.reply_to_message_id || null,
+            forwardedFromJson,
+          ],
+        },
+        {
+          query:
+            'INSERT INTO messages_by_id (message_id, conversation_id, created_at) VALUES (?, ?, ?)',
+          params: [
+            message.message_id,
+            message.conversation_id,
+            message.created_at,
+          ],
+        },
       ],
       { prepare: true },
     );
@@ -193,6 +214,24 @@ export class MessageRepository {
 
     if (result.rowLength === 0) return null;
     return this.rowToMessage(result.rows[0]);
+  }
+
+  async getMessageById(
+    messageId: string,
+  ): Promise<{ conversation_id: string; created_at: number } | null> {
+    const result = await this.client.execute(
+      'SELECT conversation_id, created_at FROM messages_by_id WHERE message_id = ?',
+      [messageId],
+      { prepare: true },
+    );
+
+    if (result.rowLength === 0) return null;
+
+    const row = result.rows[0];
+    return {
+      conversation_id: row.get('conversation_id') as string,
+      created_at: this.toNumber(row.get('created_at')),
+    };
   }
 
   async updateMessageBody(
@@ -371,6 +410,18 @@ export class MessageRepository {
       }
     }
 
+    const forwardedFromRaw = row.get('forwarded_from') as string | null;
+    let forwarded_from: PersistedMessage['forwarded_from'] | undefined;
+    if (forwardedFromRaw) {
+      try {
+        forwarded_from = JSON.parse(
+          forwardedFromRaw,
+        ) as PersistedMessage['forwarded_from'];
+      } catch {
+        forwarded_from = undefined;
+      }
+    }
+
     return {
       message_id: row.get('message_id') as string,
       conversation_id: row.get('conversation_id') as string,
@@ -386,6 +437,7 @@ export class MessageRepository {
       deleted_at: row.get('deleted_at')
         ? Number(row.get('deleted_at'))
         : undefined,
+      forwarded_from,
     };
   }
 

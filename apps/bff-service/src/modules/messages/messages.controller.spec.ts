@@ -17,6 +17,7 @@ describe('BFF MessagesController', () => {
       getMessages: jest.fn(),
       getMessage: jest.fn(),
       getMessageReactions: jest.fn(),
+      forwardMessage: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({

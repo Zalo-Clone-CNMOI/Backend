@@ -12,6 +12,27 @@ export interface MessageAttachment {
   visibility?: 'public' | 'private';
 }
 
+export interface ForwardedFrom {
+  source_message_id: string;
+  source_conversation_id: string;
+  source_sender_id: string;
+  source_sender_name_snapshot: string;
+  source_created_at: number;
+  source_type: 'text' | 'image' | 'file' | 'mixed';
+}
+
+export interface ChatMessageForwardCommand {
+  message_id: string; // target-specific UUID, BFF-generated
+  conversation_id: string; // target conversation
+  sender_id: string;
+  sent_at: number;
+  body: string; // original message body
+  attachments?: MessageAttachment[]; // cloned keys from media-service
+  forwarded_from: ForwardedFrom;
+  forward_id: string; // idempotency across the whole forward operation
+  trace_id?: string;
+}
+
 export interface ChatMessageSendCommand {
   message_id: string;
   conversation_id: string;
@@ -31,6 +52,7 @@ export interface ChatMessageCreatedEvent {
   created_at: number;
   attachments?: MessageAttachment[];
   reply_to_message_id?: string;
+  forwarded_from?: ForwardedFrom;
   trace_id?: string;
 }
 

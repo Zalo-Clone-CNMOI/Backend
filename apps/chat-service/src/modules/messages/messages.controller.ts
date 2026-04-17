@@ -37,14 +37,6 @@ import {
 export class MessagesController {
   constructor(private readonly messagesService: MessagesService) {}
 
-  /**
-   * Internal-only endpoint used by bff-service to resolve a message from its
-   * ID alone (without knowing conversation_id or created_at). This endpoint
-   * performs no auth check because chat-service is an internal microservice
-   * not directly reachable from the public internet — access is restricted at
-   * the network/service-mesh layer. Callers are trusted to have already
-   * verified the requesting user's identity.
-   */
   @Get('lookup/:messageId')
   @ApiOperation({
     summary:

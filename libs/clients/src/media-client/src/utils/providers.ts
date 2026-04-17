@@ -1,5 +1,6 @@
 import { HttpService } from '@nestjs/axios';
 import { FactoryProvider } from '@nestjs/common';
+import { ModuleMetadata } from '@nestjs/common/interfaces';
 import { AxiosInstance } from 'axios';
 import { Configuration } from '../client/generated';
 
@@ -16,6 +17,7 @@ export interface MediaClientAsyncConfig {
   useFactory: (
     ...args: unknown[]
   ) => Promise<MediaClientConfig> | MediaClientConfig;
+  imports?: ModuleMetadata['imports'];
   inject?: InjectToken[];
 }
 

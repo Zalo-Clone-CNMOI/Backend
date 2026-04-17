@@ -32,7 +32,7 @@ export class MediaClientModule {
     return {
       module: MediaClientModule,
       global: true,
-      imports: [HttpModule],
+      imports: [HttpModule, ...(asyncConfig.imports ?? [])],
       providers: [
         {
           provide: 'MEDIA_CLIENT_CONFIG',

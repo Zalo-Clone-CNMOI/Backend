@@ -1,5 +1,8 @@
 import { Module } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import {
+  ConfigModule as NestConfigModule,
+  ConfigService,
+} from '@nestjs/config';
 import { SsoClientModule } from '@app/clients';
 import { MediaClientModule } from '@app/clients/media-client/media-client.module';
 import { MediaController } from './media.controller';
@@ -8,6 +11,7 @@ import { MediaService } from './media.service';
 @Module({
   imports: [
     MediaClientModule.registerAsync({
+      imports: [NestConfigModule],
       useFactory: (...args: unknown[]) => {
         const [configService] = args as [ConfigService];
         return {

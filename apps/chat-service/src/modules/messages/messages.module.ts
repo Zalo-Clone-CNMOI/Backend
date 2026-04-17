@@ -1,5 +1,8 @@
 import { Module } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import {
+  ConfigModule as NestConfigModule,
+  ConfigService,
+} from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { MediaClientModule } from '@app/clients';
 import { KafkaModule } from '@libs/kafka';
@@ -16,6 +19,7 @@ import { MessagesService } from './messages.service';
     KafkaModule,
     ConversationMembershipModule,
     MediaClientModule.registerAsync({
+      imports: [NestConfigModule],
       useFactory: (configService: ConfigService) => ({
         baseUrl:
           configService.get<string>('MEDIA_SERVICE_URL') ||

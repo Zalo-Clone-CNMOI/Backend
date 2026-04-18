@@ -24,6 +24,7 @@ import { WsEvents, type WsQrBindIssuedPayload } from '@libs/contracts';
 import { KAFKA_CLIENT } from '@libs/kafka';
 import {
   ChatHandler,
+  CallHandler,
   PresenceHandler,
   AiHandler,
   TypingHandler,
@@ -33,6 +34,12 @@ import {
   WsAiSmartReplyRequestPayloadDto,
   WsAiSummaryRequestPayloadDto,
   WsAiTranslateRequestPayloadDto,
+  WsCallAcceptPayloadDto,
+  WsCallEndPayloadDto,
+  WsCallRejectPayloadDto,
+  WsCallSignalPayloadDto,
+  WsCallStartPayloadDto,
+  WsCallStateRequestPayloadDto,
   WsChatDeletePayloadDto,
   WsChatEditPayloadDto,
   WsChatJoinPayloadDto,
@@ -75,6 +82,7 @@ export class ChatGateway implements OnModuleInit {
     private readonly jwtService: JwtService,
     private readonly redisService: RedisService,
     private readonly chatHandler: ChatHandler,
+    private readonly callHandler: CallHandler,
     private readonly presenceHandler: PresenceHandler,
     private readonly aiHandler: AiHandler,
     private readonly typingHandler: TypingHandler,
@@ -185,6 +193,62 @@ export class ChatGateway implements OnModuleInit {
     @MessageBody() body: WsChatTypingPayloadDto,
   ) {
     return this.typingHandler.handleTyping(socket, body);
+  }
+
+  // ── Call Signaling & State Handlers ───────────────────────────────
+
+  @UseGuards(WsAuthGuard)
+  @SubscribeMessage(WsEvents.CallStart)
+  handleCallStart(
+    @ConnectedSocket() socket: AuthedSocket,
+    @MessageBody() body: WsCallStartPayloadDto,
+  ) {
+    return this.callHandler.handleStart(socket, body);
+  }
+
+  @UseGuards(WsAuthGuard)
+  @SubscribeMessage(WsEvents.CallSignal)
+  handleCallSignal(
+    @ConnectedSocket() socket: AuthedSocket,
+    @MessageBody() body: WsCallSignalPayloadDto,
+  ) {
+    return this.callHandler.handleSignal(socket, body);
+  }
+
+  @UseGuards(WsAuthGuard)
+  @SubscribeMessage(WsEvents.CallAccept)
+  handleCallAccept(
+    @ConnectedSocket() socket: AuthedSocket,
+    @MessageBody() body: WsCallAcceptPayloadDto,
+  ) {
+    return this.callHandler.handleAccept(socket, body);
+  }
+
+  @UseGuards(WsAuthGuard)
+  @SubscribeMessage(WsEvents.CallReject)
+  handleCallReject(
+    @ConnectedSocket() socket: AuthedSocket,
+    @MessageBody() body: WsCallRejectPayloadDto,
+  ) {
+    return this.callHandler.handleReject(socket, body);
+  }
+
+  @UseGuards(WsAuthGuard)
+  @SubscribeMessage(WsEvents.CallEnd)
+  handleCallEnd(
+    @ConnectedSocket() socket: AuthedSocket,
+    @MessageBody() body: WsCallEndPayloadDto,
+  ) {
+    return this.callHandler.handleEnd(socket, body);
+  }
+
+  @UseGuards(WsAuthGuard)
+  @SubscribeMessage(WsEvents.CallStateRequest)
+  handleCallStateRequest(
+    @ConnectedSocket() socket: AuthedSocket,
+    @MessageBody() body: WsCallStateRequestPayloadDto,
+  ) {
+    return this.callHandler.handleStateRequest(socket, body);
   }
 
   // ── Presence Event Handlers ──────────────────────────────────────────

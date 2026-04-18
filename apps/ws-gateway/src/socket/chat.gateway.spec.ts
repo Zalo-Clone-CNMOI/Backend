@@ -20,6 +20,14 @@ describe('ChatGateway', () => {
     handleReact: jest.fn(),
     handleUnreact: jest.fn(),
   };
+  const callHandler = {
+    handleStart: jest.fn(),
+    handleSignal: jest.fn(),
+    handleAccept: jest.fn(),
+    handleReject: jest.fn(),
+    handleEnd: jest.fn(),
+    handleStateRequest: jest.fn(),
+  };
   const presenceHandler = {
     handleConnect: jest.fn(),
     handleDisconnect: jest.fn(),
@@ -46,6 +54,7 @@ describe('ChatGateway', () => {
       jwtService as never,
       redisService as never,
       chatHandler as never,
+      callHandler as never,
       presenceHandler as never,
       aiHandler as never,
       typingHandler as never,

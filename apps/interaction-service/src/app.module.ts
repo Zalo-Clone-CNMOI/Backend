@@ -11,6 +11,7 @@ import { RedisModule } from '@libs/redis';
 import { HealthCheckService } from '@libs/shared';
 
 import { HealthController } from './health.controller';
+import { CallsModule } from './modules/calls';
 import { ConversationsModule } from './modules/conversations';
 import { FriendsModule } from './modules/friends';
 import { InteractionConsumer } from './modules/consumers/interaction.consumer';
@@ -22,6 +23,7 @@ import { InteractionConsumer } from './modules/consumers/interaction.consumer';
     DatabaseModule,
     RedisModule.forRootAsync(),
     SharedAuthModule,
+    CallsModule,
     ConversationsModule,
     FriendsModule,
     ThrottlerModule.forRootAsync({

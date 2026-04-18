@@ -1,4 +1,4 @@
-import { WsReactionTypes } from './limits';
+import { WsCallSignalTypes, WsCallTypes, WsReactionTypes } from './limits';
 
 export const WsEvents = {
   ChatJoin: 'chat:join',
@@ -17,6 +17,19 @@ export const WsEvents = {
   ChatMessageUnpinned: 'chat:message:unpinned',
   ChatTyping: 'chat:typing',
   ChatTypingUpdate: 'chat:typing:update',
+
+  CallStart: 'call:start',
+  CallStarted: 'call:started',
+  CallSignal: 'call:signal',
+  CallSignalReceived: 'call:signal:received',
+  CallAccept: 'call:accept',
+  CallAccepted: 'call:accepted',
+  CallReject: 'call:reject',
+  CallRejected: 'call:rejected',
+  CallEnd: 'call:end',
+  CallEnded: 'call:ended',
+  CallStateRequest: 'call:state:request',
+  CallStateUpdated: 'call:state:updated',
 
   PresenceHeartbeat: 'presence:heartbeat',
   PresenceUpdate: 'presence:update',
@@ -193,6 +206,113 @@ export interface WsChatTypingUser {
 export interface WsChatTypingUpdatePayload {
   conversation_id: string;
   users: WsChatTypingUser[];
+}
+
+export interface WsCallStartPayload {
+  call_id: string;
+  conversation_id: string;
+  call_type: (typeof WsCallTypes)[number];
+  participant_ids?: string[];
+  started_at: number;
+}
+
+export interface WsCallStartedPayload {
+  call_id: string;
+  conversation_id: string;
+  initiator_id: string;
+  call_type: (typeof WsCallTypes)[number];
+  participant_ids: string[];
+  started_at: number;
+}
+
+export interface WsCallSignalPayload {
+  call_id: string;
+  conversation_id: string;
+  target_user_id?: string;
+  signal_type: (typeof WsCallSignalTypes)[number];
+  sdp?: string;
+  candidate?: string;
+  sdp_mid?: string;
+  sdp_mline_index?: number;
+  sent_at: number;
+}
+
+export interface WsCallSignalReceivedPayload {
+  call_id: string;
+  conversation_id: string;
+  sender_id: string;
+  target_user_id?: string;
+  signal_type: (typeof WsCallSignalTypes)[number];
+  sdp?: string;
+  candidate?: string;
+  sdp_mid?: string;
+  sdp_mline_index?: number;
+  sent_at: number;
+}
+
+export interface WsCallAcceptPayload {
+  call_id: string;
+  conversation_id: string;
+  accepted_at: number;
+}
+
+export interface WsCallAcceptedPayload {
+  call_id: string;
+  conversation_id: string;
+  user_id: string;
+  accepted_at: number;
+}
+
+export interface WsCallRejectPayload {
+  call_id: string;
+  conversation_id: string;
+  reason?: string;
+  rejected_at: number;
+}
+
+export interface WsCallRejectedPayload {
+  call_id: string;
+  conversation_id: string;
+  user_id: string;
+  reason?: string;
+  rejected_at: number;
+}
+
+export interface WsCallEndPayload {
+  call_id: string;
+  conversation_id: string;
+  reason?: string;
+  ended_at: number;
+}
+
+export interface WsCallEndedPayload {
+  call_id: string;
+  conversation_id: string;
+  user_id: string;
+  reason?: string;
+  ended_at: number;
+}
+
+export interface WsCallStateRequestPayload {
+  conversation_id: string;
+  requested_at: number;
+}
+
+export interface WsCallStateUpdatedPayload {
+  conversation_id: string;
+  state: {
+    call_id: string;
+    conversation_id: string;
+    call_type: (typeof WsCallTypes)[number];
+    status: 'ringing' | 'ongoing' | 'ended';
+    initiator_id: string;
+    participants: Record<string, 'invited' | 'accepted' | 'rejected' | 'left'>;
+    started_at: number;
+    ended_at?: number;
+  } | null;
+  requested_by?: string;
+  updated_at: number;
+  reason?: string;
 }
 
 export interface WsPresenceHeartbeatPayload {

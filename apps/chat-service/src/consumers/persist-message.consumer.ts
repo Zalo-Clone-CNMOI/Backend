@@ -257,7 +257,7 @@ export class PersistMessageConsumer {
               },
             );
 
-            await this.handlePostMessagePersist({
+            this.handlePostMessagePersist({
               conversationId: existingMessage.conversation_id,
               senderId: existingMessage.sender_id,
               body: existingMessage.body,
@@ -370,7 +370,7 @@ export class PersistMessageConsumer {
         throw error;
       }
 
-      await this.handlePostMessagePersist({
+      this.handlePostMessagePersist({
         conversationId: payload.conversation_id,
         senderId: payload.sender_id,
         body: payload.body,
@@ -392,20 +392,25 @@ export class PersistMessageConsumer {
     }
   }
 
-  private async handlePostMessagePersist(params: {
+  private handlePostMessagePersist(params: {
     conversationId: string;
     senderId: string;
     body: string;
     messageId: string;
     createdAt: number;
     traceId: string;
-  }): Promise<void> {
-    await this.emitMessageNotification(
+  }): void {
+    void this.emitMessageNotification(
       params.conversationId,
       params.senderId,
       params.body,
       params.messageId,
       params.traceId,
+    ).catch((err) =>
+      this.logger.error(
+        `[${params.traceId}] emitMessageNotification unhandled error`,
+        err,
+      ),
     );
 
     // ── AI Moderation: auto-moderate every new message ──────────────
@@ -1297,7 +1302,7 @@ export class PersistMessageConsumer {
         duration: Date.now() - startTime,
       });
 
-      await this.handlePostMessagePersist({
+      this.handlePostMessagePersist({
         conversationId: payload.conversation_id,
         senderId: payload.sender_id,
         body: payload.body,
@@ -1336,10 +1341,10 @@ export class PersistMessageConsumer {
     );
 
     try {
-      const recipientIds = await getConversationMemberIds(
-        this.conversationMemberRepo,
-        conversationId,
-      );
+      const [recipientIds, senderName] = await Promise.all([
+        getConversationMemberIds(this.conversationMemberRepo, conversationId),
+        getUserDisplayName(this.userRepo, senderId),
+      ]);
       const recipients = recipientIds.filter((id) => id !== senderId);
 
       if (recipients.length === 0) {
@@ -1349,41 +1354,42 @@ export class PersistMessageConsumer {
         return;
       }
 
-      const senderName = await getUserDisplayName(this.userRepo, senderId);
       const preview =
         messageBody.length > 100
           ? `${messageBody.substring(0, 100)}...`
           : messageBody;
 
-      for (const recipientId of recipients) {
-        const notification: NotificationRequestedEvent = {
-          channel: 'push',
-          user_id: recipientId,
-          title: senderName || 'New message',
-          body: preview,
-          type: NotificationType.ChatMessage,
-          data: {
-            conversation_id: conversationId,
-            message_id: messageId,
-            sender_id: senderId,
-          },
-          rich: {
-            priority: 'high',
-            thread_id: conversationId,
-            category: 'message',
-          },
-          requested_at: Date.now(),
-          trace_id: notificationTraceId,
-        };
-        await this.publisher
-          .emit(KafkaTopics.NotificationRequested, notification)
-          .catch((err) =>
-            this.logger.error(
-              `[${notificationTraceId}] Failed to emit notification for ${recipientId}`,
-              err,
-            ),
-          );
-      }
+      await Promise.allSettled(
+        recipients.map((recipientId) => {
+          const notification: NotificationRequestedEvent = {
+            channel: 'push',
+            user_id: recipientId,
+            title: senderName || 'New message',
+            body: preview,
+            type: NotificationType.ChatMessage,
+            data: {
+              conversation_id: conversationId,
+              message_id: messageId,
+              sender_id: senderId,
+            },
+            rich: {
+              priority: 'high',
+              thread_id: conversationId,
+              category: 'message',
+            },
+            requested_at: Date.now(),
+            trace_id: notificationTraceId,
+          };
+          return this.publisher
+            .emit(KafkaTopics.NotificationRequested, notification)
+            .catch((err) =>
+              this.logger.error(
+                `[${notificationTraceId}] Failed to emit notification for ${recipientId}`,
+                err,
+              ),
+            );
+        }),
+      );
 
       this.logger.log(
         `[${notificationTraceId}] Notifications emitted for ${recipients.length} recipients`,

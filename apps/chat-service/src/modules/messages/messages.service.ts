@@ -30,6 +30,7 @@ import {
   ForwardMessageResultDto,
   ForwardTargetResultDto,
   GetMessagesQueryDto,
+  SearchFileType,
   SearchMessagesQueryDto,
   MessageResponseDto,
   MessageListResponseDto,
@@ -47,6 +48,25 @@ interface AttachmentItem {
   size: number;
   contentType: string;
   thumbnailKey?: string | null;
+}
+
+function hasAttachmentType(
+  attachments: MessageAttachment[] | undefined,
+  requestedFileType: SearchFileType,
+): boolean {
+  if (!attachments || attachments.length === 0) return false;
+
+  switch (requestedFileType) {
+    case 'images':
+      return attachments.some((attachment) => attachment.type === 'image');
+    case 'video':
+      return attachments.some((attachment) => attachment.type === 'video');
+    case 'files':
+      return attachments.some(
+        (attachment) =>
+          attachment.type === 'audio' || attachment.type === 'document',
+      );
+  }
 }
 
 function deriveSourceType(
@@ -140,11 +160,17 @@ export class MessagesService implements OnModuleInit {
 
     const matched = all.filter((msg) => {
       if (msg.deleted_at) return false;
-      if (keyword !== undefined && !msg.body.toLowerCase().includes(keyword))
+      if (keyword !== undefined && !msg.body?.toLowerCase().includes(keyword))
         return false;
       if (query.senderId && msg.sender_id !== query.senderId) return false;
       if (query.from !== undefined && msg.created_at < query.from) return false;
       if (query.to !== undefined && msg.created_at > query.to) return false;
+      if (
+        query.fileType &&
+        !hasAttachmentType(msg.attachments, query.fileType)
+      ) {
+        return false;
+      }
       return true;
     });
 

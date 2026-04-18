@@ -93,6 +93,12 @@ export class MessagesController {
     required: false,
     description: 'Filter to timestamp (epoch ms)',
   })
+  @ApiQuery({
+    name: 'fileType',
+    required: false,
+    description: 'Filter by attachment group (images, video, files)',
+    enum: ['images', 'video', 'files'],
+  })
   @ApiResponse({ status: 200, type: MessageSearchResponseDto })
   async searchMessages(
     @Param('conversationId', ParseUUIDPipe) conversationId: string,

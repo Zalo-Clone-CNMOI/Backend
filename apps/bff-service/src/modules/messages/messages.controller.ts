@@ -47,6 +47,7 @@ export class MessagesController {
       dto.senderId,
       dto.from,
       dto.to,
+      dto.fileType,
     );
   }
 

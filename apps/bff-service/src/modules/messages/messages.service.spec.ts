@@ -104,6 +104,7 @@ describe('BFF MessagesService', () => {
       'sender-1',
       1000,
       2000,
+      undefined,
     );
     expect(result).toEqual(expected);
   });

@@ -599,10 +599,11 @@ export const MessagesApiAxiosParamCreator = function (configuration?: Configurat
          * @param {string} [senderId] Filter by sender UUID
          * @param {number} [from] Filter messages created after this timestamp (epoch ms)
          * @param {number} [to] Filter messages created before this timestamp (epoch ms)
+         * @param {SearchMessagesFileTypeEnum} [fileType] Filter by attachment group (images, video, files)
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        searchMessages: async (conversationId: string, q?: string, senderId?: string, from?: number, to?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        searchMessages: async (conversationId: string, q?: string, senderId?: string, from?: number, to?: number, fileType?: SearchMessagesFileTypeEnum, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             // verify required parameter 'conversationId' is not null or undefined
             assertParamExists('searchMessages', 'conversationId', conversationId)
             const localVarPath = `/v1/messages/{conversationId}/search`
@@ -636,6 +637,10 @@ export const MessagesApiAxiosParamCreator = function (configuration?: Configurat
 
             if (to !== undefined) {
                 localVarQueryParameter['to'] = to;
+            }
+
+            if (fileType !== undefined) {
+                localVarQueryParameter['fileType'] = fileType;
             }
 
 
@@ -724,11 +729,12 @@ export const MessagesApiFp = function(configuration?: Configuration) {
          * @param {string} [senderId] Filter by sender UUID
          * @param {number} [from] Filter messages created after this timestamp (epoch ms)
          * @param {number} [to] Filter messages created before this timestamp (epoch ms)
+         * @param {SearchMessagesFileTypeEnum} [fileType] Filter by attachment group (images, video, files)
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async searchMessages(conversationId: string, q?: string, senderId?: string, from?: number, to?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<MessageSearchResponseDto>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.searchMessages(conversationId, q, senderId, from, to, options);
+        async searchMessages(conversationId: string, q?: string, senderId?: string, from?: number, to?: number, fileType?: SearchMessagesFileTypeEnum, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<MessageSearchResponseDto>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.searchMessages(conversationId, q, senderId, from, to, fileType, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['MessagesApi.searchMessages']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
@@ -791,7 +797,7 @@ export const MessagesApiFactory = function (configuration?: Configuration, baseP
          * @throws {RequiredError}
          */
         searchMessages(requestParameters: MessagesApiSearchMessagesRequest, options?: RawAxiosRequestConfig): AxiosPromise<MessageSearchResponseDto> {
-            return localVarFp.searchMessages(requestParameters.conversationId, requestParameters.q, requestParameters.senderId, requestParameters.from, requestParameters.to, options).then((request) => request(axios, basePath));
+            return localVarFp.searchMessages(requestParameters.conversationId, requestParameters.q, requestParameters.senderId, requestParameters.from, requestParameters.to, requestParameters.fileType, options).then((request) => request(axios, basePath));
         },
     };
 };
@@ -927,6 +933,13 @@ export interface MessagesApiSearchMessagesRequest {
      * @memberof MessagesApiSearchMessages
      */
     readonly to?: number
+
+    /**
+     * Filter by attachment group (images, video, files)
+     * @type {'images' | 'video' | 'files'}
+     * @memberof MessagesApiSearchMessages
+     */
+    readonly fileType?: SearchMessagesFileTypeEnum
 }
 
 /**
@@ -993,9 +1006,18 @@ export class MessagesApi extends BaseAPI {
      * @memberof MessagesApi
      */
     public searchMessages(requestParameters: MessagesApiSearchMessagesRequest, options?: RawAxiosRequestConfig) {
-        return MessagesApiFp(this.configuration).searchMessages(requestParameters.conversationId, requestParameters.q, requestParameters.senderId, requestParameters.from, requestParameters.to, options).then((request) => request(this.axios, this.basePath));
+        return MessagesApiFp(this.configuration).searchMessages(requestParameters.conversationId, requestParameters.q, requestParameters.senderId, requestParameters.from, requestParameters.to, requestParameters.fileType, options).then((request) => request(this.axios, this.basePath));
     }
 }
 
+/**
+  * @export
+  * @enum {string}
+  */
+export enum SearchMessagesFileTypeEnum {
+    images = 'images',
+    video = 'video',
+    files = 'files'
+}
 
 

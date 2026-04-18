@@ -84,6 +84,13 @@ paths:
           schema:
             type: integer
             format: int64
+        - name: fileType
+          in: query
+          required: false
+          description: Filter by attachment group (images, video, files)
+          schema:
+            type: string
+            enum: [images, video, files]
       responses:
         '200':
           description: Matched messages

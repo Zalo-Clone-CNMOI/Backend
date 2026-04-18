@@ -48,6 +48,7 @@ export class MessagesService {
     senderId?: string,
     from?: number,
     to?: number,
+    fileType?: 'images' | 'video' | 'files',
   ) {
     return this.chatClient.searchMessages(
       accessToken,
@@ -56,6 +57,7 @@ export class MessagesService {
       senderId,
       from,
       to,
+      fileType,
     );
   }
 

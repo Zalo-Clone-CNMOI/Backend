@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { MessagesApi } from './client/generated';
+import { MessagesApi, SearchMessagesFileTypeEnum } from './client/generated';
 import { BaseHttpClient } from '../../base-http-client';
 import type {
   ForwardMessageDto,
@@ -59,10 +59,22 @@ export class ChatClientService extends BaseHttpClient {
     senderId?: string,
     from?: number,
     to?: number,
+    fileType?: 'images' | 'video' | 'files',
   ): Promise<MessageSearchResponseDto> {
     try {
+      const normalizedFileType = fileType
+        ? SearchMessagesFileTypeEnum[fileType]
+        : undefined;
+
       const response = await this.messagesApi.searchMessages(
-        { conversationId, q, senderId, from, to },
+        {
+          conversationId,
+          q,
+          senderId,
+          from,
+          to,
+          fileType: normalizedFileType,
+        },
         { headers: { Authorization: `Bearer ${accessToken}` } },
       );
       return response.data;

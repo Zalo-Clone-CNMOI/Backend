@@ -584,6 +584,64 @@ paths:
                 properties:
                   message:
                     type: string
+  /conversations/{conversationId}/call-state:
+    get:
+      tags:
+        - Conversations
+      summary: Get active call state for a conversation
+      operationId: getConversationCallState
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Active call state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationCallStateResponseDto'
+  /conversations/{conversationId}/calls/{callId}/end:
+    post:
+      tags:
+        - Conversations
+      summary: End active call in a conversation
+      operationId: endConversationCall
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: callId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EndConversationCallDto'
+      responses:
+        '200':
+          description: Call end requested
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
 components:
   securitySchemes:
     BearerAuth:
@@ -789,6 +847,12 @@ components:
           type: string
         notificationEnabled:
           type: boolean
+    EndConversationCallDto:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
     ConversationMemberResponseDto:
       type: object
       properties:
@@ -879,6 +943,48 @@ components:
         updatedAt:
           type: string
           format: date-time
+    ConversationCallStateSnapshotDto:
+      type: object
+      properties:
+        call_id:
+          type: string
+        conversation_id:
+          type: string
+          format: uuid
+        call_type:
+          type: string
+          enum: [audio, video]
+        status:
+          type: string
+          enum: [ringing, ongoing, ended]
+        initiator_id:
+          type: string
+          format: uuid
+        participants:
+          type: object
+          additionalProperties:
+            type: string
+            enum: [invited, accepted, rejected, left]
+        started_at:
+          type: number
+        ended_at:
+          type: number
+          nullable: true
+    ConversationCallStateResponseDto:
+      type: object
+      properties:
+        conversation_id:
+          type: string
+          format: uuid
+        state:
+          allOf:
+            - $ref: '#/components/schemas/ConversationCallStateSnapshotDto'
+          nullable: true
+        updated_at:
+          type: number
+        reason:
+          type: string
+          nullable: true
     PaginatedResponseConversationListItemDto:
       type: object
       properties:

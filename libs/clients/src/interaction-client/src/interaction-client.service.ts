@@ -8,8 +8,10 @@ import type {
   CreateDirectConversationDto,
   UpdateConversationDto,
   AddMembersDto,
+  ConversationCallStateResponseDto,
   UpdateMemberRoleDto,
   UpdateMemberSettingsDto,
+  EndConversationCallDto,
   ConversationDetailDto,
   PaginatedResponseFriendResponseDto,
   PaginatedResponseFriendRequestResponseDto,
@@ -436,6 +438,44 @@ export class InteractionClientService extends BaseHttpClient {
       return response.data as { message: string };
     } catch (error) {
       this.handleError('unpinConversation', error);
+    }
+  }
+
+  /**
+   * Get active call state for conversation
+   */
+  async getConversationCallState(
+    accessToken: string,
+    conversationId: string,
+  ): Promise<ConversationCallStateResponseDto> {
+    try {
+      const response = await this.conversationsApi.getConversationCallState(
+        { conversationId },
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      return response.data;
+    } catch (error) {
+      this.handleError('getConversationCallState', error);
+    }
+  }
+
+  /**
+   * End active call for conversation
+   */
+  async endConversationCall(
+    accessToken: string,
+    conversationId: string,
+    callId: string,
+    dto: EndConversationCallDto,
+  ): Promise<{ message: string }> {
+    try {
+      const response = await this.conversationsApi.endConversationCall(
+        { conversationId, callId, endConversationCallDto: dto },
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      return response.data as { message: string };
+    } catch (error) {
+      this.handleError('endConversationCall', error);
     }
   }
 }

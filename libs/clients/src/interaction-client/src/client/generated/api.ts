@@ -42,6 +42,121 @@ export interface AddMembersDto {
 /**
  * 
  * @export
+ * @interface ConversationCallStateResponseDto
+ */
+export interface ConversationCallStateResponseDto {
+    /**
+     * 
+     * @type {string}
+     * @memberof ConversationCallStateResponseDto
+     */
+    'conversation_id'?: string;
+    /**
+     * 
+     * @type {ConversationCallStateSnapshotDto}
+     * @memberof ConversationCallStateResponseDto
+     */
+    'state'?: ConversationCallStateSnapshotDto | null;
+    /**
+     * 
+     * @type {number}
+     * @memberof ConversationCallStateResponseDto
+     */
+    'updated_at'?: number;
+    /**
+     * 
+     * @type {string}
+     * @memberof ConversationCallStateResponseDto
+     */
+    'reason'?: string | null;
+}
+/**
+ * 
+ * @export
+ * @interface ConversationCallStateSnapshotDto
+ */
+export interface ConversationCallStateSnapshotDto {
+    /**
+     * 
+     * @type {string}
+     * @memberof ConversationCallStateSnapshotDto
+     */
+    'call_id'?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof ConversationCallStateSnapshotDto
+     */
+    'conversation_id'?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof ConversationCallStateSnapshotDto
+     */
+    'call_type'?: ConversationCallStateSnapshotDtoCallTypeEnum;
+    /**
+     * 
+     * @type {string}
+     * @memberof ConversationCallStateSnapshotDto
+     */
+    'status'?: ConversationCallStateSnapshotDtoStatusEnum;
+    /**
+     * 
+     * @type {string}
+     * @memberof ConversationCallStateSnapshotDto
+     */
+    'initiator_id'?: string;
+    /**
+     * 
+     * @type {{ [key: string]: string; }}
+     * @memberof ConversationCallStateSnapshotDto
+     */
+    'participants'?: { [key: string]: string; };
+    /**
+     * 
+     * @type {number}
+     * @memberof ConversationCallStateSnapshotDto
+     */
+    'started_at'?: number;
+    /**
+     * 
+     * @type {number}
+     * @memberof ConversationCallStateSnapshotDto
+     */
+    'ended_at'?: number | null;
+}
+
+/**
+    * @export
+    * @enum {string}
+    */
+export enum ConversationCallStateSnapshotDtoCallTypeEnum {
+    audio = 'audio',
+    video = 'video'
+}
+/**
+    * @export
+    * @enum {string}
+    */
+export enum ConversationCallStateSnapshotDtoStatusEnum {
+    ringing = 'ringing',
+    ongoing = 'ongoing',
+    ended = 'ended'
+}
+/**
+    * @export
+    * @enum {string}
+    */
+export enum ConversationCallStateSnapshotDtoParticipantsEnum {
+    invited = 'invited',
+    accepted = 'accepted',
+    rejected = 'rejected',
+    left = 'left'
+}
+
+/**
+ * 
+ * @export
  * @interface ConversationDetailDto
  */
 export interface ConversationDetailDto {
@@ -292,6 +407,19 @@ export interface CreateGroupConversationDto {
      * @memberof CreateGroupConversationDto
      */
     'avatarUrl'?: string;
+}
+/**
+ * 
+ * @export
+ * @interface EndConversationCallDto
+ */
+export interface EndConversationCallDto {
+    /**
+     * 
+     * @type {string}
+     * @memberof EndConversationCallDto
+     */
+    'reason'?: string;
 }
 /**
  * 
@@ -845,6 +973,52 @@ export const ConversationsApiAxiosParamCreator = function (configuration?: Confi
         },
         /**
          * 
+         * @summary End active call in a conversation
+         * @param {string} conversationId 
+         * @param {string} callId 
+         * @param {EndConversationCallDto} [endConversationCallDto] 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        endConversationCall: async (conversationId: string, callId: string, endConversationCallDto?: EndConversationCallDto, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'conversationId' is not null or undefined
+            assertParamExists('endConversationCall', 'conversationId', conversationId)
+            // verify required parameter 'callId' is not null or undefined
+            assertParamExists('endConversationCall', 'callId', callId)
+            const localVarPath = `/conversations/{conversationId}/calls/{callId}/end`
+                .replace(`{${"conversationId"}}`, encodeURIComponent(String(conversationId)))
+                .replace(`{${"callId"}}`, encodeURIComponent(String(callId)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication BearerAuth required
+            // http bearer authentication required
+            await setBearerAuthToObject(localVarHeaderParameter, configuration)
+
+
+    
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(endConversationCallDto, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
          * @summary Get conversation details
          * @param {string} conversationId 
          * @param {*} [options] Override http request option.
@@ -854,6 +1028,44 @@ export const ConversationsApiAxiosParamCreator = function (configuration?: Confi
             // verify required parameter 'conversationId' is not null or undefined
             assertParamExists('getConversationById', 'conversationId', conversationId)
             const localVarPath = `/conversations/{conversationId}`
+                .replace(`{${"conversationId"}}`, encodeURIComponent(String(conversationId)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication BearerAuth required
+            // http bearer authentication required
+            await setBearerAuthToObject(localVarHeaderParameter, configuration)
+
+
+    
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
+         * @summary Get active call state for a conversation
+         * @param {string} conversationId 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        getConversationCallState: async (conversationId: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'conversationId' is not null or undefined
+            assertParamExists('getConversationCallState', 'conversationId', conversationId)
+            const localVarPath = `/conversations/{conversationId}/call-state`
                 .replace(`{${"conversationId"}}`, encodeURIComponent(String(conversationId)));
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -1307,6 +1519,21 @@ export const ConversationsApiFp = function(configuration?: Configuration) {
         },
         /**
          * 
+         * @summary End active call in a conversation
+         * @param {string} conversationId 
+         * @param {string} callId 
+         * @param {EndConversationCallDto} [endConversationCallDto] 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async endConversationCall(conversationId: string, callId: string, endConversationCallDto?: EndConversationCallDto, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RespondToRequest200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.endConversationCall(conversationId, callId, endConversationCallDto, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['ConversationsApi.endConversationCall']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
          * @summary Get conversation details
          * @param {string} conversationId 
          * @param {*} [options] Override http request option.
@@ -1316,6 +1543,19 @@ export const ConversationsApiFp = function(configuration?: Configuration) {
             const localVarAxiosArgs = await localVarAxiosParamCreator.getConversationById(conversationId, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['ConversationsApi.getConversationById']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
+         * @summary Get active call state for a conversation
+         * @param {string} conversationId 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async getConversationCallState(conversationId: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ConversationCallStateResponseDto>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.getConversationCallState(conversationId, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['ConversationsApi.getConversationCallState']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
@@ -1483,6 +1723,16 @@ export const ConversationsApiFactory = function (configuration?: Configuration, 
         },
         /**
          * 
+         * @summary End active call in a conversation
+         * @param {ConversationsApiEndConversationCallRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        endConversationCall(requestParameters: ConversationsApiEndConversationCallRequest, options?: RawAxiosRequestConfig): AxiosPromise<RespondToRequest200Response> {
+            return localVarFp.endConversationCall(requestParameters.conversationId, requestParameters.callId, requestParameters.endConversationCallDto, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
          * @summary Get conversation details
          * @param {ConversationsApiGetConversationByIdRequest} requestParameters Request parameters.
          * @param {*} [options] Override http request option.
@@ -1490,6 +1740,16 @@ export const ConversationsApiFactory = function (configuration?: Configuration, 
          */
         getConversationById(requestParameters: ConversationsApiGetConversationByIdRequest, options?: RawAxiosRequestConfig): AxiosPromise<ConversationDetailDto> {
             return localVarFp.getConversationById(requestParameters.conversationId, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
+         * @summary Get active call state for a conversation
+         * @param {ConversationsApiGetConversationCallStateRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        getConversationCallState(requestParameters: ConversationsApiGetConversationCallStateRequest, options?: RawAxiosRequestConfig): AxiosPromise<ConversationCallStateResponseDto> {
+            return localVarFp.getConversationCallState(requestParameters.conversationId, options).then((request) => request(axios, basePath));
         },
         /**
          * 
@@ -1634,6 +1894,34 @@ export interface ConversationsApiCreateGroupConversationRequest {
 }
 
 /**
+ * Request parameters for endConversationCall operation in ConversationsApi.
+ * @export
+ * @interface ConversationsApiEndConversationCallRequest
+ */
+export interface ConversationsApiEndConversationCallRequest {
+    /**
+     * 
+     * @type {string}
+     * @memberof ConversationsApiEndConversationCall
+     */
+    readonly conversationId: string
+
+    /**
+     * 
+     * @type {string}
+     * @memberof ConversationsApiEndConversationCall
+     */
+    readonly callId: string
+
+    /**
+     * 
+     * @type {EndConversationCallDto}
+     * @memberof ConversationsApiEndConversationCall
+     */
+    readonly endConversationCallDto?: EndConversationCallDto
+}
+
+/**
  * Request parameters for getConversationById operation in ConversationsApi.
  * @export
  * @interface ConversationsApiGetConversationByIdRequest
@@ -1643,6 +1931,20 @@ export interface ConversationsApiGetConversationByIdRequest {
      * 
      * @type {string}
      * @memberof ConversationsApiGetConversationById
+     */
+    readonly conversationId: string
+}
+
+/**
+ * Request parameters for getConversationCallState operation in ConversationsApi.
+ * @export
+ * @interface ConversationsApiGetConversationCallStateRequest
+ */
+export interface ConversationsApiGetConversationCallStateRequest {
+    /**
+     * 
+     * @type {string}
+     * @memberof ConversationsApiGetConversationCallState
      */
     readonly conversationId: string
 }
@@ -1860,6 +2162,18 @@ export class ConversationsApi extends BaseAPI {
 
     /**
      * 
+     * @summary End active call in a conversation
+     * @param {ConversationsApiEndConversationCallRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ConversationsApi
+     */
+    public endConversationCall(requestParameters: ConversationsApiEndConversationCallRequest, options?: RawAxiosRequestConfig) {
+        return ConversationsApiFp(this.configuration).endConversationCall(requestParameters.conversationId, requestParameters.callId, requestParameters.endConversationCallDto, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
      * @summary Get conversation details
      * @param {ConversationsApiGetConversationByIdRequest} requestParameters Request parameters.
      * @param {*} [options] Override http request option.
@@ -1868,6 +2182,18 @@ export class ConversationsApi extends BaseAPI {
      */
     public getConversationById(requestParameters: ConversationsApiGetConversationByIdRequest, options?: RawAxiosRequestConfig) {
         return ConversationsApiFp(this.configuration).getConversationById(requestParameters.conversationId, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
+     * @summary Get active call state for a conversation
+     * @param {ConversationsApiGetConversationCallStateRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ConversationsApi
+     */
+    public getConversationCallState(requestParameters: ConversationsApiGetConversationCallStateRequest, options?: RawAxiosRequestConfig) {
+        return ConversationsApiFp(this.configuration).getConversationCallState(requestParameters.conversationId, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**

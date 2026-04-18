@@ -4,6 +4,8 @@ import { Repository, In, IsNull } from 'typeorm';
 import { ClientKafka } from '@nestjs/microservices';
 import { KAFKA_CLIENT } from '@libs/kafka';
 import {
+  type CallEndCommand,
+  type CallStateSnapshot,
   type NotificationRequestedEvent,
   type ConversationPinnedEvent,
   type ConversationUnpinnedEvent,
@@ -37,8 +39,10 @@ import {
   AddMembersDto,
   UpdateMemberRoleDto,
   UpdateMemberSettingsDto,
+  EndConversationCallDto,
   ConversationListItemDto,
   ConversationDetailDto,
+  ConversationCallStateResponseDto,
   ConversationMemberResponseDto,
 } from './dto';
 import { RedisClientType } from 'redis';
@@ -844,6 +848,61 @@ export class ConversationsService {
     return { message: 'Conversation unpinned' };
   }
 
+  async getConversationCallState(
+    userId: string,
+    conversationId: string,
+  ): Promise<ConversationCallStateResponseDto> {
+    const membership = await this.memberRepository.findOne({
+      where: { conversationId, userId, leftAt: IsNull() },
+    });
+
+    if (!membership) {
+      throw BusinessException.notFound(ErrorCode.CONVERSATION_NOT_MEMBER);
+    }
+
+    const state = await this.getCallStateSnapshot(conversationId);
+
+    return {
+      conversation_id: conversationId,
+      state,
+      updated_at: Date.now(),
+      reason: state ? undefined : 'no_active_call',
+    };
+  }
+
+  async endConversationCall(
+    userId: string,
+    conversationId: string,
+    callId: string,
+    dto: EndConversationCallDto,
+  ): Promise<{ message: string }> {
+    const membership = await this.memberRepository.findOne({
+      where: { conversationId, userId, leftAt: IsNull() },
+    });
+
+    if (!membership) {
+      throw BusinessException.notFound(ErrorCode.CONVERSATION_NOT_MEMBER);
+    }
+
+    const state = await this.getCallStateSnapshot(conversationId);
+    if (!state || state.call_id !== callId || state.status === 'ended') {
+      throw BusinessException.notFound('Active call');
+    }
+
+    const command: CallEndCommand = {
+      call_id: callId,
+      conversation_id: conversationId,
+      user_id: userId,
+      reason: dto.reason,
+      ended_at: Date.now(),
+      trace_id: `interaction:${conversationId}:${callId}:${userId}:end`,
+    };
+
+    this.kafkaClient.emit(KafkaTopics.CallEnd, command);
+
+    return { message: 'Call end requested' };
+  }
+
   /**
    * Convert to list item response
    */
@@ -926,6 +985,24 @@ export class ConversationsService {
       nickname: member.nickname,
       joinedAt: member.joinedAt,
     };
+  }
+
+  private async getCallStateSnapshot(
+    conversationId: string,
+  ): Promise<CallStateSnapshot | null> {
+    const key = `call:state:conversation:${conversationId}`;
+    const raw = await this.redis.get(key);
+
+    if (!raw) {
+      return null;
+    }
+
+    try {
+      return JSON.parse(raw) as CallStateSnapshot;
+    } catch {
+      await this.redis.del(key);
+      return null;
+    }
   }
 
   private resolveLastMessageType(

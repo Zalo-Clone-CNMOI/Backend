@@ -7,6 +7,7 @@ import {
   AddMembersDto,
   UpdateMemberRoleDto,
   UpdateMemberSettingsDto,
+  EndConversationCallDto,
 } from '@app/clients/interaction-client';
 
 @Injectable()
@@ -115,6 +116,27 @@ export class ConversationsService {
     return this.interactionClient.unpinConversation(
       accessToken,
       conversationId,
+    );
+  }
+
+  async getConversationCallState(accessToken: string, conversationId: string) {
+    return this.interactionClient.getConversationCallState(
+      accessToken,
+      conversationId,
+    );
+  }
+
+  async endConversationCall(
+    accessToken: string,
+    conversationId: string,
+    callId: string,
+    dto: EndConversationCallDto,
+  ) {
+    return this.interactionClient.endConversationCall(
+      accessToken,
+      conversationId,
+      callId,
+      dto,
     );
   }
 }

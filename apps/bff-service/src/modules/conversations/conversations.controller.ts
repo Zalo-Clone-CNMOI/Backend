@@ -18,8 +18,10 @@ import { ConversationsService } from './conversations.service';
 import { AccessToken } from '@app/decorator';
 import {
   AddMembersDto,
+  ConversationCallStateResponseDto,
   CreateDirectConversationDto,
   CreateGroupConversationDto,
+  EndConversationCallDto,
   UpdateConversationDto,
   UpdateMemberRoleDto,
   UpdateMemberSettingsDto,
@@ -253,5 +255,43 @@ export class ConversationsController {
     @Param('conversationId') conversationId: string,
   ) {
     return this.conversationsService.unpinConversation(token, conversationId);
+  }
+
+  @Get(':conversationId/call-state')
+  @ApiOperation({ summary: 'Get active call state for a conversation' })
+  @ApiResponse({
+    status: 200,
+    description: 'Call state retrieved',
+    type: ConversationCallStateResponseDto,
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Conversation not found' })
+  async getConversationCallState(
+    @AccessToken() token: string,
+    @Param('conversationId') conversationId: string,
+  ) {
+    return this.conversationsService.getConversationCallState(
+      token,
+      conversationId,
+    );
+  }
+
+  @Post(':conversationId/calls/:callId/end')
+  @ApiOperation({ summary: 'End active call in a conversation' })
+  @ApiResponse({ status: 200, description: 'Call end requested' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Active call not found' })
+  async endConversationCall(
+    @AccessToken() token: string,
+    @Param('conversationId') conversationId: string,
+    @Param('callId') callId: string,
+    @Body() dto: EndConversationCallDto,
+  ) {
+    return this.conversationsService.endConversationCall(
+      token,
+      conversationId,
+      callId,
+      dto,
+    );
   }
 }

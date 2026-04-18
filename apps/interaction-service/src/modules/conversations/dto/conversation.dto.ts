@@ -12,6 +12,7 @@ import {
   IsUrl,
   IsBoolean,
   IsEnum,
+  MinLength,
 } from 'class-validator';
 
 /**
@@ -130,4 +131,19 @@ export class UpdateMemberSettingsDto {
   @IsOptional()
   @IsBoolean()
   isMuted?: boolean;
+}
+
+/**
+ * End active call DTO
+ */
+export class EndConversationCallDto {
+  @ApiPropertyOptional({
+    description: 'Optional reason for ending the call',
+    example: 'user_hangup',
+  })
+  @IsOptional()
+  @IsString()
+  @MinLength(1, { message: 'Reason must not be empty' })
+  @MaxLength(255, { message: 'Reason must not exceed 255 characters' })
+  reason?: string;
 }

@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddConversationPinColumns1773500000000
-  implements MigrationInterface
-{
+export class AddConversationPinColumns1773500000000 implements MigrationInterface {
   name = 'AddConversationPinColumns1773500000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

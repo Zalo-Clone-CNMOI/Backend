@@ -5,6 +5,8 @@ import { ClientKafka } from '@nestjs/microservices';
 import { KAFKA_CLIENT } from '@libs/kafka';
 import {
   type NotificationRequestedEvent,
+  type ConversationPinnedEvent,
+  type ConversationUnpinnedEvent,
   NotificationType,
   KafkaTopics,
 } from '@libs/contracts';
@@ -93,7 +95,9 @@ export class ConversationsService {
       })
       .leftJoinAndSelect('c.members', 'members', 'members.leftAt IS NULL')
       .leftJoinAndSelect('members.user', 'memberUser')
-      .orderBy('c.lastMessageAt', 'DESC', 'NULLS LAST')
+      .orderBy('m.isPinned', 'DESC')
+      .addOrderBy('m.pinnedAt', 'DESC', 'NULLS LAST')
+      .addOrderBy('c.lastMessageAt', 'DESC', 'NULLS LAST')
       .addOrderBy('c.createdAt', 'DESC')
       .skip(offset)
       .take(limit);
@@ -774,6 +778,72 @@ export class ConversationsService {
     return { message: 'Marked as read' };
   }
 
+  async pinConversation(
+    userId: string,
+    conversationId: string,
+  ): Promise<{ message: string }> {
+    const pinnedAt = new Date();
+
+    const updateResult = await this.memberRepository
+      .createQueryBuilder()
+      .update(ConversationMember)
+      .set({ isPinned: true, pinnedAt })
+      .where('conversation_id = :conversationId', { conversationId })
+      .andWhere('user_id = :userId', { userId })
+      .andWhere('left_at IS NULL')
+      .execute();
+
+    if ((updateResult.affected ?? 0) === 0) {
+      throw BusinessException.notFound(ErrorCode.CONVERSATION_NOT_MEMBER);
+    }
+
+    await this.cacheService.invalidateConversationList(userId);
+    await this.cacheService.invalidateConversation(conversationId, [userId]);
+
+    const event: ConversationPinnedEvent = {
+      userId,
+      conversationId,
+      pinnedAt: pinnedAt.getTime(),
+      trace_id: `interaction:${conversationId}:${userId}:pin`,
+    };
+    this.kafkaClient.emit(KafkaTopics.ConversationPinned, event);
+
+    return { message: 'Conversation pinned' };
+  }
+
+  async unpinConversation(
+    userId: string,
+    conversationId: string,
+  ): Promise<{ message: string }> {
+    const unpinnedAt = new Date();
+
+    const updateResult = await this.memberRepository
+      .createQueryBuilder()
+      .update(ConversationMember)
+      .set({ isPinned: false, pinnedAt: null })
+      .where('conversation_id = :conversationId', { conversationId })
+      .andWhere('user_id = :userId', { userId })
+      .andWhere('left_at IS NULL')
+      .execute();
+
+    if ((updateResult.affected ?? 0) === 0) {
+      throw BusinessException.notFound(ErrorCode.CONVERSATION_NOT_MEMBER);
+    }
+
+    await this.cacheService.invalidateConversationList(userId);
+    await this.cacheService.invalidateConversation(conversationId, [userId]);
+
+    const event: ConversationUnpinnedEvent = {
+      userId,
+      conversationId,
+      unpinnedAt: unpinnedAt.getTime(),
+      trace_id: `interaction:${conversationId}:${userId}:unpin`,
+    };
+    this.kafkaClient.emit(KafkaTopics.ConversationUnpinned, event);
+
+    return { message: 'Conversation unpinned' };
+  }
+
   /**
    * Convert to list item response
    */
@@ -805,6 +875,8 @@ export class ConversationsService {
       unreadCount: 0, // TODO: Calculate from lastReadAt
       lastMessageAt: conversation.lastMessageAt,
       isMuted: myMembership?.isMuted ?? false,
+      isPinned: myMembership?.isPinned ?? false,
+      pinnedAt: myMembership?.pinnedAt ?? null,
       memberCount: activeMembers.length,
       createdAt: conversation.createdAt,
     };
@@ -831,6 +903,8 @@ export class ConversationsService {
         role: myMembership.role,
         nickname: myMembership.nickname,
         isMuted: myMembership.isMuted,
+        isPinned: myMembership.isPinned,
+        pinnedAt: myMembership.pinnedAt,
         lastReadAt: myMembership.lastReadAt,
       },
       createdAt: conversation.createdAt,

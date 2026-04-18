@@ -38,6 +38,14 @@ export interface MessageReaction {
   created_at: number;
 }
 
+export interface PinnedMessageRecord {
+  conversation_id: string;
+  message_id: string;
+  created_at: number;
+  pinned_by: string;
+  pinned_at: number;
+}
+
 export interface CursorPaginationOptions {
   cursor?: string;
   limit?: number;

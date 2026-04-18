@@ -402,4 +402,40 @@ export class InteractionClientService extends BaseHttpClient {
       this.handleError('markAsRead', error);
     }
   }
+
+  /**
+   * Pin conversation for current user
+   */
+  async pinConversation(
+    accessToken: string,
+    conversationId: string,
+  ): Promise<{ message: string }> {
+    try {
+      const response = await this.conversationsApi.pinConversation(
+        { conversationId },
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      return response.data as { message: string };
+    } catch (error) {
+      this.handleError('pinConversation', error);
+    }
+  }
+
+  /**
+   * Unpin conversation for current user
+   */
+  async unpinConversation(
+    accessToken: string,
+    conversationId: string,
+  ): Promise<{ message: string }> {
+    try {
+      const response = await this.conversationsApi.unpinConversation(
+        { conversationId },
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      return response.data as { message: string };
+    } catch (error) {
+      this.handleError('unpinConversation', error);
+    }
+  }
 }

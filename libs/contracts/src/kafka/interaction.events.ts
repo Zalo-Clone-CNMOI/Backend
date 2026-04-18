@@ -36,3 +36,17 @@ export interface FriendRemovedEvent {
   friendId: string;
   trace_id?: string;
 }
+
+export interface ConversationPinnedEvent {
+  userId: string;
+  conversationId: string;
+  pinnedAt: number;
+  trace_id?: string;
+}
+
+export interface ConversationUnpinnedEvent {
+  userId: string;
+  conversationId: string;
+  unpinnedAt: number;
+  trace_id?: string;
+}

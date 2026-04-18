@@ -131,3 +131,22 @@ export class MessageSearchResponseDto {
   @ApiProperty({ description: 'Total number of matched messages', example: 3 })
   total: number;
 }
+
+export class PinnedMessageDto {
+  @ApiProperty({ description: 'Message payload', type: MessageResponseDto })
+  message: MessageResponseDto;
+
+  @ApiProperty({ description: 'User ID who pinned the message' })
+  pinnedBy: string;
+
+  @ApiProperty({ description: 'Pinned timestamp (epoch ms)' })
+  pinnedAt: number;
+}
+
+export class PinnedMessageListResponseDto {
+  @ApiProperty({ description: 'Pinned messages', type: [PinnedMessageDto] })
+  items: PinnedMessageDto[];
+
+  @ApiProperty({ description: 'Total pinned messages in this response' })
+  total: number;
+}

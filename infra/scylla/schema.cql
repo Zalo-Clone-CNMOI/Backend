@@ -90,6 +90,32 @@ CREATE TABLE IF NOT EXISTS message_reaction_counts (
 );
 
 -- =============================================================================
+-- PINNED MESSAGES DOMAIN
+-- =============================================================================
+
+-- Table: pinned_messages_by_conversation
+-- Query pattern: lấy danh sách pinned message mới nhất theo conversation
+CREATE TABLE IF NOT EXISTS pinned_messages_by_conversation (
+    conversation_id text,
+    pinned_at bigint,
+    message_id text,
+    created_at bigint,
+    pinned_by text,
+    PRIMARY KEY ((conversation_id), pinned_at, message_id)
+) WITH CLUSTERING ORDER BY (pinned_at DESC, message_id ASC);
+
+-- Table: pinned_message_by_message
+-- Query pattern: kiểm tra 1 message đã được pin chưa trong conversation
+CREATE TABLE IF NOT EXISTS pinned_message_by_message (
+    conversation_id text,
+    message_id text,
+    created_at bigint,
+    pinned_by text,
+    pinned_at bigint,
+    PRIMARY KEY ((conversation_id), message_id)
+);
+
+-- =============================================================================
 -- MESSAGE READ RECEIPTS DOMAIN
 -- =============================================================================
 

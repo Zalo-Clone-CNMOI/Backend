@@ -6,6 +6,8 @@ import {
   type ChatMessageCreatedEvent,
   type ChatMessageUpdatedEvent,
   type ChatMessageDeletedEvent,
+  type ChatMessagePinnedEvent,
+  type ChatMessageUnpinnedEvent,
   type ChatReactionAddedEvent,
   type ChatReactionRemovedEvent,
 } from '@libs/contracts';
@@ -106,6 +108,44 @@ export class ChatFanoutConsumer {
         message_id: payload.message_id,
         conversation_id: payload.conversation_id,
         user_id: payload.user_id,
+      },
+    );
+  }
+
+  /**
+   * Handle Message Pinned event
+   * Broadcast to conversation room
+   */
+  @EventPattern(KafkaTopics.ChatMessagePinned)
+  onMessagePinned(@Payload() payload: ChatMessagePinnedEvent) {
+    this.gateway.broadcastToConversation(
+      payload.conversation_id,
+      WsEvents.ChatMessagePinned,
+      {
+        message_id: payload.message_id,
+        conversation_id: payload.conversation_id,
+        created_at: payload.created_at,
+        pinned_by: payload.pinned_by,
+        pinned_at: payload.pinned_at,
+      },
+    );
+  }
+
+  /**
+   * Handle Message Unpinned event
+   * Broadcast to conversation room
+   */
+  @EventPattern(KafkaTopics.ChatMessageUnpinned)
+  onMessageUnpinned(@Payload() payload: ChatMessageUnpinnedEvent) {
+    this.gateway.broadcastToConversation(
+      payload.conversation_id,
+      WsEvents.ChatMessageUnpinned,
+      {
+        message_id: payload.message_id,
+        conversation_id: payload.conversation_id,
+        created_at: payload.created_at,
+        unpinned_by: payload.unpinned_by,
+        unpinned_at: payload.unpinned_at,
       },
     );
   }

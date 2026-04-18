@@ -1,5 +1,6 @@
 import {
   Controller,
+  Delete,
   Get,
   Post,
   Body,
@@ -48,6 +49,70 @@ export class MessagesController {
       dto.from,
       dto.to,
       dto.fileType,
+    );
+  }
+
+  @Get(':conversationId/pins')
+  @ApiOperation({ summary: 'Get pinned messages in a conversation' })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Max pinned messages to return',
+    type: Number,
+  })
+  @ApiResponse({ status: 200, description: 'Pinned messages retrieved' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getPinnedMessages(
+    @AccessToken() token: string,
+    @Param('conversationId') conversationId: string,
+    @Query('limit') limit?: number,
+  ) {
+    const userId = MessagesController.decodeUserId(token);
+    return this.messagesService.getPinnedMessages(
+      token,
+      conversationId,
+      userId,
+      limit,
+    );
+  }
+
+  @Post(':conversationId/:createdAt/:messageId/pin')
+  @ApiOperation({ summary: 'Pin a message' })
+  @ApiResponse({ status: 201, description: 'Message pinned' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async pinMessage(
+    @AccessToken() token: string,
+    @Param('conversationId') conversationId: string,
+    @Param('createdAt', ParseIntPipe) createdAt: number,
+    @Param('messageId') messageId: string,
+  ) {
+    const userId = MessagesController.decodeUserId(token);
+    return this.messagesService.pinMessage(
+      token,
+      conversationId,
+      createdAt,
+      messageId,
+      userId,
+    );
+  }
+
+  @Delete(':conversationId/:createdAt/:messageId/pin')
+  @ApiOperation({ summary: 'Unpin a message' })
+  @ApiResponse({ status: 200, description: 'Message unpinned' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async unpinMessage(
+    @AccessToken() token: string,
+    @Param('conversationId') conversationId: string,
+    @Param('createdAt', ParseIntPipe) createdAt: number,
+    @Param('messageId') messageId: string,
+  ) {
+    const userId = MessagesController.decodeUserId(token);
+    return this.messagesService.unpinMessage(
+      token,
+      conversationId,
+      createdAt,
+      messageId,
+      userId,
     );
   }
 

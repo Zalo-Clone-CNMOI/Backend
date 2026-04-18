@@ -34,6 +34,8 @@ describe('ConversationsService (BFF)', () => {
       updateMemberRole: jest.fn().mockResolvedValue({ ok: true }),
       updateMySettings: jest.fn().mockResolvedValue({ ok: true }),
       markAsRead: jest.fn().mockResolvedValue({ ok: true }),
+      pinConversation: jest.fn().mockResolvedValue({ ok: true }),
+      unpinConversation: jest.fn().mockResolvedValue({ ok: true }),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -223,6 +225,24 @@ describe('ConversationsService (BFF)', () => {
       await expect(service.markAsRead(TOKEN, 'conv-1')).rejects.toThrow(
         'Internal error',
       );
+    });
+  });
+
+  describe('pinConversation', () => {
+    it('should delegate with token and conversationId', async () => {
+      const result = await service.pinConversation(TOKEN, 'conv-1');
+
+      expect(client.pinConversation).toHaveBeenCalledWith(TOKEN, 'conv-1');
+      expect(result).toEqual({ ok: true });
+    });
+  });
+
+  describe('unpinConversation', () => {
+    it('should delegate with token and conversationId', async () => {
+      const result = await service.unpinConversation(TOKEN, 'conv-1');
+
+      expect(client.unpinConversation).toHaveBeenCalledWith(TOKEN, 'conv-1');
+      expect(result).toEqual({ ok: true });
     });
   });
 });

@@ -535,6 +535,55 @@ paths:
                 properties:
                   message:
                     type: string
+  /conversations/{conversationId}/pin:
+    post:
+      tags:
+        - Conversations
+      summary: Pin conversation for current user
+      operationId: pinConversation
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Conversation pinned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+    delete:
+      tags:
+        - Conversations
+      summary: Unpin conversation for current user
+      operationId: unpinConversation
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Conversation unpinned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
 components:
   securitySchemes:
     BearerAuth:
@@ -796,6 +845,12 @@ components:
               format: date-time
         unreadCount:
           type: integer
+        isPinned:
+          type: boolean
+        pinnedAt:
+          type: string
+          format: date-time
+          nullable: true
         createdAt:
           type: string
           format: date-time

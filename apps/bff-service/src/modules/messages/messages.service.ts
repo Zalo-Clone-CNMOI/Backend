@@ -37,6 +37,52 @@ export class MessagesService {
     );
   }
 
+  async getPinnedMessages(
+    accessToken: string,
+    conversationId: string,
+    userId: string,
+    limit?: number,
+  ) {
+    return this.chatClient.getPinnedMessages(
+      accessToken,
+      conversationId,
+      userId,
+      limit,
+    );
+  }
+
+  async pinMessage(
+    accessToken: string,
+    conversationId: string,
+    createdAt: number,
+    messageId: string,
+    userId: string,
+  ) {
+    return this.chatClient.pinMessage(
+      accessToken,
+      conversationId,
+      createdAt,
+      messageId,
+      userId,
+    );
+  }
+
+  async unpinMessage(
+    accessToken: string,
+    conversationId: string,
+    createdAt: number,
+    messageId: string,
+    userId: string,
+  ) {
+    return this.chatClient.unpinMessage(
+      accessToken,
+      conversationId,
+      createdAt,
+      messageId,
+      userId,
+    );
+  }
+
   async getMessageReactions(accessToken: string, messageId: string) {
     return this.chatClient.getMessageReactions(accessToken, messageId);
   }

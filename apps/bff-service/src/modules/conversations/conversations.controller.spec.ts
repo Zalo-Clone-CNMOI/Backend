@@ -31,6 +31,8 @@ describe('ConversationsController (BFF)', () => {
       updateMemberRole: jest.fn().mockResolvedValue({ ok: true }),
       updateMySettings: jest.fn().mockResolvedValue({ ok: true }),
       markAsRead: jest.fn().mockResolvedValue({ ok: true }),
+      pinConversation: jest.fn().mockResolvedValue({ ok: true }),
+      unpinConversation: jest.fn().mockResolvedValue({ ok: true }),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -209,6 +211,24 @@ describe('ConversationsController (BFF)', () => {
       await expect(controller.markAsRead(TOKEN, 'conv-1')).rejects.toThrow(
         'Service down',
       );
+    });
+  });
+
+  describe('POST /:conversationId/pin (pinConversation)', () => {
+    it('should delegate with token and conversationId', async () => {
+      const result = await controller.pinConversation(TOKEN, 'conv-1');
+
+      expect(svc.pinConversation).toHaveBeenCalledWith(TOKEN, 'conv-1');
+      expect(result).toEqual({ ok: true });
+    });
+  });
+
+  describe('DELETE /:conversationId/pin (unpinConversation)', () => {
+    it('should delegate with token and conversationId', async () => {
+      const result = await controller.unpinConversation(TOKEN, 'conv-1');
+
+      expect(svc.unpinConversation).toHaveBeenCalledWith(TOKEN, 'conv-1');
+      expect(result).toEqual({ ok: true });
     });
   });
 });

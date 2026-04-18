@@ -36,6 +36,12 @@ export class ConversationMember extends BaseEntity {
   @Column({ type: 'boolean', name: 'is_muted', default: false })
   isMuted: boolean;
 
+  @Column({ type: 'boolean', name: 'is_pinned', default: false })
+  isPinned: boolean;
+
+  @Column({ type: 'timestamp', name: 'pinned_at', nullable: true })
+  pinnedAt: Date | null;
+
   @Column({ type: 'timestamp', name: 'last_read_at', nullable: true })
   lastReadAt: Date | null;
 

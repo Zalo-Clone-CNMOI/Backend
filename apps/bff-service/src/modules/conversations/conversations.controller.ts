@@ -230,4 +230,28 @@ export class ConversationsController {
   ) {
     return this.conversationsService.markAsRead(token, conversationId);
   }
+
+  @Post(':conversationId/pin')
+  @ApiOperation({ summary: 'Pin conversation for current user' })
+  @ApiResponse({ status: 200, description: 'Conversation pinned' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Conversation not found' })
+  async pinConversation(
+    @AccessToken() token: string,
+    @Param('conversationId') conversationId: string,
+  ) {
+    return this.conversationsService.pinConversation(token, conversationId);
+  }
+
+  @Delete(':conversationId/pin')
+  @ApiOperation({ summary: 'Unpin conversation for current user' })
+  @ApiResponse({ status: 200, description: 'Conversation unpinned' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Conversation not found' })
+  async unpinConversation(
+    @AccessToken() token: string,
+    @Param('conversationId') conversationId: string,
+  ) {
+    return this.conversationsService.unpinConversation(token, conversationId);
+  }
 }

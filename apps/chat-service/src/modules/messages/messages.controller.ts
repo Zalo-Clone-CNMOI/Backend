@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Headers,
   Param,
@@ -28,6 +29,7 @@ import {
   MessageResponseDto,
   MessageReactionsResponseDto,
   MessageSearchResponseDto,
+  PinnedMessageListResponseDto,
   ForwardMessageDto,
   ForwardMessageResultDto,
 } from './dto';
@@ -128,6 +130,97 @@ export class MessagesController {
     @Query() query: GetMessagesQueryDto,
   ): Promise<MessageListResponseDto> {
     return this.messagesService.getMessages(conversationId, query);
+  }
+
+  @Get(':conversationId/pins')
+  @ApiOperation({ summary: 'Get pinned messages in a conversation' })
+  @ApiParam({ name: 'conversationId', description: 'Conversation ID' })
+  @ApiHeader({
+    name: 'x-user-id',
+    required: true,
+    description: 'Authenticated user id',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Max pinned messages to return (default 20, max 100)',
+  })
+  @ApiResponse({ status: 200, type: PinnedMessageListResponseDto })
+  @ApiUnauthorizedResponse({ description: 'Missing x-user-id header' })
+  async getPinnedMessages(
+    @Param('conversationId', ParseUUIDPipe) conversationId: string,
+    @Headers('x-user-id') userId?: string,
+    @Query('limit') limit?: string,
+  ): Promise<PinnedMessageListResponseDto> {
+    if (!userId) {
+      throw new UnauthorizedException('Missing x-user-id header');
+    }
+
+    return this.messagesService.getPinnedMessages(
+      conversationId,
+      userId,
+      limit ? Number(limit) : undefined,
+    );
+  }
+
+  @Post(':conversationId/:createdAt/:messageId/pin')
+  @ApiOperation({ summary: 'Pin a message' })
+  @ApiParam({ name: 'conversationId', description: 'Conversation ID' })
+  @ApiParam({ name: 'createdAt', description: 'Message created_at timestamp' })
+  @ApiParam({ name: 'messageId', description: 'Message ID' })
+  @ApiHeader({
+    name: 'x-user-id',
+    required: true,
+    description: 'Authenticated user id',
+  })
+  @ApiResponse({ status: 201, description: 'Message pinned successfully' })
+  @ApiUnauthorizedResponse({ description: 'Missing x-user-id header' })
+  async pinMessage(
+    @Param('conversationId', ParseUUIDPipe) conversationId: string,
+    @Param('createdAt') createdAt: string,
+    @Param('messageId', ParseUUIDPipe) messageId: string,
+    @Headers('x-user-id') userId?: string,
+  ): Promise<{ message: string }> {
+    if (!userId) {
+      throw new UnauthorizedException('Missing x-user-id header');
+    }
+
+    return this.messagesService.pinMessage(
+      conversationId,
+      Number(createdAt),
+      messageId,
+      userId,
+    );
+  }
+
+  @Delete(':conversationId/:createdAt/:messageId/pin')
+  @ApiOperation({ summary: 'Unpin a message' })
+  @ApiParam({ name: 'conversationId', description: 'Conversation ID' })
+  @ApiParam({ name: 'createdAt', description: 'Message created_at timestamp' })
+  @ApiParam({ name: 'messageId', description: 'Message ID' })
+  @ApiHeader({
+    name: 'x-user-id',
+    required: true,
+    description: 'Authenticated user id',
+  })
+  @ApiResponse({ status: 200, description: 'Message unpinned successfully' })
+  @ApiUnauthorizedResponse({ description: 'Missing x-user-id header' })
+  async unpinMessage(
+    @Param('conversationId', ParseUUIDPipe) conversationId: string,
+    @Param('createdAt') createdAt: string,
+    @Param('messageId', ParseUUIDPipe) messageId: string,
+    @Headers('x-user-id') userId?: string,
+  ): Promise<{ message: string }> {
+    if (!userId) {
+      throw new UnauthorizedException('Missing x-user-id header');
+    }
+
+    return this.messagesService.unpinMessage(
+      conversationId,
+      Number(createdAt),
+      messageId,
+      userId,
+    );
   }
 
   @Get(':conversationId/:createdAt/:messageId')

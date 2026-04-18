@@ -37,6 +37,8 @@ describe('ConversationsController', () => {
         .fn()
         .mockResolvedValue({ message: 'settings updated' }),
       markAsRead: jest.fn().mockResolvedValue({ message: 'read' }),
+      pinConversation: jest.fn().mockResolvedValue({ message: 'pinned' }),
+      unpinConversation: jest.fn().mockResolvedValue({ message: 'unpinned' }),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -124,5 +126,15 @@ describe('ConversationsController', () => {
   it('markAsRead → service.markAsRead(userId, convId)', async () => {
     await controller.markAsRead(user, uuid(2));
     expect(service.markAsRead).toHaveBeenCalledWith(user.id, uuid(2));
+  });
+
+  it('pinConversation → service.pinConversation(userId, convId)', async () => {
+    await controller.pinConversation(user, uuid(2));
+    expect(service.pinConversation).toHaveBeenCalledWith(user.id, uuid(2));
+  });
+
+  it('unpinConversation → service.unpinConversation(userId, convId)', async () => {
+    await controller.unpinConversation(user, uuid(2));
+    expect(service.unpinConversation).toHaveBeenCalledWith(user.id, uuid(2));
   });
 });

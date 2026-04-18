@@ -10,6 +10,8 @@ export const KafkaTopics = {
   ChatReactionAdded: 'chat.reaction.added',
   ChatReactionRemove: 'chat.reaction.remove',
   ChatReactionRemoved: 'chat.reaction.removed',
+  ChatMessagePinned: 'chat.message.pinned',
+  ChatMessageUnpinned: 'chat.message.unpinned',
 
   PresenceConnect: 'presence.connect',
   PresenceDisconnect: 'presence.disconnect',
@@ -32,6 +34,8 @@ export const KafkaTopics = {
   RespondFriendRequest: 'friend.request.respond',
   CancelFriendRequest: 'friend.request.cancelled',
   FriendRemoved: 'friend.removed',
+  ConversationPinned: 'conversation.pinned',
+  ConversationUnpinned: 'conversation.unpinned',
 
   // ── AI Core Topics ──────────────────────────────────────────────────
   AiModerationRequest: 'ai.moderation.request',

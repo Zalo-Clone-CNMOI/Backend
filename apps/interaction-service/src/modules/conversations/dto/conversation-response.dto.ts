@@ -109,6 +109,14 @@ export class ConversationListItemDto {
   @ApiProperty({ description: 'Whether notifications are muted' })
   isMuted: boolean;
 
+  @ApiProperty({
+    description: 'Whether conversation is pinned for current user',
+  })
+  isPinned: boolean;
+
+  @ApiPropertyOptional({ description: 'Pinned timestamp for current user' })
+  pinnedAt: Date | null;
+
   @ApiProperty({ description: 'Member count' })
   memberCount: number;
 
@@ -149,6 +157,8 @@ export class ConversationDetailDto {
     role: string;
     nickname: string | null;
     isMuted: boolean;
+    isPinned: boolean;
+    pinnedAt: Date | null;
     lastReadAt: Date | null;
   };
 

@@ -142,6 +142,18 @@ export interface ConversationListItemDto {
     'unreadCount'?: number;
     /**
      * 
+     * @type {boolean}
+     * @memberof ConversationListItemDto
+     */
+    'isPinned'?: boolean;
+    /**
+     * 
+     * @type {string}
+     * @memberof ConversationListItemDto
+     */
+    'pinnedAt'?: string | null;
+    /**
+     * 
      * @type {string}
      * @memberof ConversationListItemDto
      */
@@ -991,6 +1003,44 @@ export const ConversationsApiAxiosParamCreator = function (configuration?: Confi
         },
         /**
          * 
+         * @summary Pin conversation for current user
+         * @param {string} conversationId 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        pinConversation: async (conversationId: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'conversationId' is not null or undefined
+            assertParamExists('pinConversation', 'conversationId', conversationId)
+            const localVarPath = `/conversations/{conversationId}/pin`
+                .replace(`{${"conversationId"}}`, encodeURIComponent(String(conversationId)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication BearerAuth required
+            // http bearer authentication required
+            await setBearerAuthToObject(localVarHeaderParameter, configuration)
+
+
+    
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
          * @summary Remove member from conversation
          * @param {string} conversationId 
          * @param {string} memberId 
@@ -1005,6 +1055,44 @@ export const ConversationsApiAxiosParamCreator = function (configuration?: Confi
             const localVarPath = `/conversations/{conversationId}/members/{memberId}`
                 .replace(`{${"conversationId"}}`, encodeURIComponent(String(conversationId)))
                 .replace(`{${"memberId"}}`, encodeURIComponent(String(memberId)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'DELETE', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication BearerAuth required
+            // http bearer authentication required
+            await setBearerAuthToObject(localVarHeaderParameter, configuration)
+
+
+    
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
+         * @summary Unpin conversation for current user
+         * @param {string} conversationId 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        unpinConversation: async (conversationId: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'conversationId' is not null or undefined
+            assertParamExists('unpinConversation', 'conversationId', conversationId)
+            const localVarPath = `/conversations/{conversationId}/pin`
+                .replace(`{${"conversationId"}}`, encodeURIComponent(String(conversationId)));
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
             let baseOptions;
@@ -1272,6 +1360,19 @@ export const ConversationsApiFp = function(configuration?: Configuration) {
         },
         /**
          * 
+         * @summary Pin conversation for current user
+         * @param {string} conversationId 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async pinConversation(conversationId: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RespondToRequest200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.pinConversation(conversationId, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['ConversationsApi.pinConversation']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
          * @summary Remove member from conversation
          * @param {string} conversationId 
          * @param {string} memberId 
@@ -1282,6 +1383,19 @@ export const ConversationsApiFp = function(configuration?: Configuration) {
             const localVarAxiosArgs = await localVarAxiosParamCreator.removeMember(conversationId, memberId, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['ConversationsApi.removeMember']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
+         * @summary Unpin conversation for current user
+         * @param {string} conversationId 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async unpinConversation(conversationId: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RespondToRequest200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.unpinConversation(conversationId, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['ConversationsApi.unpinConversation']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
@@ -1409,6 +1523,16 @@ export const ConversationsApiFactory = function (configuration?: Configuration, 
         },
         /**
          * 
+         * @summary Pin conversation for current user
+         * @param {ConversationsApiPinConversationRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        pinConversation(requestParameters: ConversationsApiPinConversationRequest, options?: RawAxiosRequestConfig): AxiosPromise<RespondToRequest200Response> {
+            return localVarFp.pinConversation(requestParameters.conversationId, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
          * @summary Remove member from conversation
          * @param {ConversationsApiRemoveMemberRequest} requestParameters Request parameters.
          * @param {*} [options] Override http request option.
@@ -1416,6 +1540,16 @@ export const ConversationsApiFactory = function (configuration?: Configuration, 
          */
         removeMember(requestParameters: ConversationsApiRemoveMemberRequest, options?: RawAxiosRequestConfig): AxiosPromise<RespondToRequest200Response> {
             return localVarFp.removeMember(requestParameters.conversationId, requestParameters.memberId, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
+         * @summary Unpin conversation for current user
+         * @param {ConversationsApiUnpinConversationRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        unpinConversation(requestParameters: ConversationsApiUnpinConversationRequest, options?: RawAxiosRequestConfig): AxiosPromise<RespondToRequest200Response> {
+            return localVarFp.unpinConversation(requestParameters.conversationId, options).then((request) => request(axios, basePath));
         },
         /**
          * 
@@ -1563,6 +1697,20 @@ export interface ConversationsApiMarkAsReadRequest {
 }
 
 /**
+ * Request parameters for pinConversation operation in ConversationsApi.
+ * @export
+ * @interface ConversationsApiPinConversationRequest
+ */
+export interface ConversationsApiPinConversationRequest {
+    /**
+     * 
+     * @type {string}
+     * @memberof ConversationsApiPinConversation
+     */
+    readonly conversationId: string
+}
+
+/**
  * Request parameters for removeMember operation in ConversationsApi.
  * @export
  * @interface ConversationsApiRemoveMemberRequest
@@ -1581,6 +1729,20 @@ export interface ConversationsApiRemoveMemberRequest {
      * @memberof ConversationsApiRemoveMember
      */
     readonly memberId: string
+}
+
+/**
+ * Request parameters for unpinConversation operation in ConversationsApi.
+ * @export
+ * @interface ConversationsApiUnpinConversationRequest
+ */
+export interface ConversationsApiUnpinConversationRequest {
+    /**
+     * 
+     * @type {string}
+     * @memberof ConversationsApiUnpinConversation
+     */
+    readonly conversationId: string
 }
 
 /**
@@ -1746,6 +1908,18 @@ export class ConversationsApi extends BaseAPI {
 
     /**
      * 
+     * @summary Pin conversation for current user
+     * @param {ConversationsApiPinConversationRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ConversationsApi
+     */
+    public pinConversation(requestParameters: ConversationsApiPinConversationRequest, options?: RawAxiosRequestConfig) {
+        return ConversationsApiFp(this.configuration).pinConversation(requestParameters.conversationId, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
      * @summary Remove member from conversation
      * @param {ConversationsApiRemoveMemberRequest} requestParameters Request parameters.
      * @param {*} [options] Override http request option.
@@ -1754,6 +1928,18 @@ export class ConversationsApi extends BaseAPI {
      */
     public removeMember(requestParameters: ConversationsApiRemoveMemberRequest, options?: RawAxiosRequestConfig) {
         return ConversationsApiFp(this.configuration).removeMember(requestParameters.conversationId, requestParameters.memberId, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
+     * @summary Unpin conversation for current user
+     * @param {ConversationsApiUnpinConversationRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ConversationsApi
+     */
+    public unpinConversation(requestParameters: ConversationsApiUnpinConversationRequest, options?: RawAxiosRequestConfig) {
+        return ConversationsApiFp(this.configuration).unpinConversation(requestParameters.conversationId, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**

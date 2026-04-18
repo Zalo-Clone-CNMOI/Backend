@@ -144,6 +144,131 @@ paths:
         '401':
           description: Unauthorized
 
+  /v1/messages/{conversationId}/pins:
+    get:
+      tags:
+        - Messages
+      summary: Get pinned messages in a conversation
+      operationId: getPinnedMessages
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          description: Conversation ID
+          schema:
+            type: string
+            format: uuid
+        - name: x-user-id
+          in: header
+          required: true
+          description: Authenticated user id
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          required: false
+          description: Max pinned messages to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: Pinned messages
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PinnedMessageListResponseDto'
+        '401':
+          description: Missing x-user-id header
+
+  /v1/messages/{conversationId}/{createdAt}/{messageId}/pin:
+    post:
+      tags:
+        - Messages
+      summary: Pin a message
+      operationId: pinMessage
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          description: Conversation ID
+          schema:
+            type: string
+            format: uuid
+        - name: createdAt
+          in: path
+          required: true
+          description: Message created_at timestamp (epoch ms)
+          schema:
+            type: string
+        - name: messageId
+          in: path
+          required: true
+          description: Message ID
+          schema:
+            type: string
+            format: uuid
+        - name: x-user-id
+          in: header
+          required: true
+          description: Authenticated user id
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '201':
+          description: Message pinned successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionResponseDto'
+        '401':
+          description: Missing x-user-id header
+    delete:
+      tags:
+        - Messages
+      summary: Unpin a message
+      operationId: unpinMessage
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          description: Conversation ID
+          schema:
+            type: string
+            format: uuid
+        - name: createdAt
+          in: path
+          required: true
+          description: Message created_at timestamp (epoch ms)
+          schema:
+            type: string
+        - name: messageId
+          in: path
+          required: true
+          description: Message ID
+          schema:
+            type: string
+            format: uuid
+        - name: x-user-id
+          in: header
+          required: true
+          description: Authenticated user id
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Message unpinned successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionResponseDto'
+        '401':
+          description: Missing x-user-id header
+
   /v1/messages/{conversationId}/{createdAt}/{messageId}:
     get:
       tags:
@@ -463,6 +588,48 @@ components:
         total:
           type: integer
           description: Total number of matched messages
+
+    PinnedMessageDto:
+      type: object
+      required:
+        - message
+        - pinnedBy
+        - pinnedAt
+      properties:
+        message:
+          $ref: '#/components/schemas/MessageResponseDto'
+        pinnedBy:
+          type: string
+          format: uuid
+          description: User ID who pinned the message
+        pinnedAt:
+          type: integer
+          format: int64
+          description: Pinned timestamp (epoch ms)
+
+    PinnedMessageListResponseDto:
+      type: object
+      required:
+        - items
+        - total
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PinnedMessageDto'
+          description: Pinned messages
+        total:
+          type: integer
+          description: Total pinned messages in this response
+
+    ActionResponseDto:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          description: Action result message
 
     MessageReactionsResponseDto:
       type: object

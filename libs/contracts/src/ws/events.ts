@@ -13,6 +13,8 @@ export const WsEvents = {
   ChatUnreact: 'chat:unreact',
   ChatReactionAdded: 'chat:reaction:added',
   ChatReactionRemoved: 'chat:reaction:removed',
+  ChatMessagePinned: 'chat:message:pinned',
+  ChatMessageUnpinned: 'chat:message:unpinned',
   ChatTyping: 'chat:typing',
   ChatTypingUpdate: 'chat:typing:update',
 
@@ -30,6 +32,8 @@ export const WsEvents = {
   RespondFriendRequest: 'friend:request:respond',
   CancelFriendRequest: 'friend:request:cancel',
   FriendRemoved: 'friend:removed',
+  ConversationPinned: 'conversation:pinned',
+  ConversationUnpinned: 'conversation:unpinned',
 
   // ── Notification Events ─────────────────────────────────────────────
   NotificationSent: 'notification:sent',
@@ -160,6 +164,22 @@ export interface WsChatReactionRemovedPayload {
   user_id: string;
 }
 
+export interface WsChatMessagePinnedPayload {
+  message_id: string;
+  conversation_id: string;
+  created_at: number;
+  pinned_by: string;
+  pinned_at: number;
+}
+
+export interface WsChatMessageUnpinnedPayload {
+  message_id: string;
+  conversation_id: string;
+  created_at: number;
+  unpinned_by: string;
+  unpinned_at: number;
+}
+
 export interface WsChatTypingPayload {
   conversation_id: string;
   username: string;
@@ -245,6 +265,16 @@ export interface WsCancelFriendRequestPayload {
 
 export interface WsFriendRemovedPayload {
   userId: string;
+}
+
+export interface WsConversationPinnedPayload {
+  conversationId: string;
+  pinnedAt: number;
+}
+
+export interface WsConversationUnpinnedPayload {
+  conversationId: string;
+  unpinnedAt: number;
 }
 
 // ── Notification WebSocket Payloads ──────────────────────────────────────

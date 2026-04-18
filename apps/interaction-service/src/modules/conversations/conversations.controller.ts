@@ -261,4 +261,36 @@ export class ConversationsController {
   ): Promise<{ message: string }> {
     return this.conversationsService.markAsRead(user.id, conversationId);
   }
+
+  /**
+   * Pin conversation for current user
+   */
+  @Post(':conversationId/pin')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  @ApiOperation({ summary: 'Pin conversation for current user' })
+  @ApiParam({ name: 'conversationId', description: 'Conversation ID' })
+  @ApiResponse({ status: 200, description: 'Pinned successfully' })
+  async pinConversation(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('conversationId', ParseUUIDPipe) conversationId: string,
+  ): Promise<{ message: string }> {
+    return this.conversationsService.pinConversation(user.id, conversationId);
+  }
+
+  /**
+   * Unpin conversation for current user
+   */
+  @Delete(':conversationId/pin')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  @ApiOperation({ summary: 'Unpin conversation for current user' })
+  @ApiParam({ name: 'conversationId', description: 'Conversation ID' })
+  @ApiResponse({ status: 200, description: 'Unpinned successfully' })
+  async unpinConversation(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('conversationId', ParseUUIDPipe) conversationId: string,
+  ): Promise<{ message: string }> {
+    return this.conversationsService.unpinConversation(user.id, conversationId);
+  }
 }

@@ -106,4 +106,15 @@ export class ConversationsService {
   async markAsRead(accessToken: string, conversationId: string) {
     return this.interactionClient.markAsRead(accessToken, conversationId);
   }
+
+  async pinConversation(accessToken: string, conversationId: string) {
+    return this.interactionClient.pinConversation(accessToken, conversationId);
+  }
+
+  async unpinConversation(accessToken: string, conversationId: string) {
+    return this.interactionClient.unpinConversation(
+      accessToken,
+      conversationId,
+    );
+  }
 }

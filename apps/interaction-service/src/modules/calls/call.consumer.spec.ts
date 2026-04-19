@@ -98,6 +98,29 @@ describe('CallConsumer', () => {
     );
   });
 
+  it('blocks call start when user is not a conversation member', async () => {
+    callMembershipAccessService.ensureMember.mockResolvedValue(false);
+
+    await consumer.onCallStart({
+      call_id: 'call-1',
+      conversation_id: 'conv-1',
+      conversation_type: 'direct',
+      initiator_id: 'user-1',
+      call_type: 'audio',
+      participant_ids: ['user-2'],
+      started_at: 1700000000000,
+      trace_id: 'trace-guard',
+    });
+
+    expect(callEventsPublisher.publishNotMemberUpdate).toHaveBeenCalledWith(
+      'conv-1',
+      'user-1',
+      'trace-guard',
+    );
+    expect(kafkaClient.emit).not.toHaveBeenCalled();
+    expect(callStateStore.set).not.toHaveBeenCalled();
+  });
+
   // ── onCallSignal ─────────────────────────────────────────────────────
 
   it('emits call_not_found when signaling without active call', async () => {

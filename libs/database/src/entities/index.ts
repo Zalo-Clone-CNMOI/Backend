@@ -3,6 +3,7 @@ export * from './user.entity';
 export * from './device-token.entity';
 export * from './conversation.entity';
 export * from './conversation-member.entity';
+export * from './conversation-invite.entity';
 export * from './friendship.entity';
 export * from './media-file.entity';
 export * from './post.entity';

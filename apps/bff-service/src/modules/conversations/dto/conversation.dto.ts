@@ -1,4 +1,7 @@
-import { UpdateMemberRoleDtoRoleEnum } from '@app/clients/interaction-client';
+import {
+  GroupInviteStatus,
+  UpdateMemberRoleDtoRoleEnum,
+} from '@app/clients/interaction-client';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsNotEmpty,
@@ -12,7 +15,11 @@ import {
   IsUrl,
   IsBoolean,
   IsEnum,
+  IsInt,
+  Min,
+  Max,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
 /**
  * Create group conversation DTO
@@ -130,4 +137,69 @@ export class UpdateMemberSettingsDto {
   @IsOptional()
   @IsBoolean()
   isMuted?: boolean;
+}
+
+/**
+ * Send group invites DTO
+ */
+export class SendGroupInvitesDto {
+  @ApiProperty({
+    description: 'User IDs to invite',
+    example: ['550e8400-e29b-41d4-a716-446655440001'],
+  })
+  @IsArray()
+  @ArrayMinSize(1, { message: 'At least 1 user is required' })
+  @ArrayMaxSize(50, { message: 'Maximum 50 users can be invited at once' })
+  @IsUUID('4', { each: true, message: 'Each user ID must be a valid UUID' })
+  userIds: string[];
+
+  @ApiPropertyOptional({
+    description: 'Optional invite message',
+    example: 'Join our project planning group',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500, { message: 'Message must not exceed 500 characters' })
+  message?: string;
+
+  @ApiPropertyOptional({
+    description: 'Invite expiration in hours',
+    example: 168,
+    minimum: 1,
+    maximum: 168,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(168)
+  expiresInHours?: number;
+}
+
+/**
+ * Group invite query DTO
+ */
+export class GetGroupInvitesQueryDto {
+  @ApiPropertyOptional({ description: 'Page number', example: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
+
+  @ApiPropertyOptional({ description: 'Page size', example: 20 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  limit?: number;
+
+  @ApiPropertyOptional({
+    description: 'Invite status filter',
+    enum: GroupInviteStatus,
+  })
+  @IsOptional()
+  @IsEnum(GroupInviteStatus)
+  status?: GroupInviteStatus;
 }

@@ -389,6 +389,84 @@ export interface FriendResponseDto {
 /**
  * 
  * @export
+ * @interface GroupInviteItemDto
+ */
+export interface GroupInviteItemDto {
+    /**
+     * 
+     * @type {string}
+     * @memberof GroupInviteItemDto
+     */
+    'id'?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof GroupInviteItemDto
+     */
+    'conversationId'?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof GroupInviteItemDto
+     */
+    'inviterUserId'?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof GroupInviteItemDto
+     */
+    'invitedUserId'?: string;
+    /**
+     * 
+     * @type {GroupInviteStatus}
+     * @memberof GroupInviteItemDto
+     */
+    'status'?: GroupInviteStatus;
+    /**
+     * 
+     * @type {string}
+     * @memberof GroupInviteItemDto
+     */
+    'message'?: string | null;
+    /**
+     * 
+     * @type {string}
+     * @memberof GroupInviteItemDto
+     */
+    'expiresAt'?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof GroupInviteItemDto
+     */
+    'createdAt'?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof GroupInviteItemDto
+     */
+    'respondedAt'?: string | null;
+}
+
+
+/**
+ * 
+ * @export
+ * @enum {string}
+ */
+
+export enum GroupInviteStatus {
+    pending = 'pending',
+    accepted = 'accepted',
+    rejected = 'rejected',
+    cancelled = 'cancelled',
+    expired = 'expired'
+}
+
+
+/**
+ * 
+ * @export
  * @interface PaginatedResponseConversationListItemDto
  */
 export interface PaginatedResponseConversationListItemDto {
@@ -494,6 +572,43 @@ export interface PaginatedResponseFriendResponseDto {
      * 
      * @type {number}
      * @memberof PaginatedResponseFriendResponseDto
+     */
+    'totalPages'?: number;
+}
+/**
+ * 
+ * @export
+ * @interface PaginatedResponseGroupInviteItemDto
+ */
+export interface PaginatedResponseGroupInviteItemDto {
+    /**
+     * 
+     * @type {Array<GroupInviteItemDto>}
+     * @memberof PaginatedResponseGroupInviteItemDto
+     */
+    'data'?: Array<GroupInviteItemDto>;
+    /**
+     * 
+     * @type {number}
+     * @memberof PaginatedResponseGroupInviteItemDto
+     */
+    'total'?: number;
+    /**
+     * 
+     * @type {number}
+     * @memberof PaginatedResponseGroupInviteItemDto
+     */
+    'page'?: number;
+    /**
+     * 
+     * @type {number}
+     * @memberof PaginatedResponseGroupInviteItemDto
+     */
+    'limit'?: number;
+    /**
+     * 
+     * @type {number}
+     * @memberof PaginatedResponseGroupInviteItemDto
      */
     'totalPages'?: number;
 }
@@ -611,6 +726,56 @@ export interface SendFriendRequestDto {
 /**
  * 
  * @export
+ * @interface SendGroupInvitesDto
+ */
+export interface SendGroupInvitesDto {
+    /**
+     * 
+     * @type {Array<string>}
+     * @memberof SendGroupInvitesDto
+     */
+    'userIds': Array<string>;
+    /**
+     * 
+     * @type {string}
+     * @memberof SendGroupInvitesDto
+     */
+    'message'?: string | null;
+    /**
+     * 
+     * @type {number}
+     * @memberof SendGroupInvitesDto
+     */
+    'expiresInHours'?: number;
+}
+/**
+ * 
+ * @export
+ * @interface SendGroupInvitesResponseDto
+ */
+export interface SendGroupInvitesResponseDto {
+    /**
+     * 
+     * @type {number}
+     * @memberof SendGroupInvitesResponseDto
+     */
+    'acceptedCount'?: number;
+    /**
+     * 
+     * @type {number}
+     * @memberof SendGroupInvitesResponseDto
+     */
+    'skippedCount'?: number;
+    /**
+     * 
+     * @type {Array<string>}
+     * @memberof SendGroupInvitesResponseDto
+     */
+    'inviteIds'?: Array<string>;
+}
+/**
+ * 
+ * @export
  * @interface SentFriendRequestResponseDto
  */
 export interface SentFriendRequestResponseDto {
@@ -709,6 +874,48 @@ export const ConversationsApiAxiosParamCreator = function (configuration?: Confi
     return {
         /**
          * 
+         * @summary Accept group invite
+         * @param {string} conversationId 
+         * @param {string} inviteId 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        acceptGroupInvite: async (conversationId: string, inviteId: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'conversationId' is not null or undefined
+            assertParamExists('acceptGroupInvite', 'conversationId', conversationId)
+            // verify required parameter 'inviteId' is not null or undefined
+            assertParamExists('acceptGroupInvite', 'inviteId', inviteId)
+            const localVarPath = `/conversations/{conversationId}/invites/{inviteId}/accept`
+                .replace(`{${"conversationId"}}`, encodeURIComponent(String(conversationId)))
+                .replace(`{${"inviteId"}}`, encodeURIComponent(String(inviteId)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication BearerAuth required
+            // http bearer authentication required
+            await setBearerAuthToObject(localVarHeaderParameter, configuration)
+
+
+    
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
          * @summary Add members to conversation
          * @param {string} conversationId 
          * @param {AddMembersDto} addMembersDto 
@@ -745,6 +952,48 @@ export const ConversationsApiAxiosParamCreator = function (configuration?: Confi
             let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
             localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
             localVarRequestOptions.data = serializeDataIfNeeded(addMembersDto, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
+         * @summary Cancel group invite
+         * @param {string} conversationId 
+         * @param {string} inviteId 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        cancelGroupInvite: async (conversationId: string, inviteId: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'conversationId' is not null or undefined
+            assertParamExists('cancelGroupInvite', 'conversationId', conversationId)
+            // verify required parameter 'inviteId' is not null or undefined
+            assertParamExists('cancelGroupInvite', 'inviteId', inviteId)
+            const localVarPath = `/conversations/{conversationId}/invites/{inviteId}/cancel`
+                .replace(`{${"conversationId"}}`, encodeURIComponent(String(conversationId)))
+                .replace(`{${"inviteId"}}`, encodeURIComponent(String(inviteId)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication BearerAuth required
+            // http bearer authentication required
+            await setBearerAuthToObject(localVarHeaderParameter, configuration)
+
+
+    
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
 
             return {
                 url: toPathString(localVarUrlObj),
@@ -833,6 +1082,44 @@ export const ConversationsApiAxiosParamCreator = function (configuration?: Confi
         },
         /**
          * 
+         * @summary Disband group conversation
+         * @param {string} conversationId 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        disbandConversation: async (conversationId: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'conversationId' is not null or undefined
+            assertParamExists('disbandConversation', 'conversationId', conversationId)
+            const localVarPath = `/conversations/{conversationId}/disband`
+                .replace(`{${"conversationId"}}`, encodeURIComponent(String(conversationId)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication BearerAuth required
+            // http bearer authentication required
+            await setBearerAuthToObject(localVarHeaderParameter, configuration)
+
+
+    
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
          * @summary Get conversation details
          * @param {string} conversationId 
          * @param {*} [options] Override http request option.
@@ -857,6 +1144,59 @@ export const ConversationsApiAxiosParamCreator = function (configuration?: Confi
             // authentication BearerAuth required
             // http bearer authentication required
             await setBearerAuthToObject(localVarHeaderParameter, configuration)
+
+
+    
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
+         * @summary Get invites by conversation
+         * @param {string} conversationId 
+         * @param {number} [page] 
+         * @param {number} [limit] 
+         * @param {GroupInviteStatus} [status] 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        getConversationInvites: async (conversationId: string, page?: number, limit?: number, status?: GroupInviteStatus, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'conversationId' is not null or undefined
+            assertParamExists('getConversationInvites', 'conversationId', conversationId)
+            const localVarPath = `/conversations/{conversationId}/invites`
+                .replace(`{${"conversationId"}}`, encodeURIComponent(String(conversationId)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication BearerAuth required
+            // http bearer authentication required
+            await setBearerAuthToObject(localVarHeaderParameter, configuration)
+
+            if (page !== undefined) {
+                localVarQueryParameter['page'] = page;
+            }
+
+            if (limit !== undefined) {
+                localVarQueryParameter['limit'] = limit;
+            }
+
+            if (status !== undefined) {
+                localVarQueryParameter['status'] = status;
+            }
 
 
     
@@ -900,6 +1240,55 @@ export const ConversationsApiAxiosParamCreator = function (configuration?: Confi
 
             if (limit !== undefined) {
                 localVarQueryParameter['limit'] = limit;
+            }
+
+
+    
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
+         * @summary Get pending invites for current user
+         * @param {number} [page] 
+         * @param {number} [limit] 
+         * @param {GroupInviteStatus} [status] 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        getPendingGroupInvites: async (page?: number, limit?: number, status?: GroupInviteStatus, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            const localVarPath = `/conversations/invites/pending`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication BearerAuth required
+            // http bearer authentication required
+            await setBearerAuthToObject(localVarHeaderParameter, configuration)
+
+            if (page !== undefined) {
+                localVarQueryParameter['page'] = page;
+            }
+
+            if (limit !== undefined) {
+                localVarQueryParameter['limit'] = limit;
+            }
+
+            if (status !== undefined) {
+                localVarQueryParameter['status'] = status;
             }
 
 
@@ -991,6 +1380,48 @@ export const ConversationsApiAxiosParamCreator = function (configuration?: Confi
         },
         /**
          * 
+         * @summary Reject group invite
+         * @param {string} conversationId 
+         * @param {string} inviteId 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        rejectGroupInvite: async (conversationId: string, inviteId: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'conversationId' is not null or undefined
+            assertParamExists('rejectGroupInvite', 'conversationId', conversationId)
+            // verify required parameter 'inviteId' is not null or undefined
+            assertParamExists('rejectGroupInvite', 'inviteId', inviteId)
+            const localVarPath = `/conversations/{conversationId}/invites/{inviteId}/reject`
+                .replace(`{${"conversationId"}}`, encodeURIComponent(String(conversationId)))
+                .replace(`{${"inviteId"}}`, encodeURIComponent(String(inviteId)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication BearerAuth required
+            // http bearer authentication required
+            await setBearerAuthToObject(localVarHeaderParameter, configuration)
+
+
+    
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
          * @summary Remove member from conversation
          * @param {string} conversationId 
          * @param {string} memberId 
@@ -1025,6 +1456,50 @@ export const ConversationsApiAxiosParamCreator = function (configuration?: Confi
             setSearchParams(localVarUrlObj, localVarQueryParameter);
             let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
             localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
+         * @summary Send group invites
+         * @param {string} conversationId 
+         * @param {SendGroupInvitesDto} sendGroupInvitesDto 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        sendGroupInvites: async (conversationId: string, sendGroupInvitesDto: SendGroupInvitesDto, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'conversationId' is not null or undefined
+            assertParamExists('sendGroupInvites', 'conversationId', conversationId)
+            // verify required parameter 'sendGroupInvitesDto' is not null or undefined
+            assertParamExists('sendGroupInvites', 'sendGroupInvitesDto', sendGroupInvitesDto)
+            const localVarPath = `/conversations/{conversationId}/invites`
+                .replace(`{${"conversationId"}}`, encodeURIComponent(String(conversationId)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication BearerAuth required
+            // http bearer authentication required
+            await setBearerAuthToObject(localVarHeaderParameter, configuration)
+
+
+    
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(sendGroupInvitesDto, localVarRequestOptions, configuration)
 
             return {
                 url: toPathString(localVarUrlObj),
@@ -1179,6 +1654,20 @@ export const ConversationsApiFp = function(configuration?: Configuration) {
     return {
         /**
          * 
+         * @summary Accept group invite
+         * @param {string} conversationId 
+         * @param {string} inviteId 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async acceptGroupInvite(conversationId: string, inviteId: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RespondToRequest200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.acceptGroupInvite(conversationId, inviteId, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['ConversationsApi.acceptGroupInvite']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
          * @summary Add members to conversation
          * @param {string} conversationId 
          * @param {AddMembersDto} addMembersDto 
@@ -1189,6 +1678,20 @@ export const ConversationsApiFp = function(configuration?: Configuration) {
             const localVarAxiosArgs = await localVarAxiosParamCreator.addMembers(conversationId, addMembersDto, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['ConversationsApi.addMembers']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
+         * @summary Cancel group invite
+         * @param {string} conversationId 
+         * @param {string} inviteId 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async cancelGroupInvite(conversationId: string, inviteId: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RespondToRequest200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.cancelGroupInvite(conversationId, inviteId, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['ConversationsApi.cancelGroupInvite']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
@@ -1219,6 +1722,19 @@ export const ConversationsApiFp = function(configuration?: Configuration) {
         },
         /**
          * 
+         * @summary Disband group conversation
+         * @param {string} conversationId 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async disbandConversation(conversationId: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RespondToRequest200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.disbandConversation(conversationId, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['ConversationsApi.disbandConversation']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
          * @summary Get conversation details
          * @param {string} conversationId 
          * @param {*} [options] Override http request option.
@@ -1228,6 +1744,22 @@ export const ConversationsApiFp = function(configuration?: Configuration) {
             const localVarAxiosArgs = await localVarAxiosParamCreator.getConversationById(conversationId, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['ConversationsApi.getConversationById']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
+         * @summary Get invites by conversation
+         * @param {string} conversationId 
+         * @param {number} [page] 
+         * @param {number} [limit] 
+         * @param {GroupInviteStatus} [status] 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async getConversationInvites(conversationId: string, page?: number, limit?: number, status?: GroupInviteStatus, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<PaginatedResponseGroupInviteItemDto>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.getConversationInvites(conversationId, page, limit, status, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['ConversationsApi.getConversationInvites']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
@@ -1242,6 +1774,21 @@ export const ConversationsApiFp = function(configuration?: Configuration) {
             const localVarAxiosArgs = await localVarAxiosParamCreator.getConversations(page, limit, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['ConversationsApi.getConversations']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
+         * @summary Get pending invites for current user
+         * @param {number} [page] 
+         * @param {number} [limit] 
+         * @param {GroupInviteStatus} [status] 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async getPendingGroupInvites(page?: number, limit?: number, status?: GroupInviteStatus, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<PaginatedResponseGroupInviteItemDto>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.getPendingGroupInvites(page, limit, status, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['ConversationsApi.getPendingGroupInvites']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
@@ -1272,6 +1819,20 @@ export const ConversationsApiFp = function(configuration?: Configuration) {
         },
         /**
          * 
+         * @summary Reject group invite
+         * @param {string} conversationId 
+         * @param {string} inviteId 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async rejectGroupInvite(conversationId: string, inviteId: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RespondToRequest200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.rejectGroupInvite(conversationId, inviteId, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['ConversationsApi.rejectGroupInvite']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
          * @summary Remove member from conversation
          * @param {string} conversationId 
          * @param {string} memberId 
@@ -1282,6 +1843,20 @@ export const ConversationsApiFp = function(configuration?: Configuration) {
             const localVarAxiosArgs = await localVarAxiosParamCreator.removeMember(conversationId, memberId, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['ConversationsApi.removeMember']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
+         * @summary Send group invites
+         * @param {string} conversationId 
+         * @param {SendGroupInvitesDto} sendGroupInvitesDto 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async sendGroupInvites(conversationId: string, sendGroupInvitesDto: SendGroupInvitesDto, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<SendGroupInvitesResponseDto>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.sendGroupInvites(conversationId, sendGroupInvitesDto, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['ConversationsApi.sendGroupInvites']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
@@ -1339,6 +1914,16 @@ export const ConversationsApiFactory = function (configuration?: Configuration, 
     return {
         /**
          * 
+         * @summary Accept group invite
+         * @param {ConversationsApiAcceptGroupInviteRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        acceptGroupInvite(requestParameters: ConversationsApiAcceptGroupInviteRequest, options?: RawAxiosRequestConfig): AxiosPromise<RespondToRequest200Response> {
+            return localVarFp.acceptGroupInvite(requestParameters.conversationId, requestParameters.inviteId, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
          * @summary Add members to conversation
          * @param {ConversationsApiAddMembersRequest} requestParameters Request parameters.
          * @param {*} [options] Override http request option.
@@ -1346,6 +1931,16 @@ export const ConversationsApiFactory = function (configuration?: Configuration, 
          */
         addMembers(requestParameters: ConversationsApiAddMembersRequest, options?: RawAxiosRequestConfig): AxiosPromise<ConversationDetailDto> {
             return localVarFp.addMembers(requestParameters.conversationId, requestParameters.addMembersDto, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
+         * @summary Cancel group invite
+         * @param {ConversationsApiCancelGroupInviteRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        cancelGroupInvite(requestParameters: ConversationsApiCancelGroupInviteRequest, options?: RawAxiosRequestConfig): AxiosPromise<RespondToRequest200Response> {
+            return localVarFp.cancelGroupInvite(requestParameters.conversationId, requestParameters.inviteId, options).then((request) => request(axios, basePath));
         },
         /**
          * 
@@ -1369,6 +1964,16 @@ export const ConversationsApiFactory = function (configuration?: Configuration, 
         },
         /**
          * 
+         * @summary Disband group conversation
+         * @param {ConversationsApiDisbandConversationRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        disbandConversation(requestParameters: ConversationsApiDisbandConversationRequest, options?: RawAxiosRequestConfig): AxiosPromise<RespondToRequest200Response> {
+            return localVarFp.disbandConversation(requestParameters.conversationId, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
          * @summary Get conversation details
          * @param {ConversationsApiGetConversationByIdRequest} requestParameters Request parameters.
          * @param {*} [options] Override http request option.
@@ -1379,6 +1984,16 @@ export const ConversationsApiFactory = function (configuration?: Configuration, 
         },
         /**
          * 
+         * @summary Get invites by conversation
+         * @param {ConversationsApiGetConversationInvitesRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        getConversationInvites(requestParameters: ConversationsApiGetConversationInvitesRequest, options?: RawAxiosRequestConfig): AxiosPromise<PaginatedResponseGroupInviteItemDto> {
+            return localVarFp.getConversationInvites(requestParameters.conversationId, requestParameters.page, requestParameters.limit, requestParameters.status, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
          * @summary Get conversations for current user
          * @param {ConversationsApiGetConversationsRequest} requestParameters Request parameters.
          * @param {*} [options] Override http request option.
@@ -1386,6 +2001,16 @@ export const ConversationsApiFactory = function (configuration?: Configuration, 
          */
         getConversations(requestParameters: ConversationsApiGetConversationsRequest = {}, options?: RawAxiosRequestConfig): AxiosPromise<PaginatedResponseConversationListItemDto> {
             return localVarFp.getConversations(requestParameters.page, requestParameters.limit, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
+         * @summary Get pending invites for current user
+         * @param {ConversationsApiGetPendingGroupInvitesRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        getPendingGroupInvites(requestParameters: ConversationsApiGetPendingGroupInvitesRequest = {}, options?: RawAxiosRequestConfig): AxiosPromise<PaginatedResponseGroupInviteItemDto> {
+            return localVarFp.getPendingGroupInvites(requestParameters.page, requestParameters.limit, requestParameters.status, options).then((request) => request(axios, basePath));
         },
         /**
          * 
@@ -1409,6 +2034,16 @@ export const ConversationsApiFactory = function (configuration?: Configuration, 
         },
         /**
          * 
+         * @summary Reject group invite
+         * @param {ConversationsApiRejectGroupInviteRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        rejectGroupInvite(requestParameters: ConversationsApiRejectGroupInviteRequest, options?: RawAxiosRequestConfig): AxiosPromise<RespondToRequest200Response> {
+            return localVarFp.rejectGroupInvite(requestParameters.conversationId, requestParameters.inviteId, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
          * @summary Remove member from conversation
          * @param {ConversationsApiRemoveMemberRequest} requestParameters Request parameters.
          * @param {*} [options] Override http request option.
@@ -1416,6 +2051,16 @@ export const ConversationsApiFactory = function (configuration?: Configuration, 
          */
         removeMember(requestParameters: ConversationsApiRemoveMemberRequest, options?: RawAxiosRequestConfig): AxiosPromise<RespondToRequest200Response> {
             return localVarFp.removeMember(requestParameters.conversationId, requestParameters.memberId, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
+         * @summary Send group invites
+         * @param {ConversationsApiSendGroupInvitesRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        sendGroupInvites(requestParameters: ConversationsApiSendGroupInvitesRequest, options?: RawAxiosRequestConfig): AxiosPromise<SendGroupInvitesResponseDto> {
+            return localVarFp.sendGroupInvites(requestParameters.conversationId, requestParameters.sendGroupInvitesDto, options).then((request) => request(axios, basePath));
         },
         /**
          * 
@@ -1451,6 +2096,27 @@ export const ConversationsApiFactory = function (configuration?: Configuration, 
 };
 
 /**
+ * Request parameters for acceptGroupInvite operation in ConversationsApi.
+ * @export
+ * @interface ConversationsApiAcceptGroupInviteRequest
+ */
+export interface ConversationsApiAcceptGroupInviteRequest {
+    /**
+     * 
+     * @type {string}
+     * @memberof ConversationsApiAcceptGroupInvite
+     */
+    readonly conversationId: string
+
+    /**
+     * 
+     * @type {string}
+     * @memberof ConversationsApiAcceptGroupInvite
+     */
+    readonly inviteId: string
+}
+
+/**
  * Request parameters for addMembers operation in ConversationsApi.
  * @export
  * @interface ConversationsApiAddMembersRequest
@@ -1469,6 +2135,27 @@ export interface ConversationsApiAddMembersRequest {
      * @memberof ConversationsApiAddMembers
      */
     readonly addMembersDto: AddMembersDto
+}
+
+/**
+ * Request parameters for cancelGroupInvite operation in ConversationsApi.
+ * @export
+ * @interface ConversationsApiCancelGroupInviteRequest
+ */
+export interface ConversationsApiCancelGroupInviteRequest {
+    /**
+     * 
+     * @type {string}
+     * @memberof ConversationsApiCancelGroupInvite
+     */
+    readonly conversationId: string
+
+    /**
+     * 
+     * @type {string}
+     * @memberof ConversationsApiCancelGroupInvite
+     */
+    readonly inviteId: string
 }
 
 /**
@@ -1500,6 +2187,20 @@ export interface ConversationsApiCreateGroupConversationRequest {
 }
 
 /**
+ * Request parameters for disbandConversation operation in ConversationsApi.
+ * @export
+ * @interface ConversationsApiDisbandConversationRequest
+ */
+export interface ConversationsApiDisbandConversationRequest {
+    /**
+     * 
+     * @type {string}
+     * @memberof ConversationsApiDisbandConversation
+     */
+    readonly conversationId: string
+}
+
+/**
  * Request parameters for getConversationById operation in ConversationsApi.
  * @export
  * @interface ConversationsApiGetConversationByIdRequest
@@ -1511,6 +2212,41 @@ export interface ConversationsApiGetConversationByIdRequest {
      * @memberof ConversationsApiGetConversationById
      */
     readonly conversationId: string
+}
+
+/**
+ * Request parameters for getConversationInvites operation in ConversationsApi.
+ * @export
+ * @interface ConversationsApiGetConversationInvitesRequest
+ */
+export interface ConversationsApiGetConversationInvitesRequest {
+    /**
+     * 
+     * @type {string}
+     * @memberof ConversationsApiGetConversationInvites
+     */
+    readonly conversationId: string
+
+    /**
+     * 
+     * @type {number}
+     * @memberof ConversationsApiGetConversationInvites
+     */
+    readonly page?: number
+
+    /**
+     * 
+     * @type {number}
+     * @memberof ConversationsApiGetConversationInvites
+     */
+    readonly limit?: number
+
+    /**
+     * 
+     * @type {GroupInviteStatus}
+     * @memberof ConversationsApiGetConversationInvites
+     */
+    readonly status?: GroupInviteStatus
 }
 
 /**
@@ -1532,6 +2268,34 @@ export interface ConversationsApiGetConversationsRequest {
      * @memberof ConversationsApiGetConversations
      */
     readonly limit?: number
+}
+
+/**
+ * Request parameters for getPendingGroupInvites operation in ConversationsApi.
+ * @export
+ * @interface ConversationsApiGetPendingGroupInvitesRequest
+ */
+export interface ConversationsApiGetPendingGroupInvitesRequest {
+    /**
+     * 
+     * @type {number}
+     * @memberof ConversationsApiGetPendingGroupInvites
+     */
+    readonly page?: number
+
+    /**
+     * 
+     * @type {number}
+     * @memberof ConversationsApiGetPendingGroupInvites
+     */
+    readonly limit?: number
+
+    /**
+     * 
+     * @type {GroupInviteStatus}
+     * @memberof ConversationsApiGetPendingGroupInvites
+     */
+    readonly status?: GroupInviteStatus
 }
 
 /**
@@ -1563,6 +2327,27 @@ export interface ConversationsApiMarkAsReadRequest {
 }
 
 /**
+ * Request parameters for rejectGroupInvite operation in ConversationsApi.
+ * @export
+ * @interface ConversationsApiRejectGroupInviteRequest
+ */
+export interface ConversationsApiRejectGroupInviteRequest {
+    /**
+     * 
+     * @type {string}
+     * @memberof ConversationsApiRejectGroupInvite
+     */
+    readonly conversationId: string
+
+    /**
+     * 
+     * @type {string}
+     * @memberof ConversationsApiRejectGroupInvite
+     */
+    readonly inviteId: string
+}
+
+/**
  * Request parameters for removeMember operation in ConversationsApi.
  * @export
  * @interface ConversationsApiRemoveMemberRequest
@@ -1581,6 +2366,27 @@ export interface ConversationsApiRemoveMemberRequest {
      * @memberof ConversationsApiRemoveMember
      */
     readonly memberId: string
+}
+
+/**
+ * Request parameters for sendGroupInvites operation in ConversationsApi.
+ * @export
+ * @interface ConversationsApiSendGroupInvitesRequest
+ */
+export interface ConversationsApiSendGroupInvitesRequest {
+    /**
+     * 
+     * @type {string}
+     * @memberof ConversationsApiSendGroupInvites
+     */
+    readonly conversationId: string
+
+    /**
+     * 
+     * @type {SendGroupInvitesDto}
+     * @memberof ConversationsApiSendGroupInvites
+     */
+    readonly sendGroupInvitesDto: SendGroupInvitesDto
 }
 
 /**
@@ -1662,6 +2468,18 @@ export interface ConversationsApiUpdateMySettingsRequest {
 export class ConversationsApi extends BaseAPI {
     /**
      * 
+     * @summary Accept group invite
+     * @param {ConversationsApiAcceptGroupInviteRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ConversationsApi
+     */
+    public acceptGroupInvite(requestParameters: ConversationsApiAcceptGroupInviteRequest, options?: RawAxiosRequestConfig) {
+        return ConversationsApiFp(this.configuration).acceptGroupInvite(requestParameters.conversationId, requestParameters.inviteId, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
      * @summary Add members to conversation
      * @param {ConversationsApiAddMembersRequest} requestParameters Request parameters.
      * @param {*} [options] Override http request option.
@@ -1670,6 +2488,18 @@ export class ConversationsApi extends BaseAPI {
      */
     public addMembers(requestParameters: ConversationsApiAddMembersRequest, options?: RawAxiosRequestConfig) {
         return ConversationsApiFp(this.configuration).addMembers(requestParameters.conversationId, requestParameters.addMembersDto, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
+     * @summary Cancel group invite
+     * @param {ConversationsApiCancelGroupInviteRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ConversationsApi
+     */
+    public cancelGroupInvite(requestParameters: ConversationsApiCancelGroupInviteRequest, options?: RawAxiosRequestConfig) {
+        return ConversationsApiFp(this.configuration).cancelGroupInvite(requestParameters.conversationId, requestParameters.inviteId, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
@@ -1698,6 +2528,18 @@ export class ConversationsApi extends BaseAPI {
 
     /**
      * 
+     * @summary Disband group conversation
+     * @param {ConversationsApiDisbandConversationRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ConversationsApi
+     */
+    public disbandConversation(requestParameters: ConversationsApiDisbandConversationRequest, options?: RawAxiosRequestConfig) {
+        return ConversationsApiFp(this.configuration).disbandConversation(requestParameters.conversationId, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
      * @summary Get conversation details
      * @param {ConversationsApiGetConversationByIdRequest} requestParameters Request parameters.
      * @param {*} [options] Override http request option.
@@ -1710,6 +2552,18 @@ export class ConversationsApi extends BaseAPI {
 
     /**
      * 
+     * @summary Get invites by conversation
+     * @param {ConversationsApiGetConversationInvitesRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ConversationsApi
+     */
+    public getConversationInvites(requestParameters: ConversationsApiGetConversationInvitesRequest, options?: RawAxiosRequestConfig) {
+        return ConversationsApiFp(this.configuration).getConversationInvites(requestParameters.conversationId, requestParameters.page, requestParameters.limit, requestParameters.status, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
      * @summary Get conversations for current user
      * @param {ConversationsApiGetConversationsRequest} requestParameters Request parameters.
      * @param {*} [options] Override http request option.
@@ -1718,6 +2572,18 @@ export class ConversationsApi extends BaseAPI {
      */
     public getConversations(requestParameters: ConversationsApiGetConversationsRequest = {}, options?: RawAxiosRequestConfig) {
         return ConversationsApiFp(this.configuration).getConversations(requestParameters.page, requestParameters.limit, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
+     * @summary Get pending invites for current user
+     * @param {ConversationsApiGetPendingGroupInvitesRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ConversationsApi
+     */
+    public getPendingGroupInvites(requestParameters: ConversationsApiGetPendingGroupInvitesRequest = {}, options?: RawAxiosRequestConfig) {
+        return ConversationsApiFp(this.configuration).getPendingGroupInvites(requestParameters.page, requestParameters.limit, requestParameters.status, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
@@ -1746,6 +2612,18 @@ export class ConversationsApi extends BaseAPI {
 
     /**
      * 
+     * @summary Reject group invite
+     * @param {ConversationsApiRejectGroupInviteRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ConversationsApi
+     */
+    public rejectGroupInvite(requestParameters: ConversationsApiRejectGroupInviteRequest, options?: RawAxiosRequestConfig) {
+        return ConversationsApiFp(this.configuration).rejectGroupInvite(requestParameters.conversationId, requestParameters.inviteId, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
      * @summary Remove member from conversation
      * @param {ConversationsApiRemoveMemberRequest} requestParameters Request parameters.
      * @param {*} [options] Override http request option.
@@ -1754,6 +2632,18 @@ export class ConversationsApi extends BaseAPI {
      */
     public removeMember(requestParameters: ConversationsApiRemoveMemberRequest, options?: RawAxiosRequestConfig) {
         return ConversationsApiFp(this.configuration).removeMember(requestParameters.conversationId, requestParameters.memberId, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
+     * @summary Send group invites
+     * @param {ConversationsApiSendGroupInvitesRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ConversationsApi
+     */
+    public sendGroupInvites(requestParameters: ConversationsApiSendGroupInvitesRequest, options?: RawAxiosRequestConfig) {
+        return ConversationsApiFp(this.configuration).sendGroupInvites(requestParameters.conversationId, requestParameters.sendGroupInvitesDto, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**

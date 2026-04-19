@@ -285,6 +285,19 @@ export class ChatGateway implements OnModuleInit {
     this.server.to(`conv:${conversationId}`).emit(event, payload);
   }
 
+  broadcastToConversationExceptUsers(
+    conversationId: string,
+    event: string,
+    payload: unknown,
+    excludedUserIds: string[],
+  ) {
+    let operator = this.server.to(`conv:${conversationId}`);
+    for (const userId of excludedUserIds) {
+      operator = operator.except(`user:${userId}`);
+    }
+    operator.emit(event, payload);
+  }
+
   broadcastToAll(event: string, payload: unknown) {
     this.server.emit(event, payload);
   }

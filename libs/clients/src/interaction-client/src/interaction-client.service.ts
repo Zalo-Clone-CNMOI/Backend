@@ -10,6 +10,10 @@ import type {
   AddMembersDto,
   UpdateMemberRoleDto,
   UpdateMemberSettingsDto,
+  GroupInviteStatus,
+  PaginatedResponseGroupInviteItemDto,
+  SendGroupInvitesDto,
+  SendGroupInvitesResponseDto,
   ConversationDetailDto,
   PaginatedResponseFriendResponseDto,
   PaginatedResponseFriendRequestResponseDto,
@@ -400,6 +404,141 @@ export class InteractionClientService extends BaseHttpClient {
       return response.data as { message: string };
     } catch (error) {
       this.handleError('markAsRead', error);
+    }
+  }
+
+  /**
+   * Disband group conversation
+   */
+  async disbandConversation(
+    accessToken: string,
+    conversationId: string,
+  ): Promise<{ message: string }> {
+    try {
+      const response = await this.conversationsApi.disbandConversation(
+        { conversationId },
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      return response.data as { message: string };
+    } catch (error) {
+      this.handleError('disbandConversation', error);
+    }
+  }
+
+  /**
+   * Send group invites
+   */
+  async sendGroupInvites(
+    accessToken: string,
+    conversationId: string,
+    dto: SendGroupInvitesDto,
+  ): Promise<SendGroupInvitesResponseDto> {
+    try {
+      const response = await this.conversationsApi.sendGroupInvites(
+        { conversationId, sendGroupInvitesDto: dto },
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      return response.data;
+    } catch (error) {
+      this.handleError('sendGroupInvites', error);
+    }
+  }
+
+  /**
+   * Get pending group invites for current user
+   */
+  async getPendingGroupInvites(
+    accessToken: string,
+    page?: number,
+    limit?: number,
+    status?: GroupInviteStatus,
+  ): Promise<PaginatedResponseGroupInviteItemDto> {
+    try {
+      const response = await this.conversationsApi.getPendingGroupInvites(
+        { page, limit, status },
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      return response.data;
+    } catch (error) {
+      this.handleError('getPendingGroupInvites', error);
+    }
+  }
+
+  /**
+   * Get invites by conversation
+   */
+  async getConversationInvites(
+    accessToken: string,
+    conversationId: string,
+    page?: number,
+    limit?: number,
+    status?: GroupInviteStatus,
+  ): Promise<PaginatedResponseGroupInviteItemDto> {
+    try {
+      const response = await this.conversationsApi.getConversationInvites(
+        { conversationId, page, limit, status },
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      return response.data;
+    } catch (error) {
+      this.handleError('getConversationInvites', error);
+    }
+  }
+
+  /**
+   * Accept invite
+   */
+  async acceptGroupInvite(
+    accessToken: string,
+    conversationId: string,
+    inviteId: string,
+  ): Promise<{ message: string }> {
+    try {
+      const response = await this.conversationsApi.acceptGroupInvite(
+        { conversationId, inviteId },
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      return response.data as { message: string };
+    } catch (error) {
+      this.handleError('acceptGroupInvite', error);
+    }
+  }
+
+  /**
+   * Reject invite
+   */
+  async rejectGroupInvite(
+    accessToken: string,
+    conversationId: string,
+    inviteId: string,
+  ): Promise<{ message: string }> {
+    try {
+      const response = await this.conversationsApi.rejectGroupInvite(
+        { conversationId, inviteId },
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      return response.data as { message: string };
+    } catch (error) {
+      this.handleError('rejectGroupInvite', error);
+    }
+  }
+
+  /**
+   * Cancel invite
+   */
+  async cancelGroupInvite(
+    accessToken: string,
+    conversationId: string,
+    inviteId: string,
+  ): Promise<{ message: string }> {
+    try {
+      const response = await this.conversationsApi.cancelGroupInvite(
+        { conversationId, inviteId },
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      return response.data as { message: string };
+    } catch (error) {
+      this.handleError('cancelGroupInvite', error);
     }
   }
 }

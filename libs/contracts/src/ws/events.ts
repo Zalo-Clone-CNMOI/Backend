@@ -1,4 +1,5 @@
 import { WsCallSignalTypes, WsCallTypes, WsReactionTypes } from './limits';
+import { CallConversationType } from '../kafka/call.events';
 
 export const WsEvents = {
   ChatJoin: 'chat:join',
@@ -213,7 +214,7 @@ export interface WsChatTypingUpdatePayload {
 export interface WsCallStartPayload {
   call_id: string;
   conversation_id: string;
-  conversation_type: 'direct' | 'group';
+  conversation_type: CallConversationType;
   call_type: (typeof WsCallTypes)[number];
   participant_ids?: string[];
   started_at: number;
@@ -301,11 +302,27 @@ export interface WsCallStateRequestPayload {
   requested_at: number;
 }
 
+export interface WsCallLeavePayload {
+  call_id: string;
+  conversation_id: string;
+  reason?: string;
+  left_at: number;
+}
+
+export interface WsCallLeftPayload {
+  call_id: string;
+  conversation_id: string;
+  user_id: string;
+  reason?: string;
+  left_at: number;
+}
+
 export interface WsCallStateUpdatedPayload {
   conversation_id: string;
   state: {
     call_id: string;
     conversation_id: string;
+    conversation_type: CallConversationType;
     call_type: (typeof WsCallTypes)[number];
     status: 'ringing' | 'ongoing' | 'ended';
     initiator_id: string;
@@ -529,19 +546,4 @@ export interface WsAiStreamCompletePayload {
   conversation_id: string;
   feature: string;
   total_chunks: number;
-}
-
-export interface WsCallLeavePayload {
-  call_id: string;
-  conversation_id: string;
-  reason?: string;
-  left_at: number;
-}
-
-export interface WsCallLeftPayload {
-  call_id: string;
-  conversation_id: string;
-  user_id: string;
-  reason?: string;
-  left_at: number;
 }

@@ -2,32 +2,39 @@ import { KafkaTopics } from '@libs/contracts';
 import { CallConsumer } from './call.consumer';
 
 describe('CallConsumer', () => {
-  const redis = {
+  const callStateStore = {
     get: jest.fn(),
-    setEx: jest.fn(),
-    del: jest.fn(),
+    set: jest.fn(),
+    clear: jest.fn(),
+  };
+
+  const callEventsPublisher = {
+    publishStateUpdate: jest.fn(),
+    publishNotMemberUpdate: jest.fn(),
+    publishCallNotFoundUpdate: jest.fn(),
   };
 
   const kafkaClient = {
     emit: jest.fn(),
   };
 
-  const membershipService = {
-    canUserAccessConversation: jest.fn(),
+  const callMembershipAccessService = {
+    ensureMember: jest.fn(),
   };
 
   let consumer: CallConsumer;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    membershipService.canUserAccessConversation.mockResolvedValue(true);
-    redis.get.mockResolvedValue(null);
-    redis.setEx.mockResolvedValue('OK');
-    redis.del.mockResolvedValue(1);
+    callMembershipAccessService.ensureMember.mockResolvedValue(true);
+    callStateStore.get.mockResolvedValue(null);
+    callStateStore.set.mockResolvedValue(undefined);
+    callStateStore.clear.mockResolvedValue(undefined);
     consumer = new CallConsumer(
-      redis as never,
       kafkaClient as never,
-      membershipService as never,
+      callMembershipAccessService as never,
+      callStateStore as never,
+      callEventsPublisher as never,
     );
   });
 
@@ -42,10 +49,11 @@ describe('CallConsumer', () => {
       trace_id: 'trace-1',
     });
 
-    expect(redis.setEx).toHaveBeenCalledWith(
-      'call:state:conversation:conv-1',
-      21600,
-      expect.stringContaining('"call_id":"call-1"'),
+    expect(callStateStore.set).toHaveBeenCalledWith(
+      'conv-1',
+      expect.objectContaining({
+        call_id: 'call-1',
+      }),
     );
     expect(kafkaClient.emit).toHaveBeenCalledWith(
       KafkaTopics.CallStarted,
@@ -54,10 +62,13 @@ describe('CallConsumer', () => {
         conversation_id: 'conv-1',
       }),
     );
-    expect(kafkaClient.emit).toHaveBeenCalledWith(
-      KafkaTopics.CallStateUpdated,
+    expect(callEventsPublisher.publishStateUpdate).toHaveBeenCalledWith(
+      'conv-1',
       expect.objectContaining({
-        conversation_id: 'conv-1',
+        call_id: 'call-1',
+      }),
+      expect.objectContaining({
+        traceId: 'trace-1',
       }),
     );
   });
@@ -72,13 +83,11 @@ describe('CallConsumer', () => {
       trace_id: 'trace-2',
     });
 
-    expect(kafkaClient.emit).toHaveBeenCalledWith(
-      KafkaTopics.CallStateUpdated,
-      expect.objectContaining({
-        conversation_id: 'conv-1',
-        requested_by: 'user-1',
-        reason: 'call_not_found',
-      }),
+    expect(callEventsPublisher.publishCallNotFoundUpdate).toHaveBeenCalledWith(
+      'conv-1',
+      'user-1',
+      null,
+      'trace-2',
     );
     expect(kafkaClient.emit).not.toHaveBeenCalledWith(
       KafkaTopics.CallSignalForwarded,
@@ -94,31 +103,29 @@ describe('CallConsumer', () => {
       trace_id: 'trace-3',
     });
 
-    expect(kafkaClient.emit).toHaveBeenCalledWith(
-      KafkaTopics.CallStateUpdated,
+    expect(callEventsPublisher.publishStateUpdate).toHaveBeenCalledWith(
+      'conv-1',
+      null,
       expect.objectContaining({
-        conversation_id: 'conv-1',
-        requested_by: 'user-2',
+        requestedBy: 'user-2',
         reason: 'no_active_call',
       }),
     );
   });
 
   it('ends active call and clears call state', async () => {
-    redis.get.mockResolvedValue(
-      JSON.stringify({
-        call_id: 'call-1',
-        conversation_id: 'conv-1',
-        call_type: 'audio',
-        status: 'ongoing',
-        initiator_id: 'user-1',
-        participants: {
-          'user-1': 'accepted',
-          'user-2': 'accepted',
-        },
-        started_at: 1700000000000,
-      }),
-    );
+    callStateStore.get.mockResolvedValue({
+      call_id: 'call-1',
+      conversation_id: 'conv-1',
+      call_type: 'audio',
+      status: 'ongoing',
+      initiator_id: 'user-1',
+      participants: {
+        'user-1': 'accepted',
+        'user-2': 'accepted',
+      },
+      started_at: 1700000000000,
+    });
 
     await consumer.onCallEnd({
       call_id: 'call-1',
@@ -135,12 +142,12 @@ describe('CallConsumer', () => {
         conversation_id: 'conv-1',
       }),
     );
-    expect(redis.del).toHaveBeenCalledWith('call:state:conversation:conv-1');
-    expect(kafkaClient.emit).toHaveBeenCalledWith(
-      KafkaTopics.CallStateUpdated,
+    expect(callStateStore.clear).toHaveBeenCalledWith('conv-1');
+    expect(callEventsPublisher.publishStateUpdate).toHaveBeenCalledWith(
+      'conv-1',
+      null,
       expect.objectContaining({
-        conversation_id: 'conv-1',
-        state: null,
+        reason: 'ended',
       }),
     );
   });

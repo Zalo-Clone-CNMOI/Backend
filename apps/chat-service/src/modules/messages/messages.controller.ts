@@ -8,8 +8,7 @@ import {
   Post,
   Query,
   ParseUUIDPipe,
-  NotFoundException,
-  UnauthorizedException,
+  ParseIntPipe,
 } from '@nestjs/common';
 import {
   ApiBody,
@@ -22,6 +21,8 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { MessagesService } from './messages.service';
+import { ErrorCode } from '@app/constant';
+import { BusinessException } from '@app/types';
 import {
   GetMessagesQueryDto,
   SearchMessagesQueryDto,
@@ -51,7 +52,7 @@ export class MessagesController {
   ): Promise<MessageResponseDto> {
     const message = await this.messagesService.getMessageById(messageId);
     if (!message) {
-      throw new NotFoundException('Message not found');
+      throw BusinessException.notFound(ErrorCode.MESSAGE_NOT_FOUND);
     }
     return message;
   }
@@ -71,7 +72,7 @@ export class MessagesController {
     @Headers('x-user-id') userId?: string,
   ): Promise<ForwardMessageResultDto> {
     if (!userId) {
-      throw new UnauthorizedException('Missing x-user-id header');
+      throw BusinessException.unauthorized('Missing x-user-id header');
     }
     return this.messagesService.forwardMessage(body, userId);
   }
@@ -153,7 +154,14 @@ export class MessagesController {
     @Query('limit') limit?: string,
   ): Promise<PinnedMessageListResponseDto> {
     if (!userId) {
-      throw new UnauthorizedException('Missing x-user-id header');
+      throw BusinessException.unauthorized('Missing x-user-id header');
+    }
+
+    if (limit !== undefined) {
+      const parsedLimit = Number(limit);
+      if (!Number.isInteger(parsedLimit) || parsedLimit <= 0) {
+        throw BusinessException.badRequest(ErrorCode.VALIDATION_ERROR);
+      }
     }
 
     return this.messagesService.getPinnedMessages(
@@ -177,17 +185,17 @@ export class MessagesController {
   @ApiUnauthorizedResponse({ description: 'Missing x-user-id header' })
   async pinMessage(
     @Param('conversationId', ParseUUIDPipe) conversationId: string,
-    @Param('createdAt') createdAt: string,
+    @Param('createdAt', ParseIntPipe) createdAt: number,
     @Param('messageId', ParseUUIDPipe) messageId: string,
     @Headers('x-user-id') userId?: string,
   ): Promise<{ message: string }> {
     if (!userId) {
-      throw new UnauthorizedException('Missing x-user-id header');
+      throw BusinessException.unauthorized('Missing x-user-id header');
     }
 
     return this.messagesService.pinMessage(
       conversationId,
-      Number(createdAt),
+      createdAt,
       messageId,
       userId,
     );
@@ -207,17 +215,17 @@ export class MessagesController {
   @ApiUnauthorizedResponse({ description: 'Missing x-user-id header' })
   async unpinMessage(
     @Param('conversationId', ParseUUIDPipe) conversationId: string,
-    @Param('createdAt') createdAt: string,
+    @Param('createdAt', ParseIntPipe) createdAt: number,
     @Param('messageId', ParseUUIDPipe) messageId: string,
     @Headers('x-user-id') userId?: string,
   ): Promise<{ message: string }> {
     if (!userId) {
-      throw new UnauthorizedException('Missing x-user-id header');
+      throw BusinessException.unauthorized('Missing x-user-id header');
     }
 
     return this.messagesService.unpinMessage(
       conversationId,
-      Number(createdAt),
+      createdAt,
       messageId,
       userId,
     );
@@ -231,17 +239,17 @@ export class MessagesController {
   @ApiResponse({ status: 200, type: MessageResponseDto })
   async getMessage(
     @Param('conversationId', ParseUUIDPipe) conversationId: string,
-    @Param('createdAt') createdAt: string,
+    @Param('createdAt', ParseIntPipe) createdAt: number,
     @Param('messageId', ParseUUIDPipe) messageId: string,
   ): Promise<MessageResponseDto> {
     const message = await this.messagesService.getMessage(
       conversationId,
-      parseInt(createdAt, 10),
+      createdAt,
       messageId,
     );
 
     if (!message) {
-      throw new NotFoundException('Message not found');
+      throw BusinessException.notFound(ErrorCode.MESSAGE_NOT_FOUND);
     }
 
     return message;

@@ -7,6 +7,7 @@
  */
 import { Test, TestingModule } from '@nestjs/testing';
 import { MessagesService } from './messages.service';
+import { BusinessException } from '@app/types';
 import { MessageRepository } from '@libs/scylla';
 import { CacheService } from '@libs/redis';
 import { MediaClientService } from '@app/clients';
@@ -316,7 +317,7 @@ describe('Chat MessagesService', () => {
 
       await expect(
         service.pinMessage('conv-1', 1706162800000, 'msg-1', 'member-1'),
-      ).rejects.toThrow('Only owner/admin can pin messages in group');
+      ).rejects.toThrow(BusinessException);
 
       expect(messageRepository.pinMessage).not.toHaveBeenCalled();
       expect(kafka.emit).not.toHaveBeenCalledWith(
@@ -377,9 +378,7 @@ describe('Chat MessagesService', () => {
 
       await expect(
         service.unpinMessage('conv-1', 1706162800000, 'msg-1', 'member-1'),
-      ).rejects.toThrow(
-        'Only owner/admin or pin owner can unpin in group conversations',
-      );
+      ).rejects.toThrow(BusinessException);
 
       expect(messageRepository.unpinMessage).not.toHaveBeenCalled();
       expect(kafka.emit).not.toHaveBeenCalledWith(

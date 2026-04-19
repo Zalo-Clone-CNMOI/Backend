@@ -5,7 +5,7 @@
  * NotFoundException for missing messages, and UUID parsing.
  */
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BusinessException } from '@app/types';
 import { MessagesController } from './messages.controller';
 import { MessagesService } from './messages.service';
 
@@ -54,7 +54,7 @@ describe('Chat MessagesController', () => {
 
       const result = await controller.getMessage(
         'conv-1',
-        '1706162800000',
+        1706162800000,
         'msg-uuid',
       );
 
@@ -70,14 +70,14 @@ describe('Chat MessagesController', () => {
       messagesService.getMessage.mockResolvedValue(null);
 
       await expect(
-        controller.getMessage('conv-1', '123', 'nonexistent-uuid'),
-      ).rejects.toThrow(NotFoundException);
+        controller.getMessage('conv-1', 123, 'nonexistent-uuid'),
+      ).rejects.toThrow(BusinessException);
     });
 
     it('should parse createdAt as integer', async () => {
       messagesService.getMessage.mockResolvedValue({ messageId: 'msg-1' });
 
-      await controller.getMessage('conv-1', '1706162800000', 'msg-1');
+      await controller.getMessage('conv-1', 1706162800000, 'msg-1');
 
       expect(messagesService.getMessage).toHaveBeenCalledWith(
         'conv-1',
@@ -91,7 +91,7 @@ describe('Chat MessagesController', () => {
     it('should require x-user-id for GET pinned messages', async () => {
       await expect(
         controller.getPinnedMessages('conv-1', undefined, '20'),
-      ).rejects.toThrow(UnauthorizedException);
+      ).rejects.toThrow(BusinessException);
     });
 
     it('should delegate getPinnedMessages with parsed limit', async () => {
@@ -119,7 +119,7 @@ describe('Chat MessagesController', () => {
 
       const result = await controller.pinMessage(
         'conv-1',
-        '1706162800000',
+        1706162800000,
         'msg-1',
         'user-1',
       );
@@ -135,8 +135,8 @@ describe('Chat MessagesController', () => {
 
     it('should require x-user-id for unpinMessage', async () => {
       await expect(
-        controller.unpinMessage('conv-1', '1706162800000', 'msg-1', undefined),
-      ).rejects.toThrow(UnauthorizedException);
+        controller.unpinMessage('conv-1', 1706162800000, 'msg-1', undefined),
+      ).rejects.toThrow(BusinessException);
     });
   });
 

@@ -1,11 +1,4 @@
-import {
-  ForbiddenException,
-  Inject,
-  Injectable,
-  Logger,
-  NotFoundException,
-  OnModuleInit,
-} from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 import { MessageRepository } from '@libs/scylla';
@@ -17,6 +10,7 @@ import { Conversation, ConversationMember, User } from '@libs/database';
 import { ConversationMembershipService } from '@libs/mvp-access';
 import {
   ConversationType,
+  ErrorCode,
   inferMediaVisibility,
   UpdateMemberRoleDtoRoleEnum,
 } from '@app/constant';
@@ -52,6 +46,7 @@ import {
   SearchFileType,
   SearchMessagesQueryDto,
 } from './dto';
+import { BusinessException } from '@app/types';
 
 interface AttachmentItem {
   key: string;
@@ -235,10 +230,10 @@ export class MessagesService implements OnModuleInit {
   ): Promise<ForwardMessageResultDto> {
     const source = await this.getMessageById(dto.source_message_id);
     if (!source) {
-      throw new NotFoundException('Source message not found');
+      throw BusinessException.notFound(ErrorCode.MESSAGE_NOT_FOUND);
     }
     if (source.isDeleted) {
-      throw new NotFoundException('Source message has been deleted');
+      throw BusinessException.badRequest(ErrorCode.MESSAGE_ALREADY_DELETED);
     }
 
     const canReadSource =
@@ -247,7 +242,7 @@ export class MessagesService implements OnModuleInit {
         source.conversationId,
       );
     if (!canReadSource) {
-      throw new ForbiddenException('Cannot access source conversation');
+      throw BusinessException.forbidden(ErrorCode.CONVERSATION_NOT_MEMBER);
     }
 
     const senderUser = await this.userRepo.findOne({
@@ -339,7 +334,7 @@ export class MessagesService implements OnModuleInit {
       messageId,
     );
     if (!message || message.deleted_at) {
-      throw new NotFoundException('Message not found');
+      throw BusinessException.notFound(ErrorCode.MESSAGE_NOT_FOUND);
     }
 
     const existing = await this.messageRepository.getPinnedMessage(
@@ -398,9 +393,13 @@ export class MessagesService implements OnModuleInit {
       permission.membership.role === UpdateMemberRoleDtoRoleEnum.MEMBER &&
       existing.pinned_by !== userId
     ) {
-      throw new ForbiddenException(
+      throw BusinessException.forbidden(
         'Only owner/admin or pin owner can unpin in group conversations',
       );
+    }
+
+    if (existing.created_at !== createdAt) {
+      throw BusinessException.notFound(ErrorCode.MESSAGE_NOT_FOUND);
     }
 
     await this.messageRepository.unpinMessage(existing);
@@ -409,7 +408,7 @@ export class MessagesService implements OnModuleInit {
     const event: ChatMessageUnpinnedEvent = {
       message_id: messageId,
       conversation_id: conversationId,
-      created_at: createdAt,
+      created_at: existing.created_at,
       unpinned_by: userId,
       unpinned_at: unpinnedAt,
       trace_id: `chat-unpin:${conversationId}:${messageId}:${unpinnedAt}`,
@@ -516,11 +515,11 @@ export class MessagesService implements OnModuleInit {
     ]);
 
     if (!conversation) {
-      throw new NotFoundException('Conversation not found');
+      throw BusinessException.notFound(ErrorCode.CONVERSATION_NOT_FOUND);
     }
 
     if (!membership) {
-      throw new ForbiddenException('You are not a member of this conversation');
+      throw BusinessException.forbidden(ErrorCode.CONVERSATION_NOT_MEMBER);
     }
 
     return { conversation, membership };
@@ -531,7 +530,7 @@ export class MessagesService implements OnModuleInit {
       context.conversation.type === ConversationType.GROUP &&
       context.membership.role === UpdateMemberRoleDtoRoleEnum.MEMBER
     ) {
-      throw new ForbiddenException(
+      throw BusinessException.forbidden(
         'Only owner/admin can pin messages in group conversations',
       );
     }

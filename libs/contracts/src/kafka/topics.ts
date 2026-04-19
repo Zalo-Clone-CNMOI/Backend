@@ -25,6 +25,8 @@ export const KafkaTopics = {
   CallEnded: 'call.ended',
   CallStateRequest: 'call.state.request',
   CallStateUpdated: 'call.state.updated',
+  CallLeave: 'call.leave',
+  CallLeft: 'call.left',
 
   PresenceConnect: 'presence.connect',
   PresenceDisconnect: 'presence.disconnect',

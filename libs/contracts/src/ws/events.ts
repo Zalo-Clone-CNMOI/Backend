@@ -30,6 +30,8 @@ export const WsEvents = {
   CallEnded: 'call:ended',
   CallStateRequest: 'call:state:request',
   CallStateUpdated: 'call:state:updated',
+  CallLeave: 'call:leave',
+  CallLeft: 'call:left',
 
   PresenceHeartbeat: 'presence:heartbeat',
   PresenceUpdate: 'presence:update',
@@ -211,6 +213,7 @@ export interface WsChatTypingUpdatePayload {
 export interface WsCallStartPayload {
   call_id: string;
   conversation_id: string;
+  conversation_type: 'direct' | 'group';
   call_type: (typeof WsCallTypes)[number];
   participant_ids?: string[];
   started_at: number;
@@ -526,4 +529,19 @@ export interface WsAiStreamCompletePayload {
   conversation_id: string;
   feature: string;
   total_chunks: number;
+}
+
+export interface WsCallLeavePayload {
+  call_id: string;
+  conversation_id: string;
+  reason?: string;
+  left_at: number;
+}
+
+export interface WsCallLeftPayload {
+  call_id: string;
+  conversation_id: string;
+  user_id: string;
+  reason?: string;
+  left_at: number;
 }

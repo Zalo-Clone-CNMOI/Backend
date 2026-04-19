@@ -14,9 +14,12 @@ export type CallSignalType =
   | 'ice-candidate'
   | 'renegotiate';
 
+export type CallConversationType = 'direct' | 'group';
+
 export interface CallStateSnapshot {
   call_id: string;
   conversation_id: string;
+  conversation_type: CallConversationType;
   call_type: CallType;
   status: CallStatus;
   initiator_id: string;
@@ -29,6 +32,7 @@ export interface CallStateSnapshot {
 export interface CallStartCommand {
   call_id: string;
   conversation_id: string;
+  conversation_type: CallConversationType;
   initiator_id: string;
   call_type: CallType;
   participant_ids?: string[];
@@ -123,6 +127,24 @@ export interface CallEndedEvent {
   user_id: string;
   reason?: string;
   ended_at: number;
+  trace_id?: string;
+}
+
+export interface CallLeaveCommand {
+  call_id: string;
+  conversation_id: string;
+  user_id: string;
+  reason?: string;
+  left_at: number;
+  trace_id?: string;
+}
+
+export interface CallLeftEvent {
+  call_id: string;
+  conversation_id: string;
+  user_id: string;
+  reason?: string;
+  left_at: number;
   trace_id?: string;
 }
 

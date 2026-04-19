@@ -7,12 +7,14 @@ import {
   WsEvents,
   type CallAcceptCommand,
   type CallEndCommand,
+  type CallLeaveCommand,
   type CallRejectCommand,
   type CallSignalCommand,
   type CallStartCommand,
   type CallStateRequestCommand,
   type WsCallAcceptPayload,
   type WsCallEndPayload,
+  type WsCallLeavePayload,
   type WsCallRejectPayload,
   type WsCallSignalPayload,
   type WsCallStartPayload,
@@ -51,6 +53,7 @@ export class CallHandler {
     const cmd: CallStartCommand = {
       call_id: body.call_id,
       conversation_id: body.conversation_id,
+      conversation_type: body.conversation_type,
       initiator_id: userId,
       call_type: body.call_type,
       participant_ids: body.participant_ids,
@@ -155,6 +158,29 @@ export class CallHandler {
     };
 
     void this.kafka.emit(KafkaTopics.CallEnd, cmd);
+  }
+
+  async handleLeave(socket: AuthedSocket, body: WsCallLeavePayload) {
+    const userId = String(socket.data.userId);
+    const canAccess = await this.membershipService.canUserAccessConversation(
+      userId,
+      body.conversation_id,
+    );
+    if (!canAccess) {
+      this.emitForbidden(socket, body.conversation_id);
+      return;
+    }
+
+    const cmd: CallLeaveCommand = {
+      call_id: body.call_id,
+      conversation_id: body.conversation_id,
+      user_id: userId,
+      reason: body.reason,
+      left_at: body.left_at,
+      trace_id: `ws:${socket.id}:${body.call_id}`,
+    };
+
+    void this.kafka.emit(KafkaTopics.CallLeave, cmd);
   }
 
   async handleStateRequest(

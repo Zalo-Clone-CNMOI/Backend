@@ -5,6 +5,7 @@ import {
   WsEvents,
   type CallAcceptedEvent,
   type CallEndedEvent,
+  type CallLeftEvent,
   type CallRejectedEvent,
   type CallSignalForwardedEvent,
   type CallStartedEvent,
@@ -103,6 +104,21 @@ export class CallFanoutConsumer {
         user_id: payload.user_id,
         reason: payload.reason,
         ended_at: payload.ended_at,
+      },
+    );
+  }
+
+  @EventPattern(KafkaTopics.CallLeft)
+  onCallLeft(@Payload() payload: CallLeftEvent) {
+    this.gateway.broadcastToConversation(
+      payload.conversation_id,
+      WsEvents.CallLeft,
+      {
+        call_id: payload.call_id,
+        conversation_id: payload.conversation_id,
+        user_id: payload.user_id,
+        reason: payload.reason,
+        left_at: payload.left_at,
       },
     );
   }

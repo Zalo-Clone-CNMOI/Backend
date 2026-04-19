@@ -18,6 +18,7 @@ import {
   WsCallTypes,
   WsPayloadLimits,
   WsReactionTypes,
+  type CallConversationType,
 } from '@libs/contracts';
 
 export class WsChatJoinPayloadDto {
@@ -184,6 +185,9 @@ export class WsCallStartPayloadDto {
   @MaxLength(WsPayloadLimits.idMaxLength)
   conversation_id!: string;
 
+  @IsIn(['direct', 'group'])
+  conversation_type!: CallConversationType;
+
   @IsIn(WsCallTypes)
   call_type!: (typeof WsCallTypes)[number];
 
@@ -305,6 +309,28 @@ export class WsCallEndPayloadDto {
   @IsInt()
   @Min(1)
   ended_at!: number;
+}
+
+export class WsCallLeavePayloadDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(WsPayloadLimits.idMaxLength)
+  call_id!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(WsPayloadLimits.idMaxLength)
+  conversation_id!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(WsPayloadLimits.messageBodyMaxLength)
+  reason?: string;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  left_at!: number;
 }
 
 export class WsCallStateRequestPayloadDto {

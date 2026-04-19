@@ -36,6 +36,7 @@ import {
   WsAiTranslateRequestPayloadDto,
   WsCallAcceptPayloadDto,
   WsCallEndPayloadDto,
+  WsCallLeavePayloadDto,
   WsCallRejectPayloadDto,
   WsCallSignalPayloadDto,
   WsCallStartPayloadDto,
@@ -240,6 +241,15 @@ export class ChatGateway implements OnModuleInit {
     @MessageBody() body: WsCallEndPayloadDto,
   ) {
     return this.callHandler.handleEnd(socket, body);
+  }
+
+  @UseGuards(WsAuthGuard)
+  @SubscribeMessage(WsEvents.CallLeave)
+  async handleCallLeave(
+    @ConnectedSocket() socket: AuthedSocket,
+    @MessageBody() body: WsCallLeavePayloadDto,
+  ) {
+    await this.callHandler.handleLeave(socket, body);
   }
 
   @UseGuards(WsAuthGuard)

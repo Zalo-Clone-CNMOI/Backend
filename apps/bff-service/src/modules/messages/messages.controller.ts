@@ -145,9 +145,11 @@ export class MessagesController {
     @Query('cursor') cursor?: string,
     @Query('limit') limit?: number,
   ) {
+    const userId = this.jwtService.verifyToken(token).userId;
     return this.messagesService.getMessages(
       token,
       conversationId,
+      userId,
       cursor,
       limit,
     );

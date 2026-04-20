@@ -125,12 +125,23 @@ export class MessagesController {
     required: false,
     description: 'Pagination cursor',
   })
+  @ApiHeader({
+    name: 'x-user-id',
+    required: true,
+    description: 'Authenticated user id',
+  })
   @ApiResponse({ status: 200, type: MessageListResponseDto })
+  @ApiUnauthorizedResponse({ description: 'Missing x-user-id header' })
   async getMessages(
     @Param('conversationId', ParseUUIDPipe) conversationId: string,
     @Query() query: GetMessagesQueryDto,
+    @Headers('x-user-id') userId?: string,
   ): Promise<MessageListResponseDto> {
-    return this.messagesService.getMessages(conversationId, query);
+    if (!userId) {
+      throw BusinessException.unauthorized('Missing x-user-id header');
+    }
+
+    return this.messagesService.getMessages(conversationId, query, userId);
   }
 
   @Get(':conversationId/pins')

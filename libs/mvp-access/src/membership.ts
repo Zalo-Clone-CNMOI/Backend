@@ -73,6 +73,18 @@ export class ConversationMembershipService {
     return memberships.map((m) => m.conversationId);
   }
 
+  async listActiveMemberIds(conversationId: string): Promise<string[]> {
+    const memberships = await this.memberRepository.find({
+      where: {
+        conversationId,
+        leftAt: IsNull(),
+      },
+      select: ['userId'],
+    });
+
+    return memberships.map((m) => m.userId);
+  }
+
   /**
    * Batch check user access for multiple conversations
    * More efficient than calling canUserAccessConversation multiple times

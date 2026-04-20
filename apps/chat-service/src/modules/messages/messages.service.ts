@@ -7,7 +7,10 @@ import { ClientKafka } from '@nestjs/microservices';
 import { lastValueFrom } from 'rxjs';
 import { KAFKA_CLIENT } from '@libs/kafka';
 import { Conversation, ConversationMember, User } from '@libs/database';
-import { ConversationMembershipService } from '@libs/mvp-access';
+import {
+  ConversationMembershipService,
+  FriendshipAccessService,
+} from '@libs/mvp-access';
 import {
   ConversationType,
   ErrorCode,
@@ -105,6 +108,7 @@ export class MessagesService implements OnModuleInit {
     private readonly cacheService: CacheService,
     private readonly mediaClient: MediaClientService,
     private readonly membershipService: ConversationMembershipService,
+    private readonly friendshipAccess: FriendshipAccessService,
     @InjectRepository(User) private readonly userRepo: Repository<User>,
     @InjectRepository(Conversation)
     private readonly conversationRepo: Repository<Conversation>,
@@ -127,6 +131,7 @@ export class MessagesService implements OnModuleInit {
   async getMessages(
     conversationId: string,
     query: GetMessagesQueryDto,
+    userId: string,
   ): Promise<MessageListResponseDto> {
     const isFirstPage = !query.cursor;
     const limit = query.limit ?? 50;
@@ -138,7 +143,7 @@ export class MessagesService implements OnModuleInit {
         );
       if (cached) {
         this.logger.debug(`Recent messages cache HIT: ${conversationId}`);
-        return cached;
+        return this.applyForwardedFromFilter(cached, userId);
       }
       this.logger.debug(`Recent messages cache MISS: ${conversationId}`);
     }
@@ -163,7 +168,35 @@ export class MessagesService implements OnModuleInit {
       await this.cacheService.setRecentMessages(conversationId, response);
     }
 
-    return response;
+    return this.applyForwardedFromFilter(response, userId);
+  }
+
+  private async applyForwardedFromFilter(
+    response: MessageListResponseDto,
+    userId: string,
+  ): Promise<MessageListResponseDto> {
+    const senderIds = [
+      ...new Set(
+        response.items
+          .filter((m) => m.forwardedFrom)
+          .map((m) => m.forwardedFrom!.source_sender_id),
+      ),
+    ];
+
+    if (senderIds.length === 0) return response;
+
+    const friendSet = await this.friendshipAccess.getFriendSet(
+      userId,
+      senderIds,
+    );
+
+    const items = response.items.map((m) => {
+      if (!m.forwardedFrom) return m;
+      if (friendSet.has(m.forwardedFrom.source_sender_id)) return m;
+      return { ...m, forwardedFrom: undefined };
+    });
+
+    return { ...response, items };
   }
 
   async searchMessages(

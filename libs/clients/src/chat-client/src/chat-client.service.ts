@@ -23,13 +23,19 @@ export class ChatClientService extends BaseHttpClient {
   async getMessages(
     accessToken: string,
     conversationId: string,
+    userId: string,
     cursor?: string,
     limit?: number,
   ): Promise<MessageListResponseDto> {
     try {
       const response = await this.messagesApi.getMessages(
         { conversationId, cursor, limit },
-        { headers: { Authorization: `Bearer ${accessToken}` } },
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'x-user-id': userId,
+          },
+        },
       );
       return response.data;
     } catch (error) {

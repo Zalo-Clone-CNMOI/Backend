@@ -12,12 +12,14 @@ export class MessagesService {
   async getMessages(
     accessToken: string,
     conversationId: string,
+    userId: string,
     cursor?: string,
     limit?: number,
   ) {
     return this.chatClient.getMessages(
       accessToken,
       conversationId,
+      userId,
       cursor,
       limit,
     );

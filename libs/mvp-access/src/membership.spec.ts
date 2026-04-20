@@ -189,6 +189,31 @@ describe('ConversationMembershipService', () => {
     });
   });
 
+  describe('listActiveMemberIds', () => {
+    it('should return active member user IDs for a conversation', async () => {
+      repo.find.mockResolvedValue([{ userId: 'user-1' }, { userId: 'user-2' }]);
+
+      const result = await service.listActiveMemberIds('conv-1');
+
+      expect(result).toEqual(['user-1', 'user-2']);
+      expect(repo.find).toHaveBeenCalledWith({
+        where: {
+          conversationId: 'conv-1',
+          leftAt: expect.anything(),
+        },
+        select: ['userId'],
+      });
+    });
+
+    it('should return empty array when conversation has no active members', async () => {
+      repo.find.mockResolvedValue([]);
+
+      const result = await service.listActiveMemberIds('conv-empty');
+
+      expect(result).toEqual([]);
+    });
+  });
+
   // ── canUserAccessConversations (batch) ────────────────────────────────
 
   describe('canUserAccessConversations', () => {

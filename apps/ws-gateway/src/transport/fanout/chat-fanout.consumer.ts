@@ -1,5 +1,6 @@
 import { Controller } from '@nestjs/common';
 import { EventPattern, Payload } from '@nestjs/microservices';
+import { InjectRepository } from '@nestjs/typeorm';
 import {
   KafkaTopics,
   WsEvents,
@@ -11,32 +12,67 @@ import {
   type ChatReactionAddedEvent,
   type ChatReactionRemovedEvent,
 } from '@libs/contracts';
+import { FriendshipAccessService } from '@libs/mvp-access';
+import { ConversationMember } from '@libs/database/entities';
+import { IsNull, Repository } from 'typeorm';
 import { ChatGateway } from '../../socket/chat.gateway';
 
 @Controller()
 export class ChatFanoutConsumer {
-  constructor(private readonly gateway: ChatGateway) {}
+  constructor(
+    private readonly gateway: ChatGateway,
+    @InjectRepository(ConversationMember)
+    private readonly conversationMemberRepo: Repository<ConversationMember>,
+    private readonly friendshipAccess: FriendshipAccessService,
+  ) {}
 
-  /**
-   * Handle Message Created event
-   * Broadcast new message to conversation room
-   */
   @EventPattern(KafkaTopics.ChatMessageCreated)
-  onMessageCreated(@Payload() payload: ChatMessageCreatedEvent) {
-    this.gateway.broadcastToConversation(
-      payload.conversation_id,
-      WsEvents.ChatMessage,
-      {
-        message_id: payload.message_id,
-        conversation_id: payload.conversation_id,
-        sender_id: payload.sender_id,
-        body: payload.body,
-        created_at: payload.created_at,
-        attachments: payload.attachments,
-        reply_to_message_id: payload.reply_to_message_id,
-        forwarded_from: payload.forwarded_from,
+  async onMessageCreated(@Payload() payload: ChatMessageCreatedEvent) {
+    const base = {
+      message_id: payload.message_id,
+      conversation_id: payload.conversation_id,
+      sender_id: payload.sender_id,
+      body: payload.body,
+      created_at: payload.created_at,
+      attachments: payload.attachments,
+      reply_to_message_id: payload.reply_to_message_id,
+    };
+
+    if (!payload.forwarded_from) {
+      this.gateway.broadcastToConversation(
+        payload.conversation_id,
+        WsEvents.ChatMessage,
+        base,
+      );
+      return;
+    }
+
+    const sourceSenderId = payload.forwarded_from.source_sender_id;
+    const memberships = await this.conversationMemberRepo.find({
+      where: {
+        conversationId: payload.conversation_id,
+        leftAt: IsNull(),
       },
+      select: ['userId'],
+    });
+
+    const memberUserIds = [...new Set(memberships.map((m) => m.userId))];
+    if (memberUserIds.length === 0) {
+      return;
+    }
+
+    const friendSet = await this.friendshipAccess.getFriendSet(
+      sourceSenderId,
+      memberUserIds,
     );
+
+    for (const userId of memberUserIds) {
+      const canSeeSource = userId === sourceSenderId || friendSet.has(userId);
+      this.gateway.emitToUser(userId, WsEvents.ChatMessage, {
+        ...base,
+        forwarded_from: canSeeSource ? payload.forwarded_from : undefined,
+      });
+    }
   }
 
   /**

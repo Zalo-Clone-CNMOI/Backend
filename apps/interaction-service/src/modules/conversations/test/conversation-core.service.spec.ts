@@ -21,7 +21,6 @@ import {
 import { CacheService, REDIS_CLIENT } from '@libs/redis';
 import { KAFKA_CLIENT, NotificationOutboxPublisher } from '@libs/kafka';
 import { UpdateMemberRoleDtoRoleEnum } from '@app/constant';
-import { IsNull } from 'typeorm';
 
 // ─── Mock Enums ──────────────────────────────────────────
 const ConversationType = { DIRECT: 'direct', GROUP: 'group' };

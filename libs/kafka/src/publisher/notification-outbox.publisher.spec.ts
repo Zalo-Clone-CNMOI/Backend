@@ -2,7 +2,7 @@ import { of } from 'rxjs';
 import type { DataSource, Repository } from 'typeorm';
 import type { ClientKafka } from '@nestjs/microservices';
 import type { RedisClientType } from 'redis';
-import { NotificationOutboxPublisher } from '../notification-outbox.publisher';
+import { NotificationOutboxPublisher } from './notification-outbox.publisher';
 import {
   NotificationType,
   type NotificationRequestedEvent,

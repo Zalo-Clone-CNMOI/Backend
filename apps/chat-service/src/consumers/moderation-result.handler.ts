@@ -421,13 +421,10 @@ export class ModerationResultHandler {
         'failed',
         failureReason ?? 'unexpected',
       );
-      this.shared.logger.error(
-        `[${traceId}] Moderation enforcement failed`,
-        {
-          messageId: payload.message_id,
-          error: error instanceof Error ? error.message : String(error),
-        },
-      );
+      this.shared.logger.error(`[${traceId}] Moderation enforcement failed`, {
+        messageId: payload.message_id,
+        error: error instanceof Error ? error.message : String(error),
+      });
       throw error;
     } finally {
       if (emitLockRenewTimer) {

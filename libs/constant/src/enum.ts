@@ -28,6 +28,14 @@ export enum UpdateMemberRoleDtoRoleEnum {
   MEMBER = 'member',
 }
 
+export enum GroupInviteStatus {
+  PENDING = 'pending',
+  ACCEPTED = 'accepted',
+  REJECTED = 'rejected',
+  CANCELLED = 'cancelled',
+  EXPIRED = 'expired',
+}
+
 export enum MessageType {
   TEXT = 'text',
   IMAGE = 'image',

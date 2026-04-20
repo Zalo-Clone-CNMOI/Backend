@@ -60,6 +60,12 @@ export const ErrorMessage: Record<ErrorCode, string> = {
     'You are not a member of this conversation.',
   [ErrorCode.CONVERSATION_CANNOT_LEAVE]: 'You cannot leave this conversation.',
   [ErrorCode.CONVERSATION_INVALID_TYPE]: 'Invalid conversation type.',
+  [ErrorCode.GROUP_INVITE_NOT_FOUND]: 'Group invite not found.',
+  [ErrorCode.GROUP_INVITE_ALREADY_EXISTS]:
+    'An active invite already exists for this user.',
+  [ErrorCode.GROUP_INVITE_EXPIRED]: 'Group invite has expired.',
+  [ErrorCode.GROUP_INVITE_INVALID_STATUS]:
+    'Group invite status is invalid for this action.',
 
   // ============== MESSAGE ==============
   [ErrorCode.MESSAGE_NOT_FOUND]: 'Message not found.',

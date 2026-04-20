@@ -1,6 +1,7 @@
 import { Entity, Column, Index, OneToMany, OneToOne } from 'typeorm';
 import { DeviceToken } from './device-token.entity';
 import { ConversationMember } from './conversation-member.entity';
+import { ConversationInvite } from './conversation-invite.entity';
 import { Friendship } from './friendship.entity';
 import { MediaFile } from './media-file.entity';
 import { Post } from './post.entity';
@@ -51,6 +52,12 @@ export class User extends BaseEntity {
 
   @OneToMany(() => ConversationMember, (member) => member.user)
   conversationMemberships: ConversationMember[];
+
+  @OneToMany(() => ConversationInvite, (invite) => invite.invitedUser)
+  receivedGroupInvites: ConversationInvite[];
+
+  @OneToMany(() => ConversationInvite, (invite) => invite.inviterUser)
+  sentGroupInvites: ConversationInvite[];
 
   @OneToMany(() => Friendship, (friendship) => friendship.requester)
   sentFriendRequests: Friendship[];

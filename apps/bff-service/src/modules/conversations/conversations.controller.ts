@@ -4,6 +4,8 @@ import {
   Post,
   Patch,
   Delete,
+  HttpCode,
+  HttpStatus,
   Body,
   Param,
   Query,
@@ -20,6 +22,8 @@ import {
   AddMembersDto,
   CreateDirectConversationDto,
   CreateGroupConversationDto,
+  GetGroupInvitesQueryDto,
+  SendGroupInvitesDto,
   UpdateConversationDto,
   UpdateMemberRoleDto,
   UpdateMemberSettingsDto,
@@ -169,6 +173,136 @@ export class ConversationsController {
     @Param('conversationId') conversationId: string,
   ) {
     return this.conversationsService.leaveConversation(token, conversationId);
+  }
+
+  @Post(':conversationId/disband')
+  @ApiOperation({ summary: 'Disband group conversation' })
+  @ApiResponse({
+    status: 200,
+    description: 'Conversation disbanded successfully',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  @HttpCode(HttpStatus.OK)
+  async disbandConversation(
+    @AccessToken() token: string,
+    @Param('conversationId') conversationId: string,
+  ) {
+    return this.conversationsService.disbandConversation(token, conversationId);
+  }
+
+  @Post(':conversationId/invites')
+  @ApiOperation({ summary: 'Send group invites' })
+  @ApiResponse({
+    status: 201,
+    description: 'Group invites created successfully',
+  })
+  @ApiResponse({ status: 400, description: 'Validation error' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  async sendGroupInvites(
+    @AccessToken() token: string,
+    @Param('conversationId') conversationId: string,
+    @Body() dto: SendGroupInvitesDto,
+  ) {
+    return this.conversationsService.sendGroupInvites(
+      token,
+      conversationId,
+      dto,
+    );
+  }
+
+  @Get('invites/pending')
+  @ApiOperation({ summary: 'Get pending group invites for current user' })
+  @ApiResponse({
+    status: 200,
+    description: 'Pending invites retrieved successfully',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getPendingGroupInvites(
+    @AccessToken() token: string,
+    @Query() query: GetGroupInvitesQueryDto,
+  ) {
+    return this.conversationsService.getPendingGroupInvites(
+      token,
+      query.page,
+      query.limit,
+      query.status,
+    );
+  }
+
+  @Get(':conversationId/invites')
+  @ApiOperation({ summary: 'Get group invites by conversation' })
+  @ApiResponse({
+    status: 200,
+    description: 'Conversation invites retrieved successfully',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  async getConversationInvites(
+    @AccessToken() token: string,
+    @Param('conversationId') conversationId: string,
+    @Query() query: GetGroupInvitesQueryDto,
+  ) {
+    return this.conversationsService.getConversationInvites(
+      token,
+      conversationId,
+      query.page,
+      query.limit,
+      query.status,
+    );
+  }
+
+  @Post(':conversationId/invites/:inviteId/accept')
+  @ApiOperation({ summary: 'Accept group invite' })
+  @ApiResponse({ status: 200, description: 'Invite accepted successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @HttpCode(HttpStatus.OK)
+  async acceptGroupInvite(
+    @AccessToken() token: string,
+    @Param('conversationId') conversationId: string,
+    @Param('inviteId') inviteId: string,
+  ) {
+    return this.conversationsService.acceptGroupInvite(
+      token,
+      conversationId,
+      inviteId,
+    );
+  }
+
+  @Post(':conversationId/invites/:inviteId/reject')
+  @ApiOperation({ summary: 'Reject group invite' })
+  @ApiResponse({ status: 200, description: 'Invite rejected successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @HttpCode(HttpStatus.OK)
+  async rejectGroupInvite(
+    @AccessToken() token: string,
+    @Param('conversationId') conversationId: string,
+    @Param('inviteId') inviteId: string,
+  ) {
+    return this.conversationsService.rejectGroupInvite(
+      token,
+      conversationId,
+      inviteId,
+    );
+  }
+
+  @Post(':conversationId/invites/:inviteId/cancel')
+  @ApiOperation({ summary: 'Cancel group invite' })
+  @ApiResponse({ status: 200, description: 'Invite cancelled successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  @HttpCode(HttpStatus.OK)
+  async cancelGroupInvite(
+    @AccessToken() token: string,
+    @Param('conversationId') conversationId: string,
+    @Param('inviteId') inviteId: string,
+  ) {
+    return this.conversationsService.cancelGroupInvite(
+      token,
+      conversationId,
+      inviteId,
+    );
   }
 
   @Patch(':conversationId/members/:memberId/role')

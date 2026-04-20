@@ -51,6 +51,10 @@ export const ErrorHttpStatus: Record<ErrorCode, HttpStatus> = {
   [ErrorCode.CONVERSATION_NOT_MEMBER]: HttpStatus.FORBIDDEN,
   [ErrorCode.CONVERSATION_CANNOT_LEAVE]: HttpStatus.BAD_REQUEST,
   [ErrorCode.CONVERSATION_INVALID_TYPE]: HttpStatus.BAD_REQUEST,
+  [ErrorCode.GROUP_INVITE_NOT_FOUND]: HttpStatus.NOT_FOUND,
+  [ErrorCode.GROUP_INVITE_ALREADY_EXISTS]: HttpStatus.CONFLICT,
+  [ErrorCode.GROUP_INVITE_EXPIRED]: HttpStatus.BAD_REQUEST,
+  [ErrorCode.GROUP_INVITE_INVALID_STATUS]: HttpStatus.BAD_REQUEST,
 
   // ============== MESSAGE ==============
   [ErrorCode.MESSAGE_NOT_FOUND]: HttpStatus.NOT_FOUND,

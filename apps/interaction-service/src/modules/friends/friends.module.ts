@@ -3,10 +3,14 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { User, Friendship } from '@libs/database/entities';
 import { FriendsController } from './friends.controller';
 import { FriendsService } from './friends.service';
-import { KafkaModule } from '@libs/kafka/kafka.module';
+import { KafkaModule, NotificationOutboxModule } from '@libs/kafka';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User, Friendship]), KafkaModule],
+  imports: [
+    TypeOrmModule.forFeature([User, Friendship]),
+    KafkaModule,
+    NotificationOutboxModule,
+  ],
   controllers: [FriendsController],
   providers: [FriendsService],
   exports: [FriendsService],

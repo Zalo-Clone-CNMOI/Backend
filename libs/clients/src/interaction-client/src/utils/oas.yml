@@ -535,6 +535,217 @@ paths:
                 properties:
                   message:
                     type: string
+  /conversations/{conversationId}/disband:
+    post:
+      tags:
+        - Conversations
+      summary: Disband group conversation
+      operationId: disbandConversation
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Conversation disbanded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+  /conversations/invites/pending:
+    get:
+      tags:
+        - Conversations
+      summary: Get pending invites for current user
+      operationId: getPendingGroupInvites
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/GroupInviteStatus'
+      responses:
+        '200':
+          description: Pending invites list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedResponseGroupInviteItemDto'
+  /conversations/{conversationId}/invites:
+    get:
+      tags:
+        - Conversations
+      summary: Get invites by conversation
+      operationId: getConversationInvites
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/GroupInviteStatus'
+      responses:
+        '200':
+          description: Conversation invites list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedResponseGroupInviteItemDto'
+    post:
+      tags:
+        - Conversations
+      summary: Send group invites
+      operationId: sendGroupInvites
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendGroupInvitesDto'
+      responses:
+        '201':
+          description: Invites created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SendGroupInvitesResponseDto'
+  /conversations/{conversationId}/invites/{inviteId}/accept:
+    post:
+      tags:
+        - Conversations
+      summary: Accept group invite
+      operationId: acceptGroupInvite
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: inviteId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Invite accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+  /conversations/{conversationId}/invites/{inviteId}/reject:
+    post:
+      tags:
+        - Conversations
+      summary: Reject group invite
+      operationId: rejectGroupInvite
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: inviteId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Invite rejected
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+  /conversations/{conversationId}/invites/{inviteId}/cancel:
+    post:
+      tags:
+        - Conversations
+      summary: Cancel group invite
+      operationId: cancelGroupInvite
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: inviteId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Invite cancelled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
 components:
   securitySchemes:
     BearerAuth:
@@ -740,6 +951,71 @@ components:
           type: string
         notificationEnabled:
           type: boolean
+    GroupInviteStatus:
+      type: string
+      enum: [pending, accepted, rejected, cancelled, expired]
+    SendGroupInvitesDto:
+      type: object
+      required:
+        - userIds
+      properties:
+        userIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+          maxItems: 50
+        message:
+          type: string
+          nullable: true
+          maxLength: 500
+        expiresInHours:
+          type: integer
+          minimum: 1
+          maximum: 168
+    SendGroupInvitesResponseDto:
+      type: object
+      properties:
+        acceptedCount:
+          type: integer
+        skippedCount:
+          type: integer
+        inviteIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+    GroupInviteItemDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        conversationId:
+          type: string
+          format: uuid
+        inviterUserId:
+          type: string
+          format: uuid
+        invitedUserId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/GroupInviteStatus'
+        message:
+          type: string
+          nullable: true
+        expiresAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        respondedAt:
+          type: string
+          format: date-time
+          nullable: true
     ConversationMemberResponseDto:
       type: object
       properties:
@@ -831,6 +1107,21 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ConversationListItemDto'
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+        totalPages:
+          type: integer
+    PaginatedResponseGroupInviteItemDto:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/GroupInviteItemDto'
         total:
           type: integer
         page:

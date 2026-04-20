@@ -1,15 +1,19 @@
 /* eslint-disable @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { ConversationsService } from './conversations.service';
+import { ConversationsService } from '../conversations.service';
 import {
   User,
   Conversation,
   ConversationMember,
+  ConversationInvite,
 } from '@libs/database/entities';
 import { CacheService, REDIS_CLIENT } from '@libs/redis';
-import { KAFKA_CLIENT } from '@libs/kafka';
+import { KAFKA_CLIENT, NotificationOutboxPublisher } from '@libs/kafka';
 import { UpdateMemberRoleDtoRoleEnum } from '@app/constant';
+import { ConversationCoreService } from '../services/conversation-core.service';
+import { ConversationMemberService } from '../services/conversation-member.service';
+import { GroupInviteService } from '../services/group-invite.service';
 
 const ConversationType = { DIRECT: 'direct', GROUP: 'group' };
 const uuid = (n: number) => `00000000-0000-0000-0000-00000000000${n}`;
@@ -51,13 +55,27 @@ const createMockConversation = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
+type InviteRepositoryMock = {
+  findOne: jest.Mock;
+  find: jest.Mock;
+  findAndCount: jest.Mock;
+  create: jest.Mock;
+  save: jest.Mock;
+  update: jest.Mock;
+  manager: {
+    transaction: jest.Mock;
+  };
+};
+
 describe('ConversationsService lastMessage projection', () => {
   let service: ConversationsService;
   let userRepository: Record<string, jest.Mock>;
   let conversationRepository: Record<string, jest.Mock>;
   let memberRepository: Record<string, jest.Mock>;
+  let inviteRepository: InviteRepositoryMock;
   let cacheService: Record<string, jest.Mock>;
   let kafkaClient: Record<string, jest.Mock>;
+  let notificationPublisher: Record<string, jest.Mock>;
   let redisClient: Record<string, jest.Mock>;
 
   beforeEach(async () => {
@@ -87,6 +105,18 @@ describe('ConversationsService lastMessage projection', () => {
       createQueryBuilder: jest.fn(),
     };
 
+    inviteRepository = {
+      findOne: jest.fn(),
+      find: jest.fn(),
+      findAndCount: jest.fn(),
+      create: jest.fn().mockImplementation((data) => data),
+      save: jest.fn().mockImplementation((data) => Promise.resolve(data)),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
+      manager: {
+        transaction: jest.fn(),
+      },
+    };
+
     cacheService = {
       getConversationDetail: jest.fn().mockResolvedValue(null),
       setConversationDetail: jest.fn().mockResolvedValue(undefined),
@@ -98,6 +128,10 @@ describe('ConversationsService lastMessage projection', () => {
       emit: jest.fn(),
     };
 
+    notificationPublisher = {
+      publish: jest.fn().mockResolvedValue('queued'),
+    };
+
     redisClient = {
       mGet: jest.fn().mockResolvedValue([]),
       del: jest.fn().mockResolvedValue(1),
@@ -106,6 +140,9 @@ describe('ConversationsService lastMessage projection', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ConversationsService,
+        ConversationCoreService,
+        ConversationMemberService,
+        GroupInviteService,
         { provide: getRepositoryToken(User), useValue: userRepository },
         {
           provide: getRepositoryToken(Conversation),
@@ -115,8 +152,16 @@ describe('ConversationsService lastMessage projection', () => {
           provide: getRepositoryToken(ConversationMember),
           useValue: memberRepository,
         },
+        {
+          provide: getRepositoryToken(ConversationInvite),
+          useValue: inviteRepository,
+        },
         { provide: CacheService, useValue: cacheService },
         { provide: KAFKA_CLIENT, useValue: kafkaClient },
+        {
+          provide: NotificationOutboxPublisher,
+          useValue: notificationPublisher,
+        },
         { provide: REDIS_CLIENT, useValue: redisClient },
       ],
     }).compile();

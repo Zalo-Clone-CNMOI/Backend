@@ -15,6 +15,7 @@ import {
   IsEnum,
   Min,
   Max,
+  Matches,
 } from 'class-validator';
 
 /**
@@ -80,7 +81,11 @@ export class UpdateConversationDto {
     example: 'https://example.com/new-avatar.jpg',
   })
   @IsOptional()
-  @IsUrl({}, { message: 'Invalid avatar URL' })
+  @IsString({ message: 'Invalid avatar key' })
+  @Matches(/^(public|private)\/[-A-Za-z0-9._/]+$/, {
+    message:
+      'Avatar key must start with public/ or private/ and contain only valid key characters',
+  })
   avatarUrl?: string;
 }
 

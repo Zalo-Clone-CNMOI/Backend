@@ -13,6 +13,7 @@ export * from './post-comment.entity';
 export * from './comment-like.entity';
 export * from './notification-preference.entity';
 export * from './notification-log.entity';
+export * from './notification-outbox.entity';
 export * from './ai-moderation-log.entity';
 export * from './ai-usage-log.entity';
 export * from './document-metadata.entity';

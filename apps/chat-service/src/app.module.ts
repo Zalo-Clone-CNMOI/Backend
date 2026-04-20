@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@libs/config';
 import { LoggerModule } from '@libs/logger';
-import { KafkaModule } from '@libs/kafka';
+import { KafkaModule, NotificationOutboxModule } from '@libs/kafka';
 import { ScyllaModule } from '@libs/scylla';
 import { RedisModule } from '@libs/redis';
 import { HealthCheckService } from '@libs/shared';
@@ -20,6 +20,7 @@ import { HealthController } from './health.controller';
     DatabaseModule,
     TypeOrmModule.forFeature([User, ConversationMember]),
     KafkaModule,
+    NotificationOutboxModule,
     ScyllaModule,
     RedisModule.forRootAsync(),
     ConversationMembershipModule,

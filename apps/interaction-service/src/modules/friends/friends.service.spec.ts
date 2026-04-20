@@ -10,7 +10,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { FriendsService } from './friends.service';
 import { User, Friendship } from '@libs/database/entities';
 import { CacheService } from '@libs/redis';
-import { KAFKA_CLIENT } from '@libs/kafka';
+import { KAFKA_CLIENT, NotificationOutboxPublisher } from '@libs/kafka';
 import { RespondFriendRequestDtoActionEnum } from './dto';
 
 // ─── Mock Enums ──────────────────────────────────────────
@@ -50,6 +50,7 @@ describe('FriendsService', () => {
   let userRepository: Record<string, jest.Mock>;
   let friendshipRepository: Record<string, jest.Mock>;
   let kafkaClient: Record<string, jest.Mock>;
+  let notificationPublisher: Record<string, jest.Mock>;
   let cacheService: Record<string, jest.Mock>;
 
   beforeEach(async () => {
@@ -77,6 +78,10 @@ describe('FriendsService', () => {
       emit: jest.fn(),
     };
 
+    notificationPublisher = {
+      publish: jest.fn().mockResolvedValue('queued'),
+    };
+
     cacheService = {
       invalidateFriendLists: jest.fn().mockResolvedValue(undefined),
     };
@@ -90,6 +95,10 @@ describe('FriendsService', () => {
           useValue: friendshipRepository,
         },
         { provide: KAFKA_CLIENT, useValue: kafkaClient },
+        {
+          provide: NotificationOutboxPublisher,
+          useValue: notificationPublisher,
+        },
         { provide: CacheService, useValue: cacheService },
       ],
     }).compile();

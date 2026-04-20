@@ -25,7 +25,7 @@ import {
   SentFriendRequestResponseDto,
   RespondFriendRequestDtoActionEnum,
 } from './dto';
-import { KAFKA_CLIENT } from '@libs/kafka';
+import { KAFKA_CLIENT, NotificationOutboxPublisher } from '@libs/kafka';
 import { ClientKafka } from '@nestjs/microservices';
 
 @Injectable()
@@ -41,6 +41,7 @@ export class FriendsService {
     private readonly friendshipRepository: Repository<Friendship>,
     @Inject(KAFKA_CLIENT)
     private readonly kafkaClient: ClientKafka,
+    private readonly notificationPublisher: NotificationOutboxPublisher,
     private readonly cacheService: CacheService,
   ) {}
 
@@ -249,7 +250,13 @@ export class FriendsService {
       requested_at: Date.now(),
       trace_id: `friend-req:${saved.id}`,
     };
-    this.kafkaClient.emit(KafkaTopics.NotificationRequested, notification);
+    const publishResult =
+      await this.notificationPublisher.publish(notification);
+    if (publishResult === 'failed') {
+      this.logger.error(
+        `[NotificationOutbox] failed to enqueue friend request notification request_id=${saved.id}`,
+      );
+    }
 
     return { message: 'Friend request sent successfully', requestId: saved.id };
   }
@@ -323,10 +330,13 @@ export class FriendsService {
         requested_at: Date.now(),
         trace_id: `friend-accept:${request.id}`,
       };
-      this.kafkaClient.emit(
-        KafkaTopics.NotificationRequested,
-        acceptNotification,
-      );
+      const publishResult =
+        await this.notificationPublisher.publish(acceptNotification);
+      if (publishResult === 'failed') {
+        this.logger.error(
+          `[NotificationOutbox] failed to enqueue friend accept notification request_id=${request.id}`,
+        );
+      }
 
       return { message: 'Friend request accepted' };
     } else {

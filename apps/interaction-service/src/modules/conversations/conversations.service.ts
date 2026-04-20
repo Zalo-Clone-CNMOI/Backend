@@ -4,6 +4,10 @@ import { Repository, In, IsNull, MoreThan, QueryFailedError } from 'typeorm';
 import { ClientKafka } from '@nestjs/microservices';
 import { KAFKA_CLIENT } from '@libs/kafka';
 import {
+  NotificationOutboxPublisher,
+  type NotificationOutboxPublishResult,
+} from '@libs/kafka/publisher/notification-outbox.publisher';
+import {
   type NotificationRequestedEvent,
   NotificationType,
   KafkaTopics,
@@ -89,6 +93,7 @@ export class ConversationsService {
     @InjectRepository(ConversationInvite)
     private readonly inviteRepository: Repository<ConversationInvite>,
     private readonly cacheService: CacheService,
+    private readonly notificationPublisher: NotificationOutboxPublisher,
     @Inject(KAFKA_CLIENT)
     private readonly kafkaClient: ClientKafka,
     @Inject(REDIS_CLIENT) private readonly redis: RedisClientType,
@@ -339,13 +344,10 @@ export class ConversationsService {
     };
     this.kafkaClient.emit(KafkaTopics.ConversationCreated, createdEvent);
 
-    for (const memberId of memberIds) {
-      if (memberId === userId) {
-        continue;
-      }
-
-      const notification: NotificationRequestedEvent = {
-        channel: 'push',
+    const createdNotifications = memberIds
+      .filter((memberId) => memberId !== userId)
+      .map((memberId) => ({
+        channel: 'push' as const,
         user_id: memberId,
         title: 'Added to new group',
         body: `${membersById.get(userId)?.fullName || 'Someone'} created ${savedConversation.name || 'a group'} and added you`,
@@ -357,16 +359,18 @@ export class ConversationsService {
         },
         rich: {
           image_url: savedConversation.avatarUrl || undefined,
-          priority: 'normal',
+          priority: 'normal' as const,
           category: 'group_created',
           thread_id: savedConversation.id,
         },
         requested_at: Date.now(),
         trace_id: `group-created-notification:${savedConversation.id}:${memberId}`,
-      };
+      }));
 
-      this.kafkaClient.emit(KafkaTopics.NotificationRequested, notification);
-    }
+    await this.enqueueNotifications(
+      createdNotifications,
+      `group_created:${savedConversation.id}`,
+    );
 
     // Reload with relations
     return this.getConversationById(userId, savedConversation.id);
@@ -585,27 +589,29 @@ export class ConversationsService {
       select: ['fullName'],
     });
 
-    for (const newUserId of newUserIds) {
-      const notification: NotificationRequestedEvent = {
-        channel: 'push',
-        user_id: newUserId,
-        title: 'Added to group',
-        body: `${adderUser?.fullName || 'Someone'} added you to ${conversation.name || 'a group'}`,
-        type: NotificationType.System,
-        data: {
-          conversation_id: conversationId,
-          added_by: userId,
-        },
-        rich: {
-          image_url: conversation.avatarUrl || undefined,
-          priority: 'normal',
-          category: 'group_invite',
-          thread_id: conversationId,
-        },
-        requested_at: Date.now(),
-      };
-      this.kafkaClient.emit(KafkaTopics.NotificationRequested, notification);
-    }
+    const addedMemberNotifications = newUserIds.map((newUserId) => ({
+      channel: 'push' as const,
+      user_id: newUserId,
+      title: 'Added to group',
+      body: `${adderUser?.fullName || 'Someone'} added you to ${conversation.name || 'a group'}`,
+      type: NotificationType.System,
+      data: {
+        conversation_id: conversationId,
+        added_by: userId,
+      },
+      rich: {
+        image_url: conversation.avatarUrl || undefined,
+        priority: 'normal' as const,
+        category: 'group_invite',
+        thread_id: conversationId,
+      },
+      requested_at: Date.now(),
+    }));
+
+    await this.enqueueNotifications(
+      addedMemberNotifications,
+      `member_added:${conversationId}`,
+    );
 
     const allMemberIds = [
       ...conversation.members
@@ -1043,13 +1049,10 @@ export class ConversationsService {
       select: ['fullName'],
     });
 
-    for (const memberId of activeMemberIds) {
-      if (memberId === userId) {
-        continue;
-      }
-
-      const notification: NotificationRequestedEvent = {
-        channel: 'push',
+    const disbandNotifications = activeMemberIds
+      .filter((memberId) => memberId !== userId)
+      .map((memberId) => ({
+        channel: 'push' as const,
         user_id: memberId,
         title: 'Group disbanded',
         body: `${disbander?.fullName || 'Group owner'} disbanded ${conversationName || 'the group'}`,
@@ -1060,16 +1063,18 @@ export class ConversationsService {
           action: 'group_disbanded',
         },
         rich: {
-          priority: 'normal',
+          priority: 'normal' as const,
           category: 'group_disbanded',
           thread_id: conversationId,
         },
         requested_at: Date.now(),
         trace_id: `group-disbanded-notification:${conversationId}:${memberId}`,
-      };
+      }));
 
-      this.kafkaClient.emit(KafkaTopics.NotificationRequested, notification);
-    }
+    await this.enqueueNotifications(
+      disbandNotifications,
+      `group_disbanded:${conversationId}`,
+    );
 
     await this.cacheService.invalidateConversation(
       conversationId,
@@ -1287,6 +1292,8 @@ export class ConversationsService {
       select: ['id', 'fullName', 'avatarUrl'],
     });
 
+    const inviteNotifications: NotificationRequestedEvent[] = [];
+
     for (const invite of txResult.savedInvites) {
       const sentEvent: GroupInviteSentEvent = {
         invite_id: invite.id,
@@ -1321,8 +1328,12 @@ export class ConversationsService {
         requested_at: Date.now(),
         trace_id: `group-invite-sent:${invite.id}`,
       };
-      this.kafkaClient.emit(KafkaTopics.NotificationRequested, notification);
+      inviteNotifications.push(notification);
     }
+    await this.enqueueNotifications(
+      inviteNotifications,
+      `group_invite_sent:${conversationId}`,
+    );
 
     return {
       acceptedCount: txResult.savedInvites.length,
@@ -1851,6 +1862,47 @@ export class ConversationsService {
       createdAt: invite.createdAt,
       respondedAt: invite.respondedAt,
     };
+  }
+
+  private async enqueueNotifications(
+    notifications: NotificationRequestedEvent[],
+    context: string,
+  ): Promise<void> {
+    if (notifications.length === 0) {
+      return;
+    }
+
+    const batchSize = 50;
+
+    for (let offset = 0; offset < notifications.length; offset += batchSize) {
+      const batch = notifications.slice(offset, offset + batchSize);
+      const results = await Promise.allSettled(
+        batch.map((notification) =>
+          this.notificationPublisher.publish(notification),
+        ),
+      );
+
+      this.logNotificationPublishRejections(
+        results,
+        batch.map((notification) => notification.user_id),
+        context,
+      );
+    }
+  }
+
+  private logNotificationPublishRejections(
+    results: PromiseSettledResult<NotificationOutboxPublishResult>[],
+    recipientIds: string[],
+    context: string,
+  ): void {
+    results.forEach((result, index) => {
+      if (result.status === 'rejected' || result.value === 'failed') {
+        this.logger.error(
+          `[NotificationOutbox] failed to enqueue notification context=${context} recipient=${recipientIds[index] ?? 'unknown'}`,
+          result.status === 'rejected' ? result.reason : 'publish_failed',
+        );
+      }
+    });
   }
 
   private async expireInviteIfNeeded(

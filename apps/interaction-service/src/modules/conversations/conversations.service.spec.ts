@@ -13,9 +13,10 @@ import {
   User,
   Conversation,
   ConversationMember,
+  ConversationInvite,
 } from '@libs/database/entities';
 import { CacheService, REDIS_CLIENT } from '@libs/redis';
-import { KAFKA_CLIENT } from '@libs/kafka';
+import { KAFKA_CLIENT, NotificationOutboxPublisher } from '@libs/kafka';
 import { UpdateMemberRoleDtoRoleEnum } from '@app/constant';
 import { IsNull } from 'typeorm';
 
@@ -61,13 +62,27 @@ const createMockConversation = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
+type InviteRepositoryMock = {
+  findOne: jest.Mock;
+  find: jest.Mock;
+  findAndCount: jest.Mock;
+  create: jest.Mock;
+  save: jest.Mock;
+  update: jest.Mock;
+  manager: {
+    transaction: jest.Mock;
+  };
+};
+
 describe('ConversationsService', () => {
   let service: ConversationsService;
   let userRepository: Record<string, jest.Mock>;
   let conversationRepository: Record<string, jest.Mock>;
   let memberRepository: Record<string, jest.Mock>;
+  let inviteRepository: InviteRepositoryMock;
   let cacheService: Record<string, jest.Mock>;
   let kafkaClient: Record<string, jest.Mock>;
+  let notificationPublisher: Record<string, jest.Mock>;
   let redisClient: Record<string, jest.Mock>;
 
   beforeEach(async () => {
@@ -81,11 +96,13 @@ describe('ConversationsService', () => {
       create: jest
         .fn()
         .mockImplementation((data) => ({ ...data, id: uuid(1) })),
-      save: jest
-        .fn()
-        .mockImplementation((data) =>
-          Promise.resolve({ ...data, id: data.id || uuid(1) }),
-        ),
+      save: jest.fn().mockImplementation((data) =>
+        Promise.resolve({
+          ...data,
+          id: data.id || uuid(1),
+          createdAt: data.createdAt ?? new Date(),
+        }),
+      ),
       createQueryBuilder: jest.fn(),
     };
 
@@ -97,6 +114,18 @@ describe('ConversationsService', () => {
       createQueryBuilder: jest.fn(),
     };
 
+    inviteRepository = {
+      findOne: jest.fn(),
+      find: jest.fn(),
+      findAndCount: jest.fn(),
+      create: jest.fn().mockImplementation((data) => data),
+      save: jest.fn().mockImplementation((data) => Promise.resolve(data)),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
+      manager: {
+        transaction: jest.fn(),
+      },
+    };
+
     cacheService = {
       getConversationDetail: jest.fn().mockResolvedValue(null),
       setConversationDetail: jest.fn().mockResolvedValue(undefined),
@@ -106,6 +135,10 @@ describe('ConversationsService', () => {
 
     kafkaClient = {
       emit: jest.fn(),
+    };
+
+    notificationPublisher = {
+      publish: jest.fn().mockResolvedValue('queued'),
     };
 
     redisClient = {
@@ -125,8 +158,16 @@ describe('ConversationsService', () => {
           provide: getRepositoryToken(ConversationMember),
           useValue: memberRepository,
         },
+        {
+          provide: getRepositoryToken(ConversationInvite),
+          useValue: inviteRepository,
+        },
         { provide: CacheService, useValue: cacheService },
         { provide: KAFKA_CLIENT, useValue: kafkaClient },
+        {
+          provide: NotificationOutboxPublisher,
+          useValue: notificationPublisher,
+        },
         { provide: REDIS_CLIENT, useValue: redisClient },
       ],
     }).compile();
@@ -297,7 +338,10 @@ describe('ConversationsService', () => {
 
       // Mock the reload via getConversationById
       const savedConv = createMockConversation();
-      conversationRepository.save.mockResolvedValue({ id: uuid(1) });
+      conversationRepository.save.mockResolvedValue({
+        id: uuid(1),
+        createdAt: new Date(),
+      });
       conversationRepository.findOne.mockResolvedValue(savedConv);
 
       await service.createGroupConversation(uuid(2), {
@@ -321,7 +365,10 @@ describe('ConversationsService', () => {
       ]);
 
       const savedConv = createMockConversation();
-      conversationRepository.save.mockResolvedValue({ id: uuid(1) });
+      conversationRepository.save.mockResolvedValue({
+        id: uuid(1),
+        createdAt: new Date(),
+      });
       conversationRepository.findOne.mockResolvedValue(savedConv);
 
       await service.createGroupConversation(uuid(2), {

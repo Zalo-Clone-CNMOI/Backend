@@ -6,7 +6,7 @@ import {
   ConversationMember,
   ConversationInvite,
 } from '@libs/database/entities';
-import { KafkaModule } from '@libs/kafka';
+import { KafkaModule, NotificationOutboxModule } from '@libs/kafka';
 import { ConversationsController } from './conversations.controller';
 import { ConversationsService } from './conversations.service';
 
@@ -19,6 +19,7 @@ import { ConversationsService } from './conversations.service';
       ConversationInvite,
     ]),
     KafkaModule,
+    NotificationOutboxModule,
   ],
   controllers: [ConversationsController],
   providers: [ConversationsService],

@@ -29,6 +29,7 @@ import { APP_CONFIG, type AppConfig } from '@libs/config';
 import { MessageRepository } from '@libs/scylla';
 import { CacheService, CACHE_LOCK_RENEW_STATUS } from '@libs/redis';
 import { ConversationMembershipService } from '@libs/mvp-access';
+import { NotificationOutboxPublisher } from '@libs/kafka';
 import { User, ConversationMember } from '@libs/database';
 import { ChatPublisher } from '../services/chat.publisher';
 import {
@@ -78,6 +79,7 @@ export class PersistMessageConsumer {
     private readonly publisher: ChatPublisher,
     private readonly cacheService: CacheService,
     private readonly membershipService: ConversationMembershipService,
+    private readonly notificationPublisher: NotificationOutboxPublisher,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
     @InjectRepository(ConversationMember)
@@ -1355,39 +1357,54 @@ export class PersistMessageConsumer {
           ? `${messageBody.substring(0, 100)}...`
           : messageBody;
 
-      for (const recipientId of recipients) {
-        const notification: NotificationRequestedEvent = {
-          channel: 'push',
-          user_id: recipientId,
-          title: senderName || 'New message',
-          body: preview,
-          type: NotificationType.ChatMessage,
-          data: {
-            conversation_id: conversationId,
-            message_id: messageId,
-            sender_id: senderId,
-          },
-          rich: {
-            priority: 'high',
-            thread_id: conversationId,
-            category: 'message',
-          },
-          requested_at: Date.now(),
-          trace_id: notificationTraceId,
-        };
-        await this.publisher
-          .emit(KafkaTopics.NotificationRequested, notification)
-          .catch((err) =>
+      const batchSize = 50;
+      let successCount = 0;
+      let failureCount = 0;
+
+      for (let offset = 0; offset < recipients.length; offset += batchSize) {
+        const batchRecipients = recipients.slice(offset, offset + batchSize);
+        const publishTasks = batchRecipients.map((recipientId) => {
+          const notification: NotificationRequestedEvent = {
+            channel: 'push',
+            user_id: recipientId,
+            title: senderName || 'New message',
+            body: preview,
+            type: NotificationType.ChatMessage,
+            data: {
+              conversation_id: conversationId,
+              message_id: messageId,
+              sender_id: senderId,
+            },
+            rich: {
+              priority: 'high',
+              thread_id: conversationId,
+              category: 'message',
+            },
+            requested_at: Date.now(),
+            trace_id: notificationTraceId,
+          };
+
+          return this.notificationPublisher.publish(notification);
+        });
+
+        const batchResults = await Promise.allSettled(publishTasks);
+        batchResults.forEach((result, index) => {
+          if (result.status === 'rejected' || result.value === 'failed') {
+            failureCount += 1;
             this.logger.error(
-              `[${notificationTraceId}] Failed to emit notification for ${recipientId}`,
-              err,
-            ),
-          );
+              `[${notificationTraceId}] Failed to enqueue notification for ${batchRecipients[index]}`,
+              result.status === 'rejected' ? result.reason : 'publish_failed',
+            );
+            return;
+          }
+
+          successCount += 1;
+        });
       }
 
       this.logger.log(
-        `[${notificationTraceId}] Notifications emitted for ${recipients.length} recipients`,
-        { messageId },
+        `[${notificationTraceId}] Notification enqueue attempted for ${recipients.length} recipients (success=${successCount}, failed=${failureCount})`,
+        { messageId, successCount, failureCount },
       );
     } catch (error) {
       this.logger.error(

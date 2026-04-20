@@ -9,7 +9,11 @@ export const WsEvents = {
   ChatEdit: 'chat:edit',
   ChatMessageUpdated: 'chat:message:updated',
   ChatDelete: 'chat:delete',
+  // Backward-compatible alias for recall-only semantics.
+  ChatRecall: 'chat:delete',
   ChatMessageDeleted: 'chat:message:deleted',
+  // Backward-compatible alias for recall-only semantics.
+  ChatMessageRecalled: 'chat:message:deleted',
   ChatReact: 'chat:react',
   ChatUnreact: 'chat:unreact',
   ChatReactionAdded: 'chat:reaction:added',
@@ -33,6 +37,19 @@ export const WsEvents = {
   CallStateUpdated: 'call:state:updated',
   CallLeave: 'call:leave',
   CallLeft: 'call:left',
+
+  ConversationCreated: 'conversation:created',
+  ConversationUpdated: 'conversation:updated',
+  ConversationDisbanded: 'conversation:disbanded',
+  ConversationMemberAdded: 'conversation:member:added',
+  ConversationMemberRemoved: 'conversation:member:removed',
+  ConversationMemberRoleUpdated: 'conversation:member:role:updated',
+
+  GroupInviteSent: 'group:invite:sent',
+  GroupInviteAccepted: 'group:invite:accepted',
+  GroupInviteRejected: 'group:invite:rejected',
+  GroupInviteCancelled: 'group:invite:cancelled',
+  GroupInviteExpired: 'group:invite:expired',
 
   PresenceHeartbeat: 'presence:heartbeat',
   PresenceUpdate: 'presence:update',
@@ -155,6 +172,9 @@ export interface WsChatMessageDeletedPayload {
   sender_id: string;
   deleted_at: number;
 }
+
+// Backward-compatible alias for recall-only semantics.
+export type WsChatMessageRecalledPayload = WsChatMessageDeletedPayload;
 
 export interface WsChatReactPayload {
   message_id: string;
@@ -415,6 +435,109 @@ export interface WsConversationPinnedPayload {
 export interface WsConversationUnpinnedPayload {
   conversationId: string;
   unpinnedAt: number;
+}
+
+export interface WsConversationMemberPayload {
+  user_id: string;
+  full_name: string;
+  avatar_url: string | null;
+  role: 'owner' | 'admin' | 'member';
+}
+
+export interface WsConversationCreatedPayload {
+  conversation_id: string;
+  type: 'direct' | 'group';
+  name: string | null;
+  avatar_url: string | null;
+  created_by: string;
+  members: WsConversationMemberPayload[];
+  created_at: number;
+}
+
+export interface WsConversationUpdatedPayload {
+  conversation_id: string;
+  updated_by: string;
+  name: string | null;
+  avatar_url: string | null;
+  updated_at: number;
+}
+
+export interface WsConversationDisbandedPayload {
+  conversation_id: string;
+  disbanded_by: string;
+  member_ids: string[];
+  disbanded_at: number;
+}
+
+export interface WsConversationMemberAddedPayload {
+  conversation_id: string;
+  added_by: string;
+  members: WsConversationMemberPayload[];
+  added_at: number;
+}
+
+export interface WsConversationMemberRemovedPayload {
+  conversation_id: string;
+  removed_by: string;
+  removed_user_id: string;
+  removed_at: number;
+}
+
+export interface WsConversationMemberRoleUpdatedPayload {
+  conversation_id: string;
+  updated_by: string;
+  user_id: string;
+  previous_role: 'owner' | 'admin' | 'member';
+  current_role: 'owner' | 'admin' | 'member';
+  updated_at: number;
+}
+
+export interface WsGroupInviteSentPayload {
+  invite_id: string;
+  conversation_id: string;
+  inviter_id: string;
+  invited_user_id: string;
+  inviter_full_name: string;
+  conversation_name: string | null;
+  message: string | null;
+  expires_at: number;
+  sent_at: number;
+}
+
+export interface WsGroupInviteAcceptedPayload {
+  invite_id: string;
+  conversation_id: string;
+  inviter_id: string;
+  invited_user_id: string;
+  status: 'accepted';
+  responded_at: number;
+}
+
+export interface WsGroupInviteRejectedPayload {
+  invite_id: string;
+  conversation_id: string;
+  inviter_id: string;
+  invited_user_id: string;
+  status: 'rejected';
+  responded_at: number;
+}
+
+export interface WsGroupInviteCancelledPayload {
+  invite_id: string;
+  conversation_id: string;
+  inviter_id: string;
+  invited_user_id: string;
+  status: 'cancelled';
+  cancelled_at: number;
+}
+
+export interface WsGroupInviteExpiredPayload {
+  invite_id: string;
+  conversation_id: string;
+  inviter_id: string;
+  invited_user_id: string;
+  status: 'expired';
+  expired_at: number;
 }
 
 // ── Notification WebSocket Payloads ──────────────────────────────────────

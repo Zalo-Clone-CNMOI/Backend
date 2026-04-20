@@ -123,7 +123,7 @@ export class ConversationListItemDto {
   @ApiProperty({ description: 'Created at' })
   createdAt: Date;
 
-  @ApiProperty({ description: 'Last message' })
+  @ApiPropertyOptional({ description: 'Raw last message snapshot from cache' })
   last_message?: LastMessageDto | null;
 }
 
@@ -173,6 +173,9 @@ export class ConversationCallStateSnapshotDto {
   @ApiProperty({ description: 'Conversation ID' })
   conversation_id: string;
 
+  @ApiProperty({ description: 'Conversation type', enum: ['direct', 'group'] })
+  conversation_type: 'direct' | 'group';
+
   @ApiProperty({ description: 'Call type', enum: ['audio', 'video'] })
   call_type: 'audio' | 'video';
 
@@ -218,4 +221,50 @@ export class ConversationCallStateResponseDto {
 
   @ApiPropertyOptional({ description: 'Optional state reason' })
   reason?: string;
+}
+
+export class GroupInviteItemDto {
+  @ApiProperty({ description: 'Invite ID' })
+  id: string;
+
+  @ApiProperty({ description: 'Conversation ID' })
+  conversationId: string;
+
+  @ApiProperty({ description: 'Inviter user ID' })
+  inviterUserId: string;
+
+  @ApiProperty({ description: 'Invited user ID' })
+  invitedUserId: string;
+
+  @ApiProperty({
+    description: 'Invite status',
+    enum: ['pending', 'accepted', 'rejected', 'cancelled', 'expired'],
+  })
+  status: 'pending' | 'accepted' | 'rejected' | 'cancelled' | 'expired';
+
+  @ApiPropertyOptional({ description: 'Invite message' })
+  message: string | null;
+
+  @ApiProperty({ description: 'Invite expiry timestamp' })
+  expiresAt: Date;
+
+  @ApiProperty({ description: 'Invite created timestamp' })
+  createdAt: Date;
+
+  @ApiPropertyOptional({ description: 'Invite responded timestamp' })
+  respondedAt: Date | null;
+}
+
+export class SendGroupInvitesResponseDto {
+  @ApiProperty({ description: 'Accepted invite count' })
+  acceptedCount: number;
+
+  @ApiProperty({ description: 'Skipped invite count' })
+  skippedCount: number;
+
+  @ApiProperty({
+    description: 'Created invite IDs',
+    type: [String],
+  })
+  inviteIds: string[];
 }

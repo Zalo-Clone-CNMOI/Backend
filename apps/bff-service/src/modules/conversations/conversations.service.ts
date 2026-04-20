@@ -1,10 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import {
+  GroupInviteStatus,
   InteractionClientService,
   CreateGroupConversationDto,
   CreateDirectConversationDto,
   UpdateConversationDto,
   AddMembersDto,
+  SendGroupInvitesDto,
+  SendGroupInvitesResponseDto,
   UpdateMemberRoleDto,
   UpdateMemberSettingsDto,
   EndConversationCallDto,
@@ -75,6 +78,91 @@ export class ConversationsService {
     return this.interactionClient.leaveConversation(
       accessToken,
       conversationId,
+    );
+  }
+
+  async disbandConversation(accessToken: string, conversationId: string) {
+    return this.interactionClient.disbandConversation(
+      accessToken,
+      conversationId,
+    );
+  }
+
+  async sendGroupInvites(
+    accessToken: string,
+    conversationId: string,
+    dto: SendGroupInvitesDto,
+  ): Promise<SendGroupInvitesResponseDto> {
+    return this.interactionClient.sendGroupInvites(
+      accessToken,
+      conversationId,
+      dto,
+    );
+  }
+
+  async getPendingGroupInvites(
+    accessToken: string,
+    page?: number,
+    limit?: number,
+    status?: GroupInviteStatus,
+  ) {
+    return this.interactionClient.getPendingGroupInvites(
+      accessToken,
+      page,
+      limit,
+      status,
+    );
+  }
+
+  async getConversationInvites(
+    accessToken: string,
+    conversationId: string,
+    page?: number,
+    limit?: number,
+    status?: GroupInviteStatus,
+  ) {
+    return this.interactionClient.getConversationInvites(
+      accessToken,
+      conversationId,
+      page,
+      limit,
+      status,
+    );
+  }
+
+  async acceptGroupInvite(
+    accessToken: string,
+    conversationId: string,
+    inviteId: string,
+  ) {
+    return this.interactionClient.acceptGroupInvite(
+      accessToken,
+      conversationId,
+      inviteId,
+    );
+  }
+
+  async rejectGroupInvite(
+    accessToken: string,
+    conversationId: string,
+    inviteId: string,
+  ) {
+    return this.interactionClient.rejectGroupInvite(
+      accessToken,
+      conversationId,
+      inviteId,
+    );
+  }
+
+  async cancelGroupInvite(
+    accessToken: string,
+    conversationId: string,
+    inviteId: string,
+  ) {
+    return this.interactionClient.cancelGroupInvite(
+      accessToken,
+      conversationId,
+      inviteId,
     );
   }
 

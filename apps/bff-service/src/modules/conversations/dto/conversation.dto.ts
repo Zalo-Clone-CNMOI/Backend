@@ -1,4 +1,7 @@
-import { UpdateMemberRoleDtoRoleEnum } from '@app/clients/interaction-client';
+import {
+  GroupInviteStatus,
+  UpdateMemberRoleDtoRoleEnum,
+} from '@app/clients/interaction-client';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsNotEmpty,
@@ -9,11 +12,15 @@ import {
   ArrayMinSize,
   ArrayMaxSize,
   MaxLength,
-  IsUrl,
   IsBoolean,
   IsEnum,
   MinLength,
+  IsInt,
+  Min,
+  Max,
+  Matches,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
 /**
  * Create group conversation DTO
@@ -39,11 +46,15 @@ export class CreateGroupConversationDto {
   memberIds: string[];
 
   @ApiPropertyOptional({
-    description: 'Group avatar URL',
-    example: 'https://example.com/avatar.jpg',
+    description: 'Group avatar object key',
+    example: 'public/group/avatar.png',
   })
   @IsOptional()
-  @IsUrl({}, { message: 'Invalid avatar URL' })
+  @IsString({ message: 'Invalid avatar key' })
+  @Matches(/^(public|private)\/[-A-Za-z0-9._/]+$/, {
+    message:
+      'Avatar key must start with public/ or private/ and contain only valid key characters',
+  })
   avatarUrl?: string;
 }
 
@@ -74,11 +85,15 @@ export class UpdateConversationDto {
   name?: string;
 
   @ApiPropertyOptional({
-    description: 'Group avatar URL',
-    example: 'https://example.com/new-avatar.jpg',
+    description: 'Group avatar object key',
+    example: 'public/group/new-avatar.png',
   })
   @IsOptional()
-  @IsUrl({}, { message: 'Invalid avatar URL' })
+  @IsString({ message: 'Invalid avatar key' })
+  @Matches(/^(public|private)\/[-A-Za-z0-9._/]+$/, {
+    message:
+      'Avatar key must start with public/ or private/ and contain only valid key characters',
+  })
   avatarUrl?: string;
 }
 
@@ -103,7 +118,7 @@ export class AddMembersDto {
 export class UpdateMemberRoleDto {
   @ApiProperty({
     description: 'New role for the member',
-    example: 'admin',
+    example: UpdateMemberRoleDtoRoleEnum.admin,
     enum: UpdateMemberRoleDtoRoleEnum,
   })
   @IsEnum(UpdateMemberRoleDtoRoleEnum, { message: 'Invalid conversation role' })
@@ -133,6 +148,9 @@ export class UpdateMemberSettingsDto {
   isMuted?: boolean;
 }
 
+/**
+ * End active call DTO
+ */
 export class EndConversationCallDto {
   @ApiPropertyOptional({
     description: 'Optional reason for ending the call',
@@ -143,4 +161,69 @@ export class EndConversationCallDto {
   @MinLength(1, { message: 'Reason must not be empty' })
   @MaxLength(255, { message: 'Reason must not exceed 255 characters' })
   reason?: string;
+}
+
+/**
+ * Send group invites DTO
+ */
+export class SendGroupInvitesDto {
+  @ApiProperty({
+    description: 'User IDs to invite',
+    example: ['550e8400-e29b-41d4-a716-446655440001'],
+  })
+  @IsArray()
+  @ArrayMinSize(1, { message: 'At least 1 user is required' })
+  @ArrayMaxSize(50, { message: 'Maximum 50 users can be invited at once' })
+  @IsUUID('4', { each: true, message: 'Each user ID must be a valid UUID' })
+  userIds: string[];
+
+  @ApiPropertyOptional({
+    description: 'Optional invite message',
+    example: 'Join our project planning group',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500, { message: 'Message must not exceed 500 characters' })
+  message?: string;
+
+  @ApiPropertyOptional({
+    description: 'Invite expiration in hours',
+    example: 168,
+    minimum: 1,
+    maximum: 168,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(168)
+  expiresInHours?: number;
+}
+
+/**
+ * Group invite query DTO
+ */
+export class GetGroupInvitesQueryDto {
+  @ApiPropertyOptional({ description: 'Page number', example: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
+
+  @ApiPropertyOptional({ description: 'Page size', example: 20 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  limit?: number;
+
+  @ApiPropertyOptional({
+    description: 'Invite status filter',
+    enum: GroupInviteStatus,
+  })
+  @IsOptional()
+  @IsEnum(GroupInviteStatus)
+  status?: GroupInviteStatus;
 }

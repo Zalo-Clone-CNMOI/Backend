@@ -36,7 +36,6 @@ describe('ConversationFanoutConsumer', () => {
       userId: 'user-1',
       conversationId: 'conv-1',
       unpinnedAt: 1706163000000,
-      trace_id: 'trace-conv-unpin-1',
     });
 
     expect(gateway.emitToUser).toHaveBeenCalledWith(

@@ -29,6 +29,7 @@ describe('CallHandler', () => {
     await handler.handleStart(socket, {
       call_id: 'call-1',
       conversation_id: 'conv-1',
+      conversation_type: 'direct',
       call_type: 'video',
       participant_ids: ['user-2'],
       started_at: 1700000000000,

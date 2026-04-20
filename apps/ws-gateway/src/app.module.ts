@@ -25,6 +25,7 @@ import {
   FriendFanoutConsumer,
   ConversationFanoutConsumer,
   CallFanoutConsumer,
+  InteractionFanoutConsumer,
   AiFanoutConsumer,
   NotificationFanoutConsumer,
 } from './transport/fanout';
@@ -48,6 +49,7 @@ import {
     FriendFanoutConsumer,
     ConversationFanoutConsumer,
     CallFanoutConsumer,
+    InteractionFanoutConsumer,
     AiFanoutConsumer,
     NotificationFanoutConsumer,
   ],

@@ -4,5 +4,6 @@ export * from './auth-fanout.consumer';
 export * from './friend-fanout.consumer';
 export * from './conversation-fanout.consumer';
 export * from './call-fanout.consumer';
+export * from './interaction-fanout.consumer';
 export * from './ai-fanout.consumer';
 export * from './notification-fanout.consumer';

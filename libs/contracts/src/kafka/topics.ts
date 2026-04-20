@@ -4,7 +4,11 @@ export const KafkaTopics = {
   ChatMessageEdit: 'chat.message.edit',
   ChatMessageUpdated: 'chat.message.updated',
   ChatMessageDelete: 'chat.message.delete',
+  // Backward-compatible alias for recall-only semantics.
+  ChatMessageRecall: 'chat.message.delete',
   ChatMessageDeleted: 'chat.message.deleted',
+  // Backward-compatible alias for recall-only semantics.
+  ChatMessageRecalled: 'chat.message.deleted',
   ChatMessageForward: 'chat.message.forward',
   ChatReactionAdd: 'chat.reaction.add',
   ChatReactionAdded: 'chat.reaction.added',
@@ -27,6 +31,19 @@ export const KafkaTopics = {
   CallStateUpdated: 'call.state.updated',
   CallLeave: 'call.leave',
   CallLeft: 'call.left',
+
+  ConversationCreated: 'conversation.created',
+  ConversationUpdated: 'conversation.updated',
+  ConversationDisbanded: 'conversation.disbanded',
+  ConversationMemberAdded: 'conversation.member.added',
+  ConversationMemberRemoved: 'conversation.member.removed',
+  ConversationMemberRoleUpdated: 'conversation.member.role.updated',
+
+  GroupInviteSent: 'group.invite.sent',
+  GroupInviteAccepted: 'group.invite.accepted',
+  GroupInviteRejected: 'group.invite.rejected',
+  GroupInviteCancelled: 'group.invite.cancelled',
+  GroupInviteExpired: 'group.invite.expired',
 
   PresenceConnect: 'presence.connect',
   PresenceDisconnect: 'presence.disconnect',

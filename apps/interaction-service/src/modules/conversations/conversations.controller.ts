@@ -33,6 +33,10 @@ import {
   CreateDirectConversationDto,
   UpdateConversationDto,
   AddMembersDto,
+  GetGroupInvitesQueryDto,
+  GroupInviteItemDto,
+  SendGroupInvitesDto,
+  SendGroupInvitesResponseDto,
   UpdateMemberRoleDto,
   UpdateMemberSettingsDto,
   EndConversationCallDto,
@@ -203,6 +207,145 @@ export class ConversationsController {
     @Param('conversationId', ParseUUIDPipe) conversationId: string,
   ): Promise<{ message: string }> {
     return this.conversationsService.leaveConversation(user.id, conversationId);
+  }
+
+  /**
+   * Disband group conversation
+   */
+  @Post(':conversationId/disband')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @ApiOperation({ summary: 'Disband group conversation (owner only)' })
+  @ApiParam({ name: 'conversationId', description: 'Conversation ID' })
+  @ApiResponse({ status: 200, description: 'Conversation disbanded' })
+  async disbandConversation(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('conversationId', ParseUUIDPipe) conversationId: string,
+  ): Promise<{ message: string }> {
+    return this.conversationsService.disbandConversation(
+      user.id,
+      conversationId,
+    );
+  }
+
+  /**
+   * Send group invites
+   */
+  @Post(':conversationId/invites')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @ApiOperation({ summary: 'Send invites to group conversation users' })
+  @ApiParam({ name: 'conversationId', description: 'Conversation ID' })
+  @ApiResponse({ status: 201, description: 'Invites created' })
+  async sendGroupInvites(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('conversationId', ParseUUIDPipe) conversationId: string,
+    @Body() dto: SendGroupInvitesDto,
+  ): Promise<SendGroupInvitesResponseDto> {
+    return this.conversationsService.sendGroupInvites(
+      user.id,
+      conversationId,
+      dto,
+    );
+  }
+
+  /**
+   * Get pending invites for current user
+   */
+  @Get('invites/pending')
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  @ApiOperation({ summary: 'Get pending group invites for current user' })
+  @ApiResponse({ status: 200, description: 'Pending invites list' })
+  async getPendingGroupInvites(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: GetGroupInvitesQueryDto,
+  ): Promise<PaginatedResponse<GroupInviteItemDto>> {
+    return this.conversationsService.getPendingGroupInvites(user.id, query);
+  }
+
+  /**
+   * Get invites by conversation (admin/owner)
+   */
+  @Get(':conversationId/invites')
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  @ApiOperation({ summary: 'Get group invites by conversation' })
+  @ApiParam({ name: 'conversationId', description: 'Conversation ID' })
+  @ApiResponse({ status: 200, description: 'Conversation invites list' })
+  async getConversationInvites(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('conversationId', ParseUUIDPipe) conversationId: string,
+    @Query() query: GetGroupInvitesQueryDto,
+  ): Promise<PaginatedResponse<GroupInviteItemDto>> {
+    return this.conversationsService.getConversationInvites(
+      user.id,
+      conversationId,
+      query,
+    );
+  }
+
+  /**
+   * Accept invite
+   */
+  @Post(':conversationId/invites/:inviteId/accept')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  @ApiOperation({ summary: 'Accept group invite' })
+  @ApiParam({ name: 'conversationId', description: 'Conversation ID' })
+  @ApiParam({ name: 'inviteId', description: 'Invite ID' })
+  @ApiResponse({ status: 200, description: 'Invite accepted' })
+  async acceptGroupInvite(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('conversationId', ParseUUIDPipe) conversationId: string,
+    @Param('inviteId', ParseUUIDPipe) inviteId: string,
+  ): Promise<{ message: string }> {
+    return this.conversationsService.acceptGroupInvite(
+      user.id,
+      conversationId,
+      inviteId,
+    );
+  }
+
+  /**
+   * Reject invite
+   */
+  @Post(':conversationId/invites/:inviteId/reject')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  @ApiOperation({ summary: 'Reject group invite' })
+  @ApiParam({ name: 'conversationId', description: 'Conversation ID' })
+  @ApiParam({ name: 'inviteId', description: 'Invite ID' })
+  @ApiResponse({ status: 200, description: 'Invite rejected' })
+  async rejectGroupInvite(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('conversationId', ParseUUIDPipe) conversationId: string,
+    @Param('inviteId', ParseUUIDPipe) inviteId: string,
+  ): Promise<{ message: string }> {
+    return this.conversationsService.rejectGroupInvite(
+      user.id,
+      conversationId,
+      inviteId,
+    );
+  }
+
+  /**
+   * Cancel invite
+   */
+  @Post(':conversationId/invites/:inviteId/cancel')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  @ApiOperation({ summary: 'Cancel group invite' })
+  @ApiParam({ name: 'conversationId', description: 'Conversation ID' })
+  @ApiParam({ name: 'inviteId', description: 'Invite ID' })
+  @ApiResponse({ status: 200, description: 'Invite cancelled' })
+  async cancelGroupInvite(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('conversationId', ParseUUIDPipe) conversationId: string,
+    @Param('inviteId', ParseUUIDPipe) inviteId: string,
+  ): Promise<{ message: string }> {
+    return this.conversationsService.cancelGroupInvite(
+      user.id,
+      conversationId,
+      inviteId,
+    );
   }
 
   /**

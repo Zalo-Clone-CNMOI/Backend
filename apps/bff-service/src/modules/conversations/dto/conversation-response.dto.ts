@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { GroupInviteStatus } from '@app/clients/interaction-client';
 
 /**
  * Conversation member response
@@ -156,4 +157,44 @@ export class ConversationCallStateResponseDto {
 
   @ApiPropertyOptional({ description: 'Optional state reason' })
   reason?: string;
+}
+
+export class GroupInviteItemDto {
+  @ApiProperty({ description: 'Invite ID' })
+  id: string;
+
+  @ApiProperty({ description: 'Conversation ID' })
+  conversationId: string;
+
+  @ApiProperty({ description: 'Inviter user ID' })
+  inviterUserId: string;
+
+  @ApiProperty({ description: 'Invited user ID' })
+  invitedUserId: string;
+
+  @ApiProperty({ description: 'Invite status' })
+  status: GroupInviteStatus;
+
+  @ApiPropertyOptional({ description: 'Optional invite message' })
+  message: string | null;
+
+  @ApiProperty({ description: 'Invite expires at' })
+  expiresAt: Date;
+
+  @ApiProperty({ description: 'Invite created at' })
+  createdAt: Date;
+
+  @ApiPropertyOptional({ description: 'Invite responded at' })
+  respondedAt: Date | null;
+}
+
+export class SendGroupInvitesResponseDto {
+  @ApiProperty({ description: 'Number of invites created' })
+  acceptedCount: number;
+
+  @ApiProperty({ description: 'Number of skipped users' })
+  skippedCount: number;
+
+  @ApiProperty({ description: 'Created invite IDs', type: [String] })
+  inviteIds: string[];
 }

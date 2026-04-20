@@ -1,4 +1,5 @@
-import { WsReactionTypes } from './limits';
+import { WsCallSignalTypes, WsCallTypes, WsReactionTypes } from './limits';
+import { CallConversationType } from '../kafka/call.events';
 
 export const WsEvents = {
   ChatJoin: 'chat:join',
@@ -17,8 +18,25 @@ export const WsEvents = {
   ChatUnreact: 'chat:unreact',
   ChatReactionAdded: 'chat:reaction:added',
   ChatReactionRemoved: 'chat:reaction:removed',
+  ChatMessagePinned: 'chat:message:pinned',
+  ChatMessageUnpinned: 'chat:message:unpinned',
   ChatTyping: 'chat:typing',
   ChatTypingUpdate: 'chat:typing:update',
+
+  CallStart: 'call:start',
+  CallStarted: 'call:started',
+  CallSignal: 'call:signal',
+  CallSignalReceived: 'call:signal:received',
+  CallAccept: 'call:accept',
+  CallAccepted: 'call:accepted',
+  CallReject: 'call:reject',
+  CallRejected: 'call:rejected',
+  CallEnd: 'call:end',
+  CallEnded: 'call:ended',
+  CallStateRequest: 'call:state:request',
+  CallStateUpdated: 'call:state:updated',
+  CallLeave: 'call:leave',
+  CallLeft: 'call:left',
 
   ConversationCreated: 'conversation:created',
   ConversationUpdated: 'conversation:updated',
@@ -47,6 +65,8 @@ export const WsEvents = {
   RespondFriendRequest: 'friend:request:respond',
   CancelFriendRequest: 'friend:request:cancel',
   FriendRemoved: 'friend:removed',
+  ConversationPinned: 'conversation:pinned',
+  ConversationUnpinned: 'conversation:unpinned',
 
   // ── Notification Events ─────────────────────────────────────────────
   NotificationSent: 'notification:sent',
@@ -180,6 +200,22 @@ export interface WsChatReactionRemovedPayload {
   user_id: string;
 }
 
+export interface WsChatMessagePinnedPayload {
+  message_id: string;
+  conversation_id: string;
+  created_at: number;
+  pinned_by: string;
+  pinned_at: number;
+}
+
+export interface WsChatMessageUnpinnedPayload {
+  message_id: string;
+  conversation_id: string;
+  created_at: number;
+  unpinned_by: string;
+  unpinned_at: number;
+}
+
 export interface WsChatTypingPayload {
   conversation_id: string;
   username: string;
@@ -193,6 +229,130 @@ export interface WsChatTypingUser {
 export interface WsChatTypingUpdatePayload {
   conversation_id: string;
   users: WsChatTypingUser[];
+}
+
+export interface WsCallStartPayload {
+  call_id: string;
+  conversation_id: string;
+  conversation_type: CallConversationType;
+  call_type: (typeof WsCallTypes)[number];
+  participant_ids?: string[];
+  started_at: number;
+}
+
+export interface WsCallStartedPayload {
+  call_id: string;
+  conversation_id: string;
+  initiator_id: string;
+  call_type: (typeof WsCallTypes)[number];
+  participant_ids: string[];
+  started_at: number;
+}
+
+export interface WsCallSignalPayload {
+  call_id: string;
+  conversation_id: string;
+  target_user_id?: string;
+  signal_type: (typeof WsCallSignalTypes)[number];
+  sdp?: string;
+  candidate?: string;
+  sdp_mid?: string;
+  sdp_mline_index?: number;
+  sent_at: number;
+}
+
+export interface WsCallSignalReceivedPayload {
+  call_id: string;
+  conversation_id: string;
+  sender_id: string;
+  target_user_id?: string;
+  signal_type: (typeof WsCallSignalTypes)[number];
+  sdp?: string;
+  candidate?: string;
+  sdp_mid?: string;
+  sdp_mline_index?: number;
+  sent_at: number;
+}
+
+export interface WsCallAcceptPayload {
+  call_id: string;
+  conversation_id: string;
+  accepted_at: number;
+}
+
+export interface WsCallAcceptedPayload {
+  call_id: string;
+  conversation_id: string;
+  user_id: string;
+  accepted_at: number;
+}
+
+export interface WsCallRejectPayload {
+  call_id: string;
+  conversation_id: string;
+  reason?: string;
+  rejected_at: number;
+}
+
+export interface WsCallRejectedPayload {
+  call_id: string;
+  conversation_id: string;
+  user_id: string;
+  reason?: string;
+  rejected_at: number;
+}
+
+export interface WsCallEndPayload {
+  call_id: string;
+  conversation_id: string;
+  reason?: string;
+  ended_at: number;
+}
+
+export interface WsCallEndedPayload {
+  call_id: string;
+  conversation_id: string;
+  user_id: string;
+  reason?: string;
+  ended_at: number;
+}
+
+export interface WsCallStateRequestPayload {
+  conversation_id: string;
+  requested_at: number;
+}
+
+export interface WsCallLeavePayload {
+  call_id: string;
+  conversation_id: string;
+  reason?: string;
+  left_at: number;
+}
+
+export interface WsCallLeftPayload {
+  call_id: string;
+  conversation_id: string;
+  user_id: string;
+  reason?: string;
+  left_at: number;
+}
+
+export interface WsCallStateUpdatedPayload {
+  conversation_id: string;
+  state: {
+    call_id: string;
+    conversation_id: string;
+    conversation_type: CallConversationType;
+    call_type: (typeof WsCallTypes)[number];
+    status: 'ringing' | 'ongoing' | 'ended';
+    initiator_id: string;
+    participants: Record<string, 'invited' | 'accepted' | 'rejected' | 'left'>;
+    started_at: number;
+    ended_at?: number;
+  } | null;
+  requested_by?: string;
+  updated_at: number;
+  reason?: string;
 }
 
 export interface WsPresenceHeartbeatPayload {
@@ -265,6 +425,16 @@ export interface WsCancelFriendRequestPayload {
 
 export interface WsFriendRemovedPayload {
   userId: string;
+}
+
+export interface WsConversationPinnedPayload {
+  conversationId: string;
+  pinnedAt: number;
+}
+
+export interface WsConversationUnpinnedPayload {
+  conversationId: string;
+  unpinnedAt: number;
 }
 
 export interface WsConversationMemberPayload {

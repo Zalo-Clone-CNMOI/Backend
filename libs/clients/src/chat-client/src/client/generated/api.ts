@@ -29,6 +29,19 @@ import { BASE_PATH, COLLECTION_FORMATS, BaseAPI, RequiredError, operationServerM
 /**
  * 
  * @export
+ * @interface ActionResponseDto
+ */
+export interface ActionResponseDto {
+    /**
+     * Action result message
+     * @type {string}
+     * @memberof ActionResponseDto
+     */
+    'message': string;
+}
+/**
+ * 
+ * @export
  * @interface AttachmentResponseDto
  */
 export interface AttachmentResponseDto {
@@ -367,6 +380,50 @@ export interface MessageSearchResponseDto {
 /**
  * 
  * @export
+ * @interface PinnedMessageDto
+ */
+export interface PinnedMessageDto {
+    /**
+     * 
+     * @type {MessageResponseDto}
+     * @memberof PinnedMessageDto
+     */
+    'message': MessageResponseDto;
+    /**
+     * User ID who pinned the message
+     * @type {string}
+     * @memberof PinnedMessageDto
+     */
+    'pinnedBy': string;
+    /**
+     * Pinned timestamp (epoch ms)
+     * @type {number}
+     * @memberof PinnedMessageDto
+     */
+    'pinnedAt': number;
+}
+/**
+ * 
+ * @export
+ * @interface PinnedMessageListResponseDto
+ */
+export interface PinnedMessageListResponseDto {
+    /**
+     * Pinned messages
+     * @type {Array<PinnedMessageDto>}
+     * @memberof PinnedMessageListResponseDto
+     */
+    'items': Array<PinnedMessageDto>;
+    /**
+     * Total pinned messages in this response
+     * @type {number}
+     * @memberof PinnedMessageListResponseDto
+     */
+    'total': number;
+}
+/**
+ * 
+ * @export
  * @interface ReactionSummaryDto
  */
 export interface ReactionSummaryDto {
@@ -555,6 +612,56 @@ export const MessagesApiAxiosParamCreator = function (configuration?: Configurat
         },
         /**
          * 
+         * @summary Get pinned messages in a conversation
+         * @param {string} conversationId Conversation ID
+         * @param {string} xUserId Authenticated user id
+         * @param {number} [limit] Max pinned messages to return
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        getPinnedMessages: async (conversationId: string, xUserId: string, limit?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'conversationId' is not null or undefined
+            assertParamExists('getPinnedMessages', 'conversationId', conversationId)
+            // verify required parameter 'xUserId' is not null or undefined
+            assertParamExists('getPinnedMessages', 'xUserId', xUserId)
+            const localVarPath = `/v1/messages/{conversationId}/pins`
+                .replace(`{${"conversationId"}}`, encodeURIComponent(String(conversationId)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication BearerAuth required
+            // http bearer authentication required
+            await setBearerAuthToObject(localVarHeaderParameter, configuration)
+
+            if (limit !== undefined) {
+                localVarQueryParameter['limit'] = limit;
+            }
+
+            if (xUserId != null) {
+                localVarHeaderParameter['x-user-id'] = String(xUserId);
+            }
+
+
+    
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
          * @summary Get reactions for a message
          * @param {string} messageId Message ID
          * @param {*} [options] Override http request option.
@@ -593,16 +700,70 @@ export const MessagesApiAxiosParamCreator = function (configuration?: Configurat
         },
         /**
          * 
+         * @summary Pin a message
+         * @param {string} conversationId Conversation ID
+         * @param {string} createdAt Message created_at timestamp (epoch ms)
+         * @param {string} messageId Message ID
+         * @param {string} xUserId Authenticated user id
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        pinMessage: async (conversationId: string, createdAt: string, messageId: string, xUserId: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'conversationId' is not null or undefined
+            assertParamExists('pinMessage', 'conversationId', conversationId)
+            // verify required parameter 'createdAt' is not null or undefined
+            assertParamExists('pinMessage', 'createdAt', createdAt)
+            // verify required parameter 'messageId' is not null or undefined
+            assertParamExists('pinMessage', 'messageId', messageId)
+            // verify required parameter 'xUserId' is not null or undefined
+            assertParamExists('pinMessage', 'xUserId', xUserId)
+            const localVarPath = `/v1/messages/{conversationId}/{createdAt}/{messageId}/pin`
+                .replace(`{${"conversationId"}}`, encodeURIComponent(String(conversationId)))
+                .replace(`{${"createdAt"}}`, encodeURIComponent(String(createdAt)))
+                .replace(`{${"messageId"}}`, encodeURIComponent(String(messageId)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication BearerAuth required
+            // http bearer authentication required
+            await setBearerAuthToObject(localVarHeaderParameter, configuration)
+
+            if (xUserId != null) {
+                localVarHeaderParameter['x-user-id'] = String(xUserId);
+            }
+
+
+    
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
          * @summary Search messages in a conversation by keyword
          * @param {string} conversationId Conversation ID
          * @param {string} [q] Keyword to search in message body
          * @param {string} [senderId] Filter by sender UUID
          * @param {number} [from] Filter messages created after this timestamp (epoch ms)
          * @param {number} [to] Filter messages created before this timestamp (epoch ms)
+         * @param {SearchMessagesFileTypeEnum} [fileType] Filter by attachment group (images, video, files)
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        searchMessages: async (conversationId: string, q?: string, senderId?: string, from?: number, to?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        searchMessages: async (conversationId: string, q?: string, senderId?: string, from?: number, to?: number, fileType?: SearchMessagesFileTypeEnum, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             // verify required parameter 'conversationId' is not null or undefined
             assertParamExists('searchMessages', 'conversationId', conversationId)
             const localVarPath = `/v1/messages/{conversationId}/search`
@@ -636,6 +797,63 @@ export const MessagesApiAxiosParamCreator = function (configuration?: Configurat
 
             if (to !== undefined) {
                 localVarQueryParameter['to'] = to;
+            }
+
+            if (fileType !== undefined) {
+                localVarQueryParameter['fileType'] = fileType;
+            }
+
+
+    
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
+         * @summary Unpin a message
+         * @param {string} conversationId Conversation ID
+         * @param {string} createdAt Message created_at timestamp (epoch ms)
+         * @param {string} messageId Message ID
+         * @param {string} xUserId Authenticated user id
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        unpinMessage: async (conversationId: string, createdAt: string, messageId: string, xUserId: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'conversationId' is not null or undefined
+            assertParamExists('unpinMessage', 'conversationId', conversationId)
+            // verify required parameter 'createdAt' is not null or undefined
+            assertParamExists('unpinMessage', 'createdAt', createdAt)
+            // verify required parameter 'messageId' is not null or undefined
+            assertParamExists('unpinMessage', 'messageId', messageId)
+            // verify required parameter 'xUserId' is not null or undefined
+            assertParamExists('unpinMessage', 'xUserId', xUserId)
+            const localVarPath = `/v1/messages/{conversationId}/{createdAt}/{messageId}/pin`
+                .replace(`{${"conversationId"}}`, encodeURIComponent(String(conversationId)))
+                .replace(`{${"createdAt"}}`, encodeURIComponent(String(createdAt)))
+                .replace(`{${"messageId"}}`, encodeURIComponent(String(messageId)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'DELETE', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication BearerAuth required
+            // http bearer authentication required
+            await setBearerAuthToObject(localVarHeaderParameter, configuration)
+
+            if (xUserId != null) {
+                localVarHeaderParameter['x-user-id'] = String(xUserId);
             }
 
 
@@ -705,6 +923,21 @@ export const MessagesApiFp = function(configuration?: Configuration) {
         },
         /**
          * 
+         * @summary Get pinned messages in a conversation
+         * @param {string} conversationId Conversation ID
+         * @param {string} xUserId Authenticated user id
+         * @param {number} [limit] Max pinned messages to return
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async getPinnedMessages(conversationId: string, xUserId: string, limit?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<PinnedMessageListResponseDto>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.getPinnedMessages(conversationId, xUserId, limit, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['MessagesApi.getPinnedMessages']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
          * @summary Get reactions for a message
          * @param {string} messageId Message ID
          * @param {*} [options] Override http request option.
@@ -718,19 +951,52 @@ export const MessagesApiFp = function(configuration?: Configuration) {
         },
         /**
          * 
+         * @summary Pin a message
+         * @param {string} conversationId Conversation ID
+         * @param {string} createdAt Message created_at timestamp (epoch ms)
+         * @param {string} messageId Message ID
+         * @param {string} xUserId Authenticated user id
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async pinMessage(conversationId: string, createdAt: string, messageId: string, xUserId: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ActionResponseDto>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.pinMessage(conversationId, createdAt, messageId, xUserId, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['MessagesApi.pinMessage']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
          * @summary Search messages in a conversation by keyword
          * @param {string} conversationId Conversation ID
          * @param {string} [q] Keyword to search in message body
          * @param {string} [senderId] Filter by sender UUID
          * @param {number} [from] Filter messages created after this timestamp (epoch ms)
          * @param {number} [to] Filter messages created before this timestamp (epoch ms)
+         * @param {SearchMessagesFileTypeEnum} [fileType] Filter by attachment group (images, video, files)
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async searchMessages(conversationId: string, q?: string, senderId?: string, from?: number, to?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<MessageSearchResponseDto>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.searchMessages(conversationId, q, senderId, from, to, options);
+        async searchMessages(conversationId: string, q?: string, senderId?: string, from?: number, to?: number, fileType?: SearchMessagesFileTypeEnum, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<MessageSearchResponseDto>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.searchMessages(conversationId, q, senderId, from, to, fileType, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['MessagesApi.searchMessages']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
+         * @summary Unpin a message
+         * @param {string} conversationId Conversation ID
+         * @param {string} createdAt Message created_at timestamp (epoch ms)
+         * @param {string} messageId Message ID
+         * @param {string} xUserId Authenticated user id
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async unpinMessage(conversationId: string, createdAt: string, messageId: string, xUserId: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ActionResponseDto>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.unpinMessage(conversationId, createdAt, messageId, xUserId, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['MessagesApi.unpinMessage']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
     }
@@ -775,6 +1041,16 @@ export const MessagesApiFactory = function (configuration?: Configuration, baseP
         },
         /**
          * 
+         * @summary Get pinned messages in a conversation
+         * @param {MessagesApiGetPinnedMessagesRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        getPinnedMessages(requestParameters: MessagesApiGetPinnedMessagesRequest, options?: RawAxiosRequestConfig): AxiosPromise<PinnedMessageListResponseDto> {
+            return localVarFp.getPinnedMessages(requestParameters.conversationId, requestParameters.xUserId, requestParameters.limit, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
          * @summary Get reactions for a message
          * @param {MessagesApiGetReactionsRequest} requestParameters Request parameters.
          * @param {*} [options] Override http request option.
@@ -785,13 +1061,33 @@ export const MessagesApiFactory = function (configuration?: Configuration, baseP
         },
         /**
          * 
+         * @summary Pin a message
+         * @param {MessagesApiPinMessageRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        pinMessage(requestParameters: MessagesApiPinMessageRequest, options?: RawAxiosRequestConfig): AxiosPromise<ActionResponseDto> {
+            return localVarFp.pinMessage(requestParameters.conversationId, requestParameters.createdAt, requestParameters.messageId, requestParameters.xUserId, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
          * @summary Search messages in a conversation by keyword
          * @param {MessagesApiSearchMessagesRequest} requestParameters Request parameters.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
         searchMessages(requestParameters: MessagesApiSearchMessagesRequest, options?: RawAxiosRequestConfig): AxiosPromise<MessageSearchResponseDto> {
-            return localVarFp.searchMessages(requestParameters.conversationId, requestParameters.q, requestParameters.senderId, requestParameters.from, requestParameters.to, options).then((request) => request(axios, basePath));
+            return localVarFp.searchMessages(requestParameters.conversationId, requestParameters.q, requestParameters.senderId, requestParameters.from, requestParameters.to, requestParameters.fileType, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
+         * @summary Unpin a message
+         * @param {MessagesApiUnpinMessageRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        unpinMessage(requestParameters: MessagesApiUnpinMessageRequest, options?: RawAxiosRequestConfig): AxiosPromise<ActionResponseDto> {
+            return localVarFp.unpinMessage(requestParameters.conversationId, requestParameters.createdAt, requestParameters.messageId, requestParameters.xUserId, options).then((request) => request(axios, basePath));
         },
     };
 };
@@ -874,6 +1170,34 @@ export interface MessagesApiGetMessagesRequest {
 }
 
 /**
+ * Request parameters for getPinnedMessages operation in MessagesApi.
+ * @export
+ * @interface MessagesApiGetPinnedMessagesRequest
+ */
+export interface MessagesApiGetPinnedMessagesRequest {
+    /**
+     * Conversation ID
+     * @type {string}
+     * @memberof MessagesApiGetPinnedMessages
+     */
+    readonly conversationId: string
+
+    /**
+     * Authenticated user id
+     * @type {string}
+     * @memberof MessagesApiGetPinnedMessages
+     */
+    readonly xUserId: string
+
+    /**
+     * Max pinned messages to return
+     * @type {number}
+     * @memberof MessagesApiGetPinnedMessages
+     */
+    readonly limit?: number
+}
+
+/**
  * Request parameters for getReactions operation in MessagesApi.
  * @export
  * @interface MessagesApiGetReactionsRequest
@@ -885,6 +1209,41 @@ export interface MessagesApiGetReactionsRequest {
      * @memberof MessagesApiGetReactions
      */
     readonly messageId: string
+}
+
+/**
+ * Request parameters for pinMessage operation in MessagesApi.
+ * @export
+ * @interface MessagesApiPinMessageRequest
+ */
+export interface MessagesApiPinMessageRequest {
+    /**
+     * Conversation ID
+     * @type {string}
+     * @memberof MessagesApiPinMessage
+     */
+    readonly conversationId: string
+
+    /**
+     * Message created_at timestamp (epoch ms)
+     * @type {string}
+     * @memberof MessagesApiPinMessage
+     */
+    readonly createdAt: string
+
+    /**
+     * Message ID
+     * @type {string}
+     * @memberof MessagesApiPinMessage
+     */
+    readonly messageId: string
+
+    /**
+     * Authenticated user id
+     * @type {string}
+     * @memberof MessagesApiPinMessage
+     */
+    readonly xUserId: string
 }
 
 /**
@@ -927,6 +1286,48 @@ export interface MessagesApiSearchMessagesRequest {
      * @memberof MessagesApiSearchMessages
      */
     readonly to?: number
+
+    /**
+     * Filter by attachment group (images, video, files)
+     * @type {'images' | 'video' | 'files'}
+     * @memberof MessagesApiSearchMessages
+     */
+    readonly fileType?: SearchMessagesFileTypeEnum
+}
+
+/**
+ * Request parameters for unpinMessage operation in MessagesApi.
+ * @export
+ * @interface MessagesApiUnpinMessageRequest
+ */
+export interface MessagesApiUnpinMessageRequest {
+    /**
+     * Conversation ID
+     * @type {string}
+     * @memberof MessagesApiUnpinMessage
+     */
+    readonly conversationId: string
+
+    /**
+     * Message created_at timestamp (epoch ms)
+     * @type {string}
+     * @memberof MessagesApiUnpinMessage
+     */
+    readonly createdAt: string
+
+    /**
+     * Message ID
+     * @type {string}
+     * @memberof MessagesApiUnpinMessage
+     */
+    readonly messageId: string
+
+    /**
+     * Authenticated user id
+     * @type {string}
+     * @memberof MessagesApiUnpinMessage
+     */
+    readonly xUserId: string
 }
 
 /**
@@ -974,6 +1375,18 @@ export class MessagesApi extends BaseAPI {
 
     /**
      * 
+     * @summary Get pinned messages in a conversation
+     * @param {MessagesApiGetPinnedMessagesRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof MessagesApi
+     */
+    public getPinnedMessages(requestParameters: MessagesApiGetPinnedMessagesRequest, options?: RawAxiosRequestConfig) {
+        return MessagesApiFp(this.configuration).getPinnedMessages(requestParameters.conversationId, requestParameters.xUserId, requestParameters.limit, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
      * @summary Get reactions for a message
      * @param {MessagesApiGetReactionsRequest} requestParameters Request parameters.
      * @param {*} [options] Override http request option.
@@ -986,6 +1399,18 @@ export class MessagesApi extends BaseAPI {
 
     /**
      * 
+     * @summary Pin a message
+     * @param {MessagesApiPinMessageRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof MessagesApi
+     */
+    public pinMessage(requestParameters: MessagesApiPinMessageRequest, options?: RawAxiosRequestConfig) {
+        return MessagesApiFp(this.configuration).pinMessage(requestParameters.conversationId, requestParameters.createdAt, requestParameters.messageId, requestParameters.xUserId, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
      * @summary Search messages in a conversation by keyword
      * @param {MessagesApiSearchMessagesRequest} requestParameters Request parameters.
      * @param {*} [options] Override http request option.
@@ -993,9 +1418,30 @@ export class MessagesApi extends BaseAPI {
      * @memberof MessagesApi
      */
     public searchMessages(requestParameters: MessagesApiSearchMessagesRequest, options?: RawAxiosRequestConfig) {
-        return MessagesApiFp(this.configuration).searchMessages(requestParameters.conversationId, requestParameters.q, requestParameters.senderId, requestParameters.from, requestParameters.to, options).then((request) => request(this.axios, this.basePath));
+        return MessagesApiFp(this.configuration).searchMessages(requestParameters.conversationId, requestParameters.q, requestParameters.senderId, requestParameters.from, requestParameters.to, requestParameters.fileType, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
+     * @summary Unpin a message
+     * @param {MessagesApiUnpinMessageRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof MessagesApi
+     */
+    public unpinMessage(requestParameters: MessagesApiUnpinMessageRequest, options?: RawAxiosRequestConfig) {
+        return MessagesApiFp(this.configuration).unpinMessage(requestParameters.conversationId, requestParameters.createdAt, requestParameters.messageId, requestParameters.xUserId, options).then((request) => request(this.axios, this.basePath));
     }
 }
 
+/**
+  * @export
+  * @enum {string}
+  */
+export enum SearchMessagesFileTypeEnum {
+    images = 'images',
+    video = 'video',
+    files = 'files'
+}
 
 

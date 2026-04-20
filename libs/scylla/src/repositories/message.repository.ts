@@ -6,6 +6,7 @@ import {
   CursorPaginationOptions,
   MessageAttachment,
   MessageReaction,
+  PinnedMessageRecord,
   PersistedMessage,
   ReactionType,
 } from '@app/types/interfaces/chat.interface';
@@ -234,6 +235,92 @@ export class MessageRepository {
     };
   }
 
+  async getPinnedMessage(
+    conversationId: string,
+    messageId: string,
+  ): Promise<PinnedMessageRecord | null> {
+    const result = await this.client.execute(
+      `SELECT conversation_id, message_id, created_at, pinned_by, pinned_at
+       FROM pinned_message_by_message
+       WHERE conversation_id = ? AND message_id = ?`,
+      [conversationId, messageId],
+      { prepare: true },
+    );
+
+    if (result.rowLength === 0) {
+      return null;
+    }
+
+    return this.rowToPinnedMessage(result.rows[0]);
+  }
+
+  async getPinnedMessages(
+    conversationId: string,
+    limit = 20,
+  ): Promise<PinnedMessageRecord[]> {
+    const safeLimit = Math.min(Math.max(limit, 1), 100);
+    const result = await this.client.execute(
+      `SELECT conversation_id, message_id, created_at, pinned_by, pinned_at
+       FROM pinned_messages_by_conversation
+       WHERE conversation_id = ?
+       LIMIT ?`,
+      [conversationId, safeLimit],
+      { prepare: true },
+    );
+
+    return result.rows.map((row) => this.rowToPinnedMessage(row));
+  }
+
+  async pinMessage(record: PinnedMessageRecord): Promise<void> {
+    await this.client.batch(
+      [
+        {
+          query: `INSERT INTO pinned_messages_by_conversation
+                  (conversation_id, pinned_at, message_id, created_at, pinned_by)
+                  VALUES (?, ?, ?, ?, ?)`,
+          params: [
+            record.conversation_id,
+            record.pinned_at,
+            record.message_id,
+            record.created_at,
+            record.pinned_by,
+          ],
+        },
+        {
+          query: `INSERT INTO pinned_message_by_message
+                  (conversation_id, message_id, created_at, pinned_by, pinned_at)
+                  VALUES (?, ?, ?, ?, ?)`,
+          params: [
+            record.conversation_id,
+            record.message_id,
+            record.created_at,
+            record.pinned_by,
+            record.pinned_at,
+          ],
+        },
+      ],
+      { prepare: true },
+    );
+  }
+
+  async unpinMessage(record: PinnedMessageRecord): Promise<void> {
+    await this.client.batch(
+      [
+        {
+          query: `DELETE FROM pinned_messages_by_conversation
+                  WHERE conversation_id = ? AND pinned_at = ? AND message_id = ?`,
+          params: [record.conversation_id, record.pinned_at, record.message_id],
+        },
+        {
+          query: `DELETE FROM pinned_message_by_message
+                  WHERE conversation_id = ? AND message_id = ?`,
+          params: [record.conversation_id, record.message_id],
+        },
+      ],
+      { prepare: true },
+    );
+  }
+
   async updateMessageBody(
     conversationId: string,
     createdAt: number,
@@ -438,6 +525,16 @@ export class MessageRepository {
         ? Number(row.get('deleted_at'))
         : undefined,
       forwarded_from,
+    };
+  }
+
+  private rowToPinnedMessage(row: types.Row): PinnedMessageRecord {
+    return {
+      conversation_id: row.get('conversation_id') as string,
+      message_id: row.get('message_id') as string,
+      created_at: this.toNumber(row.get('created_at')),
+      pinned_by: row.get('pinned_by') as string,
+      pinned_at: this.toNumber(row.get('pinned_at')),
     };
   }
 

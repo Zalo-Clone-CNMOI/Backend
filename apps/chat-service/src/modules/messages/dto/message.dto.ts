@@ -1,6 +1,16 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, IsPositive, Max, IsUUID } from 'class-validator';
+import {
+  IsOptional,
+  IsString,
+  IsPositive,
+  Max,
+  IsUUID,
+  IsIn,
+} from 'class-validator';
 import { Type } from 'class-transformer';
+
+export const SearchFileTypes = ['images', 'video', 'files'] as const;
+export type SearchFileType = (typeof SearchFileTypes)[number];
 
 export class GetMessagesQueryDto {
   @ApiPropertyOptional({
@@ -59,4 +69,13 @@ export class SearchMessagesQueryDto {
   @Type(() => Number)
   @IsPositive()
   to?: number;
+
+  @ApiPropertyOptional({
+    description: 'Filter messages by attachment group',
+    enum: SearchFileTypes,
+    example: 'images',
+  })
+  @IsOptional()
+  @IsIn(SearchFileTypes)
+  fileType?: SearchFileType;
 }

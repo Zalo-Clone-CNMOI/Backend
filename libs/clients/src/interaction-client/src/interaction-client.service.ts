@@ -8,8 +8,10 @@ import type {
   CreateDirectConversationDto,
   UpdateConversationDto,
   AddMembersDto,
+  ConversationCallStateResponseDto,
   UpdateMemberRoleDto,
   UpdateMemberSettingsDto,
+  EndConversationCallDto,
   GroupInviteStatus,
   PaginatedResponseGroupInviteItemDto,
   SendGroupInvitesDto,
@@ -34,9 +36,6 @@ export class InteractionClientService extends BaseHttpClient {
 
   // ==================== FRIENDS METHODS ====================
 
-  /**
-   * Get friends list
-   */
   async getFriends(
     accessToken: string,
     page?: number,
@@ -53,9 +52,6 @@ export class InteractionClientService extends BaseHttpClient {
     }
   }
 
-  /**
-   * Get pending friend requests (received)
-   */
   async getPendingRequests(
     accessToken: string,
     page?: number,
@@ -72,9 +68,6 @@ export class InteractionClientService extends BaseHttpClient {
     }
   }
 
-  /**
-   * Get sent friend requests
-   */
   async getSentRequests(
     accessToken: string,
     page?: number,
@@ -91,9 +84,6 @@ export class InteractionClientService extends BaseHttpClient {
     }
   }
 
-  /**
-   * Send friend request
-   */
   async sendFriendRequest(
     accessToken: string,
     dto: SendFriendRequestDto,
@@ -109,9 +99,6 @@ export class InteractionClientService extends BaseHttpClient {
     }
   }
 
-  /**
-   * Respond to friend request
-   */
   async respondToRequest(
     accessToken: string,
     requestId: string,
@@ -128,9 +115,6 @@ export class InteractionClientService extends BaseHttpClient {
     }
   }
 
-  /**
-   * Cancel sent friend request
-   */
   async cancelRequest(
     accessToken: string,
     requestId: string,
@@ -146,9 +130,6 @@ export class InteractionClientService extends BaseHttpClient {
     }
   }
 
-  /**
-   * Remove friend
-   */
   async removeFriend(
     accessToken: string,
     friendId: string,
@@ -164,9 +145,6 @@ export class InteractionClientService extends BaseHttpClient {
     }
   }
 
-  /**
-   * Block user
-   */
   async blockUser(
     accessToken: string,
     userId: string,
@@ -182,9 +160,6 @@ export class InteractionClientService extends BaseHttpClient {
     }
   }
 
-  /**
-   * Unblock user
-   */
   async unblockUser(
     accessToken: string,
     userId: string,
@@ -202,9 +177,6 @@ export class InteractionClientService extends BaseHttpClient {
 
   // ==================== CONVERSATIONS METHODS ====================
 
-  /**
-   * Get conversations for current user
-   */
   async getConversations(
     accessToken: string,
     page?: number,
@@ -221,9 +193,6 @@ export class InteractionClientService extends BaseHttpClient {
     }
   }
 
-  /**
-   * Get conversation by ID
-   */
   async getConversationById(
     accessToken: string,
     conversationId: string,
@@ -239,9 +208,6 @@ export class InteractionClientService extends BaseHttpClient {
     }
   }
 
-  /**
-   * Create group conversation
-   */
   async createGroupConversation(
     accessToken: string,
     dto: CreateGroupConversationDto,
@@ -257,9 +223,6 @@ export class InteractionClientService extends BaseHttpClient {
     }
   }
 
-  /**
-   * Create or get direct conversation
-   */
   async createDirectConversation(
     accessToken: string,
     dto: CreateDirectConversationDto,
@@ -275,9 +238,6 @@ export class InteractionClientService extends BaseHttpClient {
     }
   }
 
-  /**
-   * Update conversation
-   */
   async updateConversation(
     accessToken: string,
     conversationId: string,
@@ -294,9 +254,6 @@ export class InteractionClientService extends BaseHttpClient {
     }
   }
 
-  /**
-   * Add members to conversation
-   */
   async addMembers(
     accessToken: string,
     conversationId: string,
@@ -313,9 +270,6 @@ export class InteractionClientService extends BaseHttpClient {
     }
   }
 
-  /**
-   * Remove member from conversation
-   */
   async removeMember(
     accessToken: string,
     conversationId: string,
@@ -332,9 +286,6 @@ export class InteractionClientService extends BaseHttpClient {
     }
   }
 
-  /**
-   * Leave conversation
-   */
   async leaveConversation(
     accessToken: string,
     conversationId: string,
@@ -350,66 +301,6 @@ export class InteractionClientService extends BaseHttpClient {
     }
   }
 
-  /**
-   * Update member role
-   */
-  async updateMemberRole(
-    accessToken: string,
-    conversationId: string,
-    memberId: string,
-    dto: UpdateMemberRoleDto,
-  ): Promise<{ message: string }> {
-    try {
-      const response = await this.conversationsApi.updateMemberRole(
-        { conversationId, memberId, updateMemberRoleDto: dto },
-        { headers: { Authorization: `Bearer ${accessToken}` } },
-      );
-      return response.data as { message: string };
-    } catch (error) {
-      this.handleError('updateMemberRole', error);
-    }
-  }
-
-  /**
-   * Update my settings
-   */
-  async updateMySettings(
-    accessToken: string,
-    conversationId: string,
-    dto: UpdateMemberSettingsDto,
-  ): Promise<{ message: string }> {
-    try {
-      const response = await this.conversationsApi.updateMySettings(
-        { conversationId, updateMemberSettingsDto: dto },
-        { headers: { Authorization: `Bearer ${accessToken}` } },
-      );
-      return response.data as { message: string };
-    } catch (error) {
-      this.handleError('updateMySettings', error);
-    }
-  }
-
-  /**
-   * Mark conversation as read
-   */
-  async markAsRead(
-    accessToken: string,
-    conversationId: string,
-  ): Promise<{ message: string }> {
-    try {
-      const response = await this.conversationsApi.markAsRead(
-        { conversationId },
-        { headers: { Authorization: `Bearer ${accessToken}` } },
-      );
-      return response.data as { message: string };
-    } catch (error) {
-      this.handleError('markAsRead', error);
-    }
-  }
-
-  /**
-   * Disband group conversation
-   */
   async disbandConversation(
     accessToken: string,
     conversationId: string,
@@ -425,9 +316,6 @@ export class InteractionClientService extends BaseHttpClient {
     }
   }
 
-  /**
-   * Send group invites
-   */
   async sendGroupInvites(
     accessToken: string,
     conversationId: string,
@@ -444,9 +332,6 @@ export class InteractionClientService extends BaseHttpClient {
     }
   }
 
-  /**
-   * Get pending group invites for current user
-   */
   async getPendingGroupInvites(
     accessToken: string,
     page?: number,
@@ -464,9 +349,6 @@ export class InteractionClientService extends BaseHttpClient {
     }
   }
 
-  /**
-   * Get invites by conversation
-   */
   async getConversationInvites(
     accessToken: string,
     conversationId: string,
@@ -485,9 +367,6 @@ export class InteractionClientService extends BaseHttpClient {
     }
   }
 
-  /**
-   * Accept invite
-   */
   async acceptGroupInvite(
     accessToken: string,
     conversationId: string,
@@ -504,9 +383,6 @@ export class InteractionClientService extends BaseHttpClient {
     }
   }
 
-  /**
-   * Reject invite
-   */
   async rejectGroupInvite(
     accessToken: string,
     conversationId: string,
@@ -523,9 +399,6 @@ export class InteractionClientService extends BaseHttpClient {
     }
   }
 
-  /**
-   * Cancel invite
-   */
   async cancelGroupInvite(
     accessToken: string,
     conversationId: string,
@@ -539,6 +412,116 @@ export class InteractionClientService extends BaseHttpClient {
       return response.data as { message: string };
     } catch (error) {
       this.handleError('cancelGroupInvite', error);
+    }
+  }
+
+  async updateMemberRole(
+    accessToken: string,
+    conversationId: string,
+    memberId: string,
+    dto: UpdateMemberRoleDto,
+  ): Promise<{ message: string }> {
+    try {
+      const response = await this.conversationsApi.updateMemberRole(
+        { conversationId, memberId, updateMemberRoleDto: dto },
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      return response.data as { message: string };
+    } catch (error) {
+      this.handleError('updateMemberRole', error);
+    }
+  }
+
+  async updateMySettings(
+    accessToken: string,
+    conversationId: string,
+    dto: UpdateMemberSettingsDto,
+  ): Promise<{ message: string }> {
+    try {
+      const response = await this.conversationsApi.updateMySettings(
+        { conversationId, updateMemberSettingsDto: dto },
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      return response.data as { message: string };
+    } catch (error) {
+      this.handleError('updateMySettings', error);
+    }
+  }
+
+  async markAsRead(
+    accessToken: string,
+    conversationId: string,
+  ): Promise<{ message: string }> {
+    try {
+      const response = await this.conversationsApi.markAsRead(
+        { conversationId },
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      return response.data as { message: string };
+    } catch (error) {
+      this.handleError('markAsRead', error);
+    }
+  }
+
+  async pinConversation(
+    accessToken: string,
+    conversationId: string,
+  ): Promise<{ message: string }> {
+    try {
+      const response = await this.conversationsApi.pinConversation(
+        { conversationId },
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      return response.data as { message: string };
+    } catch (error) {
+      this.handleError('pinConversation', error);
+    }
+  }
+
+  async unpinConversation(
+    accessToken: string,
+    conversationId: string,
+  ): Promise<{ message: string }> {
+    try {
+      const response = await this.conversationsApi.unpinConversation(
+        { conversationId },
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      return response.data as { message: string };
+    } catch (error) {
+      this.handleError('unpinConversation', error);
+    }
+  }
+
+  async getConversationCallState(
+    accessToken: string,
+    conversationId: string,
+  ): Promise<ConversationCallStateResponseDto> {
+    try {
+      const response = await this.conversationsApi.getConversationCallState(
+        { conversationId },
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      return response.data;
+    } catch (error) {
+      this.handleError('getConversationCallState', error);
+    }
+  }
+
+  async endConversationCall(
+    accessToken: string,
+    conversationId: string,
+    callId: string,
+    dto: EndConversationCallDto,
+  ): Promise<{ message: string }> {
+    try {
+      const response = await this.conversationsApi.endConversationCall(
+        { conversationId, callId, endConversationCallDto: dto },
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      return response.data as { message: string };
+    } catch (error) {
+      this.handleError('endConversationCall', error);
     }
   }
 }

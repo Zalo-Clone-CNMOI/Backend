@@ -14,6 +14,23 @@ export const KafkaTopics = {
   ChatReactionAdded: 'chat.reaction.added',
   ChatReactionRemove: 'chat.reaction.remove',
   ChatReactionRemoved: 'chat.reaction.removed',
+  ChatMessagePinned: 'chat.message.pinned',
+  ChatMessageUnpinned: 'chat.message.unpinned',
+
+  CallStart: 'call.start',
+  CallStarted: 'call.started',
+  CallSignalSend: 'call.signal.send',
+  CallSignalForwarded: 'call.signal.forwarded',
+  CallAccept: 'call.accept',
+  CallAccepted: 'call.accepted',
+  CallReject: 'call.reject',
+  CallRejected: 'call.rejected',
+  CallEnd: 'call.end',
+  CallEnded: 'call.ended',
+  CallStateRequest: 'call.state.request',
+  CallStateUpdated: 'call.state.updated',
+  CallLeave: 'call.leave',
+  CallLeft: 'call.left',
 
   ConversationCreated: 'conversation.created',
   ConversationUpdated: 'conversation.updated',
@@ -49,6 +66,8 @@ export const KafkaTopics = {
   RespondFriendRequest: 'friend.request.respond',
   CancelFriendRequest: 'friend.request.cancelled',
   FriendRemoved: 'friend.removed',
+  ConversationPinned: 'conversation.pinned',
+  ConversationUnpinned: 'conversation.unpinned',
 
   // ── AI Core Topics ──────────────────────────────────────────────────
   AiModerationRequest: 'ai.moderation.request',

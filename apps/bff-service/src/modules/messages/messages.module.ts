@@ -1,11 +1,13 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ChatClientModule } from '@app/clients';
+import { AuthModule as SharedAuthModule } from '@libs/auth';
 import { MessagesController } from './messages.controller';
 import { MessagesService } from './messages.service';
 
 @Module({
   imports: [
+    SharedAuthModule,
     ChatClientModule.registerAsync({
       useFactory: (configService: ConfigService) => ({
         baseUrl:

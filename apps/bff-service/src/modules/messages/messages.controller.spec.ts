@@ -7,10 +7,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { MessagesController } from './messages.controller';
 import { MessagesService } from './messages.service';
+import { JwtService } from '@libs/auth';
 
 describe('BFF MessagesController', () => {
   let controller: MessagesController;
   let messagesService: Record<string, jest.Mock>;
+  let jwtService: Record<string, jest.Mock>;
 
   beforeEach(async () => {
     messagesService = {
@@ -20,9 +22,16 @@ describe('BFF MessagesController', () => {
       forwardMessage: jest.fn(),
     };
 
+    jwtService = {
+      verifyToken: jest.fn().mockReturnValue({ userId: 'user-1' }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [MessagesController],
-      providers: [{ provide: MessagesService, useValue: messagesService }],
+      providers: [
+        { provide: MessagesService, useValue: messagesService },
+        { provide: JwtService, useValue: jwtService },
+      ],
     }).compile();
 
     controller = module.get<MessagesController>(MessagesController);

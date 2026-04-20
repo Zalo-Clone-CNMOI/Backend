@@ -34,6 +34,14 @@ describe('ConversationsService (BFF)', () => {
       updateMemberRole: jest.fn().mockResolvedValue({ ok: true }),
       updateMySettings: jest.fn().mockResolvedValue({ ok: true }),
       markAsRead: jest.fn().mockResolvedValue({ ok: true }),
+      pinConversation: jest.fn().mockResolvedValue({ ok: true }),
+      unpinConversation: jest.fn().mockResolvedValue({ ok: true }),
+      getConversationCallState: jest
+        .fn()
+        .mockResolvedValue({ conversation_id: 'conv-1', state: null }),
+      endConversationCall: jest
+        .fn()
+        .mockResolvedValue({ message: 'Call end requested' }),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -223,6 +231,56 @@ describe('ConversationsService (BFF)', () => {
       await expect(service.markAsRead(TOKEN, 'conv-1')).rejects.toThrow(
         'Internal error',
       );
+    });
+  });
+
+  describe('pinConversation', () => {
+    it('should delegate with token and conversationId', async () => {
+      const result = await service.pinConversation(TOKEN, 'conv-1');
+
+      expect(client.pinConversation).toHaveBeenCalledWith(TOKEN, 'conv-1');
+      expect(result).toEqual({ ok: true });
+    });
+  });
+
+  describe('unpinConversation', () => {
+    it('should delegate with token and conversationId', async () => {
+      const result = await service.unpinConversation(TOKEN, 'conv-1');
+
+      expect(client.unpinConversation).toHaveBeenCalledWith(TOKEN, 'conv-1');
+      expect(result).toEqual({ ok: true });
+    });
+  });
+
+  describe('getConversationCallState', () => {
+    it('should delegate with token and conversationId', async () => {
+      const result = await service.getConversationCallState(TOKEN, 'conv-1');
+
+      expect(client.getConversationCallState).toHaveBeenCalledWith(
+        TOKEN,
+        'conv-1',
+      );
+      expect(result).toEqual({ conversation_id: 'conv-1', state: null });
+    });
+  });
+
+  describe('endConversationCall', () => {
+    it('should delegate with token, conversationId, callId, and DTO', async () => {
+      const dto = { reason: 'user_hangup' };
+      const result = await service.endConversationCall(
+        TOKEN,
+        'conv-1',
+        'call-1',
+        dto,
+      );
+
+      expect(client.endConversationCall).toHaveBeenCalledWith(
+        TOKEN,
+        'conv-1',
+        'call-1',
+        dto,
+      );
+      expect(result).toEqual({ message: 'Call end requested' });
     });
   });
 });

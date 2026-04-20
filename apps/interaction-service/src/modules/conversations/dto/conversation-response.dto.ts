@@ -109,13 +109,21 @@ export class ConversationListItemDto {
   @ApiProperty({ description: 'Whether notifications are muted' })
   isMuted: boolean;
 
+  @ApiProperty({
+    description: 'Whether conversation is pinned for current user',
+  })
+  isPinned: boolean;
+
+  @ApiPropertyOptional({ description: 'Pinned timestamp for current user' })
+  pinnedAt: Date | null;
+
   @ApiProperty({ description: 'Member count' })
   memberCount: number;
 
   @ApiProperty({ description: 'Created at' })
   createdAt: Date;
 
-  @ApiProperty({ description: 'Last message' })
+  @ApiPropertyOptional({ description: 'Raw last message snapshot from cache' })
   last_message?: LastMessageDto | null;
 }
 
@@ -149,11 +157,70 @@ export class ConversationDetailDto {
     role: string;
     nickname: string | null;
     isMuted: boolean;
+    isPinned: boolean;
+    pinnedAt: Date | null;
     lastReadAt: Date | null;
   };
 
   @ApiProperty({ description: 'Created at' })
   createdAt: Date;
+}
+
+export class ConversationCallStateSnapshotDto {
+  @ApiProperty({ description: 'Call ID' })
+  call_id: string;
+
+  @ApiProperty({ description: 'Conversation ID' })
+  conversation_id: string;
+
+  @ApiProperty({ description: 'Conversation type', enum: ['direct', 'group'] })
+  conversation_type: 'direct' | 'group';
+
+  @ApiProperty({ description: 'Call type', enum: ['audio', 'video'] })
+  call_type: 'audio' | 'video';
+
+  @ApiProperty({
+    description: 'Current call status',
+    enum: ['ringing', 'ongoing', 'ended'],
+  })
+  status: 'ringing' | 'ongoing' | 'ended';
+
+  @ApiProperty({ description: 'Initiator user ID' })
+  initiator_id: string;
+
+  @ApiProperty({
+    description: 'Participant status map by user ID',
+    type: 'object',
+    additionalProperties: {
+      type: 'string',
+      enum: ['invited', 'accepted', 'rejected', 'left'],
+    },
+  })
+  participants: Record<string, 'invited' | 'accepted' | 'rejected' | 'left'>;
+
+  @ApiProperty({ description: 'Start timestamp (ms)' })
+  started_at: number;
+
+  @ApiPropertyOptional({ description: 'End timestamp (ms)' })
+  ended_at?: number;
+}
+
+export class ConversationCallStateResponseDto {
+  @ApiProperty({ description: 'Conversation ID' })
+  conversation_id: string;
+
+  @ApiPropertyOptional({
+    description: 'Current active call state; null when no active call',
+    type: ConversationCallStateSnapshotDto,
+    nullable: true,
+  })
+  state: ConversationCallStateSnapshotDto | null;
+
+  @ApiProperty({ description: 'Response timestamp (ms)' })
+  updated_at: number;
+
+  @ApiPropertyOptional({ description: 'Optional state reason' })
+  reason?: string;
 }
 
 export class GroupInviteItemDto {

@@ -37,6 +37,18 @@ export interface FriendRemovedEvent {
   trace_id?: string;
 }
 
+export interface ConversationPinnedEvent {
+  userId: string;
+  conversationId: string;
+  pinnedAt: number;
+  trace_id?: string;
+}
+
+export interface ConversationUnpinnedEvent {
+  userId: string;
+  conversationId: string;
+  unpinnedAt: number;
+}
 export type ConversationMemberRole = 'owner' | 'admin' | 'member';
 
 export interface ConversationMemberSnapshot {

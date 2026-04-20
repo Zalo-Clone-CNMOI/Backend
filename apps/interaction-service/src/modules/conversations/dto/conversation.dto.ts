@@ -10,13 +10,14 @@ import {
   ArrayMinSize,
   ArrayMaxSize,
   MaxLength,
-  IsUrl,
   IsBoolean,
   IsEnum,
+  MinLength,
   Min,
   Max,
   Matches,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
 /**
  * Create group conversation DTO
@@ -46,7 +47,11 @@ export class CreateGroupConversationDto {
     example: 'https://example.com/avatar.jpg',
   })
   @IsOptional()
-  @IsUrl({}, { message: 'Invalid avatar URL' })
+  @IsString({ message: 'Invalid avatar key' })
+  @Matches(/^(public|private)\/[-A-Za-z0-9._/]+$/, {
+    message:
+      'Avatar key must start with public/ or private/ and contain only valid key characters',
+  })
   avatarUrl?: string;
 }
 
@@ -141,6 +146,21 @@ export class UpdateMemberSettingsDto {
 }
 
 /**
+ * End active call DTO
+ */
+export class EndConversationCallDto {
+  @ApiPropertyOptional({
+    description: 'Optional reason for ending the call',
+    example: 'user_hangup',
+  })
+  @IsOptional()
+  @IsString()
+  @MinLength(1, { message: 'Reason must not be empty' })
+  @MaxLength(255, { message: 'Reason must not exceed 255 characters' })
+  reason?: string;
+}
+
+/**
  * Send group invites DTO
  */
 export class SendGroupInvitesDto {
@@ -168,6 +188,7 @@ export class SendGroupInvitesDto {
     example: 72,
   })
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   @Max(168)
@@ -180,12 +201,14 @@ export class SendGroupInvitesDto {
 export class GetGroupInvitesQueryDto {
   @ApiPropertyOptional({ description: 'Page number', example: 1 })
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   page?: number;
 
   @ApiPropertyOptional({ description: 'Page size', example: 20 })
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   @Max(50)

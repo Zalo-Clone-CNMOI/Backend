@@ -13,6 +13,7 @@ import { RedisModule } from '@libs/redis';
 import { ChatGateway } from './socket/chat.gateway';
 import {
   ChatHandler,
+  CallHandler,
   PresenceHandler,
   AiHandler,
   TypingHandler,
@@ -22,6 +23,8 @@ import {
   PresenceFanoutConsumer,
   AuthFanoutConsumer,
   FriendFanoutConsumer,
+  ConversationFanoutConsumer,
+  CallFanoutConsumer,
   InteractionFanoutConsumer,
   AiFanoutConsumer,
   NotificationFanoutConsumer,
@@ -44,6 +47,8 @@ import {
     PresenceFanoutConsumer,
     AuthFanoutConsumer,
     FriendFanoutConsumer,
+    ConversationFanoutConsumer,
+    CallFanoutConsumer,
     InteractionFanoutConsumer,
     AiFanoutConsumer,
     NotificationFanoutConsumer,
@@ -52,6 +57,7 @@ import {
     { provide: APP_FILTER, useClass: RpcAllExceptionsFilter },
     ChatGateway,
     ChatHandler,
+    CallHandler,
     PresenceHandler,
     AiHandler,
     TypingHandler,

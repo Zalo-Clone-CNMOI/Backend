@@ -1,13 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { MessagesApi } from './client/generated';
+import { MessagesApi, SearchMessagesFileTypeEnum } from './client/generated';
 import { BaseHttpClient } from '../../base-http-client';
 import type {
+  ActionResponseDto,
   ForwardMessageDto,
   ForwardMessageResultDto,
   MessageListResponseDto,
   MessageReactionsResponseDto,
   MessageResponseDto,
   MessageSearchResponseDto,
+  PinnedMessageListResponseDto,
 } from './client/generated';
 
 @Injectable()
@@ -59,10 +61,22 @@ export class ChatClientService extends BaseHttpClient {
     senderId?: string,
     from?: number,
     to?: number,
+    fileType?: 'images' | 'video' | 'files',
   ): Promise<MessageSearchResponseDto> {
     try {
+      const normalizedFileType = fileType
+        ? SearchMessagesFileTypeEnum[fileType]
+        : undefined;
+
       const response = await this.messagesApi.searchMessages(
-        { conversationId, q, senderId, from, to },
+        {
+          conversationId,
+          q,
+          senderId,
+          from,
+          to,
+          fileType: normalizedFileType,
+        },
         { headers: { Authorization: `Bearer ${accessToken}` } },
       );
       return response.data;
@@ -83,6 +97,69 @@ export class ChatClientService extends BaseHttpClient {
       return response.data;
     } catch (error) {
       this.handleError('getMessageReactions', error);
+    }
+  }
+
+  async getPinnedMessages(
+    accessToken: string,
+    conversationId: string,
+    userId: string,
+    limit?: number,
+  ): Promise<PinnedMessageListResponseDto> {
+    try {
+      const response = await this.messagesApi.getPinnedMessages(
+        { conversationId, xUserId: userId, limit },
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      return response.data;
+    } catch (error) {
+      this.handleError('getPinnedMessages', error);
+    }
+  }
+
+  async pinMessage(
+    accessToken: string,
+    conversationId: string,
+    createdAt: number,
+    messageId: string,
+    userId: string,
+  ): Promise<ActionResponseDto> {
+    try {
+      const response = await this.messagesApi.pinMessage(
+        {
+          conversationId,
+          createdAt: createdAt.toString(),
+          messageId,
+          xUserId: userId,
+        },
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      return response.data;
+    } catch (error) {
+      this.handleError('pinMessage', error);
+    }
+  }
+
+  async unpinMessage(
+    accessToken: string,
+    conversationId: string,
+    createdAt: number,
+    messageId: string,
+    userId: string,
+  ): Promise<ActionResponseDto> {
+    try {
+      const response = await this.messagesApi.unpinMessage(
+        {
+          conversationId,
+          createdAt: createdAt.toString(),
+          messageId,
+          xUserId: userId,
+        },
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      return response.data;
+    } catch (error) {
+      this.handleError('unpinMessage', error);
     }
   }
 

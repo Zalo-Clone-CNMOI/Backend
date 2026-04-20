@@ -123,3 +123,21 @@ export interface ChatReactionRemovedEvent {
   user_id: string;
   trace_id?: string;
 }
+
+export interface ChatMessagePinnedEvent {
+  message_id: string;
+  conversation_id: string;
+  created_at: number;
+  pinned_by: string;
+  pinned_at: number;
+  trace_id?: string;
+}
+
+export interface ChatMessageUnpinnedEvent {
+  message_id: string;
+  conversation_id: string;
+  created_at: number;
+  unpinned_by: string;
+  unpinned_at: number;
+  trace_id?: string;
+}

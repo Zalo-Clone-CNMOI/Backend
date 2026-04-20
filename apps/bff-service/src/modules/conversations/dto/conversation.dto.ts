@@ -12,12 +12,13 @@ import {
   ArrayMinSize,
   ArrayMaxSize,
   MaxLength,
-  IsUrl,
   IsBoolean,
   IsEnum,
+  MinLength,
   IsInt,
   Min,
   Max,
+  Matches,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -45,11 +46,15 @@ export class CreateGroupConversationDto {
   memberIds: string[];
 
   @ApiPropertyOptional({
-    description: 'Group avatar URL',
-    example: 'https://example.com/avatar.jpg',
+    description: 'Group avatar object key',
+    example: 'public/group/avatar.png',
   })
   @IsOptional()
-  @IsUrl({}, { message: 'Invalid avatar URL' })
+  @IsString({ message: 'Invalid avatar key' })
+  @Matches(/^(public|private)\/[-A-Za-z0-9._/]+$/, {
+    message:
+      'Avatar key must start with public/ or private/ and contain only valid key characters',
+  })
   avatarUrl?: string;
 }
 
@@ -80,11 +85,15 @@ export class UpdateConversationDto {
   name?: string;
 
   @ApiPropertyOptional({
-    description: 'Group avatar URL',
-    example: 'https://example.com/new-avatar.jpg',
+    description: 'Group avatar object key',
+    example: 'public/group/new-avatar.png',
   })
   @IsOptional()
-  @IsUrl({}, { message: 'Invalid avatar URL' })
+  @IsString({ message: 'Invalid avatar key' })
+  @Matches(/^(public|private)\/[-A-Za-z0-9._/]+$/, {
+    message:
+      'Avatar key must start with public/ or private/ and contain only valid key characters',
+  })
   avatarUrl?: string;
 }
 
@@ -109,7 +118,7 @@ export class AddMembersDto {
 export class UpdateMemberRoleDto {
   @ApiProperty({
     description: 'New role for the member',
-    example: 'admin',
+    example: UpdateMemberRoleDtoRoleEnum.admin,
     enum: UpdateMemberRoleDtoRoleEnum,
   })
   @IsEnum(UpdateMemberRoleDtoRoleEnum, { message: 'Invalid conversation role' })
@@ -137,6 +146,21 @@ export class UpdateMemberSettingsDto {
   @IsOptional()
   @IsBoolean()
   isMuted?: boolean;
+}
+
+/**
+ * End active call DTO
+ */
+export class EndConversationCallDto {
+  @ApiPropertyOptional({
+    description: 'Optional reason for ending the call',
+    example: 'user_hangup',
+  })
+  @IsOptional()
+  @IsString()
+  @MinLength(1, { message: 'Reason must not be empty' })
+  @MaxLength(255, { message: 'Reason must not exceed 255 characters' })
+  reason?: string;
 }
 
 /**

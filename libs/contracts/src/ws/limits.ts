@@ -15,6 +15,8 @@ export const WsPayloadLimits = {
   attachmentNameMaxLength: 255,
   attachmentContentTypeMaxLength: 128,
   attachmentMaxBytes: 50 * 1024 * 1024,
+  callParticipantsMaxItems: 50,
+  callSignalTextMaxLength: 12000,
 } as const;
 
 export const WsReactionTypes = [
@@ -31,4 +33,13 @@ export const WsAttachmentTypes = [
   'video',
   'audio',
   'document',
+] as const;
+
+export const WsCallTypes = ['audio', 'video'] as const;
+
+export const WsCallSignalTypes = [
+  'offer',
+  'answer',
+  'ice-candidate',
+  'renegotiate',
 ] as const;

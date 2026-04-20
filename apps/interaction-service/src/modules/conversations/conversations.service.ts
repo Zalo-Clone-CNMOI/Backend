@@ -1,5 +1,24 @@
-import { Injectable } from '@nestjs/common';
-import { PaginatedResponse, PaginationQuery } from '@app/types';
+import { Injectable, Logger, Inject } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, IsNull } from 'typeorm';
+import { ClientKafka } from '@nestjs/microservices';
+import { RedisClientType } from 'redis';
+import { KAFKA_CLIENT } from '@libs/kafka';
+import { CacheService, REDIS_CLIENT } from '@libs/redis';
+import {
+  KafkaTopics,
+  type CallEndCommand,
+  type CallStateSnapshot,
+  type ConversationPinnedEvent,
+  type ConversationUnpinnedEvent,
+} from '@libs/contracts';
+import { ConversationMember } from '@libs/database/entities';
+import { ErrorCode } from '@app/constant';
+import {
+  BusinessException,
+  PaginatedResponse,
+  PaginationQuery,
+} from '@app/types';
 import {
   CreateGroupConversationDto,
   CreateDirectConversationDto,
@@ -11,8 +30,10 @@ import {
   SendGroupInvitesResponseDto,
   UpdateMemberRoleDto,
   UpdateMemberSettingsDto,
+  EndConversationCallDto,
   ConversationListItemDto,
   ConversationDetailDto,
+  ConversationCallStateResponseDto,
 } from './dto';
 import { ConversationCoreService } from './services/conversation-core.service';
 import { ConversationMemberService } from './services/conversation-member.service';
@@ -20,7 +41,14 @@ import { GroupInviteService } from './services/group-invite.service';
 
 @Injectable()
 export class ConversationsService {
+  private readonly logger = new Logger(ConversationsService.name);
+
   constructor(
+    @InjectRepository(ConversationMember)
+    private readonly memberRepository: Repository<ConversationMember>,
+    private readonly cacheService: CacheService,
+    @Inject(KAFKA_CLIENT) private readonly kafkaClient: ClientKafka,
+    @Inject(REDIS_CLIENT) private readonly redis: RedisClientType,
     private readonly coreService: ConversationCoreService,
     private readonly memberService: ConversationMemberService,
     private readonly inviteService: GroupInviteService,
@@ -83,35 +111,6 @@ export class ConversationsService {
     conversationId: string,
   ): Promise<{ message: string }> {
     return this.memberService.leaveConversation(userId, conversationId);
-  }
-
-  updateMemberRole(
-    userId: string,
-    conversationId: string,
-    memberId: string,
-    dto: UpdateMemberRoleDto,
-  ): Promise<{ message: string }> {
-    return this.memberService.updateMemberRole(
-      userId,
-      conversationId,
-      memberId,
-      dto,
-    );
-  }
-
-  updateMySettings(
-    userId: string,
-    conversationId: string,
-    dto: UpdateMemberSettingsDto,
-  ): Promise<{ message: string }> {
-    return this.memberService.updateMySettings(userId, conversationId, dto);
-  }
-
-  markAsRead(
-    userId: string,
-    conversationId: string,
-  ): Promise<{ message: string }> {
-    return this.memberService.markAsRead(userId, conversationId);
   }
 
   disbandConversation(
@@ -182,5 +181,177 @@ export class ConversationsService {
       conversationId,
       inviteId,
     );
+  }
+
+  updateMemberRole(
+    userId: string,
+    conversationId: string,
+    memberId: string,
+    dto: UpdateMemberRoleDto,
+  ): Promise<{ message: string }> {
+    return this.memberService.updateMemberRole(
+      userId,
+      conversationId,
+      memberId,
+      dto,
+    );
+  }
+
+  updateMySettings(
+    userId: string,
+    conversationId: string,
+    dto: UpdateMemberSettingsDto,
+  ): Promise<{ message: string }> {
+    return this.memberService.updateMySettings(userId, conversationId, dto);
+  }
+
+  markAsRead(
+    userId: string,
+    conversationId: string,
+  ): Promise<{ message: string }> {
+    return this.memberService.markAsRead(userId, conversationId);
+  }
+
+  async pinConversation(
+    userId: string,
+    conversationId: string,
+  ): Promise<{ message: string }> {
+    const pinnedAt = new Date();
+
+    const updateResult = await this.memberRepository
+      .createQueryBuilder()
+      .update(ConversationMember)
+      .set({ isPinned: true, pinnedAt })
+      .where('conversation_id = :conversationId', { conversationId })
+      .andWhere('user_id = :userId', { userId })
+      .andWhere('left_at IS NULL')
+      .execute();
+
+    if ((updateResult.affected ?? 0) === 0) {
+      throw BusinessException.notFound(ErrorCode.CONVERSATION_NOT_MEMBER);
+    }
+
+    await this.cacheService.invalidateConversationList(userId);
+    await this.cacheService.invalidateConversation(conversationId, [userId]);
+
+    const event: ConversationPinnedEvent = {
+      userId,
+      conversationId,
+      pinnedAt: pinnedAt.getTime(),
+      trace_id: `interaction:${conversationId}:${userId}:pin`,
+    };
+
+    this.kafkaClient.emit(KafkaTopics.ConversationPinned, event);
+
+    return { message: 'Conversation pinned' };
+  }
+
+  async unpinConversation(
+    userId: string,
+    conversationId: string,
+  ): Promise<{ message: string }> {
+    const unpinnedAt = new Date();
+
+    const updateResult = await this.memberRepository
+      .createQueryBuilder()
+      .update(ConversationMember)
+      .set({ isPinned: false, pinnedAt: null })
+      .where('conversation_id = :conversationId', { conversationId })
+      .andWhere('user_id = :userId', { userId })
+      .andWhere('left_at IS NULL')
+      .execute();
+
+    if ((updateResult.affected ?? 0) === 0) {
+      throw BusinessException.notFound(ErrorCode.CONVERSATION_NOT_MEMBER);
+    }
+
+    await this.cacheService.invalidateConversationList(userId);
+    await this.cacheService.invalidateConversation(conversationId, [userId]);
+
+    const event: ConversationUnpinnedEvent = {
+      userId,
+      conversationId,
+      unpinnedAt: unpinnedAt.getTime(),
+    };
+
+    this.kafkaClient.emit(KafkaTopics.ConversationUnpinned, event);
+
+    return { message: 'Conversation unpinned' };
+  }
+
+  async getConversationCallState(
+    userId: string,
+    conversationId: string,
+  ): Promise<ConversationCallStateResponseDto> {
+    const membership = await this.memberRepository.findOne({
+      where: { conversationId, userId, leftAt: IsNull() },
+    });
+
+    if (!membership) {
+      throw BusinessException.notFound(ErrorCode.CONVERSATION_NOT_MEMBER);
+    }
+
+    const state = await this.getCallStateSnapshot(conversationId);
+
+    return {
+      conversation_id: conversationId,
+      state,
+      updated_at: Date.now(),
+      reason: state ? undefined : 'no_active_call',
+    };
+  }
+
+  async endConversationCall(
+    userId: string,
+    conversationId: string,
+    callId: string,
+    dto: EndConversationCallDto,
+  ): Promise<{ message: string }> {
+    const membership = await this.memberRepository.findOne({
+      where: { conversationId, userId, leftAt: IsNull() },
+    });
+
+    if (!membership) {
+      throw BusinessException.notFound(ErrorCode.CONVERSATION_NOT_MEMBER);
+    }
+
+    const state = await this.getCallStateSnapshot(conversationId);
+    if (!state || state.call_id !== callId || state.status === 'ended') {
+      throw BusinessException.notFound('Active call');
+    }
+
+    const command: CallEndCommand = {
+      call_id: callId,
+      conversation_id: conversationId,
+      user_id: userId,
+      reason: dto.reason,
+      ended_at: Date.now(),
+      trace_id: `interaction:${conversationId}:${callId}:${userId}:end`,
+    };
+
+    this.kafkaClient.emit(KafkaTopics.CallEnd, command);
+
+    return { message: 'Call end requested' };
+  }
+
+  private async getCallStateSnapshot(
+    conversationId: string,
+  ): Promise<CallStateSnapshot | null> {
+    const key = `call:state:conversation:${conversationId}`;
+    const raw = await this.redis.get(key);
+
+    if (!raw) {
+      return null;
+    }
+
+    try {
+      return JSON.parse(raw) as CallStateSnapshot;
+    } catch {
+      this.logger.warn(
+        `Invalid call-state cache payload for conversation ${conversationId}`,
+      );
+      await this.redis.del(key);
+      return null;
+    }
   }
 }

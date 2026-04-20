@@ -5,7 +5,7 @@
  * NotFoundException for missing messages, and UUID parsing.
  */
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException } from '@nestjs/common';
+import { BusinessException } from '@app/types';
 import { MessagesController } from './messages.controller';
 import { MessagesService } from './messages.service';
 
@@ -17,6 +17,9 @@ describe('Chat MessagesController', () => {
     messagesService = {
       getMessages: jest.fn(),
       getMessage: jest.fn(),
+      getPinnedMessages: jest.fn(),
+      pinMessage: jest.fn(),
+      unpinMessage: jest.fn(),
       getMessageReactions: jest.fn(),
     };
 
@@ -51,7 +54,7 @@ describe('Chat MessagesController', () => {
 
       const result = await controller.getMessage(
         'conv-1',
-        '1706162800000',
+        1706162800000,
         'msg-uuid',
       );
 
@@ -67,20 +70,73 @@ describe('Chat MessagesController', () => {
       messagesService.getMessage.mockResolvedValue(null);
 
       await expect(
-        controller.getMessage('conv-1', '123', 'nonexistent-uuid'),
-      ).rejects.toThrow(NotFoundException);
+        controller.getMessage('conv-1', 123, 'nonexistent-uuid'),
+      ).rejects.toThrow(BusinessException);
     });
 
     it('should parse createdAt as integer', async () => {
       messagesService.getMessage.mockResolvedValue({ messageId: 'msg-1' });
 
-      await controller.getMessage('conv-1', '1706162800000', 'msg-1');
+      await controller.getMessage('conv-1', 1706162800000, 'msg-1');
 
       expect(messagesService.getMessage).toHaveBeenCalledWith(
         'conv-1',
         1706162800000,
         'msg-1',
       );
+    });
+  });
+
+  describe('pin message endpoints', () => {
+    it('should require x-user-id for GET pinned messages', async () => {
+      await expect(
+        controller.getPinnedMessages('conv-1', undefined, '20'),
+      ).rejects.toThrow(BusinessException);
+    });
+
+    it('should delegate getPinnedMessages with parsed limit', async () => {
+      const expected = { items: [], total: 0 };
+      messagesService.getPinnedMessages.mockResolvedValue(expected);
+
+      const result = await controller.getPinnedMessages(
+        'conv-1',
+        'user-1',
+        '30',
+      );
+
+      expect(messagesService.getPinnedMessages).toHaveBeenCalledWith(
+        'conv-1',
+        'user-1',
+        30,
+      );
+      expect(result).toEqual(expected);
+    });
+
+    it('should delegate pinMessage with numeric createdAt', async () => {
+      messagesService.pinMessage.mockResolvedValue({
+        message: 'Message pinned',
+      });
+
+      const result = await controller.pinMessage(
+        'conv-1',
+        1706162800000,
+        'msg-1',
+        'user-1',
+      );
+
+      expect(messagesService.pinMessage).toHaveBeenCalledWith(
+        'conv-1',
+        1706162800000,
+        'msg-1',
+        'user-1',
+      );
+      expect(result).toEqual({ message: 'Message pinned' });
+    });
+
+    it('should require x-user-id for unpinMessage', async () => {
+      await expect(
+        controller.unpinMessage('conv-1', 1706162800000, 'msg-1', undefined),
+      ).rejects.toThrow(BusinessException);
     });
   });
 

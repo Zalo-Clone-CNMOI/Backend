@@ -31,6 +31,14 @@ describe('ConversationsController (BFF)', () => {
       updateMemberRole: jest.fn().mockResolvedValue({ ok: true }),
       updateMySettings: jest.fn().mockResolvedValue({ ok: true }),
       markAsRead: jest.fn().mockResolvedValue({ ok: true }),
+      pinConversation: jest.fn().mockResolvedValue({ ok: true }),
+      unpinConversation: jest.fn().mockResolvedValue({ ok: true }),
+      getConversationCallState: jest
+        .fn()
+        .mockResolvedValue({ conversation_id: 'conv-1', state: null }),
+      endConversationCall: jest
+        .fn()
+        .mockResolvedValue({ message: 'Call end requested' }),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -209,6 +217,56 @@ describe('ConversationsController (BFF)', () => {
       await expect(controller.markAsRead(TOKEN, 'conv-1')).rejects.toThrow(
         'Service down',
       );
+    });
+  });
+
+  describe('POST /:conversationId/pin (pinConversation)', () => {
+    it('should delegate with token and conversationId', async () => {
+      const result = await controller.pinConversation(TOKEN, 'conv-1');
+
+      expect(svc.pinConversation).toHaveBeenCalledWith(TOKEN, 'conv-1');
+      expect(result).toEqual({ ok: true });
+    });
+  });
+
+  describe('DELETE /:conversationId/pin (unpinConversation)', () => {
+    it('should delegate with token and conversationId', async () => {
+      const result = await controller.unpinConversation(TOKEN, 'conv-1');
+
+      expect(svc.unpinConversation).toHaveBeenCalledWith(TOKEN, 'conv-1');
+      expect(result).toEqual({ ok: true });
+    });
+  });
+
+  describe('GET /:conversationId/call-state (getConversationCallState)', () => {
+    it('should delegate with token and conversationId', async () => {
+      const result = await controller.getConversationCallState(TOKEN, 'conv-1');
+
+      expect(svc.getConversationCallState).toHaveBeenCalledWith(
+        TOKEN,
+        'conv-1',
+      );
+      expect(result).toEqual({ conversation_id: 'conv-1', state: null });
+    });
+  });
+
+  describe('POST /:conversationId/calls/:callId/end (endConversationCall)', () => {
+    it('should delegate with token, conversationId, callId, and body', async () => {
+      const dto = { reason: 'user_hangup' };
+      const result = await controller.endConversationCall(
+        TOKEN,
+        'conv-1',
+        'call-1',
+        dto,
+      );
+
+      expect(svc.endConversationCall).toHaveBeenCalledWith(
+        TOKEN,
+        'conv-1',
+        'call-1',
+        dto,
+      );
+      expect(result).toEqual({ message: 'Call end requested' });
     });
   });
 });

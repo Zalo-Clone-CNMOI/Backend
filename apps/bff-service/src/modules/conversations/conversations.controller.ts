@@ -16,12 +16,14 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { ConversationsService } from './conversations.service';
 import { AccessToken } from '@app/decorator';
+import { ConversationsService } from './conversations.service';
 import {
   AddMembersDto,
+  ConversationCallStateResponseDto,
   CreateDirectConversationDto,
   CreateGroupConversationDto,
+  EndConversationCallDto,
   GetGroupInvitesQueryDto,
   SendGroupInvitesDto,
   UpdateConversationDto,
@@ -363,5 +365,70 @@ export class ConversationsController {
     @Param('conversationId') conversationId: string,
   ) {
     return this.conversationsService.markAsRead(token, conversationId);
+  }
+
+  @Post(':conversationId/pin')
+  @ApiOperation({ summary: 'Pin conversation for current user' })
+  @ApiResponse({ status: 200, description: 'Conversation pinned' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Conversation not found' })
+  async pinConversation(
+    @AccessToken() token: string,
+    @Param('conversationId') conversationId: string,
+  ) {
+    return this.conversationsService.pinConversation(token, conversationId);
+  }
+
+  @Delete(':conversationId/pin')
+  @ApiOperation({ summary: 'Unpin conversation for current user' })
+  @ApiResponse({ status: 200, description: 'Conversation unpinned' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Conversation not found' })
+  async unpinConversation(
+    @AccessToken() token: string,
+    @Param('conversationId') conversationId: string,
+  ) {
+    return this.conversationsService.unpinConversation(token, conversationId);
+  }
+
+  @Get(':conversationId/call-state')
+  @ApiOperation({ summary: 'Get active call state for a conversation' })
+  @ApiResponse({
+    status: 200,
+    description: 'Call state retrieved successfully',
+    type: ConversationCallStateResponseDto,
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Conversation not found' })
+  async getConversationCallState(
+    @AccessToken() token: string,
+    @Param('conversationId') conversationId: string,
+  ): Promise<ConversationCallStateResponseDto> {
+    const response = await this.conversationsService.getConversationCallState(
+      token,
+      conversationId,
+    );
+
+    return response as ConversationCallStateResponseDto;
+  }
+
+  @Post(':conversationId/calls/:callId/end')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'End active call in a conversation' })
+  @ApiResponse({ status: 200, description: 'Call end requested' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Conversation or call not found' })
+  async endConversationCall(
+    @AccessToken() token: string,
+    @Param('conversationId') conversationId: string,
+    @Param('callId') callId: string,
+    @Body() dto: EndConversationCallDto,
+  ) {
+    return this.conversationsService.endConversationCall(
+      token,
+      conversationId,
+      callId,
+      dto,
+    );
   }
 }

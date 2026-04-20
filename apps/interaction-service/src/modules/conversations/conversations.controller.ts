@@ -39,8 +39,10 @@ import {
   SendGroupInvitesResponseDto,
   UpdateMemberRoleDto,
   UpdateMemberSettingsDto,
+  EndConversationCallDto,
   ConversationListItemDto,
   ConversationDetailDto,
+  ConversationCallStateResponseDto,
 } from './dto';
 
 @ApiTags('Conversations')
@@ -403,5 +405,83 @@ export class ConversationsController {
     @Param('conversationId', ParseUUIDPipe) conversationId: string,
   ): Promise<{ message: string }> {
     return this.conversationsService.markAsRead(user.id, conversationId);
+  }
+
+  /**
+   * Pin conversation for current user
+   */
+  @Post(':conversationId/pin')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  @ApiOperation({ summary: 'Pin conversation for current user' })
+  @ApiParam({ name: 'conversationId', description: 'Conversation ID' })
+  @ApiResponse({ status: 200, description: 'Pinned successfully' })
+  async pinConversation(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('conversationId', ParseUUIDPipe) conversationId: string,
+  ): Promise<{ message: string }> {
+    return this.conversationsService.pinConversation(user.id, conversationId);
+  }
+
+  /**
+   * Unpin conversation for current user
+   */
+  @Delete(':conversationId/pin')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  @ApiOperation({ summary: 'Unpin conversation for current user' })
+  @ApiParam({ name: 'conversationId', description: 'Conversation ID' })
+  @ApiResponse({ status: 200, description: 'Unpinned successfully' })
+  async unpinConversation(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('conversationId', ParseUUIDPipe) conversationId: string,
+  ): Promise<{ message: string }> {
+    return this.conversationsService.unpinConversation(user.id, conversationId);
+  }
+
+  /**
+   * Get active call state for conversation
+   */
+  @Get(':conversationId/call-state')
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
+  @ApiOperation({ summary: 'Get active call state for a conversation' })
+  @ApiParam({ name: 'conversationId', description: 'Conversation ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Call state retrieved',
+    type: ConversationCallStateResponseDto,
+  })
+  async getConversationCallState(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('conversationId', ParseUUIDPipe) conversationId: string,
+  ): Promise<ConversationCallStateResponseDto> {
+    return this.conversationsService.getConversationCallState(
+      user.id,
+      conversationId,
+    );
+  }
+
+  /**
+   * End active call for conversation
+   */
+  @Post(':conversationId/calls/:callId/end')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  @ApiOperation({ summary: 'End active call in a conversation' })
+  @ApiParam({ name: 'conversationId', description: 'Conversation ID' })
+  @ApiParam({ name: 'callId', description: 'Call ID' })
+  @ApiResponse({ status: 200, description: 'Call end requested' })
+  async endConversationCall(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('conversationId', ParseUUIDPipe) conversationId: string,
+    @Param('callId') callId: string,
+    @Body() dto: EndConversationCallDto,
+  ): Promise<{ message: string }> {
+    return this.conversationsService.endConversationCall(
+      user.id,
+      conversationId,
+      callId,
+      dto,
+    );
   }
 }

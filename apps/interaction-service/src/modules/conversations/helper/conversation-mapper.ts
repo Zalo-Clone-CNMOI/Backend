@@ -56,6 +56,8 @@ export function toListItem(
     unreadCount: 0, // TODO: Calculate from lastReadAt
     lastMessageAt: conversation.lastMessageAt,
     isMuted: myMembership?.isMuted ?? false,
+    isPinned: myMembership?.isPinned ?? false,
+    pinnedAt: myMembership?.pinnedAt ?? null,
     memberCount: activeMembers.length,
     createdAt: conversation.createdAt,
   };
@@ -79,6 +81,8 @@ export function toDetailResponse(
       role: myMembership.role,
       nickname: myMembership.nickname,
       isMuted: myMembership.isMuted,
+      isPinned: myMembership.isPinned,
+      pinnedAt: myMembership.pinnedAt,
       lastReadAt: myMembership.lastReadAt,
     },
     createdAt: conversation.createdAt,

@@ -7,12 +7,15 @@
  */
 import { Test, TestingModule } from '@nestjs/testing';
 import { MessagesService } from './messages.service';
+import { BusinessException } from '@app/types';
 import { MessageRepository } from '@libs/scylla';
 import { CacheService } from '@libs/redis';
 import { MediaClientService } from '@app/clients';
 import { ConversationMembershipService } from '@libs/mvp-access';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { User } from '@libs/database';
+import { Conversation, ConversationMember, User } from '@libs/database';
+import { ConversationType, UpdateMemberRoleDtoRoleEnum } from '@app/constant';
+import { KafkaTopics } from '@libs/contracts';
 import { KAFKA_CLIENT } from '@libs/kafka';
 import { of } from 'rxjs';
 
@@ -37,6 +40,8 @@ describe('Chat MessagesService', () => {
   let mediaClient: Record<string, jest.Mock>;
   let membershipService: Record<string, jest.Mock>;
   let userRepo: Record<string, jest.Mock>;
+  let conversationRepo: Record<string, jest.Mock>;
+  let conversationMemberRepo: Record<string, jest.Mock>;
   let kafka: Record<string, jest.Mock>;
 
   beforeEach(async () => {
@@ -44,6 +49,10 @@ describe('Chat MessagesService', () => {
       getMessages: jest.fn(),
       getMessage: jest.fn(),
       getMessageById: jest.fn(),
+      getPinnedMessage: jest.fn(),
+      getPinnedMessages: jest.fn(),
+      pinMessage: jest.fn(),
+      unpinMessage: jest.fn(),
       getReactions: jest.fn(),
     };
 
@@ -55,6 +64,8 @@ describe('Chat MessagesService', () => {
     mediaClient = { cloneAttachment: jest.fn() };
     membershipService = { canUserAccessConversation: jest.fn() };
     userRepo = { findOne: jest.fn() };
+    conversationRepo = { findOne: jest.fn() };
+    conversationMemberRepo = { findOne: jest.fn() };
     kafka = {
       emit: jest.fn().mockReturnValue(of(undefined)),
       connect: jest.fn().mockResolvedValue(undefined),
@@ -68,6 +79,14 @@ describe('Chat MessagesService', () => {
         { provide: MediaClientService, useValue: mediaClient },
         { provide: ConversationMembershipService, useValue: membershipService },
         { provide: getRepositoryToken(User), useValue: userRepo },
+        {
+          provide: getRepositoryToken(Conversation),
+          useValue: conversationRepo,
+        },
+        {
+          provide: getRepositoryToken(ConversationMember),
+          useValue: conversationMemberRepo,
+        },
         { provide: KAFKA_CLIENT, useValue: kafka },
       ],
     }).compile();
@@ -272,6 +291,140 @@ describe('Chat MessagesService', () => {
     });
   });
 
+  // ─── pinMessage / unpinMessage permissions ───────────
+
+  describe('pin permissions', () => {
+    const groupConversation = {
+      id: 'conv-1',
+      type: ConversationType.GROUP,
+    } as Conversation;
+
+    const groupMemberRole = {
+      conversationId: 'conv-1',
+      userId: 'member-1',
+      role: UpdateMemberRoleDtoRoleEnum.MEMBER,
+      leftAt: null,
+    } as ConversationMember;
+
+    const groupAdminRole = {
+      ...groupMemberRole,
+      role: UpdateMemberRoleDtoRoleEnum.ADMIN,
+    } as ConversationMember;
+
+    it('should reject pin when user is MEMBER in group', async () => {
+      conversationRepo.findOne.mockResolvedValue(groupConversation);
+      conversationMemberRepo.findOne.mockResolvedValue(groupMemberRole);
+
+      await expect(
+        service.pinMessage('conv-1', 1706162800000, 'msg-1', 'member-1'),
+      ).rejects.toThrow(BusinessException);
+
+      expect(messageRepository.pinMessage).not.toHaveBeenCalled();
+      expect(kafka.emit).not.toHaveBeenCalledWith(
+        KafkaTopics.ChatMessagePinned,
+        expect.anything(),
+      );
+    });
+
+    it('should allow pin when user is ADMIN in group', async () => {
+      conversationRepo.findOne.mockResolvedValue(groupConversation);
+      conversationMemberRepo.findOne.mockResolvedValue(groupAdminRole);
+      messageRepository.getMessage.mockResolvedValue(
+        createMockMessage({
+          message_id: 'msg-1',
+          conversation_id: 'conv-1',
+          created_at: 1706162800000,
+        }),
+      );
+      messageRepository.getPinnedMessage.mockResolvedValue(null);
+
+      const result = await service.pinMessage(
+        'conv-1',
+        1706162800000,
+        'msg-1',
+        'admin-1',
+      );
+
+      expect(messageRepository.pinMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          conversation_id: 'conv-1',
+          message_id: 'msg-1',
+          created_at: 1706162800000,
+          pinned_by: 'admin-1',
+        }),
+      );
+      expect(kafka.emit).toHaveBeenCalledWith(
+        KafkaTopics.ChatMessagePinned,
+        expect.objectContaining({
+          message_id: 'msg-1',
+          conversation_id: 'conv-1',
+          created_at: 1706162800000,
+          pinned_by: 'admin-1',
+        }),
+      );
+      expect(result).toEqual({ message: 'Message pinned' });
+    });
+
+    it('should reject unpin when MEMBER tries to unpin another user pin', async () => {
+      conversationRepo.findOne.mockResolvedValue(groupConversation);
+      conversationMemberRepo.findOne.mockResolvedValue(groupMemberRole);
+      messageRepository.getPinnedMessage.mockResolvedValue({
+        conversation_id: 'conv-1',
+        message_id: 'msg-1',
+        created_at: 1706162800000,
+        pinned_by: 'owner-1',
+        pinned_at: 1706162900000,
+      });
+
+      await expect(
+        service.unpinMessage('conv-1', 1706162800000, 'msg-1', 'member-1'),
+      ).rejects.toThrow(BusinessException);
+
+      expect(messageRepository.unpinMessage).not.toHaveBeenCalled();
+      expect(kafka.emit).not.toHaveBeenCalledWith(
+        KafkaTopics.ChatMessageUnpinned,
+        expect.anything(),
+      );
+    });
+
+    it('should allow unpin when MEMBER unpins own pin', async () => {
+      conversationRepo.findOne.mockResolvedValue(groupConversation);
+      conversationMemberRepo.findOne.mockResolvedValue(groupMemberRole);
+      messageRepository.getPinnedMessage.mockResolvedValue({
+        conversation_id: 'conv-1',
+        message_id: 'msg-1',
+        created_at: 1706162800000,
+        pinned_by: 'member-1',
+        pinned_at: 1706162900000,
+      });
+
+      const result = await service.unpinMessage(
+        'conv-1',
+        1706162800000,
+        'msg-1',
+        'member-1',
+      );
+
+      expect(messageRepository.unpinMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          conversation_id: 'conv-1',
+          message_id: 'msg-1',
+          pinned_by: 'member-1',
+        }),
+      );
+      expect(kafka.emit).toHaveBeenCalledWith(
+        KafkaTopics.ChatMessageUnpinned,
+        expect.objectContaining({
+          message_id: 'msg-1',
+          conversation_id: 'conv-1',
+          created_at: 1706162800000,
+          unpinned_by: 'member-1',
+        }),
+      );
+      expect(result).toEqual({ message: 'Message unpinned' });
+    });
+  });
+
   // ─── Attachments & CDN ───────────────────────────────
 
   describe('attachment URL building', () => {
@@ -351,6 +504,8 @@ describe('Chat MessagesService', () => {
         mediaClient as unknown as MediaClientService,
         membershipService as unknown as ConversationMembershipService,
         userRepo as unknown as never,
+        conversationRepo as unknown as never,
+        conversationMemberRepo as unknown as never,
         kafka as unknown as never,
       );
 

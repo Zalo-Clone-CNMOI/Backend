@@ -105,6 +105,60 @@ export class ConversationDetailDto {
   createdAt: Date;
 }
 
+export class ConversationCallStateSnapshotDto {
+  @ApiProperty({ description: 'Call ID' })
+  call_id: string;
+
+  @ApiProperty({ description: 'Conversation ID' })
+  conversation_id: string;
+
+  @ApiProperty({ description: 'Call type', enum: ['audio', 'video'] })
+  call_type: 'audio' | 'video';
+
+  @ApiProperty({
+    description: 'Current call status',
+    enum: ['ringing', 'ongoing', 'ended'],
+  })
+  status: 'ringing' | 'ongoing' | 'ended';
+
+  @ApiProperty({ description: 'Initiator user ID' })
+  initiator_id: string;
+
+  @ApiProperty({
+    description: 'Participant status map by user ID',
+    type: 'object',
+    additionalProperties: {
+      type: 'string',
+      enum: ['invited', 'accepted', 'rejected', 'left'],
+    },
+  })
+  participants: Record<string, 'invited' | 'accepted' | 'rejected' | 'left'>;
+
+  @ApiProperty({ description: 'Start timestamp (ms)' })
+  started_at: number;
+
+  @ApiPropertyOptional({ description: 'End timestamp (ms)' })
+  ended_at?: number;
+}
+
+export class ConversationCallStateResponseDto {
+  @ApiProperty({ description: 'Conversation ID' })
+  conversation_id: string;
+
+  @ApiPropertyOptional({
+    description: 'Current active call state; null when no active call',
+    type: ConversationCallStateSnapshotDto,
+    nullable: true,
+  })
+  state: ConversationCallStateSnapshotDto | null;
+
+  @ApiProperty({ description: 'Response timestamp (ms)' })
+  updated_at: number;
+
+  @ApiPropertyOptional({ description: 'Optional state reason' })
+  reason?: string;
+}
+
 export class GroupInviteItemDto {
   @ApiProperty({ description: 'Invite ID' })
   id: string;

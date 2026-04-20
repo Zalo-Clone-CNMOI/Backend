@@ -7,7 +7,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { MediaClientModule } from '@app/clients';
 import { KafkaModule } from '@libs/kafka';
 import { ScyllaModule } from '@libs/scylla';
-import { User } from '@libs/database';
+import { Conversation, ConversationMember, User } from '@libs/database';
 import { ConversationMembershipModule } from '@libs/mvp-access';
 import { MessagesController } from './messages.controller';
 import { MessagesService } from './messages.service';
@@ -15,7 +15,7 @@ import { MessagesService } from './messages.service';
 @Module({
   imports: [
     ScyllaModule,
-    TypeOrmModule.forFeature([User]),
+    TypeOrmModule.forFeature([User, Conversation, ConversationMember]),
     KafkaModule,
     ConversationMembershipModule,
     MediaClientModule.registerAsync({

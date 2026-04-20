@@ -746,6 +746,113 @@ paths:
                 properties:
                   message:
                     type: string
+  /conversations/{conversationId}/pin:
+    post:
+      tags:
+        - Conversations
+      summary: Pin conversation for current user
+      operationId: pinConversation
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Conversation pinned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+    delete:
+      tags:
+        - Conversations
+      summary: Unpin conversation for current user
+      operationId: unpinConversation
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Conversation unpinned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+  /conversations/{conversationId}/call-state:
+    get:
+      tags:
+        - Conversations
+      summary: Get active call state for a conversation
+      operationId: getConversationCallState
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Active call state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationCallStateResponseDto'
+  /conversations/{conversationId}/calls/{callId}/end:
+    post:
+      tags:
+        - Conversations
+      summary: End active call in a conversation
+      operationId: endConversationCall
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: callId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EndConversationCallDto'
+      responses:
+        '200':
+          description: Call end requested
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
 components:
   securitySchemes:
     BearerAuth:
@@ -1016,6 +1123,12 @@ components:
           type: string
           format: date-time
           nullable: true
+    EndConversationCallDto:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
     ConversationMemberResponseDto:
       type: object
       properties:
@@ -1072,6 +1185,12 @@ components:
               format: date-time
         unreadCount:
           type: integer
+        isPinned:
+          type: boolean
+        pinnedAt:
+          type: string
+          format: date-time
+          nullable: true
         createdAt:
           type: string
           format: date-time
@@ -1100,13 +1219,55 @@ components:
         updatedAt:
           type: string
           format: date-time
-    PaginatedResponseConversationListItemDto:
+    ConversationCallStateSnapshotDto:
+      type: object
+      properties:
+        call_id:
+          type: string
+        conversation_id:
+          type: string
+          format: uuid
+        call_type:
+          type: string
+          enum: [audio, video]
+        status:
+          type: string
+          enum: [ringing, ongoing, ended]
+        initiator_id:
+          type: string
+          format: uuid
+        participants:
+          type: object
+          additionalProperties:
+            type: string
+            enum: [invited, accepted, rejected, left]
+        started_at:
+          type: number
+        ended_at:
+          type: number
+          nullable: true
+    ConversationCallStateResponseDto:
+      type: object
+      properties:
+        conversation_id:
+          type: string
+          format: uuid
+        state:
+          allOf:
+            - $ref: '#/components/schemas/ConversationCallStateSnapshotDto'
+          nullable: true
+        updated_at:
+          type: number
+        reason:
+          type: string
+          nullable: true
+    PaginatedResponseGroupInviteItemDto:
       type: object
       properties:
         data:
           type: array
           items:
-            $ref: '#/components/schemas/ConversationListItemDto'
+            $ref: '#/components/schemas/GroupInviteItemDto'
         total:
           type: integer
         page:
@@ -1115,13 +1276,13 @@ components:
           type: integer
         totalPages:
           type: integer
-    PaginatedResponseGroupInviteItemDto:
+    PaginatedResponseConversationListItemDto:
       type: object
       properties:
         data:
           type: array
           items:
-            $ref: '#/components/schemas/GroupInviteItemDto'
+            $ref: '#/components/schemas/ConversationListItemDto'
         total:
           type: integer
         page:

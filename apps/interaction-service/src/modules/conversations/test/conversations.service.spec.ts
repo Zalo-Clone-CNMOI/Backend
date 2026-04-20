@@ -18,6 +18,9 @@ import {
 import { CacheService, REDIS_CLIENT } from '@libs/redis';
 import { KAFKA_CLIENT, NotificationOutboxPublisher } from '@libs/kafka';
 import { UpdateMemberRoleDtoRoleEnum } from '@app/constant';
+import { ConversationCoreService } from '../services/conversation-core.service';
+import { ConversationMemberService } from '../services/conversation-member.service';
+import { GroupInviteService } from '../services/group-invite.service';
 import { IsNull } from 'typeorm';
 
 // ─── Mock Enums ──────────────────────────────────────────
@@ -149,6 +152,9 @@ describe('ConversationsService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ConversationsService,
+        ConversationCoreService,
+        ConversationMemberService,
+        GroupInviteService,
         { provide: getRepositoryToken(User), useValue: userRepository },
         {
           provide: getRepositoryToken(Conversation),

@@ -5,8 +5,8 @@
  * ConversationsService with the correct parameter ordering.
  */
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConversationsController } from './conversations.controller';
-import { ConversationsService } from './conversations.service';
+import { ConversationsController } from '../conversations.controller';
+import { ConversationsService } from '../conversations.service';
 import { UpdateMemberRoleDtoRoleEnum } from '@app/constant';
 
 const uuid = (n: number) => `00000000-0000-0000-0000-00000000000${n}`;

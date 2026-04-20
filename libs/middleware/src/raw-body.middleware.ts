@@ -1,11 +1,11 @@
 import { json } from 'body-parser';
-import { Request, Response } from 'express';
+import { Request, RequestHandler, Response } from 'express';
 
 export interface RequestWithRawBody extends Request {
   rawBody: Buffer;
 }
 
-function rawBodyMiddleware() {
+function rawBodyMiddleware(): RequestHandler {
   return json({
     verify: (
       request: RequestWithRawBody,

@@ -186,7 +186,10 @@ describe('CallConsumer', () => {
 
     expect(kafkaClient.emit).toHaveBeenCalledWith(
       KafkaTopics.CallSignalForwarded,
-      expect.objectContaining({ sender_id: 'user-1', target_user_id: 'user-2' }),
+      expect.objectContaining({
+        sender_id: 'user-1',
+        target_user_id: 'user-2',
+      }),
     );
   });
 
@@ -203,7 +206,10 @@ describe('CallConsumer', () => {
     expect(callEventsPublisher.publishStateUpdate).toHaveBeenCalledWith(
       'conv-1',
       null,
-      expect.objectContaining({ requestedBy: 'user-2', reason: 'no_active_call' }),
+      expect.objectContaining({
+        requestedBy: 'user-2',
+        reason: 'no_active_call',
+      }),
     );
   });
 
@@ -270,10 +276,14 @@ describe('CallConsumer', () => {
       expect.anything(),
     );
     expect(callStateStore.clear).not.toHaveBeenCalled();
-    expect(callStateStore.set).toHaveBeenCalledWith(
+    expect(callStateStore.set).toHaveBeenLastCalledWith(
       'conv-1',
       expect.objectContaining({
-        participants: expect.objectContaining({ 'user-2': 'left' }),
+        participants: {
+          'user-1': 'accepted',
+          'user-2': 'left',
+          'user-3': 'accepted',
+        },
       }),
     );
   });
@@ -296,10 +306,14 @@ describe('CallConsumer', () => {
       expect.objectContaining({ user_id: 'user-3', call_id: 'call-1' }),
     );
     expect(callStateStore.clear).not.toHaveBeenCalled();
-    expect(callStateStore.set).toHaveBeenCalledWith(
+    expect(callStateStore.set).toHaveBeenLastCalledWith(
       'conv-1',
       expect.objectContaining({
-        participants: expect.objectContaining({ 'user-3': 'left' }),
+        participants: {
+          'user-1': 'accepted',
+          'user-2': 'accepted',
+          'user-3': 'left',
+        },
       }),
     );
   });
@@ -390,10 +404,14 @@ describe('CallConsumer', () => {
       expect.anything(),
     );
     expect(callStateStore.clear).not.toHaveBeenCalled();
-    expect(callStateStore.set).toHaveBeenCalledWith(
+    expect(callStateStore.set).toHaveBeenLastCalledWith(
       'conv-1',
       expect.objectContaining({
-        participants: expect.objectContaining({ 'user-2': 'rejected' }),
+        participants: {
+          'user-1': 'accepted',
+          'user-2': 'rejected',
+          'user-3': 'invited',
+        },
       }),
     );
   });
@@ -416,10 +434,14 @@ describe('CallConsumer', () => {
       accepted_at: 1700000000030,
     });
 
-    expect(callStateStore.set).toHaveBeenCalledWith(
+    expect(callStateStore.set).toHaveBeenLastCalledWith(
       'conv-1',
       expect.objectContaining({
-        participants: expect.objectContaining({ 'user-2': 'accepted' }),
+        participants: {
+          'user-1': 'accepted',
+          'user-2': 'accepted',
+          'user-3': 'accepted',
+        },
       }),
     );
   });

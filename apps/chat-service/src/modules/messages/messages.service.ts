@@ -116,7 +116,7 @@ export class MessagesService implements OnModuleInit {
     private readonly conversationMemberRepo: Repository<ConversationMember>,
     @Inject(KAFKA_CLIENT) private readonly kafka: ClientKafka,
   ) {
-    const bucket = process.env.S3_BUCKET ?? 'onn-bucket-23';
+    const bucket = process.env.S3_BUCKET ?? 'zalo-bucket-clone';
     const region = process.env.AWS_REGION ?? 'ap-southeast-1';
     const endpoint = process.env.S3_ENDPOINT;
     this.cdnBaseUrl = endpoint
@@ -616,7 +616,7 @@ export class MessagesService implements OnModuleInit {
   private toAttachmentResponse(
     attachment: MessageAttachment,
   ): AttachmentResponseDto {
-    const bucket = process.env.S3_BUCKET ?? 'onn-bucket-23';
+    const bucket = process.env.S3_BUCKET ?? 'zalo-bucket-clone';
     const visibility =
       attachment.visibility ?? inferMediaVisibility(attachment.content_type);
 

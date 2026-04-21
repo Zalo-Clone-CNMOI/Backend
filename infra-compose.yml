@@ -75,8 +75,8 @@ services:
     environment:
       NODE_ENV: production
       # Database - AWS RDS
-      DB_HOST: zalodb.cv600uwoag41.ap-southeast-1.rds.amazonaws.com
-      DB_PORT: 5432
+      DB_HOST: ${POSTGRES_HOST:-database-1.cfoyskwa2yf9.ap-southeast-1.rds.amazonaws.com}
+      DB_PORT: ${POSTGRES_PORT:-5432}
       DB_USERNAME: ${POSTGRES_USER:-postgres}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       DB_NAME: ${POSTGRES_DB:-postgres}

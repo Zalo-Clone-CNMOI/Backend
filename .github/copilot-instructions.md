@@ -248,9 +248,9 @@ A task is DONE only when ALL are true:
 
 * Code implemented
 * Contracts updated (if applicable)
-* pnpm run build:all PASSED
-* pnpm run lint PASSED
-* run code-reviewer agent → no critical and warning issues
+- run code-reviewer agent and address then fix all critical and warning issues
+- pnpm run build:all PASSED (after code-review confirmed no critical/warning issues)
+- pnpm run lint PASSED (after build passed)
 * 🧾 Code Change Report provided
 * 📘 Technical Documentation provided
 

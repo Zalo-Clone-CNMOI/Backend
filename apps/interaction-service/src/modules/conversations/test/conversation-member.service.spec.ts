@@ -8,6 +8,7 @@
  */
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { QueryFailedError } from 'typeorm';
 import { ConversationsService } from '../conversations.service';
 import { ConversationCoreService } from '../services/conversation-core.service';
 import { ConversationMemberService } from '../services/conversation-member.service';
@@ -80,7 +81,7 @@ describe('ConversationsService', () => {
   let service: ConversationsService;
   let userRepository: Record<string, jest.Mock>;
   let conversationRepository: Record<string, jest.Mock>;
-  let memberRepository: Record<string, jest.Mock>;
+  let memberRepository: Record<string, unknown>;
   let inviteRepository: InviteRepositoryMock;
   let cacheService: Record<string, jest.Mock>;
   let kafkaClient: Record<string, jest.Mock>;
@@ -114,6 +115,27 @@ describe('ConversationsService', () => {
       create: jest.fn().mockImplementation((data) => data),
       save: jest.fn().mockImplementation((data) => Promise.resolve(data)),
       createQueryBuilder: jest.fn(),
+      manager: {
+        transaction: jest.fn(
+          (
+            work: (manager: {
+              save: jest.Mock<Promise<unknown>, [unknown, unknown]>;
+              update: jest.Mock<
+                Promise<{ affected: number }>,
+                [unknown, unknown, unknown]
+              >;
+            }) => unknown,
+          ) =>
+            Promise.resolve(
+              work({
+                save: jest
+                  .fn()
+                  .mockImplementation((_entity, data) => Promise.resolve(data)),
+                update: jest.fn().mockResolvedValue({ affected: 1 }),
+              }),
+            ),
+        ),
+      },
     };
 
     inviteRepository = {
@@ -197,14 +219,65 @@ describe('ConversationsService', () => {
         memberIds: [uuid(4)],
       });
 
-      expect(memberRepository.save).toHaveBeenCalledWith(
-        expect.arrayContaining([
-          expect.objectContaining({
-            userId: uuid(4),
-            role: 'member',
+      expect(
+        (memberRepository.manager as { transaction: jest.Mock }).transaction,
+      ).toHaveBeenCalled();
+    });
+
+    it('should deduplicate memberIds in one request', async () => {
+      const conv = createMockConversation();
+      conversationRepository.findOne
+        .mockResolvedValueOnce(conv)
+        .mockResolvedValueOnce(conv);
+
+      userRepository.find.mockResolvedValue([
+        { id: uuid(4), status: 'active' },
+      ]);
+
+      await service.addMembers(uuid(2), uuid(1), {
+        memberIds: [uuid(4), uuid(4)],
+      });
+
+      expect(memberRepository.create).toHaveBeenCalledTimes(1);
+      expect(
+        (memberRepository.manager as { transaction: jest.Mock }).transaction,
+      ).toHaveBeenCalled();
+    });
+
+    it('should revive previously removed members instead of inserting duplicate rows', async () => {
+      const conv = createMockConversation({
+        members: [
+          createMockMember({
+            userId: uuid(2),
+            role: UpdateMemberRoleDtoRoleEnum.OWNER,
+            user: { id: uuid(2), fullName: 'Owner User', avatarUrl: null },
           }),
-        ]),
-      );
+          createMockMember({
+            id: uuid(10),
+            userId: uuid(4),
+            leftAt: new Date('2026-01-01T00:00:00.000Z'),
+            role: UpdateMemberRoleDtoRoleEnum.MEMBER,
+            user: { id: uuid(4), fullName: 'Former Member', avatarUrl: null },
+          }),
+        ],
+      });
+
+      conversationRepository.findOne
+        .mockResolvedValueOnce(conv)
+        .mockResolvedValueOnce(conv);
+
+      userRepository.find.mockResolvedValue([
+        { id: uuid(4), status: 'active' },
+      ]);
+
+      await service.addMembers(uuid(2), uuid(1), {
+        memberIds: [uuid(4)],
+      });
+
+      expect(memberRepository.create).not.toHaveBeenCalled();
+      expect(
+        (memberRepository.manager as { transaction: jest.Mock }).transaction,
+      ).toHaveBeenCalled();
     });
 
     it('should reject when no new members to add (all already members)', async () => {
@@ -264,6 +337,87 @@ describe('ConversationsService', () => {
       });
 
       expect(cacheService.invalidateConversation).toHaveBeenCalled();
+    });
+
+    it('should throw conflict and emit no side effects on duplicate-key insert race', async () => {
+      const conv = createMockConversation();
+      conversationRepository.findOne.mockResolvedValue(conv);
+
+      userRepository.find.mockResolvedValue([
+        { id: uuid(4), status: 'active' },
+      ]);
+
+      (
+        memberRepository.manager as { transaction: jest.Mock }
+      ).transaction.mockImplementation(
+        (work: (manager: { save: jest.Mock }) => unknown) =>
+          Promise.resolve(
+            work({
+              save: jest.fn().mockRejectedValueOnce(
+                Object.assign(
+                  new QueryFailedError('', [], new Error('duplicate key')),
+                  {
+                    driverError: { code: '23505' },
+                  },
+                ),
+              ),
+            }),
+          ),
+      );
+
+      await expect(
+        service.addMembers(uuid(2), uuid(1), {
+          memberIds: [uuid(4)],
+        }),
+      ).rejects.toThrow();
+
+      expect(kafkaClient.emit).not.toHaveBeenCalled();
+      expect(notificationPublisher.publish).not.toHaveBeenCalled();
+    });
+
+    it('should throw conflict with no side effects when revive race updates zero rows', async () => {
+      const conv = createMockConversation({
+        members: [
+          createMockMember({
+            userId: uuid(2),
+            role: UpdateMemberRoleDtoRoleEnum.OWNER,
+            user: { id: uuid(2), fullName: 'Owner User', avatarUrl: null },
+          }),
+          createMockMember({
+            id: uuid(10),
+            userId: uuid(4),
+            leftAt: new Date('2026-01-01T00:00:00.000Z'),
+            role: UpdateMemberRoleDtoRoleEnum.MEMBER,
+            user: { id: uuid(4), fullName: 'Former Member', avatarUrl: null },
+          }),
+        ],
+      });
+
+      conversationRepository.findOne.mockResolvedValue(conv);
+      userRepository.find.mockResolvedValue([
+        { id: uuid(4), status: 'active' },
+      ]);
+
+      (
+        memberRepository.manager as { transaction: jest.Mock }
+      ).transaction.mockImplementation(
+        (work: (manager: { save: jest.Mock; update: jest.Mock }) => unknown) =>
+          Promise.resolve(
+            work({
+              save: jest.fn().mockResolvedValue([]),
+              update: jest.fn().mockResolvedValue({ affected: 0 }),
+            }),
+          ),
+      );
+
+      await expect(
+        service.addMembers(uuid(2), uuid(1), {
+          memberIds: [uuid(4)],
+        }),
+      ).rejects.toThrow();
+
+      expect(kafkaClient.emit).not.toHaveBeenCalled();
+      expect(notificationPublisher.publish).not.toHaveBeenCalled();
     });
   });
 

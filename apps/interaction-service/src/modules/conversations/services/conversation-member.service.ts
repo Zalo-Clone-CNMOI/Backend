@@ -1,6 +1,6 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, IsNull, In } from 'typeorm';
+import { Repository, IsNull, In, Not, QueryFailedError } from 'typeorm';
 import { ClientKafka } from '@nestjs/microservices';
 import { KAFKA_CLIENT } from '@libs/kafka';
 import { NotificationOutboxPublisher } from '@libs/kafka/publisher/notification-outbox.publisher';
@@ -91,24 +91,48 @@ export class ConversationMemberService {
       );
     }
 
-    const newUserIds = dto.memberIds.filter(
-      (id) =>
-        !conversation.members.some((m) => m.userId === id && m.leftAt === null),
+    const requestedUserIds = [...new Set(dto.memberIds)];
+    const activeMemberIds = new Set(
+      conversation.members
+        .filter((member) => member.leftAt === null)
+        .map((member) => member.userId),
     );
 
-    if (newUserIds.length === 0) {
+    const candidateUserIds = requestedUserIds.filter(
+      (id) => !activeMemberIds.has(id),
+    );
+
+    if (candidateUserIds.length === 0) {
       throw BusinessException.conflict(ErrorCode.CONVERSATION_ALREADY_MEMBER);
     }
 
     const users = await this.userRepository.find({
-      where: { id: In(newUserIds), status: UserStatus.ACTIVE },
+      where: { id: In(candidateUserIds), status: UserStatus.ACTIVE },
     });
 
-    if (users.length !== newUserIds.length) {
+    if (users.length !== candidateUserIds.length) {
       throw BusinessException.badRequest(ErrorCode.USER_NOT_FOUND);
     }
 
-    const newMembers = newUserIds.map((memberId) =>
+    const rejoinableMembershipIds = new Set(
+      conversation.members
+        .filter((member) => member.leftAt !== null)
+        .map((member) => member.userId),
+    );
+
+    const revivedCandidateIds: string[] = [];
+    const newMemberIds: string[] = [];
+
+    for (const memberId of candidateUserIds) {
+      if (rejoinableMembershipIds.has(memberId)) {
+        revivedCandidateIds.push(memberId);
+        continue;
+      }
+
+      newMemberIds.push(memberId);
+    }
+
+    const newMembers = newMemberIds.map((memberId) =>
       this.memberRepository.create({
         conversationId,
         userId: memberId,
@@ -116,17 +140,71 @@ export class ConversationMemberService {
       }),
     );
 
-    await this.memberRepository.save(newMembers);
+    const revivedMemberIds = await this.memberRepository.manager.transaction(
+      async (manager) => {
+        const changedRevivedIds: string[] = [];
+
+        for (const revivedMemberId of revivedCandidateIds) {
+          const updateResult = await manager.update(
+            ConversationMember,
+            {
+              conversationId,
+              userId: revivedMemberId,
+              leftAt: Not(IsNull()),
+            },
+            {
+              leftAt: null,
+              role: UpdateMemberRoleDtoRoleEnum.MEMBER,
+            },
+          );
+
+          if ((updateResult.affected ?? 0) > 0) {
+            changedRevivedIds.push(revivedMemberId);
+          }
+        }
+
+        if (newMembers.length > 0) {
+          try {
+            await manager.save(ConversationMember, newMembers);
+          } catch (error) {
+            const code =
+              error instanceof QueryFailedError
+                ? (
+                    error as QueryFailedError & {
+                      driverError?: { code?: string };
+                    }
+                  ).driverError?.code
+                : undefined;
+
+            if (code !== '23505') {
+              throw error;
+            }
+
+            throw BusinessException.conflict(
+              ErrorCode.CONVERSATION_ALREADY_MEMBER,
+            );
+          }
+        }
+
+        return changedRevivedIds;
+      },
+    );
+
+    const addedUserIds = [...revivedMemberIds, ...newMemberIds];
+
+    if (addedUserIds.length === 0) {
+      throw BusinessException.conflict(ErrorCode.CONVERSATION_ALREADY_MEMBER);
+    }
 
     this.logger.log(
-      `Members added to conversation ${conversationId}: ${newUserIds.join(', ')}`,
+      `Members added to conversation ${conversationId}: ${addedUserIds.join(', ')}`,
     );
 
     const usersById = new Map(users.map((user) => [user.id, user]));
     const addedEvent: ConversationMemberAddedEvent = {
       conversation_id: conversationId,
       added_by: userId,
-      members: newUserIds.map((memberId) => ({
+      members: addedUserIds.map((memberId) => ({
         user_id: memberId,
         full_name: usersById.get(memberId)?.fullName ?? 'Unknown',
         avatar_url: usersById.get(memberId)?.avatarUrl ?? null,
@@ -142,7 +220,7 @@ export class ConversationMemberService {
       select: ['fullName'],
     });
 
-    const addedMemberNotifications = newUserIds.map((newUserId) => ({
+    const addedMemberNotifications = addedUserIds.map((newUserId) => ({
       channel: 'push' as const,
       user_id: newUserId,
       title: 'Added to group',
@@ -172,7 +250,7 @@ export class ConversationMemberService {
       ...conversation.members
         .filter((m) => m.leftAt === null)
         .map((m) => m.userId),
-      ...newUserIds,
+      ...addedUserIds,
     ];
     await this.cacheService.invalidateConversation(
       conversationId,

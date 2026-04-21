@@ -5,6 +5,7 @@ import { LoggerModule } from '@libs/logger';
 import { KafkaModule } from '@libs/kafka';
 import { DatabaseModule, MediaFile } from '@libs/database';
 import { ConversationMembershipModule } from '@libs/mvp-access';
+import { RedisModule } from '@libs/redis';
 import { ScheduleModule } from '@nestjs/schedule';
 import { S3Module } from '@libs/s3';
 import { HealthCheckService } from '@libs/shared';
@@ -21,6 +22,7 @@ import { OrphanedFileCleanupTask } from './tasks/cleanup.task';
     DatabaseModule,
     TypeOrmModule.forFeature([MediaFile]),
     ConversationMembershipModule,
+    RedisModule.forRootAsync(),
     ScheduleModule.forRoot(),
     KafkaModule,
     S3Module.forRootAsync({

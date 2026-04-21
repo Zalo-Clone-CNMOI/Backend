@@ -1,20 +1,18 @@
-import { Injectable, Logger, Inject } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, IsNull, MoreThan, QueryFailedError } from 'typeorm';
-import { ClientKafka } from '@nestjs/microservices';
-import { KAFKA_CLIENT } from '@libs/kafka';
 import { NotificationOutboxPublisher } from '@libs/kafka/publisher/notification-outbox.publisher';
 import { CacheService } from '@libs/redis';
 import {
-  type NotificationRequestedEvent,
-  NotificationType,
-  KafkaTopics,
   type ConversationMemberAddedEvent,
+  KafkaTopics,
   type GroupInviteAcceptedEvent,
   type GroupInviteCancelledEvent,
   type GroupInviteExpiredEvent,
   type GroupInviteRejectedEvent,
   type GroupInviteSentEvent,
+  NotificationType,
+  type NotificationRequestedEvent,
 } from '@libs/contracts';
 import {
   User,
@@ -58,8 +56,6 @@ export class GroupInviteService {
     private readonly inviteRepository: Repository<ConversationInvite>,
     private readonly notificationPublisher: NotificationOutboxPublisher,
     private readonly cacheService: CacheService,
-    @Inject(KAFKA_CLIENT)
-    private readonly kafkaClient: ClientKafka,
   ) {}
 
   async sendGroupInvites(
@@ -254,7 +250,10 @@ export class GroupInviteService {
         expired_at: expiredInvite.expiredAt,
         trace_id: `group-invite-expired:${expiredInvite.id}`,
       };
-      this.kafkaClient.emit(KafkaTopics.GroupInviteExpired, expiredEvent);
+      await this.publishKafkaOutbox(
+        KafkaTopics.GroupInviteExpired,
+        expiredEvent,
+      );
     }
 
     const inviter = await this.userRepository.findOne({
@@ -277,7 +276,7 @@ export class GroupInviteService {
         sent_at: invite.createdAt.getTime(),
         trace_id: `group-invite-sent:${invite.id}`,
       };
-      this.kafkaClient.emit(KafkaTopics.GroupInviteSent, sentEvent);
+      await this.publishKafkaOutbox(KafkaTopics.GroupInviteSent, sentEvent);
 
       const notification: NotificationRequestedEvent = {
         channel: 'push',
@@ -468,6 +467,18 @@ export class GroupInviteService {
       throw BusinessException.badRequest(ErrorCode.GROUP_INVITE_EXPIRED);
     }
 
+    const activeMembership = await this.memberRepository.findOne({
+      where: {
+        conversationId,
+        userId,
+        leftAt: IsNull(),
+      },
+    });
+
+    if (activeMembership) {
+      return { message: 'Already a member' };
+    }
+
     const accepted = await this.inviteRepository.manager.transaction(
       async (manager) => {
         const inviteRepository = manager.getRepository(ConversationInvite);
@@ -506,10 +517,14 @@ export class GroupInviteService {
         const membership = await memberRepository.findOne({
           where: { conversationId, userId },
         });
+        let membershipChanged = false;
         if (membership) {
-          membership.leftAt = null;
-          membership.role = UpdateMemberRoleDtoRoleEnum.MEMBER;
-          await memberRepository.save(membership);
+          if (membership.leftAt !== null) {
+            membership.leftAt = null;
+            membership.role = UpdateMemberRoleDtoRoleEnum.MEMBER;
+            await memberRepository.save(membership);
+            membershipChanged = true;
+          }
         } else {
           await memberRepository.save(
             memberRepository.create({
@@ -518,6 +533,7 @@ export class GroupInviteService {
               role: UpdateMemberRoleDtoRoleEnum.MEMBER,
             }),
           );
+          membershipChanged = true;
         }
 
         const respondedAt = new Date();
@@ -525,7 +541,7 @@ export class GroupInviteService {
           { id: existingInvite.id, status: GroupInviteStatus.PENDING },
           { status: GroupInviteStatus.ACCEPTED, respondedAt },
         );
-        if ((updateResult.affected ?? 0) !== 1) {
+        if ((updateResult.affected ?? 0) !== 1 && membershipChanged) {
           throw BusinessException.badRequest(
             ErrorCode.GROUP_INVITE_INVALID_STATUS,
           );
@@ -535,9 +551,14 @@ export class GroupInviteService {
           inviteId: existingInvite.id,
           inviterUserId: existingInvite.inviterUserId,
           respondedAt,
+          membershipChanged,
         };
       },
     );
+
+    if (!accepted.membershipChanged) {
+      return { message: 'Already a member' };
+    }
 
     const acceptedEvent: GroupInviteAcceptedEvent = {
       invite_id: accepted.inviteId,
@@ -548,7 +569,10 @@ export class GroupInviteService {
       responded_at: accepted.respondedAt.getTime(),
       trace_id: `group-invite-accepted:${accepted.inviteId}`,
     };
-    this.kafkaClient.emit(KafkaTopics.GroupInviteAccepted, acceptedEvent);
+    await this.publishKafkaOutbox(
+      KafkaTopics.GroupInviteAccepted,
+      acceptedEvent,
+    );
 
     const acceptedUser = await this.userRepository.findOne({
       where: { id: userId },
@@ -568,7 +592,7 @@ export class GroupInviteService {
       added_at: Date.now(),
       trace_id: `conversation-member-added:${conversationId}`,
     };
-    this.kafkaClient.emit(
+    await this.publishKafkaOutbox(
       KafkaTopics.ConversationMemberAdded,
       memberAddedEvent,
     );
@@ -625,7 +649,10 @@ export class GroupInviteService {
       responded_at: respondedAt.getTime(),
       trace_id: `group-invite-rejected:${invite.id}`,
     };
-    this.kafkaClient.emit(KafkaTopics.GroupInviteRejected, rejectedEvent);
+    await this.publishKafkaOutbox(
+      KafkaTopics.GroupInviteRejected,
+      rejectedEvent,
+    );
 
     return { message: 'Group invite rejected' };
   }
@@ -694,7 +721,10 @@ export class GroupInviteService {
       cancelled_at: respondedAt.getTime(),
       trace_id: `group-invite-cancelled:${invite.id}`,
     };
-    this.kafkaClient.emit(KafkaTopics.GroupInviteCancelled, cancelledEvent);
+    await this.publishKafkaOutbox(
+      KafkaTopics.GroupInviteCancelled,
+      cancelledEvent,
+    );
 
     return { message: 'Group invite cancelled' };
   }
@@ -731,8 +761,30 @@ export class GroupInviteService {
       expired_at: respondedAt.getTime(),
       trace_id: `group-invite-expired:${invite.id}`,
     };
-    this.kafkaClient.emit(KafkaTopics.GroupInviteExpired, expiredEvent);
+    await this.publishKafkaOutbox(KafkaTopics.GroupInviteExpired, expiredEvent);
 
     return true;
+  }
+
+  private async publishKafkaOutbox(
+    topic: Parameters<NotificationOutboxPublisher['publishToTopic']>[0],
+    payload: unknown,
+  ): Promise<void> {
+    const publisher = this.notificationPublisher as Pick<
+      NotificationOutboxPublisher,
+      'publishToTopic'
+    >;
+    const result = (await publisher.publishToTopic(
+      topic,
+      payload as never,
+    )) as unknown;
+
+    if (result === 'queued') {
+      return;
+    }
+
+    const message = `[GroupInviteService] Failed to enqueue outbox event topic=${topic}`;
+    this.logger.error(message);
+    throw BusinessException.internal(message);
   }
 }

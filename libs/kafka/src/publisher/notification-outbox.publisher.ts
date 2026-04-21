@@ -10,7 +10,16 @@ import { ClientKafka } from '@nestjs/microservices';
 import { DataSource, Repository } from 'typeorm';
 import { randomUUID } from 'crypto';
 import { APP_CONFIG, type AppConfig } from '@libs/config';
-import { KafkaTopics, type NotificationRequestedEvent } from '@libs/contracts';
+import {
+  KafkaTopics,
+  type ConversationMemberAddedEvent,
+  type GroupInviteAcceptedEvent,
+  type GroupInviteCancelledEvent,
+  type GroupInviteExpiredEvent,
+  type GroupInviteRejectedEvent,
+  type GroupInviteSentEvent,
+  type NotificationRequestedEvent,
+} from '@libs/contracts';
 import { NotificationOutbox } from '@libs/database/entities';
 import { REDIS_CLIENT } from '@libs/redis';
 import type { RedisClientType } from 'redis';
@@ -22,12 +31,23 @@ import {
 
 interface NotificationOutboxItem {
   id: string;
-  payload: NotificationRequestedEvent;
+  topic: string;
+  payload: unknown;
   retryCount: number;
   firstFailedAt: number;
   nextAttemptAt: number;
   lastError?: string;
 }
+
+type OutboxTopicPayloadMap = {
+  [KafkaTopics.NotificationRequested]: NotificationRequestedEvent;
+  [KafkaTopics.GroupInviteSent]: GroupInviteSentEvent;
+  [KafkaTopics.GroupInviteExpired]: GroupInviteExpiredEvent;
+  [KafkaTopics.GroupInviteAccepted]: GroupInviteAcceptedEvent;
+  [KafkaTopics.GroupInviteRejected]: GroupInviteRejectedEvent;
+  [KafkaTopics.GroupInviteCancelled]: GroupInviteCancelledEvent;
+  [KafkaTopics.ConversationMemberAdded]: ConversationMemberAddedEvent;
+};
 
 type RedisClaimResult =
   | { status: 'empty' }
@@ -98,11 +118,19 @@ export class NotificationOutboxPublisher
   async publish(
     payload: NotificationRequestedEvent,
   ): Promise<NotificationOutboxPublishResult> {
+    return this.publishToTopic(KafkaTopics.NotificationRequested, payload);
+  }
+
+  async publishToTopic<TTopic extends keyof OutboxTopicPayloadMap>(
+    topic: TTopic,
+    payload: OutboxTopicPayloadMap[TTopic],
+  ): Promise<NotificationOutboxPublishResult> {
     const now = Date.now();
-    const enqueued = await this.enqueueRedisOutbox(payload, 0, now, now);
+    const enqueued = await this.enqueueRedisOutbox(topic, payload, 0, now, now);
 
     if (!enqueued) {
       const dbPersisted = await this.persistDatabaseOutbox(
+        topic,
         payload,
         0,
         now,
@@ -112,11 +140,11 @@ export class NotificationOutboxPublisher
 
       if (!dbPersisted) {
         try {
-          await this.publishWithRetry(payload, true);
+          await this.publishWithRetry(topic, payload, true);
           return 'queued';
         } catch (error) {
           this.logger.error(
-            `[NotificationOutbox] terminal fallback failed trace_id=${payload.trace_id ?? 'unknown'} error=${this.asErrorMessage(error)}`,
+            `[NotificationOutbox] terminal fallback failed trace_id=${this.extractTraceId(payload)} error=${this.asErrorMessage(error)}`,
           );
           return 'failed';
         }
@@ -248,7 +276,7 @@ export class NotificationOutboxPublisher
       }
 
       try {
-        await this.publishWithRetry(parsed.payload, false);
+        await this.publishWithRetry(parsed.topic, parsed.payload, false);
         await this.ackProcessingItem(raw);
       } catch (error) {
         const nextRetryCount = parsed.retryCount + 1;
@@ -256,6 +284,7 @@ export class NotificationOutboxPublisher
 
         if (nextRetryCount > this.maxOutboxRetries) {
           const persisted = await this.persistDatabaseOutbox(
+            parsed.topic,
             parsed.payload,
             nextRetryCount,
             parsed.firstFailedAt,
@@ -267,6 +296,7 @@ export class NotificationOutboxPublisher
             await this.ackProcessingItem(raw);
           } else {
             const requeued = await this.enqueueRedisOutbox(
+              parsed.topic,
               parsed.payload,
               parsed.retryCount,
               parsed.firstFailedAt,
@@ -283,6 +313,7 @@ export class NotificationOutboxPublisher
         }
 
         const requeued = await this.enqueueRedisOutbox(
+          parsed.topic,
           parsed.payload,
           nextRetryCount,
           parsed.firstFailedAt,
@@ -296,6 +327,7 @@ export class NotificationOutboxPublisher
         }
 
         const persisted = await this.persistDatabaseOutbox(
+          parsed.topic,
           parsed.payload,
           nextRetryCount,
           parsed.firstFailedAt,
@@ -307,6 +339,7 @@ export class NotificationOutboxPublisher
           await this.ackProcessingItem(raw);
         } else {
           const fallbackRequeued = await this.enqueueRedisOutbox(
+            parsed.topic,
             parsed.payload,
             parsed.retryCount,
             parsed.firstFailedAt,
@@ -443,10 +476,11 @@ export class NotificationOutboxPublisher
         .getMany();
 
       for (const row of dueRows) {
-        const payload = row.payload as NotificationRequestedEvent;
+        const topic = row.topic;
+        const payload = row.payload;
 
         try {
-          await this.publishWithRetry(payload, false);
+          await this.publishWithRetry(topic, payload, false);
           await outboxRepository.delete(row.id);
         } catch (error) {
           const nextRetryCount = row.retryCount + 1;
@@ -483,7 +517,8 @@ export class NotificationOutboxPublisher
   }
 
   private async enqueueRedisOutbox(
-    payload: NotificationRequestedEvent,
+    topic: string,
+    payload: unknown,
     retryCount: number,
     firstFailedAt: number,
     nextAttemptAt?: number,
@@ -494,7 +529,8 @@ export class NotificationOutboxPublisher
       nextAttemptAt ?? now + this.computeBackoffMs(retryCount);
 
     const outboxItem: NotificationOutboxItem = {
-      id: `${payload.trace_id ?? payload.user_id}:${now}:${retryCount}`,
+      id: `${topic}:${this.extractTraceId(payload) ?? 'unknown'}:${now}:${retryCount}`,
+      topic,
       payload,
       retryCount,
       firstFailedAt,
@@ -512,14 +548,15 @@ export class NotificationOutboxPublisher
       return true;
     } catch (error) {
       this.logger.error(
-        `[NotificationOutbox] redis enqueue failed trace_id=${payload.trace_id ?? 'unknown'} error=${this.asErrorMessage(error)}`,
+        `[NotificationOutbox] redis enqueue failed trace_id=${this.extractTraceId(payload)} error=${this.asErrorMessage(error)}`,
       );
       return false;
     }
   }
 
   private async persistDatabaseOutbox(
-    payload: NotificationRequestedEvent,
+    topic: string,
+    payload: unknown,
     retryCount: number,
     firstFailedAt: number,
     nextAttemptAt: number,
@@ -529,7 +566,7 @@ export class NotificationOutboxPublisher
       await this.notificationOutboxRepository.save(
         this.notificationOutboxRepository.create({
           producer: this.producerKey,
-          topic: KafkaTopics.NotificationRequested,
+          topic,
           payload,
           retryCount,
           firstFailedAt: new Date(firstFailedAt),
@@ -540,7 +577,7 @@ export class NotificationOutboxPublisher
       return true;
     } catch (error) {
       this.logger.error(
-        `[NotificationOutbox] db fallback persist failed trace_id=${payload.trace_id ?? 'unknown'} error=${this.asErrorMessage(error)}`,
+        `[NotificationOutbox] db fallback persist failed trace_id=${this.extractTraceId(payload)} error=${this.asErrorMessage(error)}`,
       );
       return false;
     }
@@ -562,13 +599,14 @@ export class NotificationOutboxPublisher
   }
 
   private async publishWithRetry(
-    payload: NotificationRequestedEvent,
+    topic: string,
+    payload: unknown,
     emitDlqOnFailure: boolean,
   ): Promise<void> {
     const options: KafkaPublishOptions = {
       kafka: this.kafka,
       logger: this.logger,
-      topic: KafkaTopics.NotificationRequested,
+      topic,
       payload,
       producer: this.producerKey,
       emitDlqOnFailure,
@@ -577,9 +615,48 @@ export class NotificationOutboxPublisher
     await publishKafkaWithRetry(options);
   }
 
+  private extractTraceId(payload: unknown): string | undefined {
+    if (!payload || typeof payload !== 'object') {
+      return undefined;
+    }
+
+    const traceId = (payload as Record<string, unknown>).trace_id;
+    if (typeof traceId !== 'string' || traceId.length === 0) {
+      return undefined;
+    }
+
+    return traceId;
+  }
+
   private parseOutboxItem(raw: string): NotificationOutboxItem | null {
     try {
-      return JSON.parse(raw) as NotificationOutboxItem;
+      const parsed = JSON.parse(raw) as Partial<NotificationOutboxItem>;
+      if (!parsed || typeof parsed !== 'object') {
+        return null;
+      }
+
+      const topic =
+        typeof parsed.topic === 'string' && parsed.topic.length > 0
+          ? parsed.topic
+          : KafkaTopics.NotificationRequested;
+
+      return {
+        id: String(parsed.id ?? randomUUID()),
+        topic,
+        payload: parsed.payload,
+        retryCount:
+          typeof parsed.retryCount === 'number' ? parsed.retryCount : 0,
+        firstFailedAt:
+          typeof parsed.firstFailedAt === 'number'
+            ? parsed.firstFailedAt
+            : Date.now(),
+        nextAttemptAt:
+          typeof parsed.nextAttemptAt === 'number'
+            ? parsed.nextAttemptAt
+            : Date.now(),
+        lastError:
+          typeof parsed.lastError === 'string' ? parsed.lastError : undefined,
+      };
     } catch {
       this.logger.warn('[NotificationOutbox] dropped malformed outbox item');
       return null;

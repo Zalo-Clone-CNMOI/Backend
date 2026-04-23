@@ -273,68 +273,74 @@ export class GroupInviteService {
       select: ['id', 'fullName', 'avatarUrl'],
     });
 
-    const inviteNotifications: NotificationRequestedEvent[] = [];
-
-    for (const invite of txResult.savedInvites) {
-      const sentEvent: GroupInviteSentEvent = {
-        invite_id: invite.id,
-        conversation_id: conversationId,
-        inviter_id: userId,
-        invited_user_id: invite.invitedUserId,
-        inviter_full_name: inviter?.fullName ?? 'Unknown',
-        conversation_name: txResult.conversationName,
-        message: invite.message,
-        expires_at: invite.expiresAt.getTime(),
-        sent_at: invite.createdAt.getTime(),
-        trace_id: `group-invite-sent:${invite.id}`,
-      };
-      await this.publishKafkaOutbox(KafkaTopics.GroupInviteSent, sentEvent);
-
-      const directConv = await this.coreService.createDirectConversation(
-        userId,
-        { participantId: invite.invitedUserId },
-      );
-
-      const inviteMsg: ChatInviteMessageCommand = {
-        message_id: invite.messageId!,
-        conversation_id: directConv.id,
-        sender_id: userId,
-        message_type: MessageType.INVITE,
-        metadata: {
-          invite_id: invite.id,
-          group_id: conversationId,
-          group_name: txResult.conversationName || 'Group',
-          inviter_id: userId,
-          inviter_name: inviter?.fullName ?? 'Unknown',
-          status: 'pending',
-        } satisfies InviteMessageMetadata,
-        trace_id: `invite-msg-sent:${invite.id}`,
-        body: `${inviter?.fullName ?? 'Someone'} invited you to join ${txResult.conversationName || 'a group'}.`,
-        created_at: invite.createdAt.getTime(),
-      };
-      this.kafkaClient.emit(KafkaTopics.ChatInviteMessageCreated, inviteMsg);
-
-      const notification: NotificationRequestedEvent = {
-        channel: 'push',
-        user_id: invite.invitedUserId,
-        title: 'Group invite',
-        body: `${inviter?.fullName || 'Someone'} invited you to ${txResult.conversationName || 'a group'}`,
-        type: NotificationType.GroupInvite,
-        data: {
+    const inviteNotifications = await Promise.all(
+      txResult.savedInvites.map(async (invite) => {
+        const sentEvent: GroupInviteSentEvent = {
           invite_id: invite.id,
           conversation_id: conversationId,
-        },
-        rich: {
-          image_url: inviter?.avatarUrl || undefined,
-          priority: 'normal',
-          category: 'group_invite',
-          thread_id: conversationId,
-        },
-        requested_at: Date.now(),
-        trace_id: `group-invite-sent:${invite.id}`,
-      };
-      inviteNotifications.push(notification);
-    }
+          inviter_id: userId,
+          invited_user_id: invite.invitedUserId,
+          inviter_full_name: inviter?.fullName ?? 'Unknown',
+          conversation_name: txResult.conversationName,
+          message: invite.message,
+          expires_at: invite.expiresAt.getTime(),
+          sent_at: invite.createdAt.getTime(),
+          trace_id: `group-invite-sent:${invite.id}`,
+        };
+        await this.publishKafkaOutbox(
+          KafkaTopics.GroupInviteSent,
+          sentEvent,
+        );
+
+        const directConv = await this.coreService.createDirectConversation(
+          userId,
+          { participantId: invite.invitedUserId },
+        );
+
+        const inviteMsg: ChatInviteMessageCommand = {
+          message_id: invite.messageId!,
+          conversation_id: directConv.id,
+          sender_id: userId,
+          message_type: MessageType.INVITE,
+          metadata: {
+            invite_id: invite.id,
+            group_id: conversationId,
+            group_name: txResult.conversationName || 'Group',
+            inviter_id: userId,
+            inviter_name: inviter?.fullName ?? 'Unknown',
+            status: 'pending',
+          } satisfies InviteMessageMetadata,
+          trace_id: `invite-msg-sent:${invite.id}`,
+          body: `${inviter?.fullName ?? 'Someone'} invited you to join ${txResult.conversationName || 'a group'}.`,
+          created_at: invite.createdAt.getTime(),
+        };
+        this.kafkaClient.emit(
+          KafkaTopics.ChatInviteMessageCreated,
+          inviteMsg,
+        );
+
+        const notification: NotificationRequestedEvent = {
+          channel: 'push',
+          user_id: invite.invitedUserId,
+          title: 'Group invite',
+          body: `${inviter?.fullName || 'Someone'} invited you to ${txResult.conversationName || 'a group'}`,
+          type: NotificationType.GroupInvite,
+          data: {
+            invite_id: invite.id,
+            conversation_id: conversationId,
+          },
+          rich: {
+            image_url: inviter?.avatarUrl || undefined,
+            priority: 'normal',
+            category: 'group_invite',
+            thread_id: conversationId,
+          },
+          requested_at: Date.now(),
+          trace_id: `group-invite-sent:${invite.id}`,
+        };
+        return notification;
+      }),
+    );
     await enqueueNotifications(
       inviteNotifications,
       `group_invite_sent:${conversationId}`,

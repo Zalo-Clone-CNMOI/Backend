@@ -238,6 +238,91 @@ describe('GroupInviteService', () => {
       );
     });
 
+    it('should fan out createDirectConversation for all saved invites in parallel', async () => {
+      // Build 3 saved invites.
+      const savedInvites = [uuid(3), uuid(4), uuid(5)].map((invitedUserId, i) => ({
+        id: `00000000-0000-0000-0000-00000000000a${i}`,
+        conversationId: uuid(1),
+        inviterUserId: uuid(2),
+        invitedUserId,
+        status: GroupInviteStatus.PENDING,
+        expiresAt: new Date(Date.now() + 3600_000),
+        messageId: `00000000-0000-0000-0000-00000000000b${i}`,
+        message: null,
+        createdAt: new Date(),
+      }));
+
+      inviteRepository.manager.transaction.mockImplementation(
+        (cb: (m: unknown) => unknown) =>
+          cb({
+            getRepository: jest.fn((entity: unknown) => {
+              const name = (entity as { name?: string })?.name;
+              if (name === 'Conversation') {
+                return {
+                  createQueryBuilder: () => ({
+                    setLock: jest.fn().mockReturnThis(),
+                    where: jest.fn().mockReturnThis(),
+                    getOne: () =>
+                      Promise.resolve({
+                        id: uuid(1),
+                        name: 'Test Group',
+                        type: ConversationType.GROUP,
+                        createdById: uuid(2),
+                      }),
+                  }),
+                };
+              }
+              if (name === 'ConversationMember') {
+                return {
+                  findOne: () =>
+                    Promise.resolve({
+                      userId: uuid(2),
+                      role: UpdateMemberRoleDtoRoleEnum.OWNER,
+                      leftAt: null,
+                    }),
+                  find: () =>
+                    Promise.resolve([
+                      {
+                        userId: uuid(2),
+                        role: UpdateMemberRoleDtoRoleEnum.OWNER,
+                        leftAt: null,
+                      },
+                    ]),
+                };
+              }
+              if (name === 'User') {
+                return {
+                  find: () =>
+                    Promise.resolve(
+                      savedInvites.map((inv) => ({
+                        id: inv.invitedUserId,
+                        status: 'active',
+                      })),
+                    ),
+                };
+              }
+              if (name === 'ConversationInvite') {
+                return {
+                  find: () => Promise.resolve([]),
+                  create: (data: unknown) => data,
+                  save: () => Promise.resolve(savedInvites),
+                };
+              }
+              return {};
+            }),
+          }),
+      );
+
+      await service.sendGroupInvites(uuid(2), uuid(1), {
+        userIds: savedInvites.map((i) => i.invitedUserId),
+        message: 'join us',
+      });
+
+      expect(coreService.createDirectConversation).toHaveBeenCalledTimes(
+        savedInvites.length,
+      );
+    });
+
     it('should throw when conversation is disbanded mid-accept', async () => {
       const insertSpy = jest.fn();
       const disbandedConv = {

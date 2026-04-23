@@ -597,6 +597,7 @@ describe('ConversationsService', () => {
       });
 
       expect(memberRepository.save).toHaveBeenCalledWith(
+        expect.any(Function),
         expect.arrayContaining([
           expect.objectContaining({
             userId: uuid(4),

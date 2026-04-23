@@ -92,6 +92,22 @@ export class PersistMessageConsumer {
       await this.repo
         .clearMessageProcessing(payload.message_id)
         .catch(() => {});
+
+      if (this.shared.isNonRetryableBindError(error)) {
+        this.shared.logPoisonPayload('ChatSystemMessage', traceId, {
+          messageId: payload.message_id,
+          conversationId: payload.conversation_id,
+          createdAt: payload.created_at,
+          reason: 'non_retryable_bind_error',
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return;
+      }
+
+      this.shared.logger.error(`[${traceId}] ChatSystemMessage failed`, {
+        messageId: payload.message_id,
+        error: error instanceof Error ? error.message : String(error),
+      });
       throw error;
     }
   }

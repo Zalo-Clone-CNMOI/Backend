@@ -553,6 +553,15 @@ export class MessageRepository {
     }
 
     const metadataRaw = row.get('metadata') as string | null;
+    let parsedMetadata: Record<string, unknown> | undefined = undefined;
+
+    if (metadataRaw) {
+      try {
+        parsedMetadata = JSON.parse(metadataRaw) as Record<string, unknown>;
+      } catch {
+        parsedMetadata = {};
+      }
+    }
 
     return {
       message_id: row.get('message_id') as string,
@@ -572,9 +581,7 @@ export class MessageRepository {
       message_type: (row.get('message_type') as string | null) || undefined,
       system_event_type:
         (row.get('system_event_type') as string | null) || undefined,
-      metadata: metadataRaw
-        ? (JSON.parse(metadataRaw) as Record<string, unknown>)
-        : undefined,
+      metadata: parsedMetadata,
       forwarded_from,
     };
   }

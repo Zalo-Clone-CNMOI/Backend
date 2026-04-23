@@ -774,88 +774,75 @@ describe('ConversationsService', () => {
   // ─── leaveConversation ───────────────────────────────
 
   describe('leaveConversation', () => {
-    it('should set leftAt on membership', async () => {
+    // Full behavior is covered in conversation-member.service.spec.ts.
+    // This block validates that the facade delegates correctly under the new
+    // transactional API.
+    const installTxMock = (
+      conv: ReturnType<typeof createMockConversation>,
+    ) => {
+      const activeMembers = (conv.members as ReturnType<typeof createMockMember>[])
+        .filter((m) => m.leftAt === null);
+      const memberUpdate = jest.fn().mockResolvedValue({ affected: 1 });
+
+      const mockManager = {
+        getRepository: jest.fn((entity: unknown) => {
+          const entityName = (entity as { name?: string })?.name;
+          if (entityName === 'Conversation') {
+            return {
+              createQueryBuilder: () => ({
+                setLock: jest.fn().mockReturnThis(),
+                where: jest.fn().mockReturnThis(),
+                getOne: jest.fn().mockResolvedValue(conv),
+              }),
+            };
+          }
+          if (entityName === 'ConversationMember') {
+            return {
+              find: jest.fn().mockResolvedValue(activeMembers),
+              update: memberUpdate,
+              save: jest.fn().mockResolvedValue({}),
+            };
+          }
+          return {};
+        }),
+      };
+
+      (memberRepository as any).manager = {
+        transaction: jest
+          .fn()
+          .mockImplementation((cb: (m: unknown) => unknown) => cb(mockManager)),
+      };
+
+      return { memberUpdate };
+    };
+
+    it('should delegate leave flow to memberService via TX', async () => {
       const conv = createMockConversation();
-      conversationRepository.findOne.mockResolvedValue(conv);
+      const { memberUpdate } = installTxMock(conv);
 
       const result = await service.leaveConversation(uuid(3), uuid(1));
 
       expect(result.message).toContain('Left');
-      expect(memberRepository.save).toHaveBeenCalled();
+      expect(memberUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: uuid(3) }),
+        expect.objectContaining({ leftAt: expect.any(Date) }),
+      );
     });
 
     it('should reject leaving direct conversation', async () => {
-      conversationRepository.findOne.mockResolvedValue(
-        createMockConversation({ type: ConversationType.DIRECT }),
-      );
+      const directConv = createMockConversation({
+        type: ConversationType.DIRECT,
+      });
+      installTxMock(directConv);
 
       await expect(
         service.leaveConversation(uuid(2), uuid(1)),
       ).rejects.toThrow();
     });
 
-    it('should transfer ownership when OWNER leaves', async () => {
-      const conv = createMockConversation({
-        members: [
-          createMockMember({
-            userId: uuid(2),
-            role: UpdateMemberRoleDtoRoleEnum.OWNER,
-          }),
-          createMockMember({
-            id: uuid(8),
-            userId: uuid(3),
-            role: UpdateMemberRoleDtoRoleEnum.ADMIN,
-          }),
-          createMockMember({
-            id: uuid(7),
-            userId: uuid(4),
-            role: UpdateMemberRoleDtoRoleEnum.MEMBER,
-          }),
-        ],
-      });
-      conversationRepository.findOne.mockResolvedValue(conv);
-
-      await service.leaveConversation(uuid(2), uuid(1));
-
-      // Should promote admin first
-      expect(memberRepository.save).toHaveBeenCalledWith(
-        expect.objectContaining({
-          userId: uuid(3),
-          role: UpdateMemberRoleDtoRoleEnum.OWNER,
-        }),
-      );
-    });
-
-    it('should promote any member when OWNER leaves and no admin exists', async () => {
-      const conv = createMockConversation({
-        members: [
-          createMockMember({
-            userId: uuid(2),
-            role: UpdateMemberRoleDtoRoleEnum.OWNER,
-          }),
-          createMockMember({
-            id: uuid(8),
-            userId: uuid(3),
-            role: UpdateMemberRoleDtoRoleEnum.MEMBER,
-          }),
-        ],
-      });
-      conversationRepository.findOne.mockResolvedValue(conv);
-
-      await service.leaveConversation(uuid(2), uuid(1));
-
-      // Should promote the remaining member
-      expect(memberRepository.save).toHaveBeenCalledWith(
-        expect.objectContaining({
-          userId: uuid(3),
-          role: UpdateMemberRoleDtoRoleEnum.OWNER,
-        }),
-      );
-    });
-
     it('should invalidate cache after leaving', async () => {
       const conv = createMockConversation();
-      conversationRepository.findOne.mockResolvedValue(conv);
+      installTxMock(conv);
 
       await service.leaveConversation(uuid(3), uuid(1));
 

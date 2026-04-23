@@ -42,6 +42,7 @@ import {
   UpdateMemberRoleDto,
   UpdateMemberSettingsDto,
   ConversationDetailDto,
+  TransferOwnershipDto,
 } from '../dto';
 import { enqueueNotifications } from '../helper/conversations-notification.helper';
 import { ConversationCoreService } from './conversation-core.service';
@@ -525,6 +526,111 @@ export class ConversationMemberService {
     await this.cacheService.invalidateConversationList(userId);
     await this.cacheService.invalidateConversation(conversationId);
     return { message: 'Left conversation successfully' };
+  }
+
+  async transferOwnership(
+    userId: string,
+    conversationId: string,
+    dto: TransferOwnershipDto,
+  ): Promise<{ message: string }> {
+    if (dto.targetUserId === userId) {
+      throw BusinessException.badRequest(ErrorCode.BAD_REQUEST);
+    }
+
+    const txResult = await this.memberRepository.manager.transaction(
+      async (manager) => {
+        const conversationRepo = manager.getRepository(Conversation);
+        const memberRepo = manager.getRepository(ConversationMember);
+
+        const conversation = await conversationRepo
+          .createQueryBuilder('conversation')
+          .setLock('pessimistic_write')
+          .where('conversation.id = :conversationId', { conversationId })
+          .getOne();
+
+        if (!conversation) {
+          throw BusinessException.notFound(ErrorCode.CONVERSATION_NOT_FOUND);
+        }
+
+        if (conversation.type !== ConversationType.GROUP) {
+          throw BusinessException.badRequest(
+            ErrorCode.CONVERSATION_INVALID_TYPE,
+          );
+        }
+
+        if (conversation.createdById === null) {
+          throw BusinessException.badRequest(
+            ErrorCode.CONVERSATION_INVALID_TYPE,
+          );
+        }
+
+        const activeMembers = await memberRepo.find({
+          where: { conversationId, leftAt: IsNull() },
+        });
+
+        const caller = activeMembers.find((m) => m.userId === userId);
+        if (!caller || caller.role !== UpdateMemberRoleDtoRoleEnum.OWNER) {
+          throw BusinessException.forbidden(
+            ErrorCode.CONVERSATION_PERMISSION_DENIED,
+          );
+        }
+
+        const target = activeMembers.find((m) => m.userId === dto.targetUserId);
+        if (!target) {
+          throw BusinessException.notFound(
+            ErrorCode.CONVERSATION_MEMBER_NOT_FOUND,
+          );
+        }
+
+        const previousTargetRole = target.role;
+
+        const demote = await memberRepo.update(
+          {
+            conversationId,
+            userId,
+            role: UpdateMemberRoleDtoRoleEnum.OWNER,
+            leftAt: IsNull(),
+          },
+          { role: UpdateMemberRoleDtoRoleEnum.ADMIN },
+        );
+        if ((demote.affected ?? 0) !== 1) {
+          throw BusinessException.conflict(
+            ErrorCode.CONVERSATION_PERMISSION_DENIED,
+          );
+        }
+
+        const promote = await memberRepo.update(
+          {
+            conversationId,
+            userId: dto.targetUserId,
+            leftAt: IsNull(),
+          },
+          { role: UpdateMemberRoleDtoRoleEnum.OWNER },
+        );
+        if ((promote.affected ?? 0) !== 1) {
+          throw BusinessException.internal(
+            'Owner transfer promote failed',
+          );
+        }
+
+        return { previousTargetRole };
+      },
+    );
+
+    await this.emitOwnerTransferred(
+      conversationId,
+      userId,
+      dto.targetUserId,
+      txResult.previousTargetRole,
+    );
+
+    this.logger.log(
+      `Owner transferred from ${userId} to ${dto.targetUserId} in ${conversationId}`,
+    );
+
+    await this.cacheService.invalidateConversation(conversationId);
+
+    return { message: 'Ownership transferred successfully' };
   }
 
   private async emitOwnerTransferred(

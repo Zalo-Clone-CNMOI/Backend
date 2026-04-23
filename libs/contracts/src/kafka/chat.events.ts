@@ -1,11 +1,8 @@
+import { MessageType } from '@app/constant';
+
 export type MessageAttachmentType = 'image' | 'video' | 'audio' | 'document';
 
 export type ReactionType = 'like' | 'love' | 'haha' | 'wow' | 'sad' | 'angry';
-
-export enum MessageType {
-  USER = 'user',
-  SYSTEM = 'system',
-}
 
 export enum SystemEventType {
   MEMBER_ADDED = 'member_added',
@@ -53,6 +50,15 @@ export interface OwnerTransferredMetadata {
 export interface GroupDisbandedMetadata {
   disbanded_by: string;
   disbanded_by_name: string;
+}
+
+export interface InviteMessageMetadata {
+  invite_id: string;
+  group_id: string;
+  group_name: string;
+  inviter_id: string;
+  inviter_name: string;
+  status: 'pending' | 'accepted' | 'rejected' | 'cancelled' | 'expired';
 }
 
 export type SystemMessageMetadata =
@@ -137,6 +143,35 @@ export interface ChatSystemMessageCreatedEvent {
   metadata: SystemMessageMetadata;
   body: string;
   created_at: number;
+  trace_id: string;
+}
+
+export interface ChatInviteMessageCommand {
+  message_id: string;
+  conversation_id: string;
+  sender_id: string;
+  message_type: MessageType.INVITE;
+  metadata: InviteMessageMetadata;
+  body: string;
+  created_at: number;
+  trace_id: string;
+}
+
+export interface ChatInviteMessageCreatedEvent {
+  message_id: string;
+  conversation_id: string;
+  sender_id: string;
+  message_type: MessageType.INVITE;
+  metadata: InviteMessageMetadata;
+  body: string;
+  created_at: number;
+  trace_id: string;
+}
+
+export interface ChatInviteMessageUpdatedEvent {
+  message_id: string;
+  conversation_id: string;
+  metadata: InviteMessageMetadata;
   trace_id: string;
 }
 

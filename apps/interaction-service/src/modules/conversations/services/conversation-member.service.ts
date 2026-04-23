@@ -42,6 +42,7 @@ import {
   UpdateMemberRoleDto,
   UpdateMemberSettingsDto,
   ConversationDetailDto,
+  TransferOwnershipDto,
 } from '../dto';
 import { enqueueNotifications } from '../helper/conversations-notification.helper';
 import { ConversationCoreService } from './conversation-core.service';
@@ -391,101 +392,299 @@ export class ConversationMemberService {
     userId: string,
     conversationId: string,
   ): Promise<{ message: string }> {
-    const conversation = await this.conversationRepository.findOne({
-      where: { id: conversationId },
-      relations: ['members'],
-    });
+    const txResult = await this.memberRepository.manager.transaction(
+      async (manager) => {
+        const conversationRepo = manager.getRepository(Conversation);
+        const memberRepo = manager.getRepository(ConversationMember);
 
-    if (!conversation) {
-      throw BusinessException.notFound(ErrorCode.CONVERSATION_NOT_FOUND);
-    }
+        const conversation = await conversationRepo
+          .createQueryBuilder('conversation')
+          .setLock('pessimistic_write')
+          .where('conversation.id = :conversationId', { conversationId })
+          .getOne();
 
-    const myMembership = conversation.members.find(
-      (m) => m.userId === userId && m.leftAt === null,
+        if (!conversation) {
+          throw BusinessException.notFound(ErrorCode.CONVERSATION_NOT_FOUND);
+        }
+
+        if (conversation.type === ConversationType.DIRECT) {
+          throw BusinessException.badRequest(
+            ErrorCode.CONVERSATION_CANNOT_LEAVE,
+          );
+        }
+
+        const activeMembers = await memberRepo.find({
+          where: { conversationId, leftAt: IsNull() },
+        });
+
+        const myMembership = activeMembers.find((m) => m.userId === userId);
+        if (!myMembership) {
+          throw BusinessException.forbidden(ErrorCode.CONVERSATION_NOT_MEMBER);
+        }
+
+        if (
+          myMembership.role === UpdateMemberRoleDtoRoleEnum.OWNER &&
+          activeMembers.length === 1
+        ) {
+          return { action: 'sole_owner_disband' as const };
+        }
+
+        let transferredTo: {
+          userId: string;
+          previousRole: UpdateMemberRoleDtoRoleEnum;
+        } | null = null;
+
+        if (myMembership.role === UpdateMemberRoleDtoRoleEnum.OWNER) {
+          const candidates = activeMembers.filter((m) => m.userId !== userId);
+          const sortByJoined = (a: ConversationMember, b: ConversationMember) =>
+            a.joinedAt.getTime() - b.joinedAt.getTime();
+          const newOwner =
+            candidates
+              .filter((m) => m.role === UpdateMemberRoleDtoRoleEnum.ADMIN)
+              .sort(sortByJoined)[0] ||
+            candidates.sort(sortByJoined)[0];
+
+          if (!newOwner) {
+            throw BusinessException.internal(
+              'Owner transfer failed: no candidate',
+            );
+          }
+
+          const demote = await memberRepo.update(
+            {
+              conversationId,
+              userId,
+              role: UpdateMemberRoleDtoRoleEnum.OWNER,
+              leftAt: IsNull(),
+            },
+            { role: UpdateMemberRoleDtoRoleEnum.MEMBER },
+          );
+          if ((demote.affected ?? 0) !== 1) {
+            throw BusinessException.conflict(
+              ErrorCode.CONVERSATION_PERMISSION_DENIED,
+            );
+          }
+
+          const promote = await memberRepo.update(
+            {
+              conversationId,
+              userId: newOwner.userId,
+              leftAt: IsNull(),
+            },
+            { role: UpdateMemberRoleDtoRoleEnum.OWNER },
+          );
+          if ((promote.affected ?? 0) !== 1) {
+            throw BusinessException.internal(
+              'Owner transfer promote failed',
+            );
+          }
+
+          transferredTo = {
+            userId: newOwner.userId,
+            previousRole: newOwner.role,
+          };
+        }
+
+        const leftAt = new Date();
+        const leaveResult = await memberRepo.update(
+          { conversationId, userId, leftAt: IsNull() },
+          { leftAt },
+        );
+        if ((leaveResult.affected ?? 0) !== 1) {
+          throw BusinessException.conflict(ErrorCode.CONVERSATION_NOT_MEMBER);
+        }
+
+        return { action: 'left' as const, transferredTo, leftAt };
+      },
     );
 
-    if (!myMembership) {
-      throw BusinessException.forbidden(ErrorCode.CONVERSATION_NOT_MEMBER);
+    if (txResult.action === 'sole_owner_disband') {
+      return this.disbandConversation(userId, conversationId);
     }
 
-    if (conversation.type === ConversationType.DIRECT) {
-      throw BusinessException.badRequest(ErrorCode.CONVERSATION_CANNOT_LEAVE);
+    if (txResult.transferredTo) {
+      await this.emitOwnerTransferred(
+        conversationId,
+        userId,
+        txResult.transferredTo.userId,
+        txResult.transferredTo.previousRole,
+      );
     }
-
-    const activeMembers = conversation.members.filter((m) => m.leftAt === null);
-
-    if (
-      myMembership.role === UpdateMemberRoleDtoRoleEnum.OWNER &&
-      activeMembers.length > 1
-    ) {
-      const newOwner =
-        activeMembers.find(
-          (m) =>
-            m.userId !== userId && m.role === UpdateMemberRoleDtoRoleEnum.ADMIN,
-        ) || activeMembers.find((m) => m.userId !== userId);
-
-      if (newOwner) {
-        const previousRole = newOwner.role;
-        newOwner.role = UpdateMemberRoleDtoRoleEnum.OWNER;
-        await this.memberRepository.save(newOwner);
-
-        const ownerTransferredEvent: ConversationMemberRoleUpdatedEvent = {
-          conversation_id: conversationId,
-          updated_by: userId,
-          user_id: newOwner.userId,
-          previous_role: previousRole,
-          current_role: UpdateMemberRoleDtoRoleEnum.OWNER,
-          updated_at: Date.now(),
-          trace_id: `conversation-owner-transferred:${conversationId}`,
-        };
-        this.kafkaClient.emit(
-          KafkaTopics.ConversationMemberRoleUpdated,
-          ownerTransferredEvent,
-        );
-
-        const leavingUser = await this.userRepository.findOne({
-          where: { id: userId },
-        });
-        const newOwnerUser = await this.userRepository.findOne({
-          where: { id: newOwner.userId },
-        });
-
-        const systemMsgTransfer = SystemMessageFactory.create({
-          conversationId,
-          systemEventType: SystemEventType.OWNER_TRANSFERRED,
-          metadata: {
-            previous_owner_id: userId,
-            previous_owner_name: leavingUser?.fullName ?? 'Unknown',
-            new_owner_id: newOwner.userId,
-            new_owner_name: newOwnerUser?.fullName ?? 'Unknown',
-          } satisfies OwnerTransferredMetadata,
-          traceId: `system-msg:owner-transferred:${conversationId}:${Date.now()}`,
-          bodyFallback: `Ownership transferred to ${newOwnerUser?.fullName ?? 'a member'}.`,
-        });
-        this.kafkaClient.emit(
-          KafkaTopics.ChatSystemMessageCreated,
-          systemMsgTransfer,
-        );
-      }
-    }
-
-    // Leave
-    myMembership.leftAt = new Date();
-    await this.memberRepository.save(myMembership);
 
     const removedEvent: ConversationMemberRemovedEvent = {
       conversation_id: conversationId,
       removed_by: userId,
       removed_user_id: userId,
-      removed_at: Date.now(),
+      removed_at: txResult.leftAt.getTime(),
       trace_id: `conversation-member-left:${conversationId}`,
     };
     this.kafkaClient.emit(KafkaTopics.ConversationMemberRemoved, removedEvent);
 
+    await this.emitMemberLeftSystemMessage(conversationId, userId);
+
+    this.logger.log(`User ${userId} left conversation ${conversationId}`);
+    await this.cacheService.invalidateConversationList(userId);
+    await this.cacheService.invalidateConversation(conversationId);
+    return { message: 'Left conversation successfully' };
+  }
+
+  async transferOwnership(
+    userId: string,
+    conversationId: string,
+    dto: TransferOwnershipDto,
+  ): Promise<{ message: string }> {
+    if (dto.targetUserId === userId) {
+      throw BusinessException.badRequest(ErrorCode.BAD_REQUEST);
+    }
+
+    const txResult = await this.memberRepository.manager.transaction(
+      async (manager) => {
+        const conversationRepo = manager.getRepository(Conversation);
+        const memberRepo = manager.getRepository(ConversationMember);
+
+        const conversation = await conversationRepo
+          .createQueryBuilder('conversation')
+          .setLock('pessimistic_write')
+          .where('conversation.id = :conversationId', { conversationId })
+          .getOne();
+
+        if (!conversation) {
+          throw BusinessException.notFound(ErrorCode.CONVERSATION_NOT_FOUND);
+        }
+
+        if (conversation.type !== ConversationType.GROUP) {
+          throw BusinessException.badRequest(
+            ErrorCode.CONVERSATION_INVALID_TYPE,
+          );
+        }
+
+        if (conversation.createdById === null) {
+          throw BusinessException.badRequest(
+            ErrorCode.CONVERSATION_INVALID_TYPE,
+          );
+        }
+
+        const activeMembers = await memberRepo.find({
+          where: { conversationId, leftAt: IsNull() },
+        });
+
+        const caller = activeMembers.find((m) => m.userId === userId);
+        if (!caller || caller.role !== UpdateMemberRoleDtoRoleEnum.OWNER) {
+          throw BusinessException.forbidden(
+            ErrorCode.CONVERSATION_PERMISSION_DENIED,
+          );
+        }
+
+        const target = activeMembers.find((m) => m.userId === dto.targetUserId);
+        if (!target) {
+          throw BusinessException.notFound(
+            ErrorCode.CONVERSATION_MEMBER_NOT_FOUND,
+          );
+        }
+
+        const previousTargetRole = target.role;
+
+        const demote = await memberRepo.update(
+          {
+            conversationId,
+            userId,
+            role: UpdateMemberRoleDtoRoleEnum.OWNER,
+            leftAt: IsNull(),
+          },
+          { role: UpdateMemberRoleDtoRoleEnum.ADMIN },
+        );
+        if ((demote.affected ?? 0) !== 1) {
+          throw BusinessException.conflict(
+            ErrorCode.CONVERSATION_PERMISSION_DENIED,
+          );
+        }
+
+        const promote = await memberRepo.update(
+          {
+            conversationId,
+            userId: dto.targetUserId,
+            leftAt: IsNull(),
+          },
+          { role: UpdateMemberRoleDtoRoleEnum.OWNER },
+        );
+        if ((promote.affected ?? 0) !== 1) {
+          throw BusinessException.internal(
+            'Owner transfer promote failed',
+          );
+        }
+
+        return { previousTargetRole };
+      },
+    );
+
+    await this.emitOwnerTransferred(
+      conversationId,
+      userId,
+      dto.targetUserId,
+      txResult.previousTargetRole,
+    );
+
+    this.logger.log(
+      `Owner transferred from ${userId} to ${dto.targetUserId} in ${conversationId}`,
+    );
+
+    await this.cacheService.invalidateConversation(conversationId);
+
+    return { message: 'Ownership transferred successfully' };
+  }
+
+  private async emitOwnerTransferred(
+    conversationId: string,
+    previousOwnerId: string,
+    newOwnerId: string,
+    previousRoleOfNewOwner: UpdateMemberRoleDtoRoleEnum,
+  ): Promise<void> {
+    const event: ConversationMemberRoleUpdatedEvent = {
+      conversation_id: conversationId,
+      updated_by: previousOwnerId,
+      user_id: newOwnerId,
+      previous_role: previousRoleOfNewOwner,
+      current_role: UpdateMemberRoleDtoRoleEnum.OWNER,
+      updated_at: Date.now(),
+      trace_id: `conversation-owner-transferred:${conversationId}`,
+    };
+    this.kafkaClient.emit(KafkaTopics.ConversationMemberRoleUpdated, event);
+
+    const [prevUser, newUser] = await Promise.all([
+      this.userRepository.findOne({
+        where: { id: previousOwnerId },
+        select: ['fullName'],
+      }),
+      this.userRepository.findOne({
+        where: { id: newOwnerId },
+        select: ['fullName'],
+      }),
+    ]);
+
+    const systemMsg = SystemMessageFactory.create({
+      conversationId,
+      systemEventType: SystemEventType.OWNER_TRANSFERRED,
+      metadata: {
+        previous_owner_id: previousOwnerId,
+        previous_owner_name: prevUser?.fullName ?? 'Unknown',
+        new_owner_id: newOwnerId,
+        new_owner_name: newUser?.fullName ?? 'Unknown',
+      } satisfies OwnerTransferredMetadata,
+      traceId: `system-msg:owner-transferred:${conversationId}:${Date.now()}`,
+      bodyFallback: `Ownership transferred to ${newUser?.fullName ?? 'a member'}.`,
+    });
+    this.kafkaClient.emit(KafkaTopics.ChatSystemMessageCreated, systemMsg);
+  }
+
+  private async emitMemberLeftSystemMessage(
+    conversationId: string,
+    userId: string,
+  ): Promise<void> {
     const leavingUser = await this.userRepository.findOne({
       where: { id: userId },
+      select: ['fullName'],
     });
-    const systemMsgLeft = SystemMessageFactory.create({
+    const systemMsg = SystemMessageFactory.create({
       conversationId,
       systemEventType: SystemEventType.MEMBER_LEFT,
       metadata: {
@@ -495,12 +694,7 @@ export class ConversationMemberService {
       traceId: `system-msg:member-left:${conversationId}:${Date.now()}`,
       bodyFallback: `${leavingUser?.fullName ?? 'A member'} left the group.`,
     });
-    this.kafkaClient.emit(KafkaTopics.ChatSystemMessageCreated, systemMsgLeft);
-
-    this.logger.log(`User ${userId} left conversation ${conversationId}`);
-    await this.cacheService.invalidateConversationList(userId);
-    await this.cacheService.invalidateConversation(conversationId);
-    return { message: 'Left conversation successfully' };
+    this.kafkaClient.emit(KafkaTopics.ChatSystemMessageCreated, systemMsg);
   }
 
   async updateMemberRole(
@@ -509,47 +703,73 @@ export class ConversationMemberService {
     memberId: string,
     dto: UpdateMemberRoleDto,
   ): Promise<{ message: string }> {
-    const conversation = await this.conversationRepository.findOne({
-      where: { id: conversationId },
-      relations: ['members'],
-    });
-
-    if (!conversation) {
-      throw BusinessException.notFound(ErrorCode.CONVERSATION_NOT_FOUND);
-    }
-
-    if (conversation.type !== ConversationType.GROUP) {
-      throw BusinessException.badRequest(ErrorCode.CONVERSATION_INVALID_TYPE);
-    }
-
-    const myMembership = conversation.members.find(
-      (m) => m.userId === userId && m.leftAt === null,
-    );
-
-    if (
-      !myMembership ||
-      myMembership.role !== UpdateMemberRoleDtoRoleEnum.OWNER
-    ) {
-      throw BusinessException.forbidden(
-        ErrorCode.CONVERSATION_PERMISSION_DENIED,
-      );
-    }
-
-    const targetMembership = conversation.members.find(
-      (m) => m.userId === memberId && m.leftAt === null,
-    );
-
-    if (!targetMembership) {
-      throw BusinessException.notFound(ErrorCode.CONVERSATION_MEMBER_NOT_FOUND);
+    if (dto.role === UpdateMemberRoleDtoRoleEnum.OWNER) {
+      throw BusinessException.badRequest(ErrorCode.OWNER_TRANSFER_REQUIRED);
     }
 
     if (memberId === userId) {
       throw BusinessException.badRequest(ErrorCode.BAD_REQUEST);
     }
 
-    const previousRole = targetMembership.role;
-    targetMembership.role = dto.role;
-    await this.memberRepository.save(targetMembership);
+    const previousRole = await this.memberRepository.manager.transaction(
+      async (manager) => {
+        const conversationRepo = manager.getRepository(Conversation);
+        const memberRepo = manager.getRepository(ConversationMember);
+
+        const conversation = await conversationRepo
+          .createQueryBuilder('conversation')
+          .setLock('pessimistic_write')
+          .where('conversation.id = :conversationId', { conversationId })
+          .getOne();
+
+        if (!conversation) {
+          throw BusinessException.notFound(ErrorCode.CONVERSATION_NOT_FOUND);
+        }
+
+        if (conversation.type !== ConversationType.GROUP) {
+          throw BusinessException.badRequest(
+            ErrorCode.CONVERSATION_INVALID_TYPE,
+          );
+        }
+
+        const activeMembers = await memberRepo.find({
+          where: { conversationId, leftAt: IsNull() },
+        });
+
+        const caller = activeMembers.find((m) => m.userId === userId);
+        if (!caller || caller.role !== UpdateMemberRoleDtoRoleEnum.OWNER) {
+          throw BusinessException.forbidden(
+            ErrorCode.CONVERSATION_PERMISSION_DENIED,
+          );
+        }
+
+        const target = activeMembers.find((m) => m.userId === memberId);
+        if (!target) {
+          throw BusinessException.notFound(
+            ErrorCode.CONVERSATION_MEMBER_NOT_FOUND,
+          );
+        }
+
+        // Conditional UPDATE: only mutate if role is still what we observed,
+        // guarding against concurrent role changes after the read.
+        const update = await memberRepo.update(
+          {
+            conversationId,
+            userId: memberId,
+            role: target.role,
+            leftAt: IsNull(),
+          },
+          { role: dto.role },
+        );
+        if ((update.affected ?? 0) !== 1) {
+          throw BusinessException.conflict(
+            ErrorCode.CONVERSATION_PERMISSION_DENIED,
+          );
+        }
+
+        return target.role;
+      },
+    );
 
     const roleUpdatedEvent: ConversationMemberRoleUpdatedEvent = {
       conversation_id: conversationId,

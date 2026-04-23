@@ -43,6 +43,8 @@ export enum MessageType {
   AUDIO = 'audio',
   FILE = 'file',
   STICKER = 'sticker',
+  INVITE = 'invite',
+  USER = 'user',
   SYSTEM = 'system',
 }
 

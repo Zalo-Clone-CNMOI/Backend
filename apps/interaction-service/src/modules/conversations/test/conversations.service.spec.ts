@@ -197,6 +197,11 @@ describe('ConversationsService', () => {
     service = module.get<ConversationsService>(ConversationsService);
   });
 
+  afterEach(() => {
+    jest.clearAllMocks();
+    jest.restoreAllMocks();
+  });
+
   // ─── getConversations ──────────────────────────────────
 
   describe('getConversations', () => {
@@ -774,88 +779,75 @@ describe('ConversationsService', () => {
   // ─── leaveConversation ───────────────────────────────
 
   describe('leaveConversation', () => {
-    it('should set leftAt on membership', async () => {
+    // Full behavior is covered in conversation-member.service.spec.ts.
+    // This block validates that the facade delegates correctly under the new
+    // transactional API.
+    const installTxMock = (
+      conv: ReturnType<typeof createMockConversation>,
+    ) => {
+      const activeMembers = (conv.members as ReturnType<typeof createMockMember>[])
+        .filter((m) => m.leftAt === null);
+      const memberUpdate = jest.fn().mockResolvedValue({ affected: 1 });
+
+      const mockManager = {
+        getRepository: jest.fn((entity: unknown) => {
+          const entityName = (entity as { name?: string })?.name;
+          if (entityName === 'Conversation') {
+            return {
+              createQueryBuilder: () => ({
+                setLock: jest.fn().mockReturnThis(),
+                where: jest.fn().mockReturnThis(),
+                getOne: jest.fn().mockResolvedValue(conv),
+              }),
+            };
+          }
+          if (entityName === 'ConversationMember') {
+            return {
+              find: jest.fn().mockResolvedValue(activeMembers),
+              update: memberUpdate,
+              save: jest.fn().mockResolvedValue({}),
+            };
+          }
+          return {};
+        }),
+      };
+
+      (memberRepository as any).manager = {
+        transaction: jest
+          .fn()
+          .mockImplementation((cb: (m: unknown) => unknown) => cb(mockManager)),
+      };
+
+      return { memberUpdate };
+    };
+
+    it('should delegate leave flow to memberService via TX', async () => {
       const conv = createMockConversation();
-      conversationRepository.findOne.mockResolvedValue(conv);
+      const { memberUpdate } = installTxMock(conv);
 
       const result = await service.leaveConversation(uuid(3), uuid(1));
 
       expect(result.message).toContain('Left');
-      expect(memberRepository.save).toHaveBeenCalled();
+      expect(memberUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: uuid(3) }),
+        expect.objectContaining({ leftAt: expect.any(Date) }),
+      );
     });
 
     it('should reject leaving direct conversation', async () => {
-      conversationRepository.findOne.mockResolvedValue(
-        createMockConversation({ type: ConversationType.DIRECT }),
-      );
+      const directConv = createMockConversation({
+        type: ConversationType.DIRECT,
+      });
+      installTxMock(directConv);
 
       await expect(
         service.leaveConversation(uuid(2), uuid(1)),
       ).rejects.toThrow();
     });
 
-    it('should transfer ownership when OWNER leaves', async () => {
-      const conv = createMockConversation({
-        members: [
-          createMockMember({
-            userId: uuid(2),
-            role: UpdateMemberRoleDtoRoleEnum.OWNER,
-          }),
-          createMockMember({
-            id: uuid(8),
-            userId: uuid(3),
-            role: UpdateMemberRoleDtoRoleEnum.ADMIN,
-          }),
-          createMockMember({
-            id: uuid(7),
-            userId: uuid(4),
-            role: UpdateMemberRoleDtoRoleEnum.MEMBER,
-          }),
-        ],
-      });
-      conversationRepository.findOne.mockResolvedValue(conv);
-
-      await service.leaveConversation(uuid(2), uuid(1));
-
-      // Should promote admin first
-      expect(memberRepository.save).toHaveBeenCalledWith(
-        expect.objectContaining({
-          userId: uuid(3),
-          role: UpdateMemberRoleDtoRoleEnum.OWNER,
-        }),
-      );
-    });
-
-    it('should promote any member when OWNER leaves and no admin exists', async () => {
-      const conv = createMockConversation({
-        members: [
-          createMockMember({
-            userId: uuid(2),
-            role: UpdateMemberRoleDtoRoleEnum.OWNER,
-          }),
-          createMockMember({
-            id: uuid(8),
-            userId: uuid(3),
-            role: UpdateMemberRoleDtoRoleEnum.MEMBER,
-          }),
-        ],
-      });
-      conversationRepository.findOne.mockResolvedValue(conv);
-
-      await service.leaveConversation(uuid(2), uuid(1));
-
-      // Should promote the remaining member
-      expect(memberRepository.save).toHaveBeenCalledWith(
-        expect.objectContaining({
-          userId: uuid(3),
-          role: UpdateMemberRoleDtoRoleEnum.OWNER,
-        }),
-      );
-    });
-
     it('should invalidate cache after leaving', async () => {
       const conv = createMockConversation();
-      conversationRepository.findOne.mockResolvedValue(conv);
+      installTxMock(conv);
 
       await service.leaveConversation(uuid(3), uuid(1));
 
@@ -869,9 +861,50 @@ describe('ConversationsService', () => {
   // ─── updateMemberRole ────────────────────────────────
 
   describe('updateMemberRole', () => {
-    it('should update member role (owner only)', async () => {
+    const installUpdateRoleTxMock = (
+      conv: ReturnType<typeof createMockConversation>,
+    ) => {
+      const activeMembers = (
+        conv.members as ReturnType<typeof createMockMember>[]
+      ).filter((m) => m.leftAt === null);
+      const memberUpdate = jest.fn().mockResolvedValue({ affected: 1 });
+
+      const mockManager = {
+        getRepository: jest.fn((entity: unknown) => {
+          const entityName = (entity as { name?: string })?.name;
+          if (entityName === 'Conversation') {
+            return {
+              createQueryBuilder: () => ({
+                setLock: jest.fn().mockReturnThis(),
+                where: jest.fn().mockReturnThis(),
+                getOne: jest.fn().mockResolvedValue(conv),
+              }),
+            };
+          }
+          if (entityName === 'ConversationMember') {
+            return {
+              find: jest.fn().mockResolvedValue(activeMembers),
+              update: memberUpdate,
+            };
+          }
+          return {};
+        }),
+      };
+
+      (memberRepository as any).manager = {
+        transaction: jest
+          .fn()
+          .mockImplementation((cb: (m: unknown) => unknown) =>
+            cb(mockManager),
+          ),
+      };
+
+      return { memberUpdate };
+    };
+
+    it('should update member role (owner only) via conditional UPDATE', async () => {
       const conv = createMockConversation();
-      conversationRepository.findOne.mockResolvedValue(conv);
+      const { memberUpdate } = installUpdateRoleTxMock(conv);
 
       const result = await service.updateMemberRole(
         uuid(2), // owner
@@ -881,8 +914,12 @@ describe('ConversationsService', () => {
       );
 
       expect(result.message).toContain('updated');
-      expect(memberRepository.save).toHaveBeenCalledWith(
-        expect.objectContaining({ role: UpdateMemberRoleDtoRoleEnum.ADMIN }),
+      expect(memberUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: uuid(3),
+          role: UpdateMemberRoleDtoRoleEnum.MEMBER,
+        }),
+        { role: UpdateMemberRoleDtoRoleEnum.ADMIN },
       );
     });
 
@@ -899,7 +936,7 @@ describe('ConversationsService', () => {
           }),
         ],
       });
-      conversationRepository.findOne.mockResolvedValue(conv);
+      installUpdateRoleTxMock(conv);
 
       await expect(
         service.updateMemberRole(uuid(2), uuid(1), uuid(3), {
@@ -910,7 +947,7 @@ describe('ConversationsService', () => {
 
     it('should reject updating own role', async () => {
       const conv = createMockConversation();
-      conversationRepository.findOne.mockResolvedValue(conv);
+      installUpdateRoleTxMock(conv);
 
       await expect(
         service.updateMemberRole(uuid(2), uuid(1), uuid(2), {
@@ -920,13 +957,196 @@ describe('ConversationsService', () => {
     });
 
     it('should reject on direct conversation', async () => {
-      conversationRepository.findOne.mockResolvedValue(
-        createMockConversation({ type: ConversationType.DIRECT }),
-      );
+      const directConv = createMockConversation({
+        type: ConversationType.DIRECT,
+      });
+      installUpdateRoleTxMock(directConv);
 
       await expect(
         service.updateMemberRole(uuid(2), uuid(1), uuid(3), {
           role: UpdateMemberRoleDtoRoleEnum.ADMIN,
+        }),
+      ).rejects.toThrow();
+    });
+
+    it('should throw conflict when conditional UPDATE matches zero rows (concurrent modification)', async () => {
+      const conv = createMockConversation();
+      const { memberUpdate } = installUpdateRoleTxMock(conv);
+      // Simulate the target's role being changed by a concurrent request
+      // between the find() and the conditional UPDATE.
+      memberUpdate.mockResolvedValueOnce({ affected: 0 });
+
+      await expect(
+        service.updateMemberRole(uuid(2), uuid(1), uuid(3), {
+          role: UpdateMemberRoleDtoRoleEnum.ADMIN,
+        }),
+      ).rejects.toThrow();
+    });
+
+    it('should reject promote-to-OWNER and require transferOwnership flow', async () => {
+      const conv = createMockConversation();
+      conversationRepository.findOne.mockResolvedValue(conv);
+
+      try {
+        await service.updateMemberRole(uuid(2), uuid(1), uuid(3), {
+          role: UpdateMemberRoleDtoRoleEnum.OWNER,
+        });
+        throw new Error('should have thrown');
+      } catch (err: unknown) {
+        const response = (err as { getResponse?: () => unknown }).getResponse?.();
+        expect(response).toMatchObject({
+          error: { message: 'OWNER_TRANSFER_REQUIRED' },
+        });
+      }
+      expect(memberRepository.save).not.toHaveBeenCalledWith(
+        expect.objectContaining({ role: UpdateMemberRoleDtoRoleEnum.OWNER }),
+      );
+    });
+  });
+
+  // ─── transferOwnership ────────────────────────────────
+
+  describe('transferOwnership', () => {
+    const installTxMock = (
+      conv: ReturnType<typeof createMockConversation>,
+    ) => {
+      const activeMembers = (
+        conv.members as ReturnType<typeof createMockMember>[]
+      ).filter((m) => m.leftAt === null);
+      const memberUpdate = jest.fn().mockResolvedValue({ affected: 1 });
+
+      const mockManager = {
+        getRepository: jest.fn((entity: unknown) => {
+          const entityName = (entity as { name?: string })?.name;
+          if (entityName === 'Conversation') {
+            return {
+              createQueryBuilder: () => ({
+                setLock: jest.fn().mockReturnThis(),
+                where: jest.fn().mockReturnThis(),
+                getOne: jest.fn().mockResolvedValue(conv),
+              }),
+            };
+          }
+          if (entityName === 'ConversationMember') {
+            return {
+              find: jest.fn().mockResolvedValue(activeMembers),
+              update: memberUpdate,
+            };
+          }
+          return {};
+        }),
+      };
+
+      (memberRepository as any).manager = {
+        transaction: jest
+          .fn()
+          .mockImplementation((cb: (m: unknown) => unknown) =>
+            cb(mockManager),
+          ),
+      };
+
+      return { memberUpdate };
+    };
+
+    it('should atomically demote current owner and promote target', async () => {
+      const ownerId = uuid(2);
+      const targetId = uuid(3);
+      const conv = createMockConversation({
+        members: [
+          createMockMember({
+            userId: ownerId,
+            role: UpdateMemberRoleDtoRoleEnum.OWNER,
+          }),
+          createMockMember({
+            id: uuid(8),
+            userId: targetId,
+            role: UpdateMemberRoleDtoRoleEnum.ADMIN,
+          }),
+        ],
+      });
+      const { memberUpdate } = installTxMock(conv);
+
+      const result = await service.transferOwnership(ownerId, conv.id, {
+        targetUserId: targetId,
+      });
+
+      expect(result.message).toContain('transferred');
+      // Demote current owner to ADMIN.
+      expect(memberUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: ownerId,
+          role: UpdateMemberRoleDtoRoleEnum.OWNER,
+        }),
+        { role: UpdateMemberRoleDtoRoleEnum.ADMIN },
+      );
+      // Promote target to OWNER.
+      expect(memberUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: targetId }),
+        { role: UpdateMemberRoleDtoRoleEnum.OWNER },
+      );
+      expect(kafkaClient.emit).toHaveBeenCalledWith(
+        'chat.system-message.created',
+        expect.objectContaining({ system_event_type: 'owner_transferred' }),
+      );
+    });
+
+    it('should reject when caller is not OWNER', async () => {
+      const callerId = uuid(3);
+      const targetId = uuid(4);
+      const conv = createMockConversation({
+        members: [
+          createMockMember({
+            userId: uuid(2),
+            role: UpdateMemberRoleDtoRoleEnum.OWNER,
+          }),
+          createMockMember({
+            id: uuid(8),
+            userId: callerId,
+            role: UpdateMemberRoleDtoRoleEnum.ADMIN,
+          }),
+          createMockMember({
+            id: uuid(7),
+            userId: targetId,
+            role: UpdateMemberRoleDtoRoleEnum.MEMBER,
+          }),
+        ],
+      });
+      installTxMock(conv);
+
+      await expect(
+        service.transferOwnership(callerId, conv.id, {
+          targetUserId: targetId,
+        }),
+      ).rejects.toThrow();
+    });
+
+    it('should reject when target is not an active member', async () => {
+      const ownerId = uuid(2);
+      const conv = createMockConversation({
+        members: [
+          createMockMember({
+            userId: ownerId,
+            role: UpdateMemberRoleDtoRoleEnum.OWNER,
+          }),
+        ],
+      });
+      installTxMock(conv);
+
+      await expect(
+        service.transferOwnership(ownerId, conv.id, {
+          targetUserId: uuid(9),
+        }),
+      ).rejects.toThrow();
+    });
+
+    it('should reject transferring to self', async () => {
+      const ownerId = uuid(2);
+      const conv = createMockConversation();
+      installTxMock(conv);
+
+      await expect(
+        service.transferOwnership(ownerId, conv.id, {
+          targetUserId: ownerId,
         }),
       ).rejects.toThrow();
     });

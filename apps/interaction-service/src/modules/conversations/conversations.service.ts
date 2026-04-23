@@ -30,6 +30,7 @@ import {
   SendGroupInvitesResponseDto,
   UpdateMemberRoleDto,
   UpdateMemberSettingsDto,
+  TransferOwnershipDto,
   EndConversationCallDto,
   ConversationListItemDto,
   ConversationDetailDto,
@@ -118,6 +119,14 @@ export class ConversationsService {
     conversationId: string,
   ): Promise<{ message: string }> {
     return this.memberService.disbandConversation(userId, conversationId);
+  }
+
+  transferOwnership(
+    userId: string,
+    conversationId: string,
+    dto: TransferOwnershipDto,
+  ): Promise<{ message: string }> {
+    return this.memberService.transferOwnership(userId, conversationId, dto);
   }
 
   sendGroupInvites(

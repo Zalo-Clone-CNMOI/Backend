@@ -202,6 +202,11 @@ describe('ConversationsService', () => {
     service = module.get<ConversationsService>(ConversationsService);
   });
 
+  afterEach(() => {
+    jest.clearAllMocks();
+    jest.restoreAllMocks();
+  });
+
   // ─── addMembers ──────────────────────────────────────
 
   describe('addMembers', () => {
@@ -538,33 +543,74 @@ describe('ConversationsService', () => {
   });
 
   describe('leaveConversation', () => {
-    it('should set leftAt on membership', async () => {
+    const installLeaveTxMock = (conv: ReturnType<typeof createMockConversation>) => {
+      const memberUpdate = jest.fn().mockResolvedValue({ affected: 1 });
+      const memberSave = jest.fn().mockResolvedValue({});
+      const activeMembers = (conv.members as ReturnType<typeof createMockMember>[]).filter(
+        (m) => m.leftAt === null,
+      );
+
+      const mockManager = {
+        getRepository: jest.fn((entity: unknown) => {
+          const entityName = (entity as { name?: string })?.name;
+          if (entityName === 'Conversation') {
+            return {
+              createQueryBuilder: () => ({
+                setLock: jest.fn().mockReturnThis(),
+                where: jest.fn().mockReturnThis(),
+                getOne: jest.fn().mockResolvedValue(conv),
+              }),
+            };
+          }
+          if (entityName === 'ConversationMember') {
+            return {
+              find: jest.fn().mockResolvedValue(activeMembers),
+              update: memberUpdate,
+              save: memberSave,
+            };
+          }
+          return {};
+        }),
+      };
+
+      (memberRepository as unknown as InviteRepositoryMock).manager = {
+        transaction: jest
+          .fn()
+          .mockImplementation((cb: (m: unknown) => unknown) => cb(mockManager)),
+      };
+
+      return { memberUpdate, memberSave, transactionSpy: (memberRepository as unknown as InviteRepositoryMock).manager.transaction };
+    };
+
+    it('should set leftAt on membership via conditional UPDATE inside a TX', async () => {
       const conv = createMockConversation();
-      conversationRepository.findOne.mockResolvedValue(conv);
+      const { memberUpdate, transactionSpy } = installLeaveTxMock(conv);
 
       const result = await service.leaveConversation(uuid(3), uuid(1));
 
       expect(result.message).toContain('Left');
-      expect(memberRepository.save).toHaveBeenCalled();
+      expect(transactionSpy).toHaveBeenCalledTimes(1);
+      // Must use conditional UPDATE (not save) for leftAt.
+      expect(memberUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: uuid(3) }),
+        expect.objectContaining({ leftAt: expect.any(Date) }),
+      );
       expect(kafkaClient.emit).toHaveBeenCalledWith(
         'chat.system-message.created',
-        expect.objectContaining({
-          system_event_type: 'member_left',
-        }),
+        expect.objectContaining({ system_event_type: 'member_left' }),
       );
     });
 
     it('should reject leaving direct conversation', async () => {
-      conversationRepository.findOne.mockResolvedValue(
-        createMockConversation({ type: ConversationType.DIRECT }),
-      );
+      const directConv = createMockConversation({ type: ConversationType.DIRECT });
+      installLeaveTxMock(directConv);
 
       await expect(
         service.leaveConversation(uuid(2), uuid(1)),
       ).rejects.toThrow();
     });
 
-    it('should transfer ownership when OWNER leaves', async () => {
+    it('should atomically transfer ownership and demote old owner when OWNER leaves', async () => {
       const conv = createMockConversation({
         members: [
           createMockMember({
@@ -583,55 +629,83 @@ describe('ConversationsService', () => {
           }),
         ],
       });
-      conversationRepository.findOne.mockResolvedValue(conv);
+      const { memberUpdate } = installLeaveTxMock(conv);
 
       await service.leaveConversation(uuid(2), uuid(1));
 
-      // Should promote admin first
-      expect(memberRepository.save).toHaveBeenCalledWith(
+      // Demote the leaving owner to MEMBER.
+      expect(memberUpdate).toHaveBeenCalledWith(
         expect.objectContaining({
-          userId: uuid(3),
+          userId: uuid(2),
           role: UpdateMemberRoleDtoRoleEnum.OWNER,
         }),
+        { role: UpdateMemberRoleDtoRoleEnum.MEMBER },
+      );
+      // Promote the admin to OWNER.
+      expect(memberUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: uuid(3) }),
+        { role: UpdateMemberRoleDtoRoleEnum.OWNER },
       );
       expect(kafkaClient.emit).toHaveBeenCalledWith(
         'chat.system-message.created',
-        expect.objectContaining({
-          system_event_type: 'owner_transferred',
-        }),
+        expect.objectContaining({ system_event_type: 'owner_transferred' }),
       );
     });
 
-    it('should promote any member when OWNER leaves and no admin exists', async () => {
+    it('should promote oldest member when OWNER leaves and no admin exists', async () => {
       const conv = createMockConversation({
         members: [
           createMockMember({
             userId: uuid(2),
             role: UpdateMemberRoleDtoRoleEnum.OWNER,
+            joinedAt: new Date('2024-01-01'),
           }),
           createMockMember({
             id: uuid(8),
             userId: uuid(3),
             role: UpdateMemberRoleDtoRoleEnum.MEMBER,
+            joinedAt: new Date('2024-06-01'),
           }),
         ],
       });
-      conversationRepository.findOne.mockResolvedValue(conv);
+      const { memberUpdate } = installLeaveTxMock(conv);
 
       await service.leaveConversation(uuid(2), uuid(1));
 
-      // Should promote the remaining member
-      expect(memberRepository.save).toHaveBeenCalledWith(
-        expect.objectContaining({
-          userId: uuid(3),
-          role: UpdateMemberRoleDtoRoleEnum.OWNER,
-        }),
+      expect(memberUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: uuid(3) }),
+        { role: UpdateMemberRoleDtoRoleEnum.OWNER },
       );
+    });
+
+    it('should auto-disband when OWNER leaves as sole active member', async () => {
+      const ownerId = uuid(2);
+      const conv = createMockConversation({
+        members: [
+          createMockMember({
+            userId: ownerId,
+            role: UpdateMemberRoleDtoRoleEnum.OWNER,
+          }),
+        ],
+      });
+      installLeaveTxMock(conv);
+
+      const memberService = (
+        service as unknown as { memberService: ConversationMemberService }
+      ).memberService;
+      const disbandSpy = jest
+        .spyOn(memberService, 'disbandConversation')
+        .mockResolvedValue({ message: 'Conversation disbanded successfully' });
+
+      const result = await service.leaveConversation(ownerId, conv.id);
+
+      expect(disbandSpy).toHaveBeenCalledWith(ownerId, conv.id);
+      expect(result.message).toContain('disbanded');
     });
 
     it('should invalidate cache after leaving', async () => {
       const conv = createMockConversation();
-      conversationRepository.findOne.mockResolvedValue(conv);
+      installLeaveTxMock(conv);
 
       await service.leaveConversation(uuid(3), uuid(1));
 

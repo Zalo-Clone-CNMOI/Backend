@@ -39,6 +39,7 @@ import {
   SendGroupInvitesResponseDto,
   UpdateMemberRoleDto,
   UpdateMemberSettingsDto,
+  TransferOwnershipDto,
   EndConversationCallDto,
   ConversationListItemDto,
   ConversationDetailDto,
@@ -225,6 +226,29 @@ export class ConversationsController {
     return this.conversationsService.disbandConversation(
       user.id,
       conversationId,
+    );
+  }
+
+  /**
+   * Transfer ownership to another member
+   */
+  @Post(':conversationId/transfer-ownership')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @ApiOperation({
+    summary: 'Transfer ownership to another member (owner only)',
+  })
+  @ApiParam({ name: 'conversationId', description: 'Conversation ID' })
+  @ApiResponse({ status: 200, description: 'Ownership transferred' })
+  async transferOwnership(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('conversationId', ParseUUIDPipe) conversationId: string,
+    @Body() dto: TransferOwnershipDto,
+  ): Promise<{ message: string }> {
+    return this.conversationsService.transferOwnership(
+      user.id,
+      conversationId,
+      dto,
     );
   }
 

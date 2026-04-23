@@ -1,10 +1,10 @@
 import { randomUUID } from 'crypto';
 import {
   ChatSystemMessageCommand,
-  MessageType,
   SystemEventType,
   SystemMessageMetadata,
 } from '@libs/contracts';
+import { MessageType } from '@app/constant';
 
 export class SystemMessageFactory {
   static create(params: {

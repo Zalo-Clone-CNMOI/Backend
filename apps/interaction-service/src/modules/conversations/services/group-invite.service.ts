@@ -8,10 +8,12 @@ import { KAFKA_CLIENT } from '@libs/kafka';
 import { CacheService } from '@libs/redis';
 import {
   KafkaTopics,
+  type GroupInviteAcceptedEvent,
   type GroupInviteCancelledEvent,
   type GroupInviteExpiredEvent,
   type GroupInviteRejectedEvent,
   type GroupInviteSentEvent,
+  type ConversationMemberAddedEvent,
   NotificationType,
   type NotificationRequestedEvent,
   type InviteMessageMetadata,
@@ -488,6 +490,7 @@ export class GroupInviteService {
       async (manager) => {
         const inviteRepo = manager.getRepository(ConversationInvite);
         const memberRepo = manager.getRepository(ConversationMember);
+        const conversationRepo = manager.getRepository(Conversation);
 
         const invite = await inviteRepo
           .createQueryBuilder('invite')
@@ -501,6 +504,22 @@ export class GroupInviteService {
 
         if (!invite) {
           throw BusinessException.notFound(ErrorCode.GROUP_INVITE_NOT_FOUND);
+        }
+
+        const conversation = await conversationRepo
+          .createQueryBuilder('conversation')
+          .setLock('pessimistic_write')
+          .where('conversation.id = :conversationId', { conversationId })
+          .getOne();
+
+        if (!conversation) {
+          throw BusinessException.notFound(ErrorCode.CONVERSATION_NOT_FOUND);
+        }
+
+        if (conversation.createdById === null) {
+          throw BusinessException.badRequest(
+            ErrorCode.GROUP_INVITE_INVALID_STATUS,
+          );
         }
 
         if (invite.status === GroupInviteStatus.ACCEPTED) {
@@ -558,30 +577,6 @@ export class GroupInviteService {
           },
         );
 
-        await manager.insert('outbox_events', {
-          topic: KafkaTopics.GroupInviteAccepted,
-          payload: {
-            invite_id: invite.id,
-            conversation_id: conversationId,
-            inviter_id: invite.inviterUserId,
-            invited_user_id: userId,
-            status: 'accepted',
-            responded_at: Date.now(),
-          },
-          key: `invite:${invite.id}`,
-        });
-
-        await manager.insert('outbox_events', {
-          topic: KafkaTopics.ConversationMemberAdded,
-          payload: {
-            conversation_id: conversationId,
-            added_by: invite.inviterUserId,
-            members: [{ user_id: userId }],
-            added_at: Date.now(),
-          },
-          key: `member:${conversationId}:${userId}`,
-        });
-
         return {
           alreadyDone: false,
           membershipChanged,
@@ -593,6 +588,44 @@ export class GroupInviteService {
     if (result.alreadyDone) {
       return { message: 'Already accepted' };
     }
+
+    const respondedAt = Date.now();
+    const acceptedEvent: GroupInviteAcceptedEvent = {
+      invite_id: result.invite.id,
+      conversation_id: conversationId,
+      inviter_id: result.invite.inviterUserId,
+      invited_user_id: userId,
+      status: 'accepted',
+      responded_at: respondedAt,
+      trace_id: `group-invite-accepted:${result.invite.id}`,
+    };
+    await this.publishKafkaOutbox(
+      KafkaTopics.GroupInviteAccepted,
+      acceptedEvent,
+    );
+
+    const joinedUser = await this.userRepository.findOne({
+      where: { id: userId },
+      select: ['id', 'fullName', 'avatarUrl'],
+    });
+    const memberAddedEvent: ConversationMemberAddedEvent = {
+      conversation_id: conversationId,
+      added_by: result.invite.inviterUserId,
+      members: [
+        {
+          user_id: userId,
+          full_name: joinedUser?.fullName ?? 'Unknown',
+          avatar_url: joinedUser?.avatarUrl ?? null,
+          role: UpdateMemberRoleDtoRoleEnum.MEMBER,
+        },
+      ],
+      added_at: respondedAt,
+      trace_id: `conversation-member-added:${conversationId}:${userId}`,
+    };
+    await this.publishKafkaOutbox(
+      KafkaTopics.ConversationMemberAdded,
+      memberAddedEvent,
+    );
 
     if (result.invite) {
       await this.emitInviteMessageUpdated(

@@ -42,6 +42,7 @@ describe('Chat MessagesService', () => {
   let cacheService: Record<string, jest.Mock>;
   let mediaClient: Record<string, jest.Mock>;
   let membershipService: Record<string, jest.Mock>;
+  let friendshipAccessService: Record<string, jest.Mock>;
   let userRepo: Record<string, jest.Mock>;
   let conversationRepo: Record<string, jest.Mock>;
   let conversationMemberRepo: Record<string, jest.Mock>;
@@ -66,6 +67,7 @@ describe('Chat MessagesService', () => {
 
     mediaClient = { cloneAttachment: jest.fn() };
     membershipService = { canUserAccessConversation: jest.fn() };
+    friendshipAccessService = { canMessageUser: jest.fn() };
     userRepo = { findOne: jest.fn() };
     conversationRepo = { findOne: jest.fn() };
     conversationMemberRepo = { findOne: jest.fn() };
@@ -81,6 +83,7 @@ describe('Chat MessagesService', () => {
         { provide: CacheService, useValue: cacheService },
         { provide: MediaClientService, useValue: mediaClient },
         { provide: ConversationMembershipService, useValue: membershipService },
+        { provide: FriendshipAccessService, useValue: friendshipAccessService },
         { provide: getRepositoryToken(User), useValue: userRepo },
         {
           provide: getRepositoryToken(Conversation),
@@ -116,10 +119,7 @@ describe('Chat MessagesService', () => {
         'user-1',
       );
 
-      expect(cacheService.getRecentMessages).toHaveBeenCalledWith(
-        'user-1',
-        'conv-1',
-      );
+      expect(cacheService.getRecentMessages).toHaveBeenCalledWith('conv-1');
       expect(messageRepository.getMessages).not.toHaveBeenCalled();
       expect(result).toEqual(cached);
     });

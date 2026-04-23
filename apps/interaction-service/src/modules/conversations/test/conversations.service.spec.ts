@@ -115,6 +115,12 @@ describe('ConversationsService', () => {
       create: jest.fn().mockImplementation((data) => data),
       save: jest.fn().mockImplementation((data) => Promise.resolve(data)),
       createQueryBuilder: jest.fn(),
+      manager: {
+        transaction: jest.fn(
+          (cb: (manager: Record<string, jest.Mock>) => unknown) =>
+            cb(memberRepository as unknown as Record<string, jest.Mock>),
+        ),
+      },
     };
 
     inviteRepository = {

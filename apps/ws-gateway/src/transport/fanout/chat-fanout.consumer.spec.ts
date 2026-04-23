@@ -1,6 +1,6 @@
+import { MessageType } from '@app/constant';
 import { ChatFanoutConsumer } from './chat-fanout.consumer';
 import {
-  MessageType,
   SystemEventType,
   SystemMessageMetadata,
   WsEvents,

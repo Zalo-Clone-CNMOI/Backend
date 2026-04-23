@@ -1,9 +1,8 @@
-import { MessageType } from "@app/constant";
+import { MessageType } from '@app/constant';
 
 export type MessageAttachmentType = 'image' | 'video' | 'audio' | 'document';
 
 export type ReactionType = 'like' | 'love' | 'haha' | 'wow' | 'sad' | 'angry';
-
 
 export enum SystemEventType {
   MEMBER_ADDED = 'member_added',

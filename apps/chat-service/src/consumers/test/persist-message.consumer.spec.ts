@@ -22,11 +22,8 @@ import type { ConversationMembershipService } from '@libs/mvp-access';
 import type { NotificationOutboxPublisher } from '@libs/kafka';
 import type { Repository } from 'typeorm';
 import type { User, ConversationMember } from '@libs/database';
-import {
-  MessageType,
-  SystemEventType,
-  SystemMessageMetadata,
-} from '@libs/contracts';
+import { SystemEventType, SystemMessageMetadata } from '@libs/contracts';
+import { MessageType } from '@app/constant';
 
 describe('PersistMessageConsumer', () => {
   let consumer: PersistMessageConsumer;

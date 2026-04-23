@@ -570,8 +570,11 @@ export class MessageRepository {
         ? Number(row.get('deleted_at'))
         : undefined,
       message_type: (row.get('message_type') as string | null) || undefined,
-      system_event_type: (row.get('system_event_type') as string | null) || undefined,
-      metadata: metadataRaw ? JSON.parse(metadataRaw) : undefined,
+      system_event_type:
+        (row.get('system_event_type') as string | null) || undefined,
+      metadata: metadataRaw
+        ? (JSON.parse(metadataRaw) as Record<string, unknown>)
+        : undefined,
       forwarded_from,
     };
   }

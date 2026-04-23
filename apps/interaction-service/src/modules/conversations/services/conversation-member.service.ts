@@ -353,9 +353,13 @@ export class ConversationMemberService {
     };
     this.kafkaClient.emit(KafkaTopics.ConversationMemberRemoved, removedEvent);
 
-    const removerUser = await this.userRepository.findOne({ where: { id: userId } });
-    const removedUser = await this.userRepository.findOne({ where: { id: memberId } });
-    
+    const removerUser = await this.userRepository.findOne({
+      where: { id: userId },
+    });
+    const removedUser = await this.userRepository.findOne({
+      where: { id: memberId },
+    });
+
     const systemMsg = SystemMessageFactory.create({
       conversationId,
       systemEventType: SystemEventType.MEMBER_REMOVED,
@@ -439,8 +443,12 @@ export class ConversationMemberService {
           ownerTransferredEvent,
         );
 
-        const leavingUser = await this.userRepository.findOne({ where: { id: userId } });
-        const newOwnerUser = await this.userRepository.findOne({ where: { id: newOwner.userId } });
+        const leavingUser = await this.userRepository.findOne({
+          where: { id: userId },
+        });
+        const newOwnerUser = await this.userRepository.findOne({
+          where: { id: newOwner.userId },
+        });
 
         const systemMsgTransfer = SystemMessageFactory.create({
           conversationId,
@@ -454,7 +462,10 @@ export class ConversationMemberService {
           traceId: `system-msg:owner-transferred:${conversationId}:${Date.now()}`,
           bodyFallback: `Ownership transferred to ${newOwnerUser?.fullName ?? 'a member'}.`,
         });
-        this.kafkaClient.emit(KafkaTopics.ChatSystemMessageCreated, systemMsgTransfer);
+        this.kafkaClient.emit(
+          KafkaTopics.ChatSystemMessageCreated,
+          systemMsgTransfer,
+        );
       }
     }
 
@@ -471,7 +482,9 @@ export class ConversationMemberService {
     };
     this.kafkaClient.emit(KafkaTopics.ConversationMemberRemoved, removedEvent);
 
-    const leavingUser = await this.userRepository.findOne({ where: { id: userId } });
+    const leavingUser = await this.userRepository.findOne({
+      where: { id: userId },
+    });
     const systemMsgLeft = SystemMessageFactory.create({
       conversationId,
       systemEventType: SystemEventType.MEMBER_LEFT,
@@ -552,8 +565,12 @@ export class ConversationMemberService {
       roleUpdatedEvent,
     );
 
-    const updaterUser = await this.userRepository.findOne({ where: { id: userId } });
-    const targetUser = await this.userRepository.findOne({ where: { id: memberId } });
+    const updaterUser = await this.userRepository.findOne({
+      where: { id: userId },
+    });
+    const targetUser = await this.userRepository.findOne({
+      where: { id: memberId },
+    });
     const systemMsg = SystemMessageFactory.create({
       conversationId,
       systemEventType: SystemEventType.ROLE_CHANGED,

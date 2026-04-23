@@ -73,7 +73,7 @@ export class PersistMessageConsumer {
         conversation_id: payload.conversation_id,
         message_type: payload.message_type,
         system_event_type: payload.system_event_type,
-        metadata: payload.metadata,
+        metadata: payload.metadata as unknown as Record<string, unknown>,
         body: payload.body,
         created_at: payload.created_at,
       });

@@ -161,4 +161,31 @@ describe('ChatFanoutConsumer', () => {
       },
     );
   });
+
+  it('should broadcast system message payload to conversation room', () => {
+    consumer.onSystemMessageCreated({
+      message_id: 'sys-msg-1',
+      conversation_id: 'conv-1',
+      message_type: 'system' as any,
+      system_event_type: 'member_added' as any,
+      metadata: { added_by: '1' } as any,
+      body: 'A member joined',
+      created_at: 1706162800000,
+      trace_id: 'trace-sys-msg-1',
+    });
+
+    expect(gateway.broadcastToConversation).toHaveBeenCalledWith(
+      'conv-1',
+      WsEvents.ChatSystemMessage,
+      {
+        message_id: 'sys-msg-1',
+        conversation_id: 'conv-1',
+        message_type: 'system',
+        system_event_type: 'member_added',
+        metadata: { added_by: '1' },
+        body: 'A member joined',
+        created_at: 1706162800000,
+      },
+    );
+  });
 });

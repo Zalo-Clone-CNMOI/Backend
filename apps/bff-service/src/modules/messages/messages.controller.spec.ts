@@ -45,6 +45,7 @@ describe('BFF MessagesController', () => {
       const result = await controller.getMessages(
         'access-token',
         'conv-uuid-1',
+        'user-1',
         'cursor-abc',
         25,
       );
@@ -52,6 +53,7 @@ describe('BFF MessagesController', () => {
       expect(messagesService.getMessages).toHaveBeenCalledWith(
         'access-token',
         'conv-uuid-1',
+        'user-1',
         'cursor-abc',
         25,
       );
@@ -61,11 +63,12 @@ describe('BFF MessagesController', () => {
     it('should pass undefined for optional params', async () => {
       messagesService.getMessages.mockResolvedValue({ items: [] });
 
-      await controller.getMessages('token', 'conv-1');
+      await controller.getMessages('token', 'conv-1', 'user-1');
 
       expect(messagesService.getMessages).toHaveBeenCalledWith(
         'token',
         'conv-1',
+        'user-1',
         undefined,
         undefined,
       );

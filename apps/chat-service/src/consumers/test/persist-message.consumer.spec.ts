@@ -30,6 +30,7 @@ describe('PersistMessageConsumer', () => {
     tryBeginMessageProcessing: jest.Mock;
     getMessageProcessingState: jest.Mock;
     insertMessage: jest.Mock;
+    insertSystemMessage: jest.Mock;
     markMessageStored: jest.Mock;
     clearMessageProcessing: jest.Mock;
     trySoftDeleteMessage: jest.Mock;
@@ -108,6 +109,7 @@ describe('PersistMessageConsumer', () => {
       getReactionsByUser: jest.fn(),
       addReaction: jest.fn(),
       removeReaction: jest.fn(),
+      insertSystemMessage: jest.fn(),
     };
 
     publisher = {
@@ -156,6 +158,84 @@ describe('PersistMessageConsumer', () => {
     };
 
     rebuildConsumer();
+  });
+
+  // ─── onSystemMessage ───────────────────────────────────────────────────────
+
+  describe('onSystemMessage', () => {
+    it('should persist system message and invalidate cache', async () => {
+      const payload = {
+        message_id: 'sys-1',
+        conversation_id: 'conv-1',
+        message_type: 'system' as any,
+        system_event_type: 'member_added' as any,
+        metadata: { added_by: 'user-1' } as any,
+        body: 'User added',
+        created_at: Date.now(),
+        trace_id: 'test-trace',
+      };
+
+      repo.tryBeginMessageProcessing.mockResolvedValue(true);
+
+      await consumer.onSystemMessage(payload);
+
+      expect(repo.insertSystemMessage).toHaveBeenCalledWith({
+        message_id: payload.message_id,
+        conversation_id: payload.conversation_id,
+        message_type: payload.message_type,
+        system_event_type: payload.system_event_type,
+        metadata: payload.metadata,
+        body: payload.body,
+        created_at: payload.created_at,
+      });
+      expect(repo.markMessageStored).toHaveBeenCalledWith(payload.message_id);
+      expect(cacheService.invalidateRecentMessages).toHaveBeenCalledWith(
+        payload.conversation_id,
+      );
+    });
+
+    it('should skip processing if already processed (idempotent)', async () => {
+      const payload = {
+        message_id: 'sys-2',
+        conversation_id: 'conv-1',
+        message_type: 'system' as any,
+        system_event_type: 'member_removed' as any,
+        metadata: { removed_by: 'user-1' } as any,
+        body: 'User removed',
+        created_at: Date.now(),
+        trace_id: 'test-trace',
+      };
+
+      repo.tryBeginMessageProcessing.mockResolvedValue(false);
+
+      await consumer.onSystemMessage(payload);
+
+      expect(repo.insertSystemMessage).not.toHaveBeenCalled();
+      expect(cacheService.invalidateRecentMessages).not.toHaveBeenCalled();
+    });
+
+    it('should clear message processing lock and rethrow if insert fails', async () => {
+      const payload = {
+        message_id: 'sys-3',
+        conversation_id: 'conv-1',
+        message_type: 'system' as any,
+        system_event_type: 'member_left' as any,
+        metadata: {} as any,
+        body: 'User left',
+        created_at: Date.now(),
+        trace_id: 'test-trace',
+      };
+
+      repo.tryBeginMessageProcessing.mockResolvedValue(true);
+      repo.insertSystemMessage.mockRejectedValue(new Error('ScyllaDB write failed'));
+
+      await expect(consumer.onSystemMessage(payload)).rejects.toThrow(
+        'ScyllaDB write failed',
+      );
+
+      expect(repo.clearMessageProcessing).toHaveBeenCalledWith(payload.message_id);
+      expect(repo.markMessageStored).not.toHaveBeenCalled();
+    });
   });
 
   // ─── onEdit ────────────────────────────────────────────────────────────────

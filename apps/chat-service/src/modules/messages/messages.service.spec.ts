@@ -105,11 +105,18 @@ describe('Chat MessagesService', () => {
       };
       cacheService.getRecentMessages.mockResolvedValue(cached);
 
-      const result = await service.getMessages('conv-1', {
-        limit: 50,
-      });
+      const result = await service.getMessages(
+        'conv-1',
+        {
+          limit: 50,
+        },
+        'user-1',
+      );
 
-      expect(cacheService.getRecentMessages).toHaveBeenCalledWith('conv-1');
+      expect(cacheService.getRecentMessages).toHaveBeenCalledWith(
+        'user-1',
+        'conv-1',
+      );
       expect(messageRepository.getMessages).not.toHaveBeenCalled();
       expect(result).toEqual(cached);
     });
@@ -124,7 +131,7 @@ describe('Chat MessagesService', () => {
 
       const result = await service.getMessages('conv-1', {
         limit: 50,
-      });
+      },'user-1');
 
       expect(messageRepository.getMessages).toHaveBeenCalledWith('conv-1', {
         cursor: undefined,
@@ -147,7 +154,7 @@ describe('Chat MessagesService', () => {
       await service.getMessages('conv-1', {
         cursor: 'abc-cursor',
         limit: 50,
-      });
+      }, 'user-1');
 
       expect(cacheService.getRecentMessages).not.toHaveBeenCalled();
       expect(messageRepository.getMessages).toHaveBeenCalled();
@@ -160,7 +167,7 @@ describe('Chat MessagesService', () => {
         has_more: false,
       });
 
-      await service.getMessages('conv-1', { limit: 100 });
+      await service.getMessages('conv-1', { limit: 100 }, 'user-1');
 
       expect(cacheService.setRecentMessages).not.toHaveBeenCalled();
     });
@@ -172,7 +179,7 @@ describe('Chat MessagesService', () => {
         has_more: false,
       });
 
-      await service.getMessages('conv-1', {});
+      await service.getMessages('conv-1', {}, 'user-1');
 
       expect(messageRepository.getMessages).toHaveBeenCalledWith('conv-1', {
         cursor: undefined,
@@ -193,7 +200,7 @@ describe('Chat MessagesService', () => {
 
       const result = await service.getMessages('conv-1', {
         limit: 50,
-      });
+      },'user-1');
 
       expect(result.items[0]).toEqual(
         expect.objectContaining({
@@ -220,7 +227,7 @@ describe('Chat MessagesService', () => {
 
       const result = await service.getMessages('conv-1', {
         limit: 50,
-      });
+      }, 'user-1');
 
       expect(result.items[0].body).toBe('');
       expect(result.items[0].isDeleted).toBe(true);
@@ -457,7 +464,7 @@ describe('Chat MessagesService', () => {
 
       const result = await service.getMessages('conv-1', {
         limit: 50,
-      });
+      },'user-1');
 
       const attachment = result.items[0].attachments![0];
       expect(attachment.key).toBe('images/photo.jpg');
@@ -486,7 +493,7 @@ describe('Chat MessagesService', () => {
 
       const result = await service.getMessages('conv-1', {
         limit: 50,
-      });
+      },'user-1');
 
       const attachment = result.items[0].attachments![0];
       expect(attachment.thumbnailUrl).toBeUndefined();
@@ -503,6 +510,7 @@ describe('Chat MessagesService', () => {
         cacheService as unknown as CacheService,
         mediaClient as unknown as MediaClientService,
         membershipService as unknown as ConversationMembershipService,
+        {} as any, // mock FriendshipAccessService
         userRepo as unknown as never,
         conversationRepo as unknown as never,
         conversationMemberRepo as unknown as never,
@@ -529,7 +537,7 @@ describe('Chat MessagesService', () => {
 
       const result = await localService.getMessages('conv-1', {
         limit: 50,
-      });
+      }, 'user-1');
 
       // Localhost format includes bucket in path
       expect(result.items[0].attachments![0].url).toMatch(

@@ -37,11 +37,12 @@ describe('Chat MessagesController', () => {
       messagesService.getMessages.mockResolvedValue(expected);
 
       const query = { limit: 50, cursor: 'abc' };
-      const result = await controller.getMessages('conv-uuid', query);
+      const result = await controller.getMessages('conv-uuid', query, 'user-uuid');
 
       expect(messagesService.getMessages).toHaveBeenCalledWith(
         'conv-uuid',
         query,
+        'user-uuid',
       );
       expect(result).toEqual(expected);
     });

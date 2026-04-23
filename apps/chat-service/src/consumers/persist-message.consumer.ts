@@ -3,17 +3,18 @@ import { EventPattern, Payload } from '@nestjs/microservices';
 import {
   KafkaTopics,
   type ChatMessageSendCommand,
+  type ChatMessageCreatedEvent,
   type ChatMessageEditCommand,
+  type ChatMessageUpdatedEvent,
   type ChatMessageDeleteCommand,
+  type ChatMessageDeletedEvent,
   type ChatReactionAddCommand,
+  type ChatReactionAddedEvent,
   type ChatReactionRemoveCommand,
+  type ChatReactionRemovedEvent,
+  type ChatSystemMessageCommand,
   type ChatMessageForwardCommand,
   type AiModerationResultEvent,
-  type ChatMessageUpdatedEvent,
-  type ChatMessageDeletedEvent,
-  type ChatReactionAddedEvent,
-  type ChatReactionRemovedEvent,
-  type ChatMessageCreatedEvent,
 } from '@libs/contracts';
 import { MessageRepository } from '@libs/scylla';
 import { CacheService } from '@libs/redis';
@@ -47,6 +48,68 @@ export class PersistMessageConsumer {
   @EventPattern(KafkaTopics.AiModerationResult)
   async onModerationResult(@Payload() payload: AiModerationResultEvent) {
     return this.moderationHandler.handle(payload);
+  }
+
+  @EventPattern(KafkaTopics.ChatSystemMessageCreated)
+  async onSystemMessage(@Payload() payload: ChatSystemMessageCommand) {
+    const traceId = payload.trace_id;
+
+    // Idempotency: reuse existing pattern
+    const acquired = await this.repo.tryBeginMessageProcessing(
+      payload.message_id,
+      payload.conversation_id,
+      payload.created_at,
+    );
+    if (!acquired) {
+      this.shared.logger.debug(
+        `[${traceId}] System message already processed (idempotent)`,
+      );
+      return;
+    }
+
+    try {
+      await this.repo.insertSystemMessage({
+        message_id: payload.message_id,
+        conversation_id: payload.conversation_id,
+        message_type: payload.message_type,
+        system_event_type: payload.system_event_type,
+        metadata: payload.metadata as unknown as Record<string, unknown>,
+        body: payload.body,
+        created_at: payload.created_at,
+      });
+
+      await this.repo.markMessageStored(payload.message_id);
+
+      // Invalidate recent messages cache
+      await this.cacheService
+        .invalidateRecentMessages(payload.conversation_id)
+        .catch(() => {});
+
+      this.shared.logger.log(
+        `[${traceId}] System message persisted: ${payload.system_event_type}`,
+      );
+    } catch (error) {
+      await this.repo
+        .clearMessageProcessing(payload.message_id)
+        .catch(() => {});
+
+      if (this.shared.isNonRetryableBindError(error)) {
+        this.shared.logPoisonPayload('ChatSystemMessage', traceId, {
+          messageId: payload.message_id,
+          conversationId: payload.conversation_id,
+          createdAt: payload.created_at,
+          reason: 'non_retryable_bind_error',
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return;
+      }
+
+      this.shared.logger.error(`[${traceId}] ChatSystemMessage failed`, {
+        messageId: payload.message_id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
   }
 
   @EventPattern(KafkaTopics.ChatMessageEdit)

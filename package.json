@@ -6,7 +6,7 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "build": "pnpm run build:api",
+    "build": "pnpm run build:all",
     "build:bff": "nest build bff-service",
     "build:sso": "nest build sso-service",
     "build:ws": "nest build ws-gateway",

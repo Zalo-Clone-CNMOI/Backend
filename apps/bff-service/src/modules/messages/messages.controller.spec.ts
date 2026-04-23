@@ -52,6 +52,7 @@ describe('BFF MessagesController', () => {
       expect(messagesService.getMessages).toHaveBeenCalledWith(
         'access-token',
         'conv-uuid-1',
+        'user-1',
         'cursor-abc',
         25,
       );
@@ -66,6 +67,7 @@ describe('BFF MessagesController', () => {
       expect(messagesService.getMessages).toHaveBeenCalledWith(
         'token',
         'conv-1',
+        'user-1',
         undefined,
         undefined,
       );

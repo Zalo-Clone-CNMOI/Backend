@@ -222,6 +222,13 @@ describe('ConversationsService', () => {
       expect(
         (memberRepository.manager as { transaction: jest.Mock }).transaction,
       ).toHaveBeenCalled();
+      expect(kafkaClient.emit).toHaveBeenCalledWith(
+        'chat.system-message.created',
+        expect.objectContaining({
+          system_event_type: 'member_added',
+          message_type: 'system',
+        }),
+      );
     });
 
     it('should deduplicate memberIds in one request', async () => {
@@ -431,6 +438,13 @@ describe('ConversationsService', () => {
       expect(memberRepository.save).toHaveBeenCalledWith(
         expect.objectContaining({ leftAt: expect.any(Date) }),
       );
+      expect(kafkaClient.emit).toHaveBeenCalledWith(
+        'chat.system-message.created',
+        expect.objectContaining({
+          system_event_type: 'member_removed',
+          message_type: 'system',
+        }),
+      );
     });
 
     it('should throw when conversation not found', async () => {
@@ -532,6 +546,12 @@ describe('ConversationsService', () => {
 
       expect(result.message).toContain('Left');
       expect(memberRepository.save).toHaveBeenCalled();
+      expect(kafkaClient.emit).toHaveBeenCalledWith(
+        'chat.system-message.created',
+        expect.objectContaining({
+          system_event_type: 'member_left',
+        }),
+      );
     });
 
     it('should reject leaving direct conversation', async () => {
@@ -572,6 +592,12 @@ describe('ConversationsService', () => {
         expect.objectContaining({
           userId: uuid(3),
           role: UpdateMemberRoleDtoRoleEnum.OWNER,
+        }),
+      );
+      expect(kafkaClient.emit).toHaveBeenCalledWith(
+        'chat.system-message.created',
+        expect.objectContaining({
+          system_event_type: 'owner_transferred',
         }),
       );
     });

@@ -16,6 +16,7 @@ export const KafkaTopics = {
   ChatReactionRemoved: 'chat.reaction.removed',
   ChatMessagePinned: 'chat.message.pinned',
   ChatMessageUnpinned: 'chat.message.unpinned',
+  ChatSystemMessageCreated: 'chat.system-message.created',
 
   CallStart: 'call.start',
   CallStarted: 'call.started',

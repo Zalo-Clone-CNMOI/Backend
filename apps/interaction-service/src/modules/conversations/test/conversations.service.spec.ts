@@ -77,11 +77,22 @@ type InviteRepositoryMock = {
   };
 };
 
+type MemberRepositoryMock = {
+  findOne: jest.Mock;
+  find: jest.Mock;
+  create: jest.Mock;
+  save: jest.Mock;
+  createQueryBuilder: jest.Mock;
+  manager: {
+    transaction: jest.Mock;
+  };
+};
+
 describe('ConversationsService', () => {
   let service: ConversationsService;
   let userRepository: Record<string, jest.Mock>;
   let conversationRepository: Record<string, jest.Mock>;
-  let memberRepository: Record<string, jest.Mock>;
+  let memberRepository: MemberRepositoryMock;
   let inviteRepository: InviteRepositoryMock;
   let cacheService: Record<string, jest.Mock>;
   let kafkaClient: Record<string, jest.Mock>;
@@ -115,6 +126,11 @@ describe('ConversationsService', () => {
       create: jest.fn().mockImplementation((data) => data),
       save: jest.fn().mockImplementation((data) => Promise.resolve(data)),
       createQueryBuilder: jest.fn(),
+      manager: {
+        transaction: jest.fn((cb: (manager: MemberRepositoryMock) => unknown) =>
+          cb(memberRepository),
+        ),
+      },
     };
 
     inviteRepository = {
@@ -581,6 +597,7 @@ describe('ConversationsService', () => {
       });
 
       expect(memberRepository.save).toHaveBeenCalledWith(
+        expect.any(Function),
         expect.arrayContaining([
           expect.objectContaining({
             userId: uuid(4),

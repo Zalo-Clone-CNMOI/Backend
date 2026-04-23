@@ -28,6 +28,9 @@ CREATE TABLE IF NOT EXISTS messages_by_conversation (
     forwarded_from text,        -- JSON: ForwardedFrom (null for regular messages)
     edited_at bigint,
     deleted_at bigint,
+    message_type text,          -- 'user' or 'system'
+    system_event_type text,     -- e.g., 'member_added', 'member_removed'
+    metadata text,              -- JSON string for system message data
     PRIMARY KEY ((conversation_id), created_at, message_id)
 ) WITH CLUSTERING ORDER BY (created_at ASC, message_id ASC)
   AND default_time_to_live = 0

@@ -38,6 +38,7 @@ describe('BFF MessagesService', () => {
     const result = await service.getMessages(
       'token-123',
       'conv-1',
+      'user-1',
       'cursor-abc',
       50,
     );
@@ -45,6 +46,7 @@ describe('BFF MessagesService', () => {
     expect(chatClient.getMessages).toHaveBeenCalledWith(
       'token-123',
       'conv-1',
+      'user-1',
       'cursor-abc',
       50,
     );

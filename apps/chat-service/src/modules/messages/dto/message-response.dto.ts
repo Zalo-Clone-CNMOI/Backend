@@ -63,6 +63,22 @@ export class MessageResponseDto {
   createdAt: number;
 
   @ApiPropertyOptional({
+    description: 'Message type',
+    enum: ['user', 'system'],
+  })
+  messageType?: string;
+
+  @ApiPropertyOptional({
+    description: 'System event type (for system messages)',
+  })
+  systemEventType?: string;
+
+  @ApiPropertyOptional({
+    description: 'Structured metadata (for system messages)',
+  })
+  metadata?: Record<string, unknown>;
+
+  @ApiPropertyOptional({
     description: 'Attachments',
     type: [AttachmentResponseDto],
   })

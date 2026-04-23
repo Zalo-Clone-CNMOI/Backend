@@ -12,7 +12,15 @@ import {
   type ConversationMemberRoleUpdatedEvent,
   type ConversationDisbandedEvent,
   type GroupInviteCancelledEvent,
+  SystemEventType,
+  type MemberAddedMetadata,
+  type MemberRemovedMetadata,
+  type MemberLeftMetadata,
+  type OwnerTransferredMetadata,
+  type GroupDisbandedMetadata,
+  type RoleChangedMetadata,
 } from '@libs/contracts';
+import { SystemMessageFactory } from '@libs/shared';
 import {
   User,
   Conversation,
@@ -220,6 +228,22 @@ export class ConversationMemberService {
       select: ['fullName'],
     });
 
+    const systemMsg = SystemMessageFactory.create({
+      conversationId,
+      systemEventType: SystemEventType.MEMBER_ADDED,
+      metadata: {
+        added_by: userId,
+        added_by_name: adderUser?.fullName ?? 'Unknown',
+        added_members: addedUserIds.map((id) => ({
+          user_id: id,
+          full_name: usersById.get(id)?.fullName ?? 'Unknown',
+        })),
+      } satisfies MemberAddedMetadata,
+      traceId: `system-msg:member-added:${conversationId}:${Date.now()}`,
+      bodyFallback: `${adderUser?.fullName ?? 'Someone'} added members to the group.`,
+    });
+    this.kafkaClient.emit(KafkaTopics.ChatSystemMessageCreated, systemMsg);
+
     const addedMemberNotifications = addedUserIds.map((newUserId) => ({
       channel: 'push' as const,
       user_id: newUserId,
@@ -329,6 +353,27 @@ export class ConversationMemberService {
     };
     this.kafkaClient.emit(KafkaTopics.ConversationMemberRemoved, removedEvent);
 
+    const removerUser = await this.userRepository.findOne({
+      where: { id: userId },
+    });
+    const removedUser = await this.userRepository.findOne({
+      where: { id: memberId },
+    });
+
+    const systemMsg = SystemMessageFactory.create({
+      conversationId,
+      systemEventType: SystemEventType.MEMBER_REMOVED,
+      metadata: {
+        removed_by: userId,
+        removed_by_name: removerUser?.fullName ?? 'Unknown',
+        removed_user_id: memberId,
+        removed_user_name: removedUser?.fullName ?? 'Unknown',
+      } satisfies MemberRemovedMetadata,
+      traceId: `system-msg:member-removed:${conversationId}:${Date.now()}`,
+      bodyFallback: `${removerUser?.fullName ?? 'Someone'} removed ${removedUser?.fullName ?? 'a member'} from the group.`,
+    });
+    this.kafkaClient.emit(KafkaTopics.ChatSystemMessageCreated, systemMsg);
+
     this.logger.log(
       `Member ${memberId} removed from conversation ${conversationId}`,
     );
@@ -397,6 +442,30 @@ export class ConversationMemberService {
           KafkaTopics.ConversationMemberRoleUpdated,
           ownerTransferredEvent,
         );
+
+        const leavingUser = await this.userRepository.findOne({
+          where: { id: userId },
+        });
+        const newOwnerUser = await this.userRepository.findOne({
+          where: { id: newOwner.userId },
+        });
+
+        const systemMsgTransfer = SystemMessageFactory.create({
+          conversationId,
+          systemEventType: SystemEventType.OWNER_TRANSFERRED,
+          metadata: {
+            previous_owner_id: userId,
+            previous_owner_name: leavingUser?.fullName ?? 'Unknown',
+            new_owner_id: newOwner.userId,
+            new_owner_name: newOwnerUser?.fullName ?? 'Unknown',
+          } satisfies OwnerTransferredMetadata,
+          traceId: `system-msg:owner-transferred:${conversationId}:${Date.now()}`,
+          bodyFallback: `Ownership transferred to ${newOwnerUser?.fullName ?? 'a member'}.`,
+        });
+        this.kafkaClient.emit(
+          KafkaTopics.ChatSystemMessageCreated,
+          systemMsgTransfer,
+        );
       }
     }
 
@@ -412,6 +481,21 @@ export class ConversationMemberService {
       trace_id: `conversation-member-left:${conversationId}`,
     };
     this.kafkaClient.emit(KafkaTopics.ConversationMemberRemoved, removedEvent);
+
+    const leavingUser = await this.userRepository.findOne({
+      where: { id: userId },
+    });
+    const systemMsgLeft = SystemMessageFactory.create({
+      conversationId,
+      systemEventType: SystemEventType.MEMBER_LEFT,
+      metadata: {
+        user_id: userId,
+        user_name: leavingUser?.fullName ?? 'Unknown',
+      } satisfies MemberLeftMetadata,
+      traceId: `system-msg:member-left:${conversationId}:${Date.now()}`,
+      bodyFallback: `${leavingUser?.fullName ?? 'A member'} left the group.`,
+    });
+    this.kafkaClient.emit(KafkaTopics.ChatSystemMessageCreated, systemMsgLeft);
 
     this.logger.log(`User ${userId} left conversation ${conversationId}`);
     await this.cacheService.invalidateConversationList(userId);
@@ -480,6 +564,28 @@ export class ConversationMemberService {
       KafkaTopics.ConversationMemberRoleUpdated,
       roleUpdatedEvent,
     );
+
+    const updaterUser = await this.userRepository.findOne({
+      where: { id: userId },
+    });
+    const targetUser = await this.userRepository.findOne({
+      where: { id: memberId },
+    });
+    const systemMsg = SystemMessageFactory.create({
+      conversationId,
+      systemEventType: SystemEventType.ROLE_CHANGED,
+      metadata: {
+        updated_by: userId,
+        updated_by_name: updaterUser?.fullName ?? 'Unknown',
+        target_user_id: memberId,
+        target_user_name: targetUser?.fullName ?? 'Unknown',
+        previous_role: previousRole,
+        new_role: dto.role,
+      } satisfies RoleChangedMetadata,
+      traceId: `system-msg:role-changed:${conversationId}:${Date.now()}`,
+      bodyFallback: `${updaterUser?.fullName ?? 'Someone'} changed the role of ${targetUser?.fullName ?? 'a member'}.`,
+    });
+    this.kafkaClient.emit(KafkaTopics.ChatSystemMessageCreated, systemMsg);
 
     this.logger.log(
       `Member ${memberId} role updated to ${dto.role} in conversation ${conversationId}`,
@@ -663,6 +769,18 @@ export class ConversationMemberService {
       where: { id: userId },
       select: ['fullName'],
     });
+
+    const systemMsg = SystemMessageFactory.create({
+      conversationId,
+      systemEventType: SystemEventType.GROUP_DISBANDED,
+      metadata: {
+        disbanded_by: userId,
+        disbanded_by_name: disbander?.fullName ?? 'Group owner',
+      } satisfies GroupDisbandedMetadata,
+      traceId: `system-msg:group-disbanded:${conversationId}:${Date.now()}`,
+      bodyFallback: `${disbander?.fullName ?? 'The group owner'} disbanded the group.`,
+    });
+    this.kafkaClient.emit(KafkaTopics.ChatSystemMessageCreated, systemMsg);
 
     const disbandNotifications = activeMemberIds
       .filter((memberId) => memberId !== userId)

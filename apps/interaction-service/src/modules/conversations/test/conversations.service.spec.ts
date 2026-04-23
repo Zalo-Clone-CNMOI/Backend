@@ -197,6 +197,11 @@ describe('ConversationsService', () => {
     service = module.get<ConversationsService>(ConversationsService);
   });
 
+  afterEach(() => {
+    jest.clearAllMocks();
+    jest.restoreAllMocks();
+  });
+
   // ─── getConversations ──────────────────────────────────
 
   describe('getConversations', () => {
@@ -956,6 +961,20 @@ describe('ConversationsService', () => {
         type: ConversationType.DIRECT,
       });
       installUpdateRoleTxMock(directConv);
+
+      await expect(
+        service.updateMemberRole(uuid(2), uuid(1), uuid(3), {
+          role: UpdateMemberRoleDtoRoleEnum.ADMIN,
+        }),
+      ).rejects.toThrow();
+    });
+
+    it('should throw conflict when conditional UPDATE matches zero rows (concurrent modification)', async () => {
+      const conv = createMockConversation();
+      const { memberUpdate } = installUpdateRoleTxMock(conv);
+      // Simulate the target's role being changed by a concurrent request
+      // between the find() and the conditional UPDATE.
+      memberUpdate.mockResolvedValueOnce({ affected: 0 });
 
       await expect(
         service.updateMemberRole(uuid(2), uuid(1), uuid(3), {

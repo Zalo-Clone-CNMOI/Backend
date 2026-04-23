@@ -202,6 +202,11 @@ describe('ConversationsService', () => {
     service = module.get<ConversationsService>(ConversationsService);
   });
 
+  afterEach(() => {
+    jest.clearAllMocks();
+    jest.restoreAllMocks();
+  });
+
   // ─── addMembers ──────────────────────────────────────
 
   describe('addMembers', () => {

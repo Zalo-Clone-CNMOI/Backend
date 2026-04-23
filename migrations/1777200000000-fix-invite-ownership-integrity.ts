@@ -1,11 +1,9 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class FixInviteOwnershipIntegrity1777200000000
-  implements MigrationInterface
-{
+export class FixInviteOwnershipIntegrity1777200000000 implements MigrationInterface {
   name = 'FixInviteOwnershipIntegrity1777200000000';
 
-  public async up(queryRunner: QueryRunner): Promise<void> {.
+  public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       WITH ranked_owners AS (
         SELECT

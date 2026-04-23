@@ -77,11 +77,22 @@ type InviteRepositoryMock = {
   };
 };
 
+type MemberRepositoryMock = {
+  findOne: jest.Mock;
+  find: jest.Mock;
+  create: jest.Mock;
+  save: jest.Mock;
+  createQueryBuilder: jest.Mock;
+  manager: {
+    transaction: jest.Mock;
+  };
+};
+
 describe('ConversationsService', () => {
   let service: ConversationsService;
   let userRepository: Record<string, jest.Mock>;
   let conversationRepository: Record<string, jest.Mock>;
-  let memberRepository: Record<string, jest.Mock>;
+  let memberRepository: MemberRepositoryMock;
   let inviteRepository: InviteRepositoryMock;
   let cacheService: Record<string, jest.Mock>;
   let kafkaClient: Record<string, jest.Mock>;
@@ -116,9 +127,8 @@ describe('ConversationsService', () => {
       save: jest.fn().mockImplementation((data) => Promise.resolve(data)),
       createQueryBuilder: jest.fn(),
       manager: {
-        transaction: jest.fn(
-          (cb: (manager: Record<string, jest.Mock>) => unknown) =>
-            cb(memberRepository as unknown as Record<string, jest.Mock>),
+        transaction: jest.fn((cb: (manager: MemberRepositoryMock) => unknown) =>
+          cb(memberRepository),
         ),
       },
     };

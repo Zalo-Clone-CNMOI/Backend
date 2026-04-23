@@ -11,7 +11,10 @@ import { BusinessException } from '@app/types';
 import { MessageRepository } from '@libs/scylla';
 import { CacheService } from '@libs/redis';
 import { MediaClientService } from '@app/clients';
-import { ConversationMembershipService } from '@libs/mvp-access';
+import {
+  ConversationMembershipService,
+  FriendshipAccessService,
+} from '@libs/mvp-access';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Conversation, ConversationMember, User } from '@libs/database';
 import { ConversationType, UpdateMemberRoleDtoRoleEnum } from '@app/constant';
@@ -129,9 +132,13 @@ describe('Chat MessagesService', () => {
         has_more: false,
       });
 
-      const result = await service.getMessages('conv-1', {
-        limit: 50,
-      },'user-1');
+      const result = await service.getMessages(
+        'conv-1',
+        {
+          limit: 50,
+        },
+        'user-1',
+      );
 
       expect(messageRepository.getMessages).toHaveBeenCalledWith('conv-1', {
         cursor: undefined,
@@ -151,10 +158,14 @@ describe('Chat MessagesService', () => {
         has_more: false,
       });
 
-      await service.getMessages('conv-1', {
-        cursor: 'abc-cursor',
-        limit: 50,
-      }, 'user-1');
+      await service.getMessages(
+        'conv-1',
+        {
+          cursor: 'abc-cursor',
+          limit: 50,
+        },
+        'user-1',
+      );
 
       expect(cacheService.getRecentMessages).not.toHaveBeenCalled();
       expect(messageRepository.getMessages).toHaveBeenCalled();
@@ -198,9 +209,13 @@ describe('Chat MessagesService', () => {
         has_more: true,
       });
 
-      const result = await service.getMessages('conv-1', {
-        limit: 50,
-      },'user-1');
+      const result = await service.getMessages(
+        'conv-1',
+        {
+          limit: 50,
+        },
+        'user-1',
+      );
 
       expect(result.items[0]).toEqual(
         expect.objectContaining({
@@ -225,9 +240,13 @@ describe('Chat MessagesService', () => {
         has_more: false,
       });
 
-      const result = await service.getMessages('conv-1', {
-        limit: 50,
-      }, 'user-1');
+      const result = await service.getMessages(
+        'conv-1',
+        {
+          limit: 50,
+        },
+        'user-1',
+      );
 
       expect(result.items[0].body).toBe('');
       expect(result.items[0].isDeleted).toBe(true);
@@ -462,9 +481,13 @@ describe('Chat MessagesService', () => {
         has_more: false,
       });
 
-      const result = await service.getMessages('conv-1', {
-        limit: 50,
-      },'user-1');
+      const result = await service.getMessages(
+        'conv-1',
+        {
+          limit: 50,
+        },
+        'user-1',
+      );
 
       const attachment = result.items[0].attachments![0];
       expect(attachment.key).toBe('images/photo.jpg');
@@ -491,9 +514,13 @@ describe('Chat MessagesService', () => {
         has_more: false,
       });
 
-      const result = await service.getMessages('conv-1', {
-        limit: 50,
-      },'user-1');
+      const result = await service.getMessages(
+        'conv-1',
+        {
+          limit: 50,
+        },
+        'user-1',
+      );
 
       const attachment = result.items[0].attachments![0];
       expect(attachment.thumbnailUrl).toBeUndefined();
@@ -510,7 +537,7 @@ describe('Chat MessagesService', () => {
         cacheService as unknown as CacheService,
         mediaClient as unknown as MediaClientService,
         membershipService as unknown as ConversationMembershipService,
-        {} as any, // mock FriendshipAccessService
+        {} as FriendshipAccessService, // mock FriendshipAccessService
         userRepo as unknown as never,
         conversationRepo as unknown as never,
         conversationMemberRepo as unknown as never,
@@ -535,9 +562,13 @@ describe('Chat MessagesService', () => {
         has_more: false,
       });
 
-      const result = await localService.getMessages('conv-1', {
-        limit: 50,
-      }, 'user-1');
+      const result = await localService.getMessages(
+        'conv-1',
+        {
+          limit: 50,
+        },
+        'user-1',
+      );
 
       // Localhost format includes bucket in path
       expect(result.items[0].attachments![0].url).toMatch(

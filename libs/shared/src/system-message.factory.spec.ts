@@ -1,5 +1,9 @@
 import { SystemMessageFactory } from './system-message.factory';
-import { SystemEventType, MessageType, MemberAddedMetadata } from '@libs/contracts';
+import {
+  SystemEventType,
+  MessageType,
+  MemberAddedMetadata,
+} from '@libs/contracts';
 
 describe('SystemMessageFactory', () => {
   it('should create a valid system message command', () => {

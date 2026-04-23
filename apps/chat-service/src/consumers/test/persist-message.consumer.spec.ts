@@ -22,6 +22,11 @@ import type { ConversationMembershipService } from '@libs/mvp-access';
 import type { NotificationOutboxPublisher } from '@libs/kafka';
 import type { Repository } from 'typeorm';
 import type { User, ConversationMember } from '@libs/database';
+import {
+  MessageType,
+  SystemEventType,
+  SystemMessageMetadata,
+} from '@libs/contracts';
 
 describe('PersistMessageConsumer', () => {
   let consumer: PersistMessageConsumer;
@@ -167,9 +172,9 @@ describe('PersistMessageConsumer', () => {
       const payload = {
         message_id: 'sys-1',
         conversation_id: 'conv-1',
-        message_type: 'system' as any,
-        system_event_type: 'member_added' as any,
-        metadata: { added_by: 'user-1' } as any,
+        message_type: 'system' as MessageType.SYSTEM,
+        system_event_type: 'member_added' as SystemEventType,
+        metadata: { added_by: '1' } as SystemMessageMetadata,
         body: 'User added',
         created_at: Date.now(),
         trace_id: 'test-trace',
@@ -198,9 +203,9 @@ describe('PersistMessageConsumer', () => {
       const payload = {
         message_id: 'sys-2',
         conversation_id: 'conv-1',
-        message_type: 'system' as any,
-        system_event_type: 'member_removed' as any,
-        metadata: { removed_by: 'user-1' } as any,
+        metadata: { removed_by: 'user-1' } as SystemMessageMetadata,
+        message_type: 'system' as MessageType.SYSTEM,
+        system_event_type: 'member_removed' as SystemEventType,
         body: 'User removed',
         created_at: Date.now(),
         trace_id: 'test-trace',
@@ -218,22 +223,26 @@ describe('PersistMessageConsumer', () => {
       const payload = {
         message_id: 'sys-3',
         conversation_id: 'conv-1',
-        message_type: 'system' as any,
-        system_event_type: 'member_left' as any,
-        metadata: {} as any,
+        message_type: 'system' as MessageType.SYSTEM,
+        system_event_type: 'member_left' as SystemEventType,
+        metadata: {} as SystemMessageMetadata,
         body: 'User left',
         created_at: Date.now(),
         trace_id: 'test-trace',
       };
 
       repo.tryBeginMessageProcessing.mockResolvedValue(true);
-      repo.insertSystemMessage.mockRejectedValue(new Error('ScyllaDB write failed'));
+      repo.insertSystemMessage.mockRejectedValue(
+        new Error('ScyllaDB write failed'),
+      );
 
       await expect(consumer.onSystemMessage(payload)).rejects.toThrow(
         'ScyllaDB write failed',
       );
 
-      expect(repo.clearMessageProcessing).toHaveBeenCalledWith(payload.message_id);
+      expect(repo.clearMessageProcessing).toHaveBeenCalledWith(
+        payload.message_id,
+      );
       expect(repo.markMessageStored).not.toHaveBeenCalled();
     });
   });

@@ -41,7 +41,9 @@ describe('MessageRepository - insertSystemMessage', () => {
     expect(scyllaClient.batch).toHaveBeenCalledWith(
       [
         {
-          query: expect.stringContaining('INSERT INTO messages_by_conversation'),
+          query: expect.stringContaining(
+            'INSERT INTO messages_by_conversation',
+          ) as string,
           params: [
             payload.conversation_id,
             payload.created_at,
@@ -54,7 +56,9 @@ describe('MessageRepository - insertSystemMessage', () => {
           ],
         },
         {
-          query: expect.stringContaining('INSERT INTO messages_by_id'),
+          query: expect.stringContaining(
+            'INSERT INTO messages_by_id',
+          ) as string,
           params: [
             payload.message_id,
             payload.conversation_id,

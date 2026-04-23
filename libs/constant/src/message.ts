@@ -66,6 +66,8 @@ export const ErrorMessage: Record<ErrorCode, string> = {
   [ErrorCode.GROUP_INVITE_EXPIRED]: 'Group invite has expired.',
   [ErrorCode.GROUP_INVITE_INVALID_STATUS]:
     'Group invite status is invalid for this action.',
+  [ErrorCode.OWNER_TRANSFER_REQUIRED]:
+    'Promoting to OWNER is not allowed via role update. Use the transfer ownership endpoint instead.',
 
   // ============== MESSAGE ==============
   [ErrorCode.MESSAGE_NOT_FOUND]: 'Message not found.',

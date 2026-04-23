@@ -55,6 +55,7 @@ export const ErrorHttpStatus: Record<ErrorCode, HttpStatus> = {
   [ErrorCode.GROUP_INVITE_ALREADY_EXISTS]: HttpStatus.CONFLICT,
   [ErrorCode.GROUP_INVITE_EXPIRED]: HttpStatus.BAD_REQUEST,
   [ErrorCode.GROUP_INVITE_INVALID_STATUS]: HttpStatus.BAD_REQUEST,
+  [ErrorCode.OWNER_TRANSFER_REQUIRED]: HttpStatus.BAD_REQUEST,
 
   // ============== MESSAGE ==============
   [ErrorCode.MESSAGE_NOT_FOUND]: HttpStatus.NOT_FOUND,

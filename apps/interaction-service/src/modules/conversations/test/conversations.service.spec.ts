@@ -917,6 +917,26 @@ describe('ConversationsService', () => {
         }),
       ).rejects.toThrow();
     });
+
+    it('should reject promote-to-OWNER and require transferOwnership flow', async () => {
+      const conv = createMockConversation();
+      conversationRepository.findOne.mockResolvedValue(conv);
+
+      try {
+        await service.updateMemberRole(uuid(2), uuid(1), uuid(3), {
+          role: UpdateMemberRoleDtoRoleEnum.OWNER,
+        });
+        throw new Error('should have thrown');
+      } catch (err: unknown) {
+        const response = (err as { getResponse?: () => unknown }).getResponse?.();
+        expect(response).toMatchObject({
+          error: { message: 'OWNER_TRANSFER_REQUIRED' },
+        });
+      }
+      expect(memberRepository.save).not.toHaveBeenCalledWith(
+        expect.objectContaining({ role: UpdateMemberRoleDtoRoleEnum.OWNER }),
+      );
+    });
   });
 
   // ─── updateMySettings ────────────────────────────────

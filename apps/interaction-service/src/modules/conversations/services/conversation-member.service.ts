@@ -623,6 +623,12 @@ export class ConversationMemberService {
       );
     }
 
+    if (dto.role === UpdateMemberRoleDtoRoleEnum.OWNER) {
+      throw BusinessException.badRequest(
+        ErrorCode.OWNER_TRANSFER_REQUIRED,
+      );
+    }
+
     const targetMembership = conversation.members.find(
       (m) => m.userId === memberId && m.leftAt === null,
     );

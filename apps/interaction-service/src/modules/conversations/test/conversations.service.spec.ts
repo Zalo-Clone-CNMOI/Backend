@@ -856,9 +856,50 @@ describe('ConversationsService', () => {
   // ─── updateMemberRole ────────────────────────────────
 
   describe('updateMemberRole', () => {
-    it('should update member role (owner only)', async () => {
+    const installUpdateRoleTxMock = (
+      conv: ReturnType<typeof createMockConversation>,
+    ) => {
+      const activeMembers = (
+        conv.members as ReturnType<typeof createMockMember>[]
+      ).filter((m) => m.leftAt === null);
+      const memberUpdate = jest.fn().mockResolvedValue({ affected: 1 });
+
+      const mockManager = {
+        getRepository: jest.fn((entity: unknown) => {
+          const entityName = (entity as { name?: string })?.name;
+          if (entityName === 'Conversation') {
+            return {
+              createQueryBuilder: () => ({
+                setLock: jest.fn().mockReturnThis(),
+                where: jest.fn().mockReturnThis(),
+                getOne: jest.fn().mockResolvedValue(conv),
+              }),
+            };
+          }
+          if (entityName === 'ConversationMember') {
+            return {
+              find: jest.fn().mockResolvedValue(activeMembers),
+              update: memberUpdate,
+            };
+          }
+          return {};
+        }),
+      };
+
+      (memberRepository as any).manager = {
+        transaction: jest
+          .fn()
+          .mockImplementation((cb: (m: unknown) => unknown) =>
+            cb(mockManager),
+          ),
+      };
+
+      return { memberUpdate };
+    };
+
+    it('should update member role (owner only) via conditional UPDATE', async () => {
       const conv = createMockConversation();
-      conversationRepository.findOne.mockResolvedValue(conv);
+      const { memberUpdate } = installUpdateRoleTxMock(conv);
 
       const result = await service.updateMemberRole(
         uuid(2), // owner
@@ -868,8 +909,12 @@ describe('ConversationsService', () => {
       );
 
       expect(result.message).toContain('updated');
-      expect(memberRepository.save).toHaveBeenCalledWith(
-        expect.objectContaining({ role: UpdateMemberRoleDtoRoleEnum.ADMIN }),
+      expect(memberUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: uuid(3),
+          role: UpdateMemberRoleDtoRoleEnum.MEMBER,
+        }),
+        { role: UpdateMemberRoleDtoRoleEnum.ADMIN },
       );
     });
 
@@ -886,7 +931,7 @@ describe('ConversationsService', () => {
           }),
         ],
       });
-      conversationRepository.findOne.mockResolvedValue(conv);
+      installUpdateRoleTxMock(conv);
 
       await expect(
         service.updateMemberRole(uuid(2), uuid(1), uuid(3), {
@@ -897,7 +942,7 @@ describe('ConversationsService', () => {
 
     it('should reject updating own role', async () => {
       const conv = createMockConversation();
-      conversationRepository.findOne.mockResolvedValue(conv);
+      installUpdateRoleTxMock(conv);
 
       await expect(
         service.updateMemberRole(uuid(2), uuid(1), uuid(2), {
@@ -907,9 +952,10 @@ describe('ConversationsService', () => {
     });
 
     it('should reject on direct conversation', async () => {
-      conversationRepository.findOne.mockResolvedValue(
-        createMockConversation({ type: ConversationType.DIRECT }),
-      );
+      const directConv = createMockConversation({
+        type: ConversationType.DIRECT,
+      });
+      installUpdateRoleTxMock(directConv);
 
       await expect(
         service.updateMemberRole(uuid(2), uuid(1), uuid(3), {

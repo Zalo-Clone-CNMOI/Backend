@@ -273,7 +273,11 @@ export class GroupInviteService {
       select: ['id', 'fullName', 'avatarUrl'],
     });
 
-    const inviteNotifications = await Promise.all(
+    // Per-invite fan-out. Use allSettled so a failure emitting one invite's
+    // Kafka/direct-conv side-effects doesn't block notifications for the
+    // remaining invites — the DB TX is already committed, so best-effort is
+    // the correct semantics here.
+    const settled = await Promise.allSettled(
       txResult.savedInvites.map(async (invite) => {
         const sentEvent: GroupInviteSentEvent = {
           invite_id: invite.id,
@@ -338,9 +342,26 @@ export class GroupInviteService {
           requested_at: Date.now(),
           trace_id: `group-invite-sent:${invite.id}`,
         };
-        return notification;
+        return { invite, notification };
       }),
     );
+
+    const inviteNotifications: NotificationRequestedEvent[] = [];
+    settled.forEach((outcome, index) => {
+      if (outcome.status === 'fulfilled') {
+        inviteNotifications.push(outcome.value.notification);
+        return;
+      }
+      const failedInvite = txResult.savedInvites[index];
+      this.logger.error(
+        `[GroupInviteService] Per-invite side-effect failed invite_id=${failedInvite?.id} invited_user_id=${failedInvite?.invitedUserId}: ${
+          outcome.reason instanceof Error
+            ? outcome.reason.message
+            : String(outcome.reason)
+        }`,
+      );
+    });
+
     await enqueueNotifications(
       inviteNotifications,
       `group_invite_sent:${conversationId}`,

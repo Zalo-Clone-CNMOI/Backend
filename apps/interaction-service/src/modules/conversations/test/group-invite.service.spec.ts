@@ -131,6 +131,11 @@ describe('GroupInviteService', () => {
     service = module.get<GroupInviteService>(GroupInviteService);
   });
 
+  afterEach(() => {
+    jest.clearAllMocks();
+    jest.restoreAllMocks();
+  });
+
   describe('acceptGroupInvite', () => {
     const buildPendingInvite = () => ({
       id: uuid(3),

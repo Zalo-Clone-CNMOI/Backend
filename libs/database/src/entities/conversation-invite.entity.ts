@@ -29,6 +29,10 @@ export class ConversationInvite extends BaseEntity {
   @Column({ type: 'varchar', length: 500, nullable: true })
   message: string | null;
 
+  @Column({ type: 'uuid', name: 'message_id', nullable: true })
+  @Index()
+  messageId: string | null;
+
   @Column({ type: 'timestamp', name: 'expires_at' })
   @Index()
   expiresAt: Date;

@@ -195,6 +195,64 @@ export class MessageRepository {
     );
   }
 
+  async insertInviteMessage(message: {
+    message_id: string;
+    conversation_id: string;
+    sender_id: string;
+    message_type: string;
+    metadata: Record<string, unknown>;
+    body: string;
+    created_at: number;
+  }): Promise<void> {
+    const metadataJson = JSON.stringify(message.metadata);
+
+    await this.client.batch(
+      [
+        {
+          query: `INSERT INTO messages_by_conversation
+                  (conversation_id, created_at, message_id, sender_id, body,
+                   message_type, metadata)
+                  VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          params: [
+            message.conversation_id,
+            message.created_at,
+            message.message_id,
+            message.sender_id,
+            message.body,
+            message.message_type,
+            metadataJson,
+          ],
+        },
+        {
+          query:
+            'INSERT INTO messages_by_id (message_id, conversation_id, created_at) VALUES (?, ?, ?)',
+          params: [
+            message.message_id,
+            message.conversation_id,
+            message.created_at,
+          ],
+        },
+      ],
+      { prepare: true },
+    );
+  }
+
+  async updateMessageMetadata(
+    conversationId: string,
+    createdAt: number,
+    messageId: string,
+    newMetadata: Record<string, unknown>,
+  ): Promise<void> {
+    const metadataJson = JSON.stringify(newMetadata);
+    await this.client.execute(
+      `UPDATE messages_by_conversation 
+       SET metadata = ? 
+       WHERE conversation_id = ? AND created_at = ? AND message_id = ?`,
+      [metadataJson, conversationId, createdAt, messageId],
+      { prepare: true },
+    );
+  }
+
   async getMessages(
     conversationId: string,
     options: CursorPaginationOptions = {},

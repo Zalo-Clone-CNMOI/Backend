@@ -1,18 +1,22 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject } from '@nestjs/common';
+import * as crypto from 'crypto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, IsNull, MoreThan, QueryFailedError } from 'typeorm';
 import { NotificationOutboxPublisher } from '@libs/kafka/publisher/notification-outbox.publisher';
+import { ClientKafka } from '@nestjs/microservices';
+import { KAFKA_CLIENT } from '@libs/kafka';
 import { CacheService } from '@libs/redis';
 import {
-  type ConversationMemberAddedEvent,
   KafkaTopics,
-  type GroupInviteAcceptedEvent,
   type GroupInviteCancelledEvent,
   type GroupInviteExpiredEvent,
   type GroupInviteRejectedEvent,
   type GroupInviteSentEvent,
   NotificationType,
   type NotificationRequestedEvent,
+  type InviteMessageMetadata,
+  type ChatInviteMessageCommand,
+  type ChatInviteMessageUpdatedEvent,
 } from '@libs/contracts';
 import {
   User,
@@ -26,6 +30,7 @@ import {
   GroupInviteStatus,
   UpdateMemberRoleDtoRoleEnum,
   UserStatus,
+  MessageType,
 } from '@app/constant';
 import {
   BusinessException,
@@ -40,6 +45,7 @@ import {
 } from '../dto';
 import { toGroupInviteItem } from '../helper/conversation-mapper';
 import { enqueueNotifications } from '../helper/conversations-notification.helper';
+import { ConversationCoreService } from './conversation-core.service';
 
 @Injectable()
 export class GroupInviteService {
@@ -56,6 +62,9 @@ export class GroupInviteService {
     private readonly inviteRepository: Repository<ConversationInvite>,
     private readonly notificationPublisher: NotificationOutboxPublisher,
     private readonly cacheService: CacheService,
+    private readonly coreService: ConversationCoreService,
+    @Inject(KAFKA_CLIENT)
+    private readonly kafkaClient: ClientKafka,
   ) {}
 
   async sendGroupInvites(
@@ -213,6 +222,7 @@ export class GroupInviteService {
             message: dto.message ?? null,
             expiresAt,
             respondedAt: null,
+            messageId: crypto.randomUUID(),
           }),
         );
 
@@ -277,6 +287,30 @@ export class GroupInviteService {
         trace_id: `group-invite-sent:${invite.id}`,
       };
       await this.publishKafkaOutbox(KafkaTopics.GroupInviteSent, sentEvent);
+
+      const directConv = await this.coreService.createDirectConversation(
+        userId,
+        { participantId: invite.invitedUserId },
+      );
+
+      const inviteMsg: ChatInviteMessageCommand = {
+        message_id: invite.messageId!,
+        conversation_id: directConv.id,
+        sender_id: userId,
+        message_type: MessageType.INVITE,
+        metadata: {
+          invite_id: invite.id,
+          group_id: conversationId,
+          group_name: txResult.conversationName || 'Group',
+          inviter_id: userId,
+          inviter_name: inviter?.fullName ?? 'Unknown',
+          status: 'pending',
+        } satisfies InviteMessageMetadata,
+        trace_id: `invite-msg-sent:${invite.id}`,
+        body: `${inviter?.fullName ?? 'Someone'} invited you to join ${txResult.conversationName || 'a group'}.`,
+        created_at: invite.createdAt.getTime(),
+      };
+      this.kafkaClient.emit(KafkaTopics.ChatInviteMessageCreated, inviteMsg);
 
       const notification: NotificationRequestedEvent = {
         channel: 'push',
@@ -450,155 +484,125 @@ export class GroupInviteService {
     conversationId: string,
     inviteId: string,
   ): Promise<{ message: string }> {
-    const existingInvite = await this.inviteRepository.findOne({
-      where: {
-        id: inviteId,
-        conversationId,
-        invitedUserId: userId,
-      },
-    });
-
-    if (!existingInvite) {
-      throw BusinessException.notFound(ErrorCode.GROUP_INVITE_NOT_FOUND);
-    }
-
-    const expired = await this.expireInviteIfNeeded(existingInvite);
-    if (expired) {
-      throw BusinessException.badRequest(ErrorCode.GROUP_INVITE_EXPIRED);
-    }
-
-    const activeMembership = await this.memberRepository.findOne({
-      where: {
-        conversationId,
-        userId,
-        leftAt: IsNull(),
-      },
-    });
-
-    if (activeMembership) {
-      return { message: 'Already a member' };
-    }
-
-    const accepted = await this.inviteRepository.manager.transaction(
+    const result = await this.inviteRepository.manager.transaction(
       async (manager) => {
-        const inviteRepository = manager.getRepository(ConversationInvite);
-        const conversationRepository = manager.getRepository(Conversation);
-        const memberRepository = manager.getRepository(ConversationMember);
+        const inviteRepo = manager.getRepository(ConversationInvite);
+        const memberRepo = manager.getRepository(ConversationMember);
 
-        const conversation = await conversationRepository
-          .createQueryBuilder('conversation')
+        const invite = await inviteRepo
+          .createQueryBuilder('invite')
           .setLock('pessimistic_write')
-          .where('conversation.id = :conversationId', { conversationId })
+          .where('invite.id = :inviteId', { inviteId })
+          .andWhere('invite.conversationId = :conversationId', {
+            conversationId,
+          })
+          .andWhere('invite.invitedUserId = :userId', { userId })
           .getOne();
 
-        if (!conversation || conversation.type !== ConversationType.GROUP) {
-          throw BusinessException.notFound(ErrorCode.CONVERSATION_NOT_FOUND);
+        if (!invite) {
+          throw BusinessException.notFound(ErrorCode.GROUP_INVITE_NOT_FOUND);
         }
 
-        if (!conversation.createdById) {
+        if (invite.status === GroupInviteStatus.ACCEPTED) {
+          return { alreadyDone: true, invite };
+        }
+
+        if (invite.status !== GroupInviteStatus.PENDING) {
           throw BusinessException.badRequest(
             ErrorCode.GROUP_INVITE_INVALID_STATUS,
           );
         }
 
-        const activeOwner = await memberRepository.findOne({
-          where: {
-            conversationId,
-            leftAt: IsNull(),
-            role: UpdateMemberRoleDtoRoleEnum.OWNER,
-          },
-        });
-        if (!activeOwner) {
-          throw BusinessException.badRequest(
-            ErrorCode.GROUP_INVITE_INVALID_STATUS,
+        if (invite.expiresAt.getTime() <= Date.now()) {
+          await inviteRepo.update(
+            { id: invite.id, status: GroupInviteStatus.PENDING },
+            {
+              status: GroupInviteStatus.EXPIRED,
+              respondedAt: new Date(),
+            },
           );
+
+          throw BusinessException.badRequest(ErrorCode.GROUP_INVITE_EXPIRED);
         }
 
-        const membership = await memberRepository.findOne({
-          where: { conversationId, userId },
-        });
+        const existingMembership = await memberRepo
+          .createQueryBuilder('member')
+          .setLock('pessimistic_write')
+          .where('member.conversationId = :conversationId', { conversationId })
+          .andWhere('member.userId = :userId', { userId })
+          .getOne();
+
         let membershipChanged = false;
-        if (membership) {
-          if (membership.leftAt !== null) {
-            membership.leftAt = null;
-            membership.role = UpdateMemberRoleDtoRoleEnum.MEMBER;
-            await memberRepository.save(membership);
+
+        if (existingMembership) {
+          if (existingMembership.leftAt !== null) {
+            existingMembership.leftAt = null;
+            existingMembership.role = UpdateMemberRoleDtoRoleEnum.MEMBER;
+            await memberRepo.save(existingMembership);
             membershipChanged = true;
           }
         } else {
-          await memberRepository.save(
-            memberRepository.create({
-              conversationId,
-              userId,
-              role: UpdateMemberRoleDtoRoleEnum.MEMBER,
-            }),
-          );
+          await memberRepo.insert({
+            conversationId,
+            userId,
+            role: UpdateMemberRoleDtoRoleEnum.MEMBER,
+          });
           membershipChanged = true;
         }
 
-        const respondedAt = new Date();
-        const updateResult = await inviteRepository.update(
-          { id: existingInvite.id, status: GroupInviteStatus.PENDING },
-          { status: GroupInviteStatus.ACCEPTED, respondedAt },
+        await inviteRepo.update(
+          { id: invite.id, status: GroupInviteStatus.PENDING },
+          {
+            status: GroupInviteStatus.ACCEPTED,
+            respondedAt: new Date(),
+          },
         );
-        if ((updateResult.affected ?? 0) !== 1 && membershipChanged) {
-          throw BusinessException.badRequest(
-            ErrorCode.GROUP_INVITE_INVALID_STATUS,
-          );
-        }
+
+        await manager.insert('outbox_events', {
+          topic: KafkaTopics.GroupInviteAccepted,
+          payload: {
+            invite_id: invite.id,
+            conversation_id: conversationId,
+            inviter_id: invite.inviterUserId,
+            invited_user_id: userId,
+            status: 'accepted',
+            responded_at: Date.now(),
+          },
+          key: `invite:${invite.id}`,
+        });
+
+        await manager.insert('outbox_events', {
+          topic: KafkaTopics.ConversationMemberAdded,
+          payload: {
+            conversation_id: conversationId,
+            added_by: invite.inviterUserId,
+            members: [{ user_id: userId }],
+            added_at: Date.now(),
+          },
+          key: `member:${conversationId}:${userId}`,
+        });
 
         return {
-          inviteId: existingInvite.id,
-          inviterUserId: existingInvite.inviterUserId,
-          respondedAt,
+          alreadyDone: false,
           membershipChanged,
+          invite,
         };
       },
     );
 
-    if (!accepted.membershipChanged) {
-      return { message: 'Already a member' };
+    if (result.alreadyDone) {
+      return { message: 'Already accepted' };
     }
 
-    const acceptedEvent: GroupInviteAcceptedEvent = {
-      invite_id: accepted.inviteId,
-      conversation_id: conversationId,
-      inviter_id: accepted.inviterUserId,
-      invited_user_id: userId,
-      status: 'accepted',
-      responded_at: accepted.respondedAt.getTime(),
-      trace_id: `group-invite-accepted:${accepted.inviteId}`,
-    };
-    await this.publishKafkaOutbox(
-      KafkaTopics.GroupInviteAccepted,
-      acceptedEvent,
-    );
-
-    const acceptedUser = await this.userRepository.findOne({
-      where: { id: userId },
-      select: ['id', 'fullName', 'avatarUrl'],
-    });
-    const memberAddedEvent: ConversationMemberAddedEvent = {
-      conversation_id: conversationId,
-      added_by: accepted.inviterUserId,
-      members: [
-        {
-          user_id: userId,
-          full_name: acceptedUser?.fullName ?? 'Unknown',
-          avatar_url: acceptedUser?.avatarUrl ?? null,
-          role: UpdateMemberRoleDtoRoleEnum.MEMBER,
-        },
-      ],
-      added_at: Date.now(),
-      trace_id: `conversation-member-added:${conversationId}`,
-    };
-    await this.publishKafkaOutbox(
-      KafkaTopics.ConversationMemberAdded,
-      memberAddedEvent,
-    );
-
-    await this.cacheService.invalidateConversationList(userId);
-    await this.cacheService.invalidateConversation(conversationId);
+    if (result.invite) {
+      await this.emitInviteMessageUpdated(
+        result.invite,
+        result.invite.inviterUserId,
+        userId,
+        conversationId,
+        'accepted',
+      );
+    }
 
     return { message: 'Group invite accepted' };
   }
@@ -652,6 +656,14 @@ export class GroupInviteService {
     await this.publishKafkaOutbox(
       KafkaTopics.GroupInviteRejected,
       rejectedEvent,
+    );
+
+    await this.emitInviteMessageUpdated(
+      invite,
+      invite.inviterUserId,
+      userId,
+      conversationId,
+      'rejected',
     );
 
     return { message: 'Group invite rejected' };
@@ -726,6 +738,14 @@ export class GroupInviteService {
       cancelledEvent,
     );
 
+    await this.emitInviteMessageUpdated(
+      invite,
+      invite.inviterUserId,
+      invite.invitedUserId,
+      conversationId,
+      'cancelled',
+    );
+
     return { message: 'Group invite cancelled' };
   }
 
@@ -763,6 +783,14 @@ export class GroupInviteService {
     };
     await this.publishKafkaOutbox(KafkaTopics.GroupInviteExpired, expiredEvent);
 
+    await this.emitInviteMessageUpdated(
+      invite,
+      invite.inviterUserId,
+      invite.invitedUserId,
+      invite.conversationId,
+      'expired',
+    );
+
     return true;
   }
 
@@ -786,5 +814,46 @@ export class GroupInviteService {
     const message = `[GroupInviteService] Failed to enqueue outbox event topic=${topic}`;
     this.logger.error(message);
     throw BusinessException.internal(message);
+  }
+
+  private async emitInviteMessageUpdated(
+    invite: ConversationInvite,
+    inviterUserId: string,
+    invitedUserId: string,
+    conversationId: string,
+    status: 'accepted' | 'rejected' | 'cancelled' | 'expired',
+  ) {
+    if (!invite.messageId) return;
+
+    const directConv = await this.coreService.createDirectConversation(
+      inviterUserId,
+      { participantId: invitedUserId },
+    );
+
+    const groupConv = await this.conversationRepository.findOne({
+      where: { id: conversationId },
+      select: ['name'],
+    });
+
+    const inviter = await this.userRepository.findOne({
+      where: { id: inviterUserId },
+      select: ['fullName'],
+    });
+
+    const event: ChatInviteMessageUpdatedEvent = {
+      message_id: invite.messageId,
+      conversation_id: directConv.id,
+      metadata: {
+        invite_id: invite.id,
+        group_id: conversationId,
+        group_name: groupConv?.name || 'Group',
+        inviter_id: inviterUserId,
+        inviter_name: inviter?.fullName ?? 'Unknown',
+        status,
+      },
+      trace_id: `invite-msg-updated:${invite.id}:${status}`,
+    };
+
+    this.kafkaClient.emit(KafkaTopics.ChatInviteMessageUpdated, event);
   }
 }

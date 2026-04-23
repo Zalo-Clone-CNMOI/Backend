@@ -2,6 +2,67 @@ export type MessageAttachmentType = 'image' | 'video' | 'audio' | 'document';
 
 export type ReactionType = 'like' | 'love' | 'haha' | 'wow' | 'sad' | 'angry';
 
+export enum MessageType {
+  USER = 'user',
+  SYSTEM = 'system',
+}
+
+export enum SystemEventType {
+  MEMBER_ADDED = 'member_added',
+  MEMBER_REMOVED = 'member_removed',
+  MEMBER_LEFT = 'member_left',
+  ROLE_CHANGED = 'role_changed',
+  OWNER_TRANSFERRED = 'owner_transferred',
+  GROUP_DISBANDED = 'group_disbanded',
+}
+
+export interface MemberAddedMetadata {
+  added_by: string;
+  added_by_name: string;
+  added_members: Array<{ user_id: string; full_name: string }>;
+}
+
+export interface MemberRemovedMetadata {
+  removed_by: string;
+  removed_by_name: string;
+  removed_user_id: string;
+  removed_user_name: string;
+}
+
+export interface MemberLeftMetadata {
+  user_id: string;
+  user_name: string;
+}
+
+export interface RoleChangedMetadata {
+  updated_by: string;
+  updated_by_name: string;
+  target_user_id: string;
+  target_user_name: string;
+  previous_role: string;
+  new_role: string;
+}
+
+export interface OwnerTransferredMetadata {
+  previous_owner_id: string;
+  previous_owner_name: string;
+  new_owner_id: string;
+  new_owner_name: string;
+}
+
+export interface GroupDisbandedMetadata {
+  disbanded_by: string;
+  disbanded_by_name: string;
+}
+
+export type SystemMessageMetadata =
+  | MemberAddedMetadata
+  | MemberRemovedMetadata
+  | MemberLeftMetadata
+  | RoleChangedMetadata
+  | OwnerTransferredMetadata
+  | GroupDisbandedMetadata;
+
 export interface MessageAttachment {
   key: string;
   type: MessageAttachmentType;
@@ -54,6 +115,29 @@ export interface ChatMessageCreatedEvent {
   reply_to_message_id?: string;
   forwarded_from?: ForwardedFrom;
   trace_id?: string;
+  message_type?: string;
+}
+
+export interface ChatSystemMessageCommand {
+  message_id: string;
+  conversation_id: string;
+  message_type: MessageType.SYSTEM;
+  system_event_type: SystemEventType;
+  metadata: SystemMessageMetadata;
+  body: string;
+  created_at: number;
+  trace_id: string;
+}
+
+export interface ChatSystemMessageCreatedEvent {
+  message_id: string;
+  conversation_id: string;
+  message_type: MessageType.SYSTEM;
+  system_event_type: SystemEventType;
+  metadata: SystemMessageMetadata;
+  body: string;
+  created_at: number;
+  trace_id: string;
 }
 
 export interface ChatMessageEditCommand {

@@ -576,6 +576,9 @@ export class MessagesService implements OnModuleInit {
       senderId: message.sender_id,
       body: message.deleted_at ? '' : message.body,
       createdAt: message.created_at,
+      messageType: message.message_type || 'user',
+      systemEventType: message.system_event_type,
+      metadata: message.metadata,
       attachments: message.attachments?.map((a) =>
         this.toAttachmentResponse(a),
       ),

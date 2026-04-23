@@ -21,6 +21,9 @@ export interface PersistedMessage {
   reply_to_message_id?: string;
   edited_at?: number;
   deleted_at?: number;
+  message_type?: string;
+  system_event_type?: string;
+  metadata?: Record<string, unknown>;
   forwarded_from?: {
     source_message_id: string;
     source_conversation_id: string;

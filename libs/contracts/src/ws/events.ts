@@ -6,6 +6,7 @@ export const WsEvents = {
   ChatLeave: 'chat:leave',
   ChatSend: 'chat:send',
   ChatMessage: 'chat:message',
+  ChatSystemMessage: 'chat:system-message',
   ChatEdit: 'chat:edit',
   ChatMessageUpdated: 'chat:message:updated',
   ChatDelete: 'chat:delete',
@@ -133,6 +134,9 @@ export interface WsChatMessagePayload {
   sender_id: string;
   body: string;
   created_at: number;
+  message_type?: string;
+  system_event_type?: string;
+  metadata?: Record<string, unknown>;
   attachments?: WsMessageAttachment[];
   reply_to_message_id?: string;
   forwarded_from?: {
@@ -143,6 +147,16 @@ export interface WsChatMessagePayload {
     source_created_at: number;
     source_type: 'text' | 'image' | 'file' | 'mixed';
   };
+}
+
+export interface WsChatSystemMessagePayload {
+  message_id: string;
+  conversation_id: string;
+  message_type: 'system';
+  system_event_type: string;
+  metadata: Record<string, unknown>;
+  body: string;
+  created_at: number;
 }
 
 export interface WsChatEditPayload {

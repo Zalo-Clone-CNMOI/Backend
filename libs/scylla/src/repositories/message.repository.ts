@@ -152,6 +152,49 @@ export class MessageRepository {
     );
   }
 
+  async insertSystemMessage(message: {
+    message_id: string;
+    conversation_id: string;
+    message_type: string;
+    system_event_type: string;
+    metadata: Record<string, unknown>;
+    body: string;
+    created_at: number;
+  }): Promise<void> {
+    const metadataJson = JSON.stringify(message.metadata);
+
+    await this.client.batch(
+      [
+        {
+          query: `INSERT INTO messages_by_conversation
+                  (conversation_id, created_at, message_id, sender_id, body,
+                   message_type, system_event_type, metadata)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          params: [
+            message.conversation_id,
+            message.created_at,
+            message.message_id,
+            'SYSTEM',
+            message.body,
+            message.message_type,
+            message.system_event_type,
+            metadataJson,
+          ],
+        },
+        {
+          query:
+            'INSERT INTO messages_by_id (message_id, conversation_id, created_at) VALUES (?, ?, ?)',
+          params: [
+            message.message_id,
+            message.conversation_id,
+            message.created_at,
+          ],
+        },
+      ],
+      { prepare: true },
+    );
+  }
+
   async getMessages(
     conversationId: string,
     options: CursorPaginationOptions = {},
@@ -509,6 +552,8 @@ export class MessageRepository {
       }
     }
 
+    const metadataRaw = row.get('metadata') as string | null;
+
     return {
       message_id: row.get('message_id') as string,
       conversation_id: row.get('conversation_id') as string,
@@ -524,6 +569,9 @@ export class MessageRepository {
       deleted_at: row.get('deleted_at')
         ? Number(row.get('deleted_at'))
         : undefined,
+      message_type: (row.get('message_type') as string | null) || undefined,
+      system_event_type: (row.get('system_event_type') as string | null) || undefined,
+      metadata: metadataRaw ? JSON.parse(metadataRaw) : undefined,
       forwarded_from,
     };
   }

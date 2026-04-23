@@ -11,6 +11,7 @@ import {
   type ChatMessageUnpinnedEvent,
   type ChatReactionAddedEvent,
   type ChatReactionRemovedEvent,
+  type ChatSystemMessageCreatedEvent,
 } from '@libs/contracts';
 import { FriendshipAccessService } from '@libs/mvp-access';
 import { ConversationMember } from '@libs/database/entities';
@@ -73,6 +74,23 @@ export class ChatFanoutConsumer {
         forwarded_from: canSeeSource ? payload.forwarded_from : undefined,
       });
     }
+  }
+
+  @EventPattern(KafkaTopics.ChatSystemMessageCreated)
+  onSystemMessageCreated(@Payload() payload: ChatSystemMessageCreatedEvent) {
+    this.gateway.broadcastToConversation(
+      payload.conversation_id,
+      WsEvents.ChatSystemMessage,
+      {
+        message_id: payload.message_id,
+        conversation_id: payload.conversation_id,
+        message_type: 'system',
+        system_event_type: payload.system_event_type,
+        metadata: payload.metadata,
+        body: payload.body,
+        created_at: payload.created_at,
+      },
+    );
   }
 
   /**

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any */
 /**
  * @file group-invite.service.spec.ts (interaction-service)
  *
@@ -25,36 +24,83 @@ import {
 
 const uuid = (n: number) => `00000000-0000-0000-0000-00000000000${n}`;
 
+type InviteRepoMock = {
+  findOne: jest.Mock;
+  find: jest.Mock;
+  findAndCount: jest.Mock;
+  create: jest.Mock;
+  save: jest.Mock;
+  update: jest.Mock;
+  createQueryBuilder: jest.Mock;
+  manager: { transaction: jest.Mock };
+};
+
+type MemberRepoMock = {
+  findOne: jest.Mock;
+  find: jest.Mock;
+  create: jest.Mock;
+  save: jest.Mock;
+  update: jest.Mock;
+  insert: jest.Mock;
+  createQueryBuilder: jest.Mock;
+};
+
+type ConversationRepoMock = {
+  findOne: jest.Mock;
+  createQueryBuilder: jest.Mock;
+};
+
+type UserRepoMock = {
+  find: jest.Mock;
+  findOne: jest.Mock;
+};
+
+type NotificationPublisherMock = {
+  publish: jest.Mock;
+  publishToTopic: jest.Mock;
+};
+
+type KafkaClientMock = {
+  emit: jest.Mock;
+};
+
+type CoreServiceMock = {
+  createDirectConversation: jest.Mock;
+  getConversationById: jest.Mock;
+};
+
 describe('GroupInviteService', () => {
   let service: GroupInviteService;
-  let inviteRepository: any;
-  let memberRepository: any;
-  let conversationRepository: any;
-  let userRepository: any;
-  let notificationPublisher: any;
-  let kafkaClient: any;
-  let coreService: any;
+  let inviteRepository: InviteRepoMock;
+  let memberRepository: MemberRepoMock;
+  let conversationRepository: ConversationRepoMock;
+  let userRepository: UserRepoMock;
+  let notificationPublisher: NotificationPublisherMock;
+  let kafkaClient: KafkaClientMock;
+  let coreService: CoreServiceMock;
 
   beforeEach(async () => {
     userRepository = {
       find: jest.fn().mockResolvedValue([]),
-      findOne: jest
-        .fn()
-        .mockResolvedValue({ id: uuid(2), fullName: 'Inviter', avatarUrl: null }),
+      findOne: jest.fn().mockResolvedValue({
+        id: uuid(2),
+        fullName: 'Inviter',
+        avatarUrl: null,
+      }),
     };
 
     conversationRepository = {
-      findOne: jest
-        .fn()
-        .mockResolvedValue({ id: uuid(1), name: 'Test Group' }),
+      findOne: jest.fn().mockResolvedValue({ id: uuid(1), name: 'Test Group' }),
       createQueryBuilder: jest.fn(),
     };
 
     memberRepository = {
       findOne: jest.fn(),
       find: jest.fn().mockResolvedValue([]),
-      create: jest.fn().mockImplementation((data) => data),
-      save: jest.fn().mockImplementation((data) => Promise.resolve(data)),
+      create: jest.fn().mockImplementation((data: unknown) => data),
+      save: jest
+        .fn()
+        .mockImplementation((data: unknown) => Promise.resolve(data)),
       update: jest.fn().mockResolvedValue({ affected: 1 }),
       insert: jest.fn().mockResolvedValue({}),
       createQueryBuilder: jest.fn(),
@@ -64,8 +110,10 @@ describe('GroupInviteService', () => {
       findOne: jest.fn(),
       find: jest.fn().mockResolvedValue([]),
       findAndCount: jest.fn().mockResolvedValue([[], 0]),
-      create: jest.fn().mockImplementation((data) => data),
-      save: jest.fn().mockImplementation((data) => Promise.resolve(data)),
+      create: jest.fn().mockImplementation((data: unknown) => data),
+      save: jest
+        .fn()
+        .mockImplementation((data: unknown) => Promise.resolve(data)),
       update: jest.fn().mockResolvedValue({ affected: 1 }),
       createQueryBuilder: jest.fn(),
       manager: {
@@ -83,9 +131,7 @@ describe('GroupInviteService', () => {
     };
 
     coreService = {
-      createDirectConversation: jest
-        .fn()
-        .mockResolvedValue({ id: uuid(7) }),
+      createDirectConversation: jest.fn().mockResolvedValue({ id: uuid(7) }),
       getConversationById: jest.fn(),
     };
 
@@ -155,11 +201,11 @@ describe('GroupInviteService', () => {
     });
 
     const makeMockManager = (opts: {
-      invite: any;
-      conversation: any;
+      invite: unknown;
+      conversation: unknown;
       insertSpy: jest.Mock;
     }) => ({
-      getRepository: jest.fn((entity: any) => {
+      getRepository: jest.fn((entity: unknown) => {
         if (entity === ConversationInvite) {
           return {
             createQueryBuilder: () => ({
@@ -206,8 +252,8 @@ describe('GroupInviteService', () => {
         conversation: buildActiveConversation(),
         insertSpy,
       });
-      inviteRepository.manager.transaction.mockImplementation((cb: any) =>
-        cb(mockManager),
+      inviteRepository.manager.transaction.mockImplementation(
+        (cb: (manager: unknown) => unknown) => cb(mockManager),
       );
 
       await service.acceptGroupInvite(uuid(2), uuid(1), uuid(3));
@@ -226,15 +272,15 @@ describe('GroupInviteService', () => {
         conversation: buildActiveConversation(),
         insertSpy,
       });
-      inviteRepository.manager.transaction.mockImplementation((cb: any) =>
-        cb(mockManager),
+      inviteRepository.manager.transaction.mockImplementation(
+        (cb: (manager: unknown) => unknown) => cb(mockManager),
       );
 
       await service.acceptGroupInvite(uuid(2), uuid(1), uuid(3));
 
-      const topics = notificationPublisher.publishToTopic.mock.calls.map(
-        (call: any[]) => call[0],
-      );
+      const topics = (
+        notificationPublisher.publishToTopic.mock.calls as unknown[][]
+      ).map((call) => call[0]);
       expect(topics).toEqual(
         expect.arrayContaining([
           expect.stringContaining('invite'),
@@ -245,17 +291,19 @@ describe('GroupInviteService', () => {
 
     it('should fan out createDirectConversation for all saved invites in parallel', async () => {
       // Build 3 saved invites.
-      const savedInvites = [uuid(3), uuid(4), uuid(5)].map((invitedUserId, i) => ({
-        id: `00000000-0000-0000-0000-00000000000a${i}`,
-        conversationId: uuid(1),
-        inviterUserId: uuid(2),
-        invitedUserId,
-        status: GroupInviteStatus.PENDING,
-        expiresAt: new Date(Date.now() + 3600_000),
-        messageId: `00000000-0000-0000-0000-00000000000b${i}`,
-        message: null,
-        createdAt: new Date(),
-      }));
+      const savedInvites = [uuid(3), uuid(4), uuid(5)].map(
+        (invitedUserId, i) => ({
+          id: `00000000-0000-0000-0000-00000000000a${i}`,
+          conversationId: uuid(1),
+          inviterUserId: uuid(2),
+          invitedUserId,
+          status: GroupInviteStatus.PENDING,
+          expiresAt: new Date(Date.now() + 3600_000),
+          messageId: `00000000-0000-0000-0000-00000000000b${i}`,
+          message: null,
+          createdAt: new Date(),
+        }),
+      );
 
       inviteRepository.manager.transaction.mockImplementation(
         (cb: (m: unknown) => unknown) =>
@@ -339,8 +387,8 @@ describe('GroupInviteService', () => {
         conversation: disbandedConv,
         insertSpy,
       });
-      inviteRepository.manager.transaction.mockImplementation((cb: any) =>
-        cb(mockManager),
+      inviteRepository.manager.transaction.mockImplementation(
+        (cb: (manager: unknown) => unknown) => cb(mockManager),
       );
 
       await expect(

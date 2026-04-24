@@ -81,7 +81,14 @@ describe('ConversationsService', () => {
   let service: ConversationsService;
   let userRepository: Record<string, jest.Mock>;
   let conversationRepository: Record<string, jest.Mock>;
-  let memberRepository: Record<string, jest.Mock>;
+  let memberRepository: {
+    findOne: jest.Mock;
+    find: jest.Mock;
+    create: jest.Mock;
+    save: jest.Mock;
+    createQueryBuilder: jest.Mock;
+    manager?: { transaction: jest.Mock };
+  };
   let inviteRepository: InviteRepositoryMock;
   let cacheService: Record<string, jest.Mock>;
   let kafkaClient: Record<string, jest.Mock>;
@@ -189,12 +196,8 @@ describe('ConversationsService', () => {
   // ─── updateMemberRole ────────────────────────────────
 
   describe('updateMemberRole', () => {
-    const installTxMock = (
-      conv: ReturnType<typeof createMockConversation>,
-    ) => {
-      const activeMembers = (
-        conv.members as ReturnType<typeof createMockMember>[]
-      ).filter((m) => m.leftAt === null);
+    const installTxMock = (conv: ReturnType<typeof createMockConversation>) => {
+      const activeMembers = conv.members.filter((m) => m.leftAt === null);
       const memberUpdate = jest.fn().mockResolvedValue({ affected: 1 });
 
       const mockManager = {
@@ -219,12 +222,10 @@ describe('ConversationsService', () => {
         }),
       };
 
-      (memberRepository as any).manager = {
+      memberRepository.manager = {
         transaction: jest
           .fn()
-          .mockImplementation((cb: (m: unknown) => unknown) =>
-            cb(mockManager),
-          ),
+          .mockImplementation((cb: (m: unknown) => unknown) => cb(mockManager)),
       };
 
       return { memberUpdate };
@@ -234,12 +235,9 @@ describe('ConversationsService', () => {
       const conv = createMockConversation();
       const { memberUpdate } = installTxMock(conv);
 
-      const result = await service.updateMemberRole(
-        uuid(2),
-        uuid(1),
-        uuid(3),
-        { role: UpdateMemberRoleDtoRoleEnum.ADMIN },
-      );
+      const result = await service.updateMemberRole(uuid(2), uuid(1), uuid(3), {
+        role: UpdateMemberRoleDtoRoleEnum.ADMIN,
+      });
 
       expect(result.message).toContain('updated');
       expect(memberUpdate).toHaveBeenCalledWith(

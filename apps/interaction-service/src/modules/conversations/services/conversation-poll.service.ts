@@ -26,6 +26,7 @@ import {
   type ChatPollMessageUpdatedEvent,
   type ConversationPollClosedEvent,
   type ConversationPollCreatedEvent,
+  type ConversationPollEditedEvent,
   type ConversationPollOptionAddedEvent,
   type PollMessageMetadata,
 } from '@libs/contracts';
@@ -62,6 +63,19 @@ export interface AddOptionResult {
   option_id: string;
   label: string;
   order_index: number;
+}
+
+export interface EditPollDto {
+  question?: string;
+  allow_multiple?: boolean;
+  allow_add_option?: boolean;
+  expires_at?: string | null;
+  edited_option_labels?: Array<{ option_id: string; label: string }>;
+}
+
+export interface EditPollResult {
+  poll_id: string;
+  edited_at: number;
 }
 
 @Injectable()
@@ -485,6 +499,210 @@ export class ConversationPollService {
       option_id: saved.id,
       label: saved.label,
       order_index: saved.orderIndex,
+    };
+  }
+
+  /**
+   * Edit an active poll (Option A edit scope).
+   *
+   * Only the poll creator may edit. Allowed mutations:
+   *  - question (string)
+   *  - allow_multiple (forbidden when any vote exists)
+   *  - allow_add_option
+   *  - expires_at (ISO8601 string, or null to clear). Must be strictly > now.
+   *  - edited_option_labels: rename existing options. Each option must belong
+   *    to the poll (not soft-deleted) and have no votes; otherwise rejected.
+   *
+   * Preconditions:
+   *  - DTO must carry at least one listed field; else POLL_NO_EDIT_FIELDS.
+   *  - Poll must exist and be ACTIVE; closed/missing polls are rejected.
+   *
+   * Side effects (post-commit):
+   *  - KafkaTopics.ConversationPollEdited outbox event with `changes` diff.
+   *  - KafkaTopics.ChatPollMessageUpdated outbox event (refreshed metadata).
+   */
+  async editPoll(
+    userId: string,
+    pollId: string,
+    dto: EditPollDto,
+  ): Promise<EditPollResult> {
+    const hasAnyField =
+      !!dto &&
+      (dto.question !== undefined ||
+        dto.allow_multiple !== undefined ||
+        dto.allow_add_option !== undefined ||
+        dto.expires_at !== undefined ||
+        (Array.isArray(dto.edited_option_labels) &&
+          dto.edited_option_labels.length > 0));
+
+    if (!hasAnyField) {
+      throw new BusinessException(
+        ErrorCode.POLL_NO_EDIT_FIELDS,
+        ErrorCode.POLL_NO_EDIT_FIELDS,
+      );
+    }
+
+    const poll = await this.pollRepo.findOne({ where: { id: pollId } });
+    if (!poll) {
+      throw new BusinessException(
+        ErrorCode.POLL_NOT_FOUND,
+        ErrorCode.POLL_NOT_FOUND,
+      );
+    }
+
+    if (poll.creatorId !== userId) {
+      throw new BusinessException(
+        ErrorCode.POLL_PERMISSION_DENIED,
+        ErrorCode.POLL_PERMISSION_DENIED,
+      );
+    }
+
+    if (poll.status !== PollStatus.ACTIVE) {
+      throw new BusinessException(
+        ErrorCode.POLL_CLOSED,
+        ErrorCode.POLL_CLOSED,
+      );
+    }
+
+    // Parse / validate expires_at if present.
+    let nextExpiresAt: Date | null | undefined = undefined;
+    if (dto.expires_at !== undefined) {
+      if (dto.expires_at === null) {
+        nextExpiresAt = null;
+      } else {
+        const parsed = new Date(dto.expires_at);
+        if (Number.isNaN(parsed.getTime()) || parsed.getTime() <= Date.now()) {
+          throw new BusinessException(
+            ErrorCode.POLL_EXPIRES_AT_IN_PAST,
+            ErrorCode.POLL_EXPIRES_AT_IN_PAST,
+          );
+        }
+        nextExpiresAt = parsed;
+      }
+    }
+
+    const changes: ConversationPollEditedEvent['changes'] = {};
+    const pollPatch: Partial<ConversationPoll> = {};
+
+    // allow_multiple diff (with votes guard)
+    if (
+      dto.allow_multiple !== undefined &&
+      dto.allow_multiple !== poll.allowMultiple
+    ) {
+      const voteCount = await this.voteRepo.count({ where: { pollId } });
+      if (voteCount > 0) {
+        throw new BusinessException(
+          ErrorCode.POLL_CANNOT_EDIT_MULTIPLE_WITH_VOTES,
+          ErrorCode.POLL_CANNOT_EDIT_MULTIPLE_WITH_VOTES,
+        );
+      }
+      changes.allow_multiple = dto.allow_multiple;
+      pollPatch.allowMultiple = dto.allow_multiple;
+    }
+
+    // edited_option_labels: validate all BEFORE recording any change.
+    const normalizedLabelEdits: Array<{ option_id: string; label: string }> =
+      [];
+    if (
+      Array.isArray(dto.edited_option_labels) &&
+      dto.edited_option_labels.length > 0
+    ) {
+      for (const edit of dto.edited_option_labels) {
+        const trimmedLabel = (edit?.label ?? '').trim();
+        const option = await this.optionRepo.findOne({
+          where: {
+            id: edit.option_id,
+            pollId,
+            deletedAt: IsNull() as unknown as Date,
+          },
+        });
+        if (!option) {
+          throw new BusinessException(
+            ErrorCode.POLL_INVALID_OPTION,
+            ErrorCode.POLL_INVALID_OPTION,
+          );
+        }
+        const optionVotes = await this.voteRepo.count({
+          where: { pollId, optionId: edit.option_id },
+        });
+        if (optionVotes > 0) {
+          throw new BusinessException(
+            ErrorCode.POLL_CANNOT_EDIT_OPTION_WITH_VOTES,
+            ErrorCode.POLL_CANNOT_EDIT_OPTION_WITH_VOTES,
+          );
+        }
+        normalizedLabelEdits.push({
+          option_id: edit.option_id,
+          label: trimmedLabel,
+        });
+      }
+      if (normalizedLabelEdits.length > 0) {
+        changes.edited_option_labels = normalizedLabelEdits;
+      }
+    }
+
+    // question diff
+    if (dto.question !== undefined) {
+      const trimmedQ = dto.question.trim();
+      if (trimmedQ !== poll.question) {
+        changes.question = trimmedQ;
+        pollPatch.question = trimmedQ;
+      }
+    }
+
+    // allow_add_option diff
+    if (
+      dto.allow_add_option !== undefined &&
+      dto.allow_add_option !== poll.allowAddOption
+    ) {
+      changes.allow_add_option = dto.allow_add_option;
+      pollPatch.allowAddOption = dto.allow_add_option;
+    }
+
+    // expires_at diff (undefined means "not provided"; null means "clear")
+    if (nextExpiresAt !== undefined) {
+      changes.expires_at = nextExpiresAt ? nextExpiresAt.getTime() : null;
+      pollPatch.expiresAt = nextExpiresAt;
+    }
+
+    const editedAt = new Date();
+    const traceId = `conversation-poll-edited:${pollId}:${editedAt.getTime()}`;
+
+    await this.pollRepo.manager.transaction(async (manager) => {
+      await manager.update(
+        ConversationPoll,
+        { id: pollId },
+        { ...pollPatch, editedAt },
+      );
+
+      for (const labelEdit of normalizedLabelEdits) {
+        await manager.update(
+          ConversationPollOption,
+          { id: labelEdit.option_id, pollId },
+          { label: labelEdit.label },
+        );
+      }
+    });
+
+    const editedEvent: ConversationPollEditedEvent = {
+      poll_id: pollId,
+      conversation_id: poll.conversationId,
+      editor_user_id: userId,
+      changes,
+      edited_at: editedAt.getTime(),
+      trace_id: traceId,
+    };
+
+    await this.outbox.publishToTopic(
+      KafkaTopics.ConversationPollEdited,
+      editedEvent,
+    );
+
+    await this.emitMessageUpdate(pollId, traceId);
+
+    return {
+      poll_id: pollId,
+      edited_at: editedAt.getTime(),
     };
   }
 

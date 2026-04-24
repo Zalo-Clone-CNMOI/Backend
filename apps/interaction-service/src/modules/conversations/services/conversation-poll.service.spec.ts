@@ -680,4 +680,258 @@ describe('ConversationPollService', () => {
       });
     });
   });
+
+  describe('editPoll', () => {
+    const voteRepo = () => voteRepository;
+    const optionRepo = () => optionRepository;
+    const pollRepo = () => pollRepository;
+
+    it('rejects empty dto', async () => {
+      await expect(
+        service.editPoll('u1', 'p1', {} as any),
+      ).rejects.toMatchObject({
+        response: { error: { message: 'POLL_NO_EDIT_FIELDS' } },
+      });
+    });
+
+    it('rejects poll not found', async () => {
+      pollRepo().findOne.mockResolvedValueOnce(null);
+      await expect(
+        service.editPoll('u1', 'p1', { question: 'new' } as any),
+      ).rejects.toMatchObject({
+        response: { error: { message: 'POLL_NOT_FOUND' } },
+      });
+    });
+
+    it('rejects non-creator (even admin)', async () => {
+      pollRepo().findOne.mockResolvedValueOnce({
+        id: 'p1',
+        creatorId: 'other',
+        conversationId: 'c1',
+        status: 'active',
+      });
+      await expect(
+        service.editPoll('u1', 'p1', { question: 'new' } as any),
+      ).rejects.toMatchObject({
+        response: { error: { message: 'POLL_PERMISSION_DENIED' } },
+      });
+    });
+
+    it('rejects when poll closed', async () => {
+      pollRepo().findOne.mockResolvedValueOnce({
+        id: 'p1',
+        creatorId: 'u1',
+        conversationId: 'c1',
+        status: 'closed',
+      });
+      await expect(
+        service.editPoll('u1', 'p1', { question: 'new' } as any),
+      ).rejects.toMatchObject({
+        response: { error: { message: 'POLL_CLOSED' } },
+      });
+    });
+
+    it('rejects expires_at in past', async () => {
+      pollRepo().findOne.mockResolvedValueOnce({
+        id: 'p1',
+        creatorId: 'u1',
+        conversationId: 'c1',
+        status: 'active',
+      });
+      await expect(
+        service.editPoll('u1', 'p1', {
+          expires_at: new Date(Date.now() - 10_000).toISOString(),
+        } as any),
+      ).rejects.toMatchObject({
+        response: { error: { message: 'POLL_EXPIRES_AT_IN_PAST' } },
+      });
+    });
+
+    it('rejects allow_multiple change when votes exist', async () => {
+      pollRepo().findOne.mockResolvedValueOnce({
+        id: 'p1',
+        creatorId: 'u1',
+        conversationId: 'c1',
+        status: 'active',
+        allowMultiple: false,
+      });
+      voteRepo().count.mockResolvedValueOnce(3);
+      await expect(
+        service.editPoll('u1', 'p1', { allow_multiple: true } as any),
+      ).rejects.toMatchObject({
+        response: {
+          error: { message: 'POLL_CANNOT_EDIT_MULTIPLE_WITH_VOTES' },
+        },
+      });
+    });
+
+    it('rejects label edit when option has votes', async () => {
+      pollRepo().findOne.mockResolvedValueOnce({
+        id: 'p1',
+        creatorId: 'u1',
+        conversationId: 'c1',
+        status: 'active',
+        allowMultiple: false,
+        allowAddOption: false,
+      });
+      optionRepo().findOne.mockResolvedValueOnce({
+        id: 'o1',
+        pollId: 'p1',
+        deletedAt: null,
+      });
+      voteRepo().count.mockResolvedValueOnce(2);
+      await expect(
+        service.editPoll('u1', 'p1', {
+          edited_option_labels: [{ option_id: 'o1', label: 'new' }],
+        } as any),
+      ).rejects.toMatchObject({
+        response: {
+          error: { message: 'POLL_CANNOT_EDIT_OPTION_WITH_VOTES' },
+        },
+      });
+    });
+
+    it('rejects label edit when option_id not found in poll', async () => {
+      pollRepo().findOne.mockResolvedValueOnce({
+        id: 'p1',
+        creatorId: 'u1',
+        conversationId: 'c1',
+        status: 'active',
+      });
+      optionRepo().findOne.mockResolvedValueOnce(null);
+      await expect(
+        service.editPoll('u1', 'p1', {
+          edited_option_labels: [{ option_id: 'ghost', label: 'new' }],
+        } as any),
+      ).rejects.toMatchObject({
+        response: { error: { message: 'POLL_INVALID_OPTION' } },
+      });
+    });
+
+    it('applies valid edits in a transaction and emits events', async () => {
+      const expiresAtIso = new Date(Date.now() + 3600_000).toISOString();
+      pollRepo()
+        .findOne.mockResolvedValueOnce({
+          id: 'p1',
+          creatorId: 'u1',
+          conversationId: 'c1',
+          status: 'active',
+          allowMultiple: false,
+          allowAddOption: false,
+          messageId: 'm1',
+          question: 'Old q',
+        })
+        .mockResolvedValueOnce({
+          id: 'p1',
+          conversationId: 'c1',
+          messageId: 'm1',
+          options: [],
+          question: 'Updated question',
+          allowMultiple: true,
+          allowAddOption: false,
+          isAnonymous: false,
+          status: 'active',
+          expiresAt: new Date(expiresAtIso),
+          closedAt: null,
+          closedReason: null,
+        });
+      voteRepo().count.mockResolvedValueOnce(0);
+      installTxMock(pollRepository, async (mgr: any) => {
+        mgr.update = jest.fn().mockResolvedValue({ affected: 1 });
+      });
+      (pollRepository.manager as any).createQueryBuilder = jest
+        .fn()
+        .mockReturnValue({
+          select: () => ({
+            addSelect: () => ({
+              from: () => ({
+                where: () => ({
+                  groupBy: () => ({ getRawMany: async () => [] }),
+                  getRawOne: async () => ({ n: '0' }),
+                }),
+              }),
+            }),
+          }),
+        });
+
+      const r = await service.editPoll('u1', 'p1', {
+        question: 'Updated question',
+        allow_multiple: true,
+        expires_at: expiresAtIso,
+      } as any);
+
+      expect(r.poll_id).toBe('p1');
+      expect(r.edited_at).toEqual(expect.any(Number));
+      expect(outbox.publishToTopic).toHaveBeenCalledWith(
+        'conversation.poll.edited',
+        expect.objectContaining({
+          poll_id: 'p1',
+          editor_user_id: 'u1',
+          changes: expect.objectContaining({
+            question: 'Updated question',
+            allow_multiple: true,
+            expires_at: expect.any(Number),
+          }),
+        }),
+      );
+      expect(outbox.publishToTopic).toHaveBeenCalledWith(
+        'chat.poll-message.updated',
+        expect.any(Object),
+      );
+    });
+
+    it('clears expires_at when null passed', async () => {
+      pollRepo()
+        .findOne.mockResolvedValueOnce({
+          id: 'p1',
+          creatorId: 'u1',
+          conversationId: 'c1',
+          status: 'active',
+          allowMultiple: false,
+          allowAddOption: false,
+          messageId: 'm1',
+          question: 'q',
+          expiresAt: new Date(),
+        })
+        .mockResolvedValueOnce({
+          id: 'p1',
+          conversationId: 'c1',
+          messageId: 'm1',
+          options: [],
+          question: 'q',
+          allowMultiple: false,
+          allowAddOption: false,
+          isAnonymous: false,
+          status: 'active',
+          expiresAt: null,
+          closedAt: null,
+          closedReason: null,
+        });
+      installTxMock(pollRepository, async (mgr: any) => {
+        mgr.update = jest.fn().mockResolvedValue({ affected: 1 });
+      });
+      (pollRepository.manager as any).createQueryBuilder = jest
+        .fn()
+        .mockReturnValue({
+          select: () => ({
+            addSelect: () => ({
+              from: () => ({
+                where: () => ({
+                  groupBy: () => ({ getRawMany: async () => [] }),
+                  getRawOne: async () => ({ n: '0' }),
+                }),
+              }),
+            }),
+          }),
+        });
+
+      await service.editPoll('u1', 'p1', { expires_at: null } as any);
+      expect(outbox.publishToTopic).toHaveBeenCalledWith(
+        'conversation.poll.edited',
+        expect.objectContaining({
+          changes: expect.objectContaining({ expires_at: null }),
+        }),
+      );
+    });
+  });
 });

@@ -17,6 +17,7 @@ import {
   type ConversationMemberAddedEvent,
   type ConversationPollClosedEvent,
   type ConversationPollCreatedEvent,
+  type ConversationPollOptionAddedEvent,
   type GroupInviteAcceptedEvent,
   type GroupInviteCancelledEvent,
   type GroupInviteExpiredEvent,
@@ -53,6 +54,7 @@ type OutboxTopicPayloadMap = {
   [KafkaTopics.ConversationMemberAdded]: ConversationMemberAddedEvent;
   [KafkaTopics.ConversationPollCreated]: ConversationPollCreatedEvent;
   [KafkaTopics.ConversationPollClosed]: ConversationPollClosedEvent;
+  [KafkaTopics.ConversationPollOptionAdded]: ConversationPollOptionAddedEvent;
   [KafkaTopics.ChatPollMessageCreated]: ChatPollMessageCommand;
   [KafkaTopics.ChatPollMessageUpdated]: ChatPollMessageUpdatedEvent;
 };

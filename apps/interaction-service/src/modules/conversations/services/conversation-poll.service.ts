@@ -26,6 +26,7 @@ import {
   type ChatPollMessageUpdatedEvent,
   type ConversationPollClosedEvent,
   type ConversationPollCreatedEvent,
+  type ConversationPollOptionAddedEvent,
   type PollMessageMetadata,
 } from '@libs/contracts';
 import {
@@ -55,6 +56,12 @@ export interface ClosePollResult {
   poll_id: string;
   status: 'closed';
   final_tally: Array<{ option_id: string; vote_count: number }>;
+}
+
+export interface AddOptionResult {
+  option_id: string;
+  label: string;
+  order_index: number;
 }
 
 @Injectable()
@@ -363,6 +370,144 @@ export class ConversationPollService {
     await this.emitMessageUpdate(pollId, traceId);
 
     return { poll_id: pollId, status: 'closed', final_tally: tally };
+  }
+
+  /**
+   * Add a new option to an existing active poll.
+   *
+   * Preconditions:
+   *  - label must be a non-empty string after trimming.
+   *  - poll must exist and be ACTIVE.
+   *  - poll.allowAddOption must be true.
+   *  - caller must be an active member of the poll's conversation.
+   *  - poll must have fewer than POLL_LIMITS.MAX_OPTIONS active options.
+   *  - label must be unique within the poll (enforced both in app logic
+   *    and via a Postgres unique constraint -> 23505).
+   *
+   * Side effects (post-commit):
+   *  - KafkaTopics.ConversationPollOptionAdded outbox event.
+   *  - KafkaTopics.ChatPollMessageUpdated outbox event (refreshed metadata).
+   */
+  async addOption(
+    userId: string,
+    pollId: string,
+    label: string,
+  ): Promise<AddOptionResult> {
+    const trimmed = (label ?? '').trim();
+    if (trimmed.length === 0) {
+      throw new BusinessException(
+        ErrorCode.VALIDATION_ERROR,
+        ErrorCode.VALIDATION_ERROR,
+      );
+    }
+
+    const poll = await this.pollRepo.findOne({ where: { id: pollId } });
+    if (!poll) {
+      throw new BusinessException(
+        ErrorCode.POLL_NOT_FOUND,
+        ErrorCode.POLL_NOT_FOUND,
+      );
+    }
+
+    if (poll.status !== PollStatus.ACTIVE) {
+      throw new BusinessException(
+        ErrorCode.POLL_CLOSED,
+        ErrorCode.POLL_CLOSED,
+      );
+    }
+
+    if (!poll.allowAddOption) {
+      throw BusinessException.forbidden(ErrorCode.POLL_ADD_OPTION_NOT_ALLOWED);
+    }
+
+    const membership = await this.memberRepo.findOne({
+      where: {
+        conversationId: poll.conversationId,
+        userId,
+        leftAt: IsNull(),
+      },
+    });
+
+    if (!membership) {
+      throw new BusinessException(
+        ErrorCode.CONVERSATION_NOT_MEMBER,
+        ErrorCode.CONVERSATION_NOT_MEMBER,
+      );
+    }
+
+    const existingCount = await this.optionRepo.count({ where: { pollId } });
+    if (existingCount >= POLL_LIMITS.MAX_OPTIONS) {
+      throw BusinessException.conflict(ErrorCode.POLL_OPTION_LIMIT_REACHED);
+    }
+
+    let saved: ConversationPollOption;
+    try {
+      saved = await this.optionRepo.save(
+        this.optionRepo.create({
+          pollId,
+          label: trimmed,
+          orderIndex: existingCount,
+          addedByUserId: userId,
+        }),
+      );
+    } catch (err: unknown) {
+      if (this.isUniqueViolationError(err)) {
+        throw new BusinessException(
+          ErrorCode.POLL_DUPLICATE_OPTION_LABEL,
+          ErrorCode.POLL_DUPLICATE_OPTION_LABEL,
+        );
+      }
+      throw err;
+    }
+
+    const addedAtMs = Date.now();
+    const traceId = `conversation-poll-option-added:${saved.id}`;
+
+    const optionAddedEvent: ConversationPollOptionAddedEvent = {
+      poll_id: pollId,
+      conversation_id: poll.conversationId,
+      option_id: saved.id,
+      label: saved.label,
+      order_index: saved.orderIndex,
+      added_by_user_id: userId,
+      added_at: addedAtMs,
+      trace_id: traceId,
+    };
+
+    await this.outbox.publishToTopic(
+      KafkaTopics.ConversationPollOptionAdded,
+      optionAddedEvent,
+    );
+
+    await this.emitMessageUpdate(pollId, traceId);
+
+    return {
+      option_id: saved.id,
+      label: saved.label,
+      order_index: saved.orderIndex,
+    };
+  }
+
+  /**
+   * Detects a Postgres unique-constraint violation. Handles both:
+   *   - Raw driver errors with `.code === '23505'`
+   *   - TypeORM QueryFailedError wrapping `driverError.code === '23505'`
+   */
+  private isUniqueViolationError(err: unknown): boolean {
+    if (!err || typeof err !== 'object') {
+      return false;
+    }
+    const anyErr = err as {
+      code?: unknown;
+      driverError?: { code?: unknown };
+    };
+    if (anyErr.code === '23505') {
+      return true;
+    }
+    if (anyErr.driverError && anyErr.driverError.code === '23505') {
+      return true;
+    }
+    return false;
   }
 
   /**

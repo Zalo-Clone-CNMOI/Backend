@@ -16,6 +16,8 @@ import { ConversationCoreService } from './services/conversation-core.service';
 import { ConversationMemberService } from './services/conversation-member.service';
 import { GroupInviteService } from './services/group-invite.service';
 import { ConversationPollService } from './services/conversation-poll.service';
+import { ConversationVoteService } from './services/conversation-vote.service';
+import { PollMetadataBuilder } from './services/poll-metadata.builder';
 
 @Module({
   imports: [
@@ -38,6 +40,8 @@ import { ConversationPollService } from './services/conversation-poll.service';
     ConversationMemberService,
     GroupInviteService,
     ConversationPollService,
+    ConversationVoteService,
+    PollMetadataBuilder,
   ],
   exports: [ConversationsService],
 })

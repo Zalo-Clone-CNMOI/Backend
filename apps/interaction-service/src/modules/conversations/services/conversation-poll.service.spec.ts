@@ -20,6 +20,7 @@ import {
   ConversationPollVote,
 } from '@libs/database/entities';
 import { NotificationOutboxPublisher } from '@libs/kafka/publisher/notification-outbox.publisher';
+import { PollMetadataBuilder } from './poll-metadata.builder';
 
 /**
  * Installs a mock `manager.transaction(cb)` implementation on the given repo.
@@ -65,6 +66,7 @@ describe('ConversationPollService', () => {
   let conversationRepository: any;
   let memberRepository: any;
   let outbox: any;
+  let metadataBuilder: { build: jest.Mock; emitUpdated: jest.Mock };
 
   beforeEach(async () => {
     const makeRepo = () => ({
@@ -97,6 +99,11 @@ describe('ConversationPollService', () => {
       publishToTopic: jest.fn().mockResolvedValue({ status: 'queued' }),
     };
 
+    metadataBuilder = {
+      build: jest.fn().mockResolvedValue(null),
+      emitUpdated: jest.fn().mockResolvedValue(undefined),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ConversationPollService,
@@ -121,6 +128,7 @@ describe('ConversationPollService', () => {
           useValue: memberRepository,
         },
         { provide: NotificationOutboxPublisher, useValue: outbox },
+        { provide: PollMetadataBuilder, useValue: metadataBuilder },
       ],
     }).compile();
 
@@ -361,28 +369,13 @@ describe('ConversationPollService', () => {
     });
 
     it('allows creator to close and emits ConversationPollClosed + ChatPollMessageUpdated', async () => {
-      pollRepository.findOne
-        .mockResolvedValueOnce({
-          id: 'p1',
-          creatorId: 'u1',
-          conversationId: 'c1',
-          status: 'active',
-          messageId: 'm1',
-        })
-        .mockResolvedValueOnce({
-          id: 'p1',
-          conversationId: 'c1',
-          messageId: 'm1',
-          question: 'q',
-          options: [],
-          status: 'closed',
-          allowMultiple: false,
-          allowAddOption: false,
-          isAnonymous: false,
-          expiresAt: null,
-          closedAt: new Date(),
-          closedReason: 'by_creator',
-        });
+      pollRepository.findOne.mockResolvedValueOnce({
+        id: 'p1',
+        creatorId: 'u1',
+        conversationId: 'c1',
+        status: 'active',
+        messageId: 'm1',
+      });
       installTxMock(pollRepository, (mgr: any) => {
         mgr.update = jest.fn().mockResolvedValue({ affected: 1 });
         mgr.createQueryBuilder = jest.fn().mockReturnValue({
@@ -399,22 +392,6 @@ describe('ConversationPollService', () => {
           }),
         });
       });
-      (pollRepository.manager as any).createQueryBuilder = jest
-        .fn()
-        .mockReturnValue({
-          select: () => ({
-            addSelect: () => ({
-              from: () => ({
-                where: () => ({
-                  groupBy: () => ({
-                    getRawMany: async () => [{ option_id: 'o1', count: '2' }],
-                  }),
-                  getRawOne: async () => ({ n: '2' }),
-                }),
-              }),
-            }),
-          }),
-        });
 
       const r = await service.closePoll('u1', 'p1');
       expect(r.status).toBe('closed');
@@ -427,35 +404,20 @@ describe('ConversationPollService', () => {
           closed_by_user_id: 'u1',
         }),
       );
-      expect(outbox.publishToTopic).toHaveBeenCalledWith(
-        'chat.poll-message.updated',
-        expect.objectContaining({ message_id: 'm1' }),
+      expect(metadataBuilder.emitUpdated).toHaveBeenCalledWith(
+        'p1',
+        expect.any(String),
       );
     });
 
     it('allows admin to close and forces reason=by_admin', async () => {
-      pollRepository.findOne
-        .mockResolvedValueOnce({
-          id: 'p1',
-          creatorId: 'other',
-          conversationId: 'c1',
-          status: 'active',
-          messageId: 'm1',
-        })
-        .mockResolvedValueOnce({
-          id: 'p1',
-          conversationId: 'c1',
-          messageId: 'm1',
-          options: [],
-          question: 'q',
-          allowMultiple: false,
-          allowAddOption: false,
-          isAnonymous: false,
-          expiresAt: null,
-          closedAt: new Date(),
-          closedReason: 'by_admin',
-          status: 'closed',
-        });
+      pollRepository.findOne.mockResolvedValueOnce({
+        id: 'p1',
+        creatorId: 'other',
+        conversationId: 'c1',
+        status: 'active',
+        messageId: 'm1',
+      });
       memberRepository.findOne.mockResolvedValueOnce({
         userId: 'u1',
         role: 'admin',
@@ -474,26 +436,16 @@ describe('ConversationPollService', () => {
           }),
         });
       });
-      (pollRepository.manager as any).createQueryBuilder = jest
-        .fn()
-        .mockReturnValue({
-          select: () => ({
-            addSelect: () => ({
-              from: () => ({
-                where: () => ({
-                  groupBy: () => ({ getRawMany: async () => [] }),
-                  getRawOne: async () => ({ n: '0' }),
-                }),
-              }),
-            }),
-          }),
-        });
 
       const r = await service.closePoll('u1', 'p1');
       expect(r.status).toBe('closed');
       expect(outbox.publishToTopic).toHaveBeenCalledWith(
         'conversation.poll.closed',
         expect.objectContaining({ reason: 'by_admin' }),
+      );
+      expect(metadataBuilder.emitUpdated).toHaveBeenCalledWith(
+        'p1',
+        expect.any(String),
       );
     });
 
@@ -592,28 +544,13 @@ describe('ConversationPollService', () => {
     });
 
     it('inserts option and emits events', async () => {
-      pollRepository.findOne
-        .mockResolvedValueOnce({
-          id: 'p1',
-          status: 'active',
-          allowAddOption: true,
-          conversationId: 'c1',
-          messageId: 'm1',
-        })
-        .mockResolvedValueOnce({
-          id: 'p1',
-          conversationId: 'c1',
-          messageId: 'm1',
-          options: [],
-          question: 'q',
-          allowMultiple: false,
-          allowAddOption: true,
-          isAnonymous: false,
-          status: 'active',
-          expiresAt: null,
-          closedAt: null,
-          closedReason: null,
-        });
+      pollRepository.findOne.mockResolvedValueOnce({
+        id: 'p1',
+        status: 'active',
+        allowAddOption: true,
+        conversationId: 'c1',
+        messageId: 'm1',
+      });
       memberRepository.findOne.mockResolvedValueOnce({ userId: 'u1' });
       optionRepository.count.mockResolvedValueOnce(3);
       optionRepository.create.mockImplementation((d: any) => d);
@@ -624,20 +561,6 @@ describe('ConversationPollService', () => {
         addedByUserId: 'u1',
         pollId: 'p1',
       });
-      (pollRepository.manager as any).createQueryBuilder = jest
-        .fn()
-        .mockReturnValue({
-          select: () => ({
-            addSelect: () => ({
-              from: () => ({
-                where: () => ({
-                  groupBy: () => ({ getRawMany: async () => [] }),
-                  getRawOne: async () => ({ n: '0' }),
-                }),
-              }),
-            }),
-          }),
-        });
 
       const r = await service.addOption('u1', 'p1', 'newOpt');
       expect(r).toEqual({
@@ -655,9 +578,9 @@ describe('ConversationPollService', () => {
           added_by_user_id: 'u1',
         }),
       );
-      expect(outbox.publishToTopic).toHaveBeenCalledWith(
-        'chat.poll-message.updated',
-        expect.any(Object),
+      expect(metadataBuilder.emitUpdated).toHaveBeenCalledWith(
+        'p1',
+        expect.any(String),
       );
     });
 
@@ -811,49 +734,20 @@ describe('ConversationPollService', () => {
 
     it('applies valid edits in a transaction and emits events', async () => {
       const expiresAtIso = new Date(Date.now() + 3600_000).toISOString();
-      pollRepo()
-        .findOne.mockResolvedValueOnce({
-          id: 'p1',
-          creatorId: 'u1',
-          conversationId: 'c1',
-          status: 'active',
-          allowMultiple: false,
-          allowAddOption: false,
-          messageId: 'm1',
-          question: 'Old q',
-        })
-        .mockResolvedValueOnce({
-          id: 'p1',
-          conversationId: 'c1',
-          messageId: 'm1',
-          options: [],
-          question: 'Updated question',
-          allowMultiple: true,
-          allowAddOption: false,
-          isAnonymous: false,
-          status: 'active',
-          expiresAt: new Date(expiresAtIso),
-          closedAt: null,
-          closedReason: null,
-        });
+      pollRepo().findOne.mockResolvedValueOnce({
+        id: 'p1',
+        creatorId: 'u1',
+        conversationId: 'c1',
+        status: 'active',
+        allowMultiple: false,
+        allowAddOption: false,
+        messageId: 'm1',
+        question: 'Old q',
+      });
       voteRepo().count.mockResolvedValueOnce(0);
       installTxMock(pollRepository, async (mgr: any) => {
         mgr.update = jest.fn().mockResolvedValue({ affected: 1 });
       });
-      (pollRepository.manager as any).createQueryBuilder = jest
-        .fn()
-        .mockReturnValue({
-          select: () => ({
-            addSelect: () => ({
-              from: () => ({
-                where: () => ({
-                  groupBy: () => ({ getRawMany: async () => [] }),
-                  getRawOne: async () => ({ n: '0' }),
-                }),
-              }),
-            }),
-          }),
-        });
 
       const r = await service.editPoll('u1', 'p1', {
         question: 'Updated question',
@@ -875,56 +769,27 @@ describe('ConversationPollService', () => {
           }),
         }),
       );
-      expect(outbox.publishToTopic).toHaveBeenCalledWith(
-        'chat.poll-message.updated',
-        expect.any(Object),
+      expect(metadataBuilder.emitUpdated).toHaveBeenCalledWith(
+        'p1',
+        expect.any(String),
       );
     });
 
     it('clears expires_at when null passed', async () => {
-      pollRepo()
-        .findOne.mockResolvedValueOnce({
-          id: 'p1',
-          creatorId: 'u1',
-          conversationId: 'c1',
-          status: 'active',
-          allowMultiple: false,
-          allowAddOption: false,
-          messageId: 'm1',
-          question: 'q',
-          expiresAt: new Date(),
-        })
-        .mockResolvedValueOnce({
-          id: 'p1',
-          conversationId: 'c1',
-          messageId: 'm1',
-          options: [],
-          question: 'q',
-          allowMultiple: false,
-          allowAddOption: false,
-          isAnonymous: false,
-          status: 'active',
-          expiresAt: null,
-          closedAt: null,
-          closedReason: null,
-        });
+      pollRepo().findOne.mockResolvedValueOnce({
+        id: 'p1',
+        creatorId: 'u1',
+        conversationId: 'c1',
+        status: 'active',
+        allowMultiple: false,
+        allowAddOption: false,
+        messageId: 'm1',
+        question: 'q',
+        expiresAt: new Date(),
+      });
       installTxMock(pollRepository, async (mgr: any) => {
         mgr.update = jest.fn().mockResolvedValue({ affected: 1 });
       });
-      (pollRepository.manager as any).createQueryBuilder = jest
-        .fn()
-        .mockReturnValue({
-          select: () => ({
-            addSelect: () => ({
-              from: () => ({
-                where: () => ({
-                  groupBy: () => ({ getRawMany: async () => [] }),
-                  getRawOne: async () => ({ n: '0' }),
-                }),
-              }),
-            }),
-          }),
-        });
 
       await service.editPoll('u1', 'p1', { expires_at: null } as any);
       expect(outbox.publishToTopic).toHaveBeenCalledWith(
@@ -1031,28 +896,13 @@ describe('ConversationPollService', () => {
     });
 
     it('soft-deletes and emits events when valid', async () => {
-      pollRepository.findOne
-        .mockResolvedValueOnce({
-          id: 'p1',
-          creatorId: 'u1',
-          conversationId: 'c1',
-          status: 'active',
-          messageId: 'm1',
-        })
-        .mockResolvedValueOnce({
-          id: 'p1',
-          conversationId: 'c1',
-          messageId: 'm1',
-          options: [],
-          question: 'q',
-          allowMultiple: false,
-          allowAddOption: false,
-          isAnonymous: false,
-          status: 'active',
-          expiresAt: null,
-          closedAt: null,
-          closedReason: null,
-        });
+      pollRepository.findOne.mockResolvedValueOnce({
+        id: 'p1',
+        creatorId: 'u1',
+        conversationId: 'c1',
+        status: 'active',
+        messageId: 'm1',
+      });
       optionRepository.findOne.mockResolvedValueOnce({
         id: 'o1',
         pollId: 'p1',
@@ -1065,20 +915,6 @@ describe('ConversationPollService', () => {
         raw: [],
         generatedMaps: [],
       } as any);
-      (pollRepository.manager as any).createQueryBuilder = jest
-        .fn()
-        .mockReturnValue({
-          select: () => ({
-            addSelect: () => ({
-              from: () => ({
-                where: () => ({
-                  groupBy: () => ({ getRawMany: async () => [] }),
-                  getRawOne: async () => ({ n: '0' }),
-                }),
-              }),
-            }),
-          }),
-        });
 
       const r = await service.removeOption('u1', 'p1', 'o1');
       expect(r).toEqual({ option_id: 'o1' });
@@ -1091,9 +927,9 @@ describe('ConversationPollService', () => {
           removed_by_user_id: 'u1',
         }),
       );
-      expect(outbox.publishToTopic).toHaveBeenCalledWith(
-        'chat.poll-message.updated',
-        expect.any(Object),
+      expect(metadataBuilder.emitUpdated).toHaveBeenCalledWith(
+        'p1',
+        expect.any(String),
       );
     });
   });

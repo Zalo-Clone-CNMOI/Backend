@@ -52,6 +52,13 @@ export const WsEvents = {
   GroupInviteCancelled: 'group:invite:cancelled',
   GroupInviteExpired: 'group:invite:expired',
 
+  ConversationPollCreated: 'group:poll:created',
+  ConversationPollEdited: 'group:poll:edited',
+  ConversationPollVoteUpdated: 'group:poll:vote:updated',
+  ConversationPollOptionAdded: 'group:poll:option:added',
+  ConversationPollOptionRemoved: 'group:poll:option:removed',
+  ConversationPollClosed: 'group:poll:closed',
+
   PresenceHeartbeat: 'presence:heartbeat',
   PresenceUpdate: 'presence:update',
 
@@ -683,4 +690,67 @@ export interface WsAiStreamCompletePayload {
   conversation_id: string;
   feature: string;
   total_chunks: number;
+}
+
+// ── Conversation Poll WebSocket Payloads ──────────────────────────────────
+
+export interface WsConversationPollCreatedPayload {
+  poll_id: string;
+  conversation_id: string;
+  message_id: string;
+  creator_id: string;
+  question: string;
+  options: Array<{ option_id: string; label: string; order_index: number }>;
+  allow_multiple: boolean;
+  allow_add_option: boolean;
+  expires_at: number | null;
+  created_at: number;
+}
+
+export interface WsConversationPollVoteUpdatedPayload {
+  poll_id: string;
+  conversation_id: string;
+  tally: Array<{ option_id: string; vote_count: number }>;
+  total_votes: number;
+  total_voters: number;
+  updated_at: number;
+}
+
+export interface WsConversationPollOptionAddedPayload {
+  poll_id: string;
+  conversation_id: string;
+  option_id: string;
+  label: string;
+  order_index: number;
+  added_by_user_id: string;
+}
+
+export interface WsConversationPollOptionRemovedPayload {
+  poll_id: string;
+  conversation_id: string;
+  option_id: string;
+  removed_by_user_id: string;
+}
+
+export interface WsConversationPollEditedPayload {
+  poll_id: string;
+  conversation_id: string;
+  editor_user_id: string;
+  changes: {
+    question?: string;
+    allow_multiple?: boolean;
+    allow_add_option?: boolean;
+    expires_at?: number | null;
+    edited_option_labels?: Array<{ option_id: string; label: string }>;
+  };
+  edited_at: number;
+}
+
+export interface WsConversationPollClosedPayload {
+  poll_id: string;
+  conversation_id: string;
+  closed_by_user_id: string | null;
+  reason: 'by_creator' | 'by_admin' | 'expired';
+  final_tally: Array<{ option_id: string; vote_count: number }>;
+  closed_at: number;
 }

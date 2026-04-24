@@ -36,6 +36,17 @@ export enum GroupInviteStatus {
   EXPIRED = 'expired',
 }
 
+export enum PollStatus {
+  ACTIVE = 'active',
+  CLOSED = 'closed',
+}
+
+export enum PollClosedReason {
+  BY_CREATOR = 'by_creator',
+  BY_ADMIN = 'by_admin',
+  EXPIRED = 'expired',
+}
+
 export enum MessageType {
   TEXT = 'text',
   IMAGE = 'image',
@@ -46,6 +57,7 @@ export enum MessageType {
   INVITE = 'invite',
   USER = 'user',
   SYSTEM = 'system',
+  POLL = 'poll',
 }
 
 export enum ReactionType {

@@ -110,6 +110,30 @@ export const ErrorMessage: Record<ErrorCode, string> = {
   [ErrorCode.QR_SESSION_ALREADY_PROCESSED]:
     'QR session has already been processed.',
   [ErrorCode.QR_SESSION_INVALID]: 'Invalid QR session.',
+
+  // ============== POLL ==============
+  [ErrorCode.POLL_NOT_FOUND]: 'Poll not found.',
+  [ErrorCode.POLL_CLOSED]: 'Poll is closed.',
+  [ErrorCode.POLL_EXPIRED]: 'Poll has expired.',
+  [ErrorCode.POLL_NOT_GROUP_CONVERSATION]:
+    'Polls are only allowed in group conversations.',
+  [ErrorCode.POLL_INVALID_OPTION]:
+    'Selected option does not belong to this poll.',
+  [ErrorCode.POLL_ADD_OPTION_NOT_ALLOWED]:
+    'Adding new options is disabled for this poll.',
+  [ErrorCode.POLL_OPTION_LIMIT_REACHED]:
+    'Poll cannot have more than 20 options.',
+  [ErrorCode.POLL_SINGLE_CHOICE_VIOLATION]:
+    'This poll only allows a single option.',
+  [ErrorCode.POLL_DUPLICATE_OPTION_LABEL]: 'Duplicate option label.',
+  [ErrorCode.POLL_PERMISSION_DENIED]: 'You do not have permission on this poll.',
+  [ErrorCode.POLL_CANNOT_EDIT_MULTIPLE_WITH_VOTES]:
+    'Cannot change single/multi-choice after votes exist.',
+  [ErrorCode.POLL_CANNOT_EDIT_OPTION_WITH_VOTES]:
+    'Cannot edit or remove an option that already has votes.',
+  [ErrorCode.POLL_EXPIRES_AT_IN_PAST]: 'Poll expiry cannot be in the past.',
+  [ErrorCode.POLL_NO_EDIT_FIELDS]:
+    'At least one field must be provided to edit.',
 };
 
 /**

@@ -15,12 +15,16 @@ import {
   ErrorCode,
   MessageType,
   POLL_LIMITS,
+  PollClosedReason,
   PollStatus,
+  UpdateMemberRoleDtoRoleEnum,
 } from '@app/constant';
 import { BusinessException } from '@app/types';
 import {
   KafkaTopics,
   type ChatPollMessageCommand,
+  type ChatPollMessageUpdatedEvent,
+  type ConversationPollClosedEvent,
   type ConversationPollCreatedEvent,
   type PollMessageMetadata,
 } from '@libs/contracts';
@@ -45,6 +49,12 @@ export interface CreatePollResult {
   poll_id: string;
   message_id: string;
   options: Array<{ option_id: string; label: string; order_index: number }>;
+}
+
+export interface ClosePollResult {
+  poll_id: string;
+  status: 'closed';
+  final_tally: Array<{ option_id: string; vote_count: number }>;
 }
 
 @Injectable()
@@ -237,5 +247,222 @@ export class ConversationPollService {
       message_id: messageId,
       options: optionSummaries,
     };
+  }
+
+  /**
+   * Close an active poll.
+   *
+   * Behavior:
+   *  - POLL_NOT_FOUND if poll does not exist.
+   *  - Idempotent: if already CLOSED, returns the same shape with empty
+   *    final_tally and emits no events.
+   *  - Creator always allowed (keeps passed-in reason, default BY_CREATOR).
+   *  - Active group members with role owner/admin allowed; reason forced to
+   *    BY_ADMIN regardless of caller input.
+   *  - Otherwise POLL_PERMISSION_DENIED.
+   *  - Uses an optimistic-status `UPDATE ... WHERE status = ACTIVE` inside a
+   *    TX; affected=0 means another actor closed first -> POLL_CLOSED.
+   *
+   * Post-commit side effects:
+   *  - KafkaTopics.ConversationPollClosed outbox event with the final tally.
+   *  - KafkaTopics.ChatPollMessageUpdated outbox event carrying the refreshed
+   *    PollMessageMetadata snapshot for the chat message card.
+   */
+  async closePoll(
+    userId: string,
+    pollId: string,
+    reason: PollClosedReason = PollClosedReason.BY_CREATOR,
+  ): Promise<ClosePollResult> {
+    const poll = await this.pollRepo.findOne({ where: { id: pollId } });
+
+    if (!poll) {
+      throw new BusinessException(
+        ErrorCode.POLL_NOT_FOUND,
+        ErrorCode.POLL_NOT_FOUND,
+      );
+    }
+
+    if (poll.status === PollStatus.CLOSED) {
+      return { poll_id: pollId, status: 'closed', final_tally: [] };
+    }
+
+    let effectiveReason: PollClosedReason = reason;
+
+    if (userId !== poll.creatorId) {
+      const membership = await this.memberRepo.findOne({
+        where: {
+          conversationId: poll.conversationId,
+          userId,
+          leftAt: IsNull(),
+        },
+      });
+
+      const isPrivileged =
+        !!membership &&
+        (membership.role === UpdateMemberRoleDtoRoleEnum.OWNER ||
+          membership.role === UpdateMemberRoleDtoRoleEnum.ADMIN);
+
+      if (!isPrivileged) {
+        throw BusinessException.forbidden(ErrorCode.POLL_PERMISSION_DENIED);
+      }
+
+      effectiveReason = PollClosedReason.BY_ADMIN;
+    }
+
+    const closedAt = new Date();
+    const traceId = randomUUID();
+    const closedByUserId =
+      effectiveReason === PollClosedReason.EXPIRED ? null : userId;
+
+    const tally = await this.pollRepo.manager.transaction(async (manager) => {
+      const updateResult = await manager.update(
+        ConversationPoll,
+        { id: pollId, status: PollStatus.ACTIVE },
+        {
+          status: PollStatus.CLOSED,
+          closedAt,
+          closedByUserId,
+          closedReason: effectiveReason,
+        },
+      );
+
+      if (updateResult.affected !== 1) {
+        throw BusinessException.conflict(ErrorCode.POLL_CLOSED);
+      }
+
+      const rows = await manager
+        .createQueryBuilder()
+        .select('option_id', 'option_id')
+        .addSelect('COUNT(*)', 'count')
+        .from(ConversationPollVote, 'v')
+        .where('v.poll_id = :pid', { pid: pollId })
+        .groupBy('option_id')
+        .getRawMany<{ option_id: string; count: string | number }>();
+
+      return rows.map((row) => ({
+        option_id: row.option_id,
+        vote_count: Number(row.count),
+      }));
+    });
+
+    const closedEvent: ConversationPollClosedEvent = {
+      poll_id: pollId,
+      conversation_id: poll.conversationId,
+      closed_by_user_id: closedByUserId,
+      reason: effectiveReason,
+      final_tally: tally,
+      closed_at: closedAt.getTime(),
+      trace_id: traceId,
+    };
+
+    await this.outbox.publishToTopic(
+      KafkaTopics.ConversationPollClosed,
+      closedEvent,
+    );
+
+    await this.emitMessageUpdate(pollId, traceId);
+
+    return { poll_id: pollId, status: 'closed', final_tally: tally };
+  }
+
+  /**
+   * Build a fresh PollMessageMetadata snapshot for a poll's chat message.
+   * Returns null if the poll does not exist or has no linked messageId.
+   */
+  private async buildMetadataSnapshot(pollId: string): Promise<{
+    messageId: string;
+    conversationId: string;
+    payload: PollMessageMetadata;
+  } | null> {
+    const poll = await this.pollRepo.findOne({
+      where: { id: pollId },
+      relations: ['options'],
+    });
+
+    if (!poll || !poll.messageId) {
+      return null;
+    }
+
+    const tallyRows = await this.pollRepo.manager
+      .createQueryBuilder()
+      .select('option_id', 'option_id')
+      .addSelect('COUNT(*)', 'count')
+      .from(ConversationPollVote, 'v')
+      .where('v.poll_id = :pid', { pid: pollId })
+      .groupBy('option_id')
+      .getRawMany<{ option_id: string; count: string | number }>();
+
+    const tallyByOption = new Map<string, number>();
+    for (const row of tallyRows) {
+      tallyByOption.set(row.option_id, Number(row.count));
+    }
+
+    const voterRow = await this.pollRepo.manager
+      .createQueryBuilder()
+      .select('COUNT(DISTINCT user_id)', 'n')
+      .addSelect('1', '_pad')
+      .from(ConversationPollVote, 'v')
+      .where('v.poll_id = :pid', { pid: pollId })
+      .getRawOne<{ n: string | number }>();
+
+    const totalVoters = voterRow ? Number(voterRow.n) : 0;
+
+    const options = (poll.options ?? [])
+      .filter((opt) => !opt.deletedAt)
+      .sort((a, b) => a.orderIndex - b.orderIndex)
+      .map((opt) => ({
+        option_id: opt.id,
+        label: opt.label,
+        order_index: opt.orderIndex,
+        vote_count: tallyByOption.get(opt.id) ?? 0,
+      }));
+
+    const totalVotes = options.reduce((sum, o) => sum + o.vote_count, 0);
+
+    const payload: PollMessageMetadata = {
+      poll_id: poll.id,
+      question: poll.question,
+      options,
+      total_votes: totalVotes,
+      total_voters: totalVoters,
+      allow_multiple: poll.allowMultiple,
+      allow_add_option: poll.allowAddOption,
+      status: poll.status === PollStatus.CLOSED ? 'closed' : 'active',
+      expires_at: poll.expiresAt ? poll.expiresAt.getTime() : null,
+      closed_at: poll.closedAt ? poll.closedAt.getTime() : null,
+      closed_reason: poll.closedReason ?? null,
+    };
+
+    return {
+      messageId: poll.messageId,
+      conversationId: poll.conversationId,
+      payload,
+    };
+  }
+
+  /**
+   * Emit a ChatPollMessageUpdated event carrying a refreshed poll metadata
+   * snapshot. No-op if the poll or its message cannot be found.
+   */
+  private async emitMessageUpdate(
+    pollId: string,
+    traceId: string,
+  ): Promise<void> {
+    const snapshot = await this.buildMetadataSnapshot(pollId);
+    if (!snapshot) {
+      return;
+    }
+
+    const event: ChatPollMessageUpdatedEvent = {
+      message_id: snapshot.messageId,
+      conversation_id: snapshot.conversationId,
+      metadata: snapshot.payload,
+      trace_id: traceId,
+    };
+
+    await this.outbox.publishToTopic(
+      KafkaTopics.ChatPollMessageUpdated,
+      event,
+    );
   }
 }

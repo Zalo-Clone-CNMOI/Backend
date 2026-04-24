@@ -320,4 +320,195 @@ describe('ConversationPollService', () => {
       expect(savedPoll.isAnonymous).toBe(false);
     });
   });
+
+  describe('closePoll', () => {
+    it('returns POLL_NOT_FOUND when poll missing', async () => {
+      pollRepository.findOne.mockResolvedValueOnce(null);
+      await expect(service.closePoll('u1', 'p1')).rejects.toMatchObject({
+        response: { error: { message: 'POLL_NOT_FOUND' } },
+      });
+    });
+
+    it('is idempotent when poll already closed', async () => {
+      pollRepository.findOne.mockResolvedValueOnce({
+        id: 'p1',
+        creatorId: 'u1',
+        conversationId: 'c1',
+        status: 'closed',
+      });
+      const r = await service.closePoll('u1', 'p1');
+      expect(r.status).toBe('closed');
+      expect(r.final_tally).toEqual([]);
+      expect(outbox.publishToTopic).not.toHaveBeenCalled();
+    });
+
+    it('rejects when caller is not creator, admin, or owner', async () => {
+      pollRepository.findOne.mockResolvedValueOnce({
+        id: 'p1',
+        creatorId: 'other',
+        conversationId: 'c1',
+        status: 'active',
+      });
+      memberRepository.findOne.mockResolvedValueOnce({
+        userId: 'u1',
+        role: 'member',
+      });
+      await expect(service.closePoll('u1', 'p1')).rejects.toMatchObject({
+        response: { error: { message: 'POLL_PERMISSION_DENIED' } },
+      });
+    });
+
+    it('allows creator to close and emits ConversationPollClosed + ChatPollMessageUpdated', async () => {
+      pollRepository.findOne
+        .mockResolvedValueOnce({
+          id: 'p1',
+          creatorId: 'u1',
+          conversationId: 'c1',
+          status: 'active',
+          messageId: 'm1',
+        })
+        .mockResolvedValueOnce({
+          id: 'p1',
+          conversationId: 'c1',
+          messageId: 'm1',
+          question: 'q',
+          options: [],
+          status: 'closed',
+          allowMultiple: false,
+          allowAddOption: false,
+          isAnonymous: false,
+          expiresAt: null,
+          closedAt: new Date(),
+          closedReason: 'by_creator',
+        });
+      installTxMock(pollRepository, (mgr: any) => {
+        mgr.update = jest.fn().mockResolvedValue({ affected: 1 });
+        mgr.createQueryBuilder = jest.fn().mockReturnValue({
+          select: () => ({
+            addSelect: () => ({
+              from: () => ({
+                where: () => ({
+                  groupBy: () => ({
+                    getRawMany: async () => [{ option_id: 'o1', count: '2' }],
+                  }),
+                }),
+              }),
+            }),
+          }),
+        });
+      });
+      (pollRepository.manager as any).createQueryBuilder = jest
+        .fn()
+        .mockReturnValue({
+          select: () => ({
+            addSelect: () => ({
+              from: () => ({
+                where: () => ({
+                  groupBy: () => ({
+                    getRawMany: async () => [{ option_id: 'o1', count: '2' }],
+                  }),
+                  getRawOne: async () => ({ n: '2' }),
+                }),
+              }),
+            }),
+          }),
+        });
+
+      const r = await service.closePoll('u1', 'p1');
+      expect(r.status).toBe('closed');
+      expect(r.final_tally).toEqual([{ option_id: 'o1', vote_count: 2 }]);
+      expect(outbox.publishToTopic).toHaveBeenCalledWith(
+        'conversation.poll.closed',
+        expect.objectContaining({
+          poll_id: 'p1',
+          reason: 'by_creator',
+          closed_by_user_id: 'u1',
+        }),
+      );
+      expect(outbox.publishToTopic).toHaveBeenCalledWith(
+        'chat.poll-message.updated',
+        expect.objectContaining({ message_id: 'm1' }),
+      );
+    });
+
+    it('allows admin to close and forces reason=by_admin', async () => {
+      pollRepository.findOne
+        .mockResolvedValueOnce({
+          id: 'p1',
+          creatorId: 'other',
+          conversationId: 'c1',
+          status: 'active',
+          messageId: 'm1',
+        })
+        .mockResolvedValueOnce({
+          id: 'p1',
+          conversationId: 'c1',
+          messageId: 'm1',
+          options: [],
+          question: 'q',
+          allowMultiple: false,
+          allowAddOption: false,
+          isAnonymous: false,
+          expiresAt: null,
+          closedAt: new Date(),
+          closedReason: 'by_admin',
+          status: 'closed',
+        });
+      memberRepository.findOne.mockResolvedValueOnce({
+        userId: 'u1',
+        role: 'admin',
+      });
+      installTxMock(pollRepository, (mgr: any) => {
+        mgr.update = jest.fn().mockResolvedValue({ affected: 1 });
+        mgr.createQueryBuilder = jest.fn().mockReturnValue({
+          select: () => ({
+            addSelect: () => ({
+              from: () => ({
+                where: () => ({
+                  groupBy: () => ({ getRawMany: async () => [] }),
+                }),
+              }),
+            }),
+          }),
+        });
+      });
+      (pollRepository.manager as any).createQueryBuilder = jest
+        .fn()
+        .mockReturnValue({
+          select: () => ({
+            addSelect: () => ({
+              from: () => ({
+                where: () => ({
+                  groupBy: () => ({ getRawMany: async () => [] }),
+                  getRawOne: async () => ({ n: '0' }),
+                }),
+              }),
+            }),
+          }),
+        });
+
+      const r = await service.closePoll('u1', 'p1');
+      expect(r.status).toBe('closed');
+      expect(outbox.publishToTopic).toHaveBeenCalledWith(
+        'conversation.poll.closed',
+        expect.objectContaining({ reason: 'by_admin' }),
+      );
+    });
+
+    it('throws CONFLICT on race when update affects 0 rows', async () => {
+      pollRepository.findOne.mockResolvedValueOnce({
+        id: 'p1',
+        creatorId: 'u1',
+        conversationId: 'c1',
+        status: 'active',
+        messageId: 'm1',
+      });
+      installTxMock(pollRepository, (mgr: any) => {
+        mgr.update = jest.fn().mockResolvedValue({ affected: 0 });
+      });
+      await expect(service.closePoll('u1', 'p1')).rejects.toMatchObject({
+        response: { error: { message: 'POLL_CLOSED' } },
+      });
+    });
+  });
 });

@@ -13,7 +13,9 @@ import { APP_CONFIG, type AppConfig } from '@libs/config';
 import {
   KafkaTopics,
   type ChatPollMessageCommand,
+  type ChatPollMessageUpdatedEvent,
   type ConversationMemberAddedEvent,
+  type ConversationPollClosedEvent,
   type ConversationPollCreatedEvent,
   type GroupInviteAcceptedEvent,
   type GroupInviteCancelledEvent,
@@ -50,7 +52,9 @@ type OutboxTopicPayloadMap = {
   [KafkaTopics.GroupInviteCancelled]: GroupInviteCancelledEvent;
   [KafkaTopics.ConversationMemberAdded]: ConversationMemberAddedEvent;
   [KafkaTopics.ConversationPollCreated]: ConversationPollCreatedEvent;
+  [KafkaTopics.ConversationPollClosed]: ConversationPollClosedEvent;
   [KafkaTopics.ChatPollMessageCreated]: ChatPollMessageCommand;
+  [KafkaTopics.ChatPollMessageUpdated]: ChatPollMessageUpdatedEvent;
 };
 
 type RedisClaimResult =

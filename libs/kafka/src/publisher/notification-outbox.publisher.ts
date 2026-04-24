@@ -12,7 +12,9 @@ import { randomUUID } from 'crypto';
 import { APP_CONFIG, type AppConfig } from '@libs/config';
 import {
   KafkaTopics,
+  type ChatPollMessageCommand,
   type ConversationMemberAddedEvent,
+  type ConversationPollCreatedEvent,
   type GroupInviteAcceptedEvent,
   type GroupInviteCancelledEvent,
   type GroupInviteExpiredEvent,
@@ -47,6 +49,8 @@ type OutboxTopicPayloadMap = {
   [KafkaTopics.GroupInviteRejected]: GroupInviteRejectedEvent;
   [KafkaTopics.GroupInviteCancelled]: GroupInviteCancelledEvent;
   [KafkaTopics.ConversationMemberAdded]: ConversationMemberAddedEvent;
+  [KafkaTopics.ConversationPollCreated]: ConversationPollCreatedEvent;
+  [KafkaTopics.ChatPollMessageCreated]: ChatPollMessageCommand;
 };
 
 type RedisClaimResult =

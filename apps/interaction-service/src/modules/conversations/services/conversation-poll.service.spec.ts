@@ -23,23 +23,24 @@ import { NotificationOutboxPublisher } from '@libs/kafka/publisher/notification-
 
 /**
  * Installs a mock `manager.transaction(cb)` implementation on the given repo.
- * The callback is invoked immediately with `mockManager`, so tests can stub
- * `manager.getRepository(Entity)` to return arbitrary per-entity repo mocks.
+ * The transaction callback will be invoked with `mockManager`. Tests can
+ * optionally provide a `configure` callback to mutate the manager (e.g. set
+ * custom `save`/`create`/`getRepository` behavior) before the transaction
+ * body runs.
  *
- * Usage:
- *   installTxMock(pollRepo, (m) => ({
- *     [ConversationPoll.name]: { save: jest.fn() },
- *   }));
+ * Usage (configure pattern):
+ *   installTxMock(pollRepo, (mgr) => {
+ *     mgr.save = jest.fn().mockResolvedValueOnce({ id: 'x' });
+ *     mgr.create = jest.fn().mockImplementation((_e, data) => data);
+ *   });
  */
 export const installTxMock = (
   repo: { manager?: { transaction?: jest.Mock } } & Record<string, any>,
-  getRepositoryImpl?: (entity: unknown) => unknown,
+  configure?: (manager: any) => unknown,
 ) => {
-  const mockManager = {
-    getRepository: jest.fn((entity: unknown) => {
-      if (getRepositoryImpl) return getRepositoryImpl(entity);
-      return {};
-    }),
+  const mockManager: any = {
+    getRepository: jest.fn(() => ({})),
+    create: jest.fn().mockImplementation((_e: unknown, data: unknown) => data),
     save: jest.fn().mockImplementation((_e: unknown, data: unknown) => data),
     update: jest.fn().mockResolvedValue({ affected: 1 }),
     insert: jest.fn().mockResolvedValue({}),
@@ -47,9 +48,10 @@ export const installTxMock = (
   };
 
   (repo as any).manager = {
-    transaction: jest
-      .fn()
-      .mockImplementation((cb: (m: unknown) => unknown) => cb(mockManager)),
+    transaction: jest.fn().mockImplementation(async (cb: (m: unknown) => unknown) => {
+      if (configure) await configure(mockManager);
+      return cb(mockManager);
+    }),
   };
 
   return { mockManager };
@@ -130,5 +132,192 @@ describe('ConversationPollService', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  describe('createPoll', () => {
+    const baseDto = {
+      question: 'Pizza or Burger?',
+      options: [{ label: 'Pizza' }, { label: 'Burger' }],
+    };
+
+    it('rejects non-group conversation', async () => {
+      conversationRepository.findOne.mockResolvedValueOnce({
+        id: 'c1',
+        type: 'direct',
+      });
+      await expect(
+        service.createPoll('u1', 'c1', baseDto as any),
+      ).rejects.toMatchObject({
+        response: { error: { message: 'POLL_NOT_GROUP_CONVERSATION' } },
+      });
+    });
+
+    it('rejects non-member caller', async () => {
+      conversationRepository.findOne.mockResolvedValueOnce({
+        id: 'c1',
+        type: 'group',
+      });
+      memberRepository.findOne.mockResolvedValueOnce(null);
+      await expect(
+        service.createPoll('u1', 'c1', baseDto as any),
+      ).rejects.toMatchObject({
+        response: { error: { message: 'CONVERSATION_NOT_MEMBER' } },
+      });
+    });
+
+    it('rejects fewer than 2 options', async () => {
+      conversationRepository.findOne.mockResolvedValueOnce({
+        id: 'c1',
+        type: 'group',
+      });
+      memberRepository.findOne.mockResolvedValueOnce({
+        userId: 'u1',
+        conversationId: 'c1',
+      });
+      await expect(
+        service.createPoll('u1', 'c1', {
+          question: 'q',
+          options: [{ label: 'only' }],
+        } as any),
+      ).rejects.toMatchObject({
+        response: { error: { message: 'POLL_MIN_OPTIONS_REQUIRED' } },
+      });
+    });
+
+    it('rejects more than 20 options', async () => {
+      conversationRepository.findOne.mockResolvedValueOnce({
+        id: 'c1',
+        type: 'group',
+      });
+      memberRepository.findOne.mockResolvedValueOnce({
+        userId: 'u1',
+        conversationId: 'c1',
+      });
+      const tooMany = Array.from({ length: 21 }, (_, i) => ({
+        label: `opt${i}`,
+      }));
+      await expect(
+        service.createPoll('u1', 'c1', {
+          question: 'q',
+          options: tooMany,
+        } as any),
+      ).rejects.toMatchObject({
+        response: { error: { message: 'POLL_OPTION_LIMIT_REACHED' } },
+      });
+    });
+
+    it('rejects duplicate option labels', async () => {
+      conversationRepository.findOne.mockResolvedValueOnce({
+        id: 'c1',
+        type: 'group',
+      });
+      memberRepository.findOne.mockResolvedValueOnce({
+        userId: 'u1',
+        conversationId: 'c1',
+      });
+      await expect(
+        service.createPoll('u1', 'c1', {
+          question: 'q',
+          options: [{ label: 'a' }, { label: 'a' }],
+        } as any),
+      ).rejects.toMatchObject({
+        response: { error: { message: 'POLL_DUPLICATE_OPTION_LABEL' } },
+      });
+    });
+
+    it('creates poll with options and emits ConversationPollCreated + ChatPollMessageCreated', async () => {
+      conversationRepository.findOne.mockResolvedValueOnce({
+        id: 'c1',
+        type: 'group',
+      });
+      memberRepository.findOne.mockResolvedValueOnce({
+        userId: 'u1',
+        conversationId: 'c1',
+      });
+      installTxMock(pollRepository, (mgr: any) => {
+        mgr.save = jest
+          .fn()
+          .mockImplementationOnce(async (_e: any, data: any) => ({
+            ...data,
+            id: 'poll-uuid',
+          }))
+          .mockImplementationOnce(async (_e: any, arr: any[]) =>
+            arr.map((o, i) => ({ ...o, id: `opt-${i}` })),
+          );
+        mgr.create = jest
+          .fn()
+          .mockImplementation((_entity: any, data: any) => data);
+      });
+
+      const result = await service.createPoll('u1', 'c1', {
+        question: 'Pizza or Burger?',
+        options: [{ label: 'Pizza' }, { label: 'Burger' }],
+        allow_multiple: false,
+        allow_add_option: true,
+        expires_in_hours: 24,
+      } as any);
+
+      expect(result.poll_id).toBe('poll-uuid');
+      expect(result.message_id).toMatch(/^[0-9a-f-]{36}$/);
+      expect(result.options).toEqual([
+        { option_id: 'opt-0', label: 'Pizza', order_index: 0 },
+        { option_id: 'opt-1', label: 'Burger', order_index: 1 },
+      ]);
+      expect(outbox.publishToTopic).toHaveBeenCalledWith(
+        'conversation.poll.created',
+        expect.objectContaining({
+          poll_id: 'poll-uuid',
+          conversation_id: 'c1',
+          creator_id: 'u1',
+          question: 'Pizza or Burger?',
+          allow_multiple: false,
+          allow_add_option: true,
+          message_id: expect.any(String),
+        }),
+      );
+      expect(outbox.publishToTopic).toHaveBeenCalledWith(
+        'chat.poll-message.created',
+        expect.objectContaining({
+          message_type: 'poll',
+          metadata: expect.objectContaining({
+            total_votes: 0,
+            total_voters: 0,
+            status: 'active',
+          }),
+        }),
+      );
+    });
+
+    it('forces is_anonymous=false even if dto says true', async () => {
+      conversationRepository.findOne.mockResolvedValueOnce({
+        id: 'c1',
+        type: 'group',
+      });
+      memberRepository.findOne.mockResolvedValueOnce({
+        userId: 'u1',
+        conversationId: 'c1',
+      });
+      const savedPoll: any = {};
+      installTxMock(pollRepository, (mgr: any) => {
+        mgr.create = jest.fn().mockImplementation((_e: any, data: any) => {
+          Object.assign(savedPoll, data);
+          return data;
+        });
+        mgr.save = jest
+          .fn()
+          .mockImplementationOnce(async (_e: any, data: any) => ({
+            ...data,
+            id: 'p1',
+          }))
+          .mockImplementationOnce(async (_e: any, arr: any[]) =>
+            arr.map((o, i) => ({ ...o, id: `opt-${i}` })),
+          );
+      });
+      await service.createPoll('u1', 'c1', {
+        ...baseDto,
+        is_anonymous: true,
+      } as any);
+      expect(savedPoll.isAnonymous).toBe(false);
+    });
   });
 });

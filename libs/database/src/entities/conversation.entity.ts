@@ -9,6 +9,7 @@ import {
 import { User } from './user.entity';
 import { ConversationMember } from './conversation-member.entity';
 import { ConversationInvite } from './conversation-invite.entity';
+import { ConversationPoll } from './conversation-poll.entity';
 import { MediaFile } from './media-file.entity';
 import { ConversationType } from '@app/constant';
 import { BaseEntity } from '@libs/shared';
@@ -44,6 +45,9 @@ export class Conversation extends BaseEntity {
 
   @OneToMany(() => ConversationInvite, (invite) => invite.conversation)
   invites: ConversationInvite[];
+
+  @OneToMany(() => ConversationPoll, (poll) => poll.conversation)
+  polls: ConversationPoll[];
 
   @OneToMany(() => MediaFile, (media) => media.conversation)
   mediaFiles: MediaFile[];

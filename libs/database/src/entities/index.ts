@@ -18,3 +18,6 @@ export * from './ai-moderation-log.entity';
 export * from './ai-usage-log.entity';
 export * from './document-metadata.entity';
 export * from './document-chunk.entity';
+export * from './conversation-poll.entity';
+export * from './conversation-poll-option.entity';
+export * from './conversation-poll-vote.entity';

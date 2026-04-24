@@ -260,3 +260,40 @@ export interface ChatMessageUnpinnedEvent {
   unpinned_at: number;
   trace_id?: string;
 }
+
+export interface PollMessageMetadata {
+  poll_id: string;
+  question: string;
+  options: Array<{
+    option_id: string;
+    label: string;
+    order_index: number;
+    vote_count: number;
+  }>;
+  total_votes: number;
+  total_voters: number;
+  allow_multiple: boolean;
+  allow_add_option: boolean;
+  status: 'active' | 'closed';
+  expires_at: number | null;
+  closed_at: number | null;
+  closed_reason: 'by_creator' | 'by_admin' | 'expired' | null;
+}
+
+export interface ChatPollMessageCommand {
+  message_id: string;
+  conversation_id: string;
+  sender_id: string;
+  message_type: 'poll';
+  metadata: PollMessageMetadata;
+  body: string;
+  created_at: number;
+  trace_id: string;
+}
+
+export interface ChatPollMessageUpdatedEvent {
+  message_id: string;
+  conversation_id: string;
+  metadata: PollMessageMetadata;
+  trace_id: string;
+}

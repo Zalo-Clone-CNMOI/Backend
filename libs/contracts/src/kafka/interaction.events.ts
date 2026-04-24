@@ -171,3 +171,80 @@ export interface GroupInviteExpiredEvent {
   expired_at: number;
   trace_id?: string;
 }
+
+export interface ConversationPollCreatedEvent {
+  poll_id: string;
+  conversation_id: string;
+  creator_id: string;
+  question: string;
+  options: Array<{ option_id: string; label: string; order_index: number }>;
+  allow_multiple: boolean;
+  allow_add_option: boolean;
+  expires_at: number | null;
+  created_at: number;
+  message_id: string;
+  trace_id: string;
+}
+
+export interface ConversationPollVoteCastEvent {
+  poll_id: string;
+  conversation_id: string;
+  voter_id: string;
+  option_ids_added: string[];
+  option_ids_removed: string[];
+  voted_at: number;
+  trace_id: string;
+}
+
+export interface ConversationPollVoteRetractedEvent {
+  poll_id: string;
+  conversation_id: string;
+  voter_id: string;
+  retracted_at: number;
+  trace_id: string;
+}
+
+export interface ConversationPollOptionAddedEvent {
+  poll_id: string;
+  conversation_id: string;
+  option_id: string;
+  label: string;
+  order_index: number;
+  added_by_user_id: string;
+  added_at: number;
+  trace_id: string;
+}
+
+export interface ConversationPollEditedEvent {
+  poll_id: string;
+  conversation_id: string;
+  editor_user_id: string;
+  changes: {
+    question?: string;
+    allow_multiple?: boolean;
+    allow_add_option?: boolean;
+    expires_at?: number | null;
+    edited_option_labels?: Array<{ option_id: string; label: string }>;
+  };
+  edited_at: number;
+  trace_id: string;
+}
+
+export interface ConversationPollOptionRemovedEvent {
+  poll_id: string;
+  conversation_id: string;
+  option_id: string;
+  removed_by_user_id: string;
+  removed_at: number;
+  trace_id: string;
+}
+
+export interface ConversationPollClosedEvent {
+  poll_id: string;
+  conversation_id: string;
+  closed_by_user_id: string | null;
+  reason: 'by_creator' | 'by_admin' | 'expired';
+  final_tally: Array<{ option_id: string; vote_count: number }>;
+  closed_at: number;
+  trace_id: string;
+}

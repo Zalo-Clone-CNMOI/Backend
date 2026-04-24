@@ -123,10 +123,13 @@ export const ErrorMessage: Record<ErrorCode, string> = {
     'Adding new options is disabled for this poll.',
   [ErrorCode.POLL_OPTION_LIMIT_REACHED]:
     'Poll cannot have more than 20 options.',
+  [ErrorCode.POLL_MIN_OPTIONS_REQUIRED]:
+    'Poll must retain at least 2 options.',
   [ErrorCode.POLL_SINGLE_CHOICE_VIOLATION]:
     'This poll only allows a single option.',
   [ErrorCode.POLL_DUPLICATE_OPTION_LABEL]: 'Duplicate option label.',
-  [ErrorCode.POLL_PERMISSION_DENIED]: 'You do not have permission on this poll.',
+  [ErrorCode.POLL_PERMISSION_DENIED]:
+    'You do not have permission to perform this action on this poll.',
   [ErrorCode.POLL_CANNOT_EDIT_MULTIPLE_WITH_VOTES]:
     'Cannot change single/multi-choice after votes exist.',
   [ErrorCode.POLL_CANNOT_EDIT_OPTION_WITH_VOTES]:

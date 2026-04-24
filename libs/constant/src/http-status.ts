@@ -94,17 +94,18 @@ export const ErrorHttpStatus: Record<ErrorCode, HttpStatus> = {
 
   // ============== POLL ==============
   [ErrorCode.POLL_NOT_FOUND]: HttpStatus.NOT_FOUND,
-  [ErrorCode.POLL_CLOSED]: HttpStatus.BAD_REQUEST,
-  [ErrorCode.POLL_EXPIRED]: HttpStatus.BAD_REQUEST,
+  [ErrorCode.POLL_CLOSED]: HttpStatus.CONFLICT,
+  [ErrorCode.POLL_EXPIRED]: HttpStatus.CONFLICT,
   [ErrorCode.POLL_NOT_GROUP_CONVERSATION]: HttpStatus.BAD_REQUEST,
   [ErrorCode.POLL_INVALID_OPTION]: HttpStatus.BAD_REQUEST,
   [ErrorCode.POLL_ADD_OPTION_NOT_ALLOWED]: HttpStatus.FORBIDDEN,
   [ErrorCode.POLL_OPTION_LIMIT_REACHED]: HttpStatus.BAD_REQUEST,
+  [ErrorCode.POLL_MIN_OPTIONS_REQUIRED]: HttpStatus.CONFLICT,
   [ErrorCode.POLL_SINGLE_CHOICE_VIOLATION]: HttpStatus.BAD_REQUEST,
   [ErrorCode.POLL_DUPLICATE_OPTION_LABEL]: HttpStatus.CONFLICT,
   [ErrorCode.POLL_PERMISSION_DENIED]: HttpStatus.FORBIDDEN,
-  [ErrorCode.POLL_CANNOT_EDIT_MULTIPLE_WITH_VOTES]: HttpStatus.BAD_REQUEST,
-  [ErrorCode.POLL_CANNOT_EDIT_OPTION_WITH_VOTES]: HttpStatus.BAD_REQUEST,
+  [ErrorCode.POLL_CANNOT_EDIT_MULTIPLE_WITH_VOTES]: HttpStatus.CONFLICT,
+  [ErrorCode.POLL_CANNOT_EDIT_OPTION_WITH_VOTES]: HttpStatus.CONFLICT,
   [ErrorCode.POLL_EXPIRES_AT_IN_PAST]: HttpStatus.BAD_REQUEST,
   [ErrorCode.POLL_NO_EDIT_FIELDS]: HttpStatus.BAD_REQUEST,
 };

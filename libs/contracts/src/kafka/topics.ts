@@ -48,6 +48,16 @@ export const KafkaTopics = {
   GroupInviteCancelled: 'group.invite.cancelled',
   GroupInviteExpired: 'group.invite.expired',
 
+  ConversationPollCreated: 'conversation.poll.created',
+  ConversationPollEdited: 'conversation.poll.edited',
+  ConversationPollClosed: 'conversation.poll.closed',
+  ConversationPollVoteCast: 'conversation.poll.vote.cast',
+  ConversationPollVoteRetracted: 'conversation.poll.vote.retracted',
+  ConversationPollOptionAdded: 'conversation.poll.option.added',
+  ConversationPollOptionRemoved: 'conversation.poll.option.removed',
+  ChatPollMessageCreated: 'chat.poll-message.created',
+  ChatPollMessageUpdated: 'chat.poll-message.updated',
+
   PresenceConnect: 'presence.connect',
   PresenceDisconnect: 'presence.disconnect',
   PresenceHeartbeat: 'presence.heartbeat',

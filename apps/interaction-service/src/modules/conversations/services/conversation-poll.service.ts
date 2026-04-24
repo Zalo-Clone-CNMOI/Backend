@@ -83,6 +83,56 @@ export interface RemoveOptionResult {
   option_id: string;
 }
 
+export interface ListPollsQuery {
+  status?: PollStatus;
+  page?: number;
+  limit?: number;
+}
+
+export interface PollListItem {
+  poll_id: string;
+  conversation_id: string;
+  creator_id: string;
+  question: string;
+  status: PollStatus;
+  allow_multiple: boolean;
+  allow_add_option: boolean;
+  expires_at: number | null;
+  closed_at: number | null;
+  created_at: number | undefined;
+  options_count: number;
+}
+
+export interface ListPollsResult {
+  items: PollListItem[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface PollDetailOption {
+  option_id: string;
+  label: string;
+  order_index: number;
+  vote_count: number;
+  added_by_user_id: string | null;
+}
+
+export interface PollDetailResult {
+  poll_id: string;
+  conversation_id: string;
+  creator_id: string;
+  question: string;
+  status: PollStatus;
+  allow_multiple: boolean;
+  allow_add_option: boolean;
+  expires_at: number | null;
+  closed_at: number | null;
+  options: PollDetailOption[];
+  my_vote: string[];
+  total_votes: number;
+}
+
 @Injectable()
 export class ConversationPollService {
   private readonly logger = new Logger(ConversationPollService.name);
@@ -806,6 +856,159 @@ export class ConversationPollService {
     await this.metadataBuilder.emitUpdated(pollId, traceId);
 
     return { option_id: optionId };
+  }
+
+  /**
+   * List polls in a conversation with pagination + optional status filter.
+   *
+   * Preconditions:
+   *  - Caller must be an active member of the conversation. Non-members
+   *    get CONVERSATION_NOT_MEMBER (forbidden).
+   *
+   * Pagination is clamped: page >= 1, 1 <= limit <= 50 (default 20).
+   * Results are ordered by createdAt DESC. Each item's `options_count`
+   * excludes soft-deleted options.
+   */
+  async listPolls(
+    userId: string,
+    conversationId: string,
+    query: ListPollsQuery,
+  ): Promise<ListPollsResult> {
+    const membership = await this.memberRepo.findOne({
+      where: {
+        conversationId,
+        userId,
+        leftAt: IsNull(),
+      },
+    });
+
+    if (!membership) {
+      throw BusinessException.forbidden(ErrorCode.CONVERSATION_NOT_MEMBER);
+    }
+
+    const page = Math.max(1, query.page ?? 1);
+    const limit = Math.min(50, Math.max(1, query.limit ?? 20));
+
+    const [rows, total] = await this.pollRepo.findAndCount({
+      where: {
+        conversationId,
+        ...(query.status ? { status: query.status } : {}),
+      },
+      relations: ['options'],
+      order: { createdAt: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+
+    const items: PollListItem[] = rows.map((p) => ({
+      poll_id: p.id,
+      conversation_id: p.conversationId,
+      creator_id: p.creatorId,
+      question: p.question,
+      status: p.status,
+      allow_multiple: p.allowMultiple,
+      allow_add_option: p.allowAddOption,
+      expires_at: p.expiresAt?.getTime() ?? null,
+      closed_at: p.closedAt?.getTime() ?? null,
+      created_at: p.createdAt?.getTime(),
+      options_count: (p.options ?? []).filter((o) => !o.deletedAt).length,
+    }));
+
+    return { items, total, page, limit };
+  }
+
+  /**
+   * Return full detail for a single poll — options (with tally), caller's
+   * votes, and total_votes.
+   *
+   * Preconditions:
+   *  - Poll must exist (else POLL_NOT_FOUND).
+   *  - Caller must be an active member of the poll's conversation
+   *    (else CONVERSATION_NOT_MEMBER forbidden).
+   *
+   * Soft-deleted options are filtered out. `my_vote` contains the
+   * optionIds the caller has voted for (empty array when none).
+   * `total_votes` is the sum of per-option vote counts across active
+   * (non-deleted) options — note: votes attached to soft-deleted options
+   * are excluded from the visible tally.
+   */
+  async getPollDetail(
+    userId: string,
+    pollId: string,
+  ): Promise<PollDetailResult> {
+    const poll = await this.pollRepo.findOne({
+      where: { id: pollId },
+      relations: ['options'],
+    });
+
+    if (!poll) {
+      throw new BusinessException(
+        ErrorCode.POLL_NOT_FOUND,
+        ErrorCode.POLL_NOT_FOUND,
+      );
+    }
+
+    const membership = await this.memberRepo.findOne({
+      where: {
+        conversationId: poll.conversationId,
+        userId,
+        leftAt: IsNull(),
+      },
+    });
+
+    if (!membership) {
+      throw BusinessException.forbidden(ErrorCode.CONVERSATION_NOT_MEMBER);
+    }
+
+    const myVotes = await this.voteRepo.find({ where: { pollId, userId } });
+    const tally = await this.loadTally(pollId);
+
+    const options: PollDetailOption[] = (poll.options ?? [])
+      .filter((o) => !o.deletedAt)
+      .map((o) => ({
+        option_id: o.id,
+        label: o.label,
+        order_index: o.orderIndex,
+        vote_count: tally.get(o.id) ?? 0,
+        added_by_user_id: o.addedByUserId,
+      }))
+      .sort((a, b) => a.order_index - b.order_index);
+
+    const total_votes = options.reduce((sum, o) => sum + o.vote_count, 0);
+
+    return {
+      poll_id: poll.id,
+      conversation_id: poll.conversationId,
+      creator_id: poll.creatorId,
+      question: poll.question,
+      status: poll.status,
+      allow_multiple: poll.allowMultiple,
+      allow_add_option: poll.allowAddOption,
+      expires_at: poll.expiresAt?.getTime() ?? null,
+      closed_at: poll.closedAt?.getTime() ?? null,
+      options,
+      my_vote: myVotes.map((v) => v.optionId),
+      total_votes,
+    };
+  }
+
+  /**
+   * Load per-option vote counts for a poll.
+   *
+   * Returns a Map keyed by option_id with the vote count as a number.
+   * Options with zero votes are absent from the map (callers should
+   * fall back to 0).
+   */
+  private async loadTally(pollId: string): Promise<Map<string, number>> {
+    const rows = await this.pollRepo.manager
+      .createQueryBuilder()
+      .select('option_id', 'option_id')
+      .addSelect('COUNT(*)', 'count')
+      .from('conversation_poll_votes', 'v')
+      .where('v.poll_id = :pid', { pid: pollId })
+      .groupBy('option_id')
+      .getRawMany<{ option_id: string; count: string }>();
+    return new Map(rows.map((r) => [r.option_id, Number(r.count)]));
   }
 
   /**

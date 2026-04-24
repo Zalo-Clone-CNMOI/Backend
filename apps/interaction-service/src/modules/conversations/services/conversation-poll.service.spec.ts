@@ -79,6 +79,7 @@ describe('ConversationPollService', () => {
       update: jest.fn().mockResolvedValue({ affected: 1 }),
       insert: jest.fn().mockResolvedValue({}),
       delete: jest.fn().mockResolvedValue({ affected: 1 }),
+      softDelete: jest.fn().mockResolvedValue({ affected: 1, raw: [], generatedMaps: [] }),
       createQueryBuilder: jest.fn(),
       manager: {
         transaction: jest.fn(),
@@ -931,6 +932,168 @@ describe('ConversationPollService', () => {
         expect.objectContaining({
           changes: expect.objectContaining({ expires_at: null }),
         }),
+      );
+    });
+  });
+
+  describe('removeOption', () => {
+    it('rejects poll not found', async () => {
+      pollRepository.findOne.mockResolvedValueOnce(null);
+      await expect(
+        service.removeOption('u1', 'p1', 'o1'),
+      ).rejects.toMatchObject({
+        response: { error: { message: 'POLL_NOT_FOUND' } },
+      });
+    });
+
+    it('rejects non-creator', async () => {
+      pollRepository.findOne.mockResolvedValueOnce({
+        id: 'p1',
+        creatorId: 'other',
+        conversationId: 'c1',
+        status: 'active',
+      });
+      await expect(
+        service.removeOption('u1', 'p1', 'o1'),
+      ).rejects.toMatchObject({
+        response: { error: { message: 'POLL_PERMISSION_DENIED' } },
+      });
+    });
+
+    it('rejects when poll closed', async () => {
+      pollRepository.findOne.mockResolvedValueOnce({
+        id: 'p1',
+        creatorId: 'u1',
+        conversationId: 'c1',
+        status: 'closed',
+      });
+      await expect(
+        service.removeOption('u1', 'p1', 'o1'),
+      ).rejects.toMatchObject({
+        response: { error: { message: 'POLL_CLOSED' } },
+      });
+    });
+
+    it('rejects when option not found in poll', async () => {
+      pollRepository.findOne.mockResolvedValueOnce({
+        id: 'p1',
+        creatorId: 'u1',
+        conversationId: 'c1',
+        status: 'active',
+      });
+      optionRepository.findOne.mockResolvedValueOnce(null);
+      await expect(
+        service.removeOption('u1', 'p1', 'ghost'),
+      ).rejects.toMatchObject({
+        response: { error: { message: 'POLL_INVALID_OPTION' } },
+      });
+    });
+
+    it('rejects when option has votes', async () => {
+      pollRepository.findOne.mockResolvedValueOnce({
+        id: 'p1',
+        creatorId: 'u1',
+        conversationId: 'c1',
+        status: 'active',
+      });
+      optionRepository.findOne.mockResolvedValueOnce({
+        id: 'o1',
+        pollId: 'p1',
+        deletedAt: null,
+      });
+      voteRepository.count.mockResolvedValueOnce(1);
+      await expect(
+        service.removeOption('u1', 'p1', 'o1'),
+      ).rejects.toMatchObject({
+        response: { error: { message: 'POLL_CANNOT_EDIT_OPTION_WITH_VOTES' } },
+      });
+    });
+
+    it('rejects when removing would leave < 2 options', async () => {
+      pollRepository.findOne.mockResolvedValueOnce({
+        id: 'p1',
+        creatorId: 'u1',
+        conversationId: 'c1',
+        status: 'active',
+      });
+      optionRepository.findOne.mockResolvedValueOnce({
+        id: 'o1',
+        pollId: 'p1',
+        deletedAt: null,
+      });
+      voteRepository.count.mockResolvedValueOnce(0);
+      optionRepository.count.mockResolvedValueOnce(2);
+      await expect(
+        service.removeOption('u1', 'p1', 'o1'),
+      ).rejects.toMatchObject({
+        response: { error: { message: 'POLL_MIN_OPTIONS_REQUIRED' } },
+      });
+    });
+
+    it('soft-deletes and emits events when valid', async () => {
+      pollRepository.findOne
+        .mockResolvedValueOnce({
+          id: 'p1',
+          creatorId: 'u1',
+          conversationId: 'c1',
+          status: 'active',
+          messageId: 'm1',
+        })
+        .mockResolvedValueOnce({
+          id: 'p1',
+          conversationId: 'c1',
+          messageId: 'm1',
+          options: [],
+          question: 'q',
+          allowMultiple: false,
+          allowAddOption: false,
+          isAnonymous: false,
+          status: 'active',
+          expiresAt: null,
+          closedAt: null,
+          closedReason: null,
+        });
+      optionRepository.findOne.mockResolvedValueOnce({
+        id: 'o1',
+        pollId: 'p1',
+        deletedAt: null,
+      });
+      voteRepository.count.mockResolvedValueOnce(0);
+      optionRepository.count.mockResolvedValueOnce(3);
+      optionRepository.softDelete.mockResolvedValueOnce({
+        affected: 1,
+        raw: [],
+        generatedMaps: [],
+      } as any);
+      (pollRepository.manager as any).createQueryBuilder = jest
+        .fn()
+        .mockReturnValue({
+          select: () => ({
+            addSelect: () => ({
+              from: () => ({
+                where: () => ({
+                  groupBy: () => ({ getRawMany: async () => [] }),
+                  getRawOne: async () => ({ n: '0' }),
+                }),
+              }),
+            }),
+          }),
+        });
+
+      const r = await service.removeOption('u1', 'p1', 'o1');
+      expect(r).toEqual({ option_id: 'o1' });
+      expect(optionRepository.softDelete).toHaveBeenCalledWith({ id: 'o1' });
+      expect(outbox.publishToTopic).toHaveBeenCalledWith(
+        'conversation.poll.option.removed',
+        expect.objectContaining({
+          poll_id: 'p1',
+          option_id: 'o1',
+          removed_by_user_id: 'u1',
+        }),
+      );
+      expect(outbox.publishToTopic).toHaveBeenCalledWith(
+        'chat.poll-message.updated',
+        expect.any(Object),
       );
     });
   });

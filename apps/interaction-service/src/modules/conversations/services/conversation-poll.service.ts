@@ -28,6 +28,7 @@ import {
   type ConversationPollCreatedEvent,
   type ConversationPollEditedEvent,
   type ConversationPollOptionAddedEvent,
+  type ConversationPollOptionRemovedEvent,
   type PollMessageMetadata,
 } from '@libs/contracts';
 import {
@@ -76,6 +77,10 @@ export interface EditPollDto {
 export interface EditPollResult {
   poll_id: string;
   edited_at: number;
+}
+
+export interface RemoveOptionResult {
+  option_id: string;
 }
 
 @Injectable()
@@ -704,6 +709,102 @@ export class ConversationPollService {
       poll_id: pollId,
       edited_at: editedAt.getTime(),
     };
+  }
+
+  /**
+   * Soft-delete an option from an active poll.
+   *
+   * Preconditions:
+   *  - Poll must exist (else POLL_NOT_FOUND).
+   *  - Caller must be the creator (else POLL_PERMISSION_DENIED).
+   *  - Poll must be ACTIVE (else POLL_CLOSED).
+   *  - Option must belong to the poll and not already be soft-deleted
+   *    (else POLL_INVALID_OPTION).
+   *  - Option must have zero votes
+   *    (else POLL_CANNOT_EDIT_OPTION_WITH_VOTES).
+   *  - Removing this option must not drop the active option count below
+   *    POLL_LIMITS.MIN_OPTIONS (else POLL_MIN_OPTIONS_REQUIRED).
+   *
+   * Side effects (post-commit):
+   *  - KafkaTopics.ConversationPollOptionRemoved outbox event.
+   *  - KafkaTopics.ChatPollMessageUpdated outbox event (refreshed metadata).
+   */
+  async removeOption(
+    userId: string,
+    pollId: string,
+    optionId: string,
+  ): Promise<RemoveOptionResult> {
+    const poll = await this.pollRepo.findOne({ where: { id: pollId } });
+    if (!poll) {
+      throw new BusinessException(
+        ErrorCode.POLL_NOT_FOUND,
+        ErrorCode.POLL_NOT_FOUND,
+      );
+    }
+
+    if (poll.creatorId !== userId) {
+      throw new BusinessException(
+        ErrorCode.POLL_PERMISSION_DENIED,
+        ErrorCode.POLL_PERMISSION_DENIED,
+      );
+    }
+
+    if (poll.status !== PollStatus.ACTIVE) {
+      throw new BusinessException(
+        ErrorCode.POLL_CLOSED,
+        ErrorCode.POLL_CLOSED,
+      );
+    }
+
+    const option = await this.optionRepo.findOne({
+      where: {
+        id: optionId,
+        pollId,
+        deletedAt: IsNull() as unknown as Date,
+      },
+    });
+    if (!option) {
+      throw BusinessException.badRequest(ErrorCode.POLL_INVALID_OPTION);
+    }
+
+    const optionVotes = await this.voteRepo.count({
+      where: { pollId, optionId },
+    });
+    if (optionVotes > 0) {
+      throw BusinessException.conflict(
+        ErrorCode.POLL_CANNOT_EDIT_OPTION_WITH_VOTES,
+      );
+    }
+
+    const activeOptionCount = await this.optionRepo.count({
+      where: { pollId, deletedAt: IsNull() as unknown as Date },
+    });
+    if (activeOptionCount <= POLL_LIMITS.MIN_OPTIONS) {
+      throw BusinessException.conflict(ErrorCode.POLL_MIN_OPTIONS_REQUIRED);
+    }
+
+    await this.optionRepo.softDelete({ id: optionId });
+
+    const removedAtMs = Date.now();
+    const traceId = `conversation-poll-option-removed:${optionId}:${removedAtMs}`;
+
+    const optionRemovedEvent: ConversationPollOptionRemovedEvent = {
+      poll_id: pollId,
+      conversation_id: poll.conversationId,
+      option_id: optionId,
+      removed_by_user_id: userId,
+      removed_at: removedAtMs,
+      trace_id: traceId,
+    };
+
+    await this.outbox.publishToTopic(
+      KafkaTopics.ConversationPollOptionRemoved,
+      optionRemovedEvent,
+    );
+
+    await this.emitMessageUpdate(pollId, traceId);
+
+    return { option_id: optionId };
   }
 
   /**

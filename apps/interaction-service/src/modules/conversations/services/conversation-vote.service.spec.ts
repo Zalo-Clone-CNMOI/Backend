@@ -373,4 +373,76 @@ describe('ConversationVoteService', () => {
       expect(r.option_ids_added).toEqual(['o1']);
     });
   });
+
+  describe('retractVote', () => {
+    it('rejects poll not found', async () => {
+      pollRepo.findOne.mockResolvedValueOnce(null);
+      await expect(service.retractVote('u1', 'p1')).rejects.toMatchObject({
+        response: { error: { message: 'POLL_NOT_FOUND' } },
+      });
+    });
+
+    it('rejects when poll closed', async () => {
+      pollRepo.findOne.mockResolvedValueOnce({
+        id: 'p1',
+        status: 'closed',
+        conversationId: 'c1',
+      });
+      await expect(service.retractVote('u1', 'p1')).rejects.toMatchObject({
+        response: { error: { message: 'POLL_CLOSED' } },
+      });
+    });
+
+    it('rejects non-member', async () => {
+      pollRepo.findOne.mockResolvedValueOnce({
+        id: 'p1',
+        status: 'active',
+        conversationId: 'c1',
+      });
+      memberRepo.findOne.mockResolvedValueOnce(null);
+      await expect(service.retractVote('u1', 'p1')).rejects.toMatchObject({
+        response: { error: { message: 'CONVERSATION_NOT_MEMBER' } },
+      });
+    });
+
+    it('deletes all user votes and emits event', async () => {
+      pollRepo.findOne.mockResolvedValueOnce({
+        id: 'p1',
+        status: 'active',
+        conversationId: 'c1',
+      });
+      memberRepo.findOne.mockResolvedValueOnce({ userId: 'u1' });
+      voteRepo.delete.mockResolvedValueOnce({ affected: 2, raw: [] } as any);
+
+      const r = await service.retractVote('u1', 'p1');
+      expect(r).toEqual({ poll_id: 'p1', deleted: 2 });
+      expect(outbox.publishToTopic).toHaveBeenCalledWith(
+        'conversation.poll.vote.retracted',
+        expect.objectContaining({
+          poll_id: 'p1',
+          conversation_id: 'c1',
+          voter_id: 'u1',
+        }),
+      );
+      expect(metadataBuilder.emitUpdated).toHaveBeenCalledWith(
+        'p1',
+        expect.any(String),
+      );
+    });
+
+    it('is no-op when user has no votes', async () => {
+      pollRepo.findOne.mockResolvedValueOnce({
+        id: 'p1',
+        status: 'active',
+        conversationId: 'c1',
+      });
+      memberRepo.findOne.mockResolvedValueOnce({ userId: 'u1' });
+      voteRepo.delete.mockResolvedValueOnce({ affected: 0, raw: [] } as any);
+
+      const r = await service.retractVote('u1', 'p1');
+      expect(r).toEqual({ poll_id: 'p1', deleted: 0 });
+      expect(outbox.publishToTopic).not.toHaveBeenCalled();
+      expect(metadataBuilder.emitUpdated).not.toHaveBeenCalled();
+    });
+  });
 });

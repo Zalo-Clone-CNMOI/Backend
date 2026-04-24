@@ -21,6 +21,7 @@ import {
   type ConversationPollOptionAddedEvent,
   type ConversationPollOptionRemovedEvent,
   type ConversationPollVoteCastEvent,
+  type ConversationPollVoteRetractedEvent,
   type GroupInviteAcceptedEvent,
   type GroupInviteCancelledEvent,
   type GroupInviteExpiredEvent,
@@ -61,6 +62,7 @@ type OutboxTopicPayloadMap = {
   [KafkaTopics.ConversationPollOptionRemoved]: ConversationPollOptionRemovedEvent;
   [KafkaTopics.ConversationPollEdited]: ConversationPollEditedEvent;
   [KafkaTopics.ConversationPollVoteCast]: ConversationPollVoteCastEvent;
+  [KafkaTopics.ConversationPollVoteRetracted]: ConversationPollVoteRetractedEvent;
   [KafkaTopics.ChatPollMessageCreated]: ChatPollMessageCommand;
   [KafkaTopics.ChatPollMessageUpdated]: ChatPollMessageUpdatedEvent;
 };

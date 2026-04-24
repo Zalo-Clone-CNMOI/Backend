@@ -25,6 +25,7 @@ import {
   KafkaTopics,
   type ConversationPollClosedEvent,
   type ConversationPollVoteCastEvent,
+  type ConversationPollVoteRetractedEvent,
 } from '@libs/contracts';
 import { NotificationOutboxPublisher } from '@libs/kafka/publisher/notification-outbox.publisher';
 import { PollMetadataBuilder } from './poll-metadata.builder';
@@ -33,6 +34,11 @@ export interface CastVoteResult {
   poll_id: string;
   option_ids_added: string[];
   option_ids_removed: string[];
+}
+
+export interface RetractVoteResult {
+  poll_id: string;
+  deleted: number;
 }
 
 /**
@@ -275,6 +281,75 @@ export class ConversationVoteService {
       poll_id: pollId,
       option_ids_added: normal.added,
       option_ids_removed: normal.removed,
+    };
+  }
+
+  /**
+   * Retract all of `userId`'s votes in the given poll.
+   *
+   * Semantics:
+   *  - Poll must exist (POLL_NOT_FOUND) and be ACTIVE (POLL_CLOSED).
+   *  - Caller must be a current conversation member (CONVERSATION_NOT_MEMBER).
+   *  - Deletes every vote row for (pollId, userId). Tally is implicit —
+   *    downstream metadata rebuild reads the live DB state.
+   *  - If nothing was deleted (user had no votes), the call is a no-op: no
+   *    event is emitted and the metadata card is not republished. The caller
+   *    still gets `{ deleted: 0 }` so the API is idempotent.
+   *
+   * Post-commit side effects (only when `affected > 0`):
+   *  - KafkaTopics.ConversationPollVoteRetracted outbox event.
+   *  - `PollMetadataBuilder.emitUpdated(pollId, traceId)` refreshes the
+   *    chat-message metadata card.
+   */
+  async retractVote(
+    userId: string,
+    pollId: string,
+  ): Promise<RetractVoteResult> {
+    const poll = await this.pollRepo.findOne({ where: { id: pollId } });
+    if (!poll) {
+      throw new BusinessException(
+        ErrorCode.POLL_NOT_FOUND,
+        ErrorCode.POLL_NOT_FOUND,
+      );
+    }
+
+    if (poll.status !== PollStatus.ACTIVE) {
+      throw BusinessException.conflict(ErrorCode.POLL_CLOSED);
+    }
+
+    const membership = await this.memberRepo.findOne({
+      where: {
+        conversationId: poll.conversationId,
+        userId,
+        leftAt: IsNull(),
+      },
+    });
+    if (!membership) {
+      throw BusinessException.forbidden(ErrorCode.CONVERSATION_NOT_MEMBER);
+    }
+
+    const deleteResult = await this.voteRepo.delete({ pollId, userId });
+    const affected = deleteResult.affected ?? 0;
+
+    if (affected > 0) {
+      const traceId = randomUUID();
+      const retractedEvent: ConversationPollVoteRetractedEvent = {
+        poll_id: pollId,
+        conversation_id: poll.conversationId,
+        voter_id: userId,
+        retracted_at: Date.now(),
+        trace_id: traceId,
+      };
+      await this.outbox.publishToTopic(
+        KafkaTopics.ConversationPollVoteRetracted,
+        retractedEvent,
+      );
+      await this.metadataBuilder.emitUpdated(pollId, traceId);
+    }
+
+    return {
+      poll_id: pollId,
+      deleted: affected,
     };
   }
 }

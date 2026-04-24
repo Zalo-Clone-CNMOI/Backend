@@ -5,6 +5,9 @@ import {
   Conversation,
   ConversationMember,
   ConversationInvite,
+  ConversationPoll,
+  ConversationPollOption,
+  ConversationPollVote,
 } from '@libs/database/entities';
 import { KafkaModule, NotificationOutboxModule } from '@libs/kafka';
 import { ConversationsController } from './conversations.controller';
@@ -12,6 +15,7 @@ import { ConversationsService } from './conversations.service';
 import { ConversationCoreService } from './services/conversation-core.service';
 import { ConversationMemberService } from './services/conversation-member.service';
 import { GroupInviteService } from './services/group-invite.service';
+import { ConversationPollService } from './services/conversation-poll.service';
 
 @Module({
   imports: [
@@ -20,6 +24,9 @@ import { GroupInviteService } from './services/group-invite.service';
       Conversation,
       ConversationMember,
       ConversationInvite,
+      ConversationPoll,
+      ConversationPollOption,
+      ConversationPollVote,
     ]),
     KafkaModule,
     NotificationOutboxModule,
@@ -30,6 +37,7 @@ import { GroupInviteService } from './services/group-invite.service';
     ConversationCoreService,
     ConversationMemberService,
     GroupInviteService,
+    ConversationPollService,
   ],
   exports: [ConversationsService],
 })

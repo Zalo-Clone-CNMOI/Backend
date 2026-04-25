@@ -1,6 +1,6 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
 import { Public } from '@app/decorator';
-import { CallHistoryService } from './call-history.service';
+import { CallHistoryService, PaginatedCallSessions } from './call-history.service';
 
 @Controller('conversations/:conversationId/calls')
 @Public()
@@ -8,11 +8,11 @@ export class CallHistoryController {
   constructor(private readonly callHistoryService: CallHistoryService) {}
 
   @Get()
-  list(
+  async list(
     @Param('conversationId') conversationId: string,
     @Query('page') page = 1,
     @Query('limit') limit = 20,
-  ) {
+  ): Promise<PaginatedCallSessions> {
     return this.callHistoryService.listForConversation(
       conversationId,
       Number(page),

@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common';
-import { JwtModule } from '@nestjs/jwt';
 import { KafkaModule } from '@libs/kafka';
 import { ConversationMembershipModule } from '@libs/mvp-access';
 import { CallConsumer } from './call.consumer';
@@ -10,7 +9,7 @@ import { IceServerService } from './ice-server.service';
 import { IceServerController } from './ice-server.controller';
 
 @Module({
-  imports: [KafkaModule, ConversationMembershipModule, JwtModule.register({})],
+  imports: [KafkaModule, ConversationMembershipModule],
   controllers: [CallConsumer, IceServerController],
   providers: [
     CallStateStore,

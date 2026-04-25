@@ -1,19 +1,14 @@
 import { Controller, Get } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-import { AccessToken } from '@app/decorator';
+import { CurrentUser } from '@app/decorator';
+import type { AuthenticatedUser } from '@app/types';
 import { IceServerService } from './ice-server.service';
 
 @Controller('calls')
 export class IceServerController {
-  constructor(
-    private readonly iceServerService: IceServerService,
-    private readonly jwt: JwtService,
-  ) {}
+  constructor(private readonly iceServerService: IceServerService) {}
 
   @Get('ice-servers')
-  getIceServers(@AccessToken() token: string) {
-    const payload = this.jwt.decode(token) as { sub: string };
-    const userId = payload?.sub ?? 'unknown';
-    return this.iceServerService.getIceServers(userId);
+  getIceServers(@CurrentUser() user: AuthenticatedUser) {
+    return this.iceServerService.getIceServers(user.id);
   }
 }

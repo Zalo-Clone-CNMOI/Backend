@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-argument */
 /**
  * @file conversation-vote.service.spec.ts (interaction-service)
  *
@@ -146,9 +146,7 @@ describe('ConversationVoteService', () => {
       installTxMock(pollRepo, (mgr: any) => {
         mgr.findOne = jest.fn().mockResolvedValueOnce(null);
       });
-      await expect(
-        service.castVote('u1', 'p1', ['o1']),
-      ).rejects.toMatchObject({
+      await expect(service.castVote('u1', 'p1', ['o1'])).rejects.toMatchObject({
         response: { error: { message: 'POLL_NOT_FOUND' } },
       });
     });
@@ -162,9 +160,7 @@ describe('ConversationVoteService', () => {
           conversationId: 'c1',
         });
       });
-      await expect(
-        service.castVote('u1', 'p1', ['o1']),
-      ).rejects.toMatchObject({
+      await expect(service.castVote('u1', 'p1', ['o1'])).rejects.toMatchObject({
         response: { error: { message: 'POLL_CLOSED' } },
       });
     });
@@ -180,9 +176,7 @@ describe('ConversationVoteService', () => {
         });
         mgr.update = jest.fn().mockResolvedValueOnce({ affected: 1 });
       });
-      await expect(
-        service.castVote('u1', 'p1', ['o1']),
-      ).rejects.toMatchObject({
+      await expect(service.castVote('u1', 'p1', ['o1'])).rejects.toMatchObject({
         response: { error: { message: 'POLL_EXPIRED' } },
       });
       expect(outbox.publishToTopic).toHaveBeenCalledWith(
@@ -226,9 +220,7 @@ describe('ConversationVoteService', () => {
         });
       });
       memberRepo.findOne.mockResolvedValueOnce(null);
-      await expect(
-        service.castVote('u1', 'p1', ['o1']),
-      ).rejects.toMatchObject({
+      await expect(service.castVote('u1', 'p1', ['o1'])).rejects.toMatchObject({
         response: { error: { message: 'CONVERSATION_NOT_MEMBER' } },
       });
     });
@@ -316,10 +308,7 @@ describe('ConversationVoteService', () => {
           .mockResolvedValueOnce([{ id: 'o1' }, { id: 'o2' }, { id: 'o3' }]);
         mgr.query = jest
           .fn()
-          .mockResolvedValueOnce([
-            { option_id: 'o1' },
-            { option_id: 'o2' },
-          ]) // current: o1, o2
+          .mockResolvedValueOnce([{ option_id: 'o1' }, { option_id: 'o2' }]) // current: o1, o2
           .mockResolvedValueOnce(undefined); // DELETE
         mgr.createQueryBuilder = jest.fn().mockReturnValue({
           insert: () => ({

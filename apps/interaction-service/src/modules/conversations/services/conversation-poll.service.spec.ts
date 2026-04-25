@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-argument, @typescript-eslint/require-await */
 /**
  * @file conversation-poll.service.spec.ts (interaction-service)
  *
@@ -50,10 +50,12 @@ export const installTxMock = (
   };
 
   (repo as any).manager = {
-    transaction: jest.fn().mockImplementation(async (cb: (m: unknown) => unknown) => {
-      if (configure) await configure(mockManager);
-      return cb(mockManager);
-    }),
+    transaction: jest
+      .fn()
+      .mockImplementation(async (cb: (m: unknown) => unknown) => {
+        if (configure) await configure(mockManager);
+        return cb(mockManager);
+      }),
   };
 
   return { mockManager };
@@ -83,7 +85,9 @@ describe('ConversationPollService', () => {
       update: jest.fn().mockResolvedValue({ affected: 1 }),
       insert: jest.fn().mockResolvedValue({}),
       delete: jest.fn().mockResolvedValue({ affected: 1 }),
-      softDelete: jest.fn().mockResolvedValue({ affected: 1, raw: [], generatedMaps: [] }),
+      softDelete: jest
+        .fn()
+        .mockResolvedValue({ affected: 1, raw: [], generatedMaps: [] }),
       createQueryBuilder: jest.fn(),
       manager: {
         transaction: jest.fn(),
@@ -693,18 +697,14 @@ describe('ConversationPollService', () => {
 
   describe('addOption', () => {
     it('rejects empty label', async () => {
-      await expect(
-        service.addOption('u1', 'p1', '   '),
-      ).rejects.toMatchObject({
+      await expect(service.addOption('u1', 'p1', '   ')).rejects.toMatchObject({
         response: { error: { message: 'VALIDATION_ERROR' } },
       });
     });
 
     it('rejects poll not found', async () => {
       pollRepository.findOne.mockResolvedValueOnce(null);
-      await expect(
-        service.addOption('u1', 'p1', 'new'),
-      ).rejects.toMatchObject({
+      await expect(service.addOption('u1', 'p1', 'new')).rejects.toMatchObject({
         response: { error: { message: 'POLL_NOT_FOUND' } },
       });
     });
@@ -716,9 +716,7 @@ describe('ConversationPollService', () => {
         allowAddOption: true,
         conversationId: 'c1',
       });
-      await expect(
-        service.addOption('u1', 'p1', 'new'),
-      ).rejects.toMatchObject({
+      await expect(service.addOption('u1', 'p1', 'new')).rejects.toMatchObject({
         response: { error: { message: 'POLL_CLOSED' } },
       });
     });
@@ -730,9 +728,7 @@ describe('ConversationPollService', () => {
         allowAddOption: false,
         conversationId: 'c1',
       });
-      await expect(
-        service.addOption('u1', 'p1', 'new'),
-      ).rejects.toMatchObject({
+      await expect(service.addOption('u1', 'p1', 'new')).rejects.toMatchObject({
         response: { error: { message: 'POLL_ADD_OPTION_NOT_ALLOWED' } },
       });
     });
@@ -745,9 +741,7 @@ describe('ConversationPollService', () => {
         conversationId: 'c1',
       });
       memberRepository.findOne.mockResolvedValueOnce(null);
-      await expect(
-        service.addOption('u1', 'p1', 'new'),
-      ).rejects.toMatchObject({
+      await expect(service.addOption('u1', 'p1', 'new')).rejects.toMatchObject({
         response: { error: { message: 'CONVERSATION_NOT_MEMBER' } },
       });
     });
@@ -761,9 +755,7 @@ describe('ConversationPollService', () => {
       });
       memberRepository.findOne.mockResolvedValueOnce({ userId: 'u1' });
       optionRepository.count.mockResolvedValueOnce(20);
-      await expect(
-        service.addOption('u1', 'p1', 'new'),
-      ).rejects.toMatchObject({
+      await expect(service.addOption('u1', 'p1', 'new')).rejects.toMatchObject({
         response: { error: { message: 'POLL_OPTION_LIMIT_REACHED' } },
       });
     });
@@ -822,9 +814,7 @@ describe('ConversationPollService', () => {
       const err: any = new Error('duplicate');
       err.code = '23505';
       optionRepository.save.mockRejectedValueOnce(err);
-      await expect(
-        service.addOption('u1', 'p1', 'dup'),
-      ).rejects.toMatchObject({
+      await expect(service.addOption('u1', 'p1', 'dup')).rejects.toMatchObject({
         response: { error: { message: 'POLL_DUPLICATE_OPTION_LABEL' } },
       });
     });
@@ -1162,9 +1152,7 @@ describe('ConversationPollService', () => {
   describe('listPolls', () => {
     it('rejects non-member', async () => {
       memberRepository.findOne.mockResolvedValueOnce(null);
-      await expect(
-        service.listPolls('u1', 'c1', {}),
-      ).rejects.toMatchObject({
+      await expect(service.listPolls('u1', 'c1', {})).rejects.toMatchObject({
         response: { error: { message: 'CONVERSATION_NOT_MEMBER' } },
       });
     });
@@ -1240,9 +1228,7 @@ describe('ConversationPollService', () => {
   describe('getPollDetail', () => {
     it('rejects poll not found', async () => {
       pollRepository.findOne.mockResolvedValueOnce(null);
-      await expect(
-        service.getPollDetail('u1', 'p1'),
-      ).rejects.toMatchObject({
+      await expect(service.getPollDetail('u1', 'p1')).rejects.toMatchObject({
         response: { error: { message: 'POLL_NOT_FOUND' } },
       });
     });
@@ -1254,9 +1240,7 @@ describe('ConversationPollService', () => {
         options: [],
       });
       memberRepository.findOne.mockResolvedValueOnce(null);
-      await expect(
-        service.getPollDetail('u1', 'p1'),
-      ).rejects.toMatchObject({
+      await expect(service.getPollDetail('u1', 'p1')).rejects.toMatchObject({
         response: { error: { message: 'CONVERSATION_NOT_MEMBER' } },
       });
     });
@@ -1294,24 +1278,22 @@ describe('ConversationPollService', () => {
       voteRepository.find.mockResolvedValueOnce([
         { optionId: 'o1', userId: 'u1', pollId: 'p1' },
       ] as any);
-      (pollRepository.manager as any).createQueryBuilder = jest
-        .fn()
-        .mockReturnValue({
-          select: () => ({
-            addSelect: () => ({
-              from: () => ({
-                where: () => ({
-                  groupBy: () => ({
-                    getRawMany: async () => [
-                      { option_id: 'o1', count: '3' },
-                      { option_id: 'o2', count: '1' },
-                    ],
-                  }),
+      pollRepository.manager.createQueryBuilder = jest.fn().mockReturnValue({
+        select: () => ({
+          addSelect: () => ({
+            from: () => ({
+              where: () => ({
+                groupBy: () => ({
+                  getRawMany: async () => [
+                    { option_id: 'o1', count: '3' },
+                    { option_id: 'o2', count: '1' },
+                  ],
                 }),
               }),
             }),
           }),
-        });
+        }),
+      });
 
       const r = await service.getPollDetail('u1', 'p1');
       expect(r.poll_id).toBe('p1');
@@ -1365,19 +1347,17 @@ describe('ConversationPollService', () => {
       } as any);
       memberRepository.findOne.mockResolvedValueOnce({ userId: 'u1' });
       voteRepository.find.mockResolvedValueOnce([]);
-      (pollRepository.manager as any).createQueryBuilder = jest
-        .fn()
-        .mockReturnValue({
-          select: () => ({
-            addSelect: () => ({
-              from: () => ({
-                where: () => ({
-                  groupBy: () => ({ getRawMany: async () => [] }),
-                }),
+      pollRepository.manager.createQueryBuilder = jest.fn().mockReturnValue({
+        select: () => ({
+          addSelect: () => ({
+            from: () => ({
+              where: () => ({
+                groupBy: () => ({ getRawMany: async () => [] }),
               }),
             }),
           }),
-        });
+        }),
+      });
 
       const r = await service.getPollDetail('u1', 'p1');
       expect(r.options).toHaveLength(1);

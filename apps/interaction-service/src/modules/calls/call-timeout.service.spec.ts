@@ -36,8 +36,8 @@ describe('CallTimeoutService', () => {
     );
     const call = redis.zAdd.mock.calls[0] as [string, { score: number; value: string }];
     const score = call[1].score;
-    expect(score).toBeGreaterThanOrEqual(now + 45_000);
-    expect(score).toBeLessThan(now + 46_000);
+    expect(score).toBeGreaterThanOrEqual(now + CallTimeoutService.RING_TIMEOUT_MS);
+    expect(score).toBeLessThan(now + CallTimeoutService.RING_TIMEOUT_MS + 1000);
   });
 
   it('cancelTimeout removes member from sorted set', async () => {

@@ -10,7 +10,8 @@ export interface DueTimeout {
 @Injectable()
 export class CallTimeoutService {
   static readonly TIMEOUT_KEY = 'call:ring-timeout:zset';
-  private readonly ringTimeoutMs = 45_000;
+  static readonly RING_TIMEOUT_MS = 45_000;
+  private readonly ringTimeoutMs = CallTimeoutService.RING_TIMEOUT_MS;
   private readonly logger = new Logger(CallTimeoutService.name);
 
   constructor(@Inject(REDIS_CLIENT) private readonly redis: RedisClientType) {}
@@ -40,12 +41,13 @@ export class CallTimeoutService {
       0,
       now,
     );
-    return members.map((m) => {
+    return members.flatMap((m) => {
       const idx = m.indexOf(':');
-      return {
-        callId: m.substring(0, idx),
-        conversationId: m.substring(idx + 1),
-      };
+      if (idx === -1) {
+        this.logger.warn(`Skipping malformed timeout entry: "${m}"`);
+        return [];
+      }
+      return [{ callId: m.substring(0, idx), conversationId: m.substring(idx + 1) }];
     });
   }
 }

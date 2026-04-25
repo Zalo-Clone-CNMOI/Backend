@@ -18,6 +18,7 @@ import {
   ConversationPoll,
   ConversationPollOption,
   ConversationPollVote,
+  User,
 } from '@libs/database/entities';
 import { NotificationOutboxPublisher } from '@libs/kafka/publisher/notification-outbox.publisher';
 import { PollMetadataBuilder } from './poll-metadata.builder';
@@ -65,6 +66,7 @@ describe('ConversationPollService', () => {
   let voteRepository: any;
   let conversationRepository: any;
   let memberRepository: any;
+  let userRepository: any;
   let outbox: any;
   let metadataBuilder: { build: jest.Mock; emitUpdated: jest.Mock };
 
@@ -93,9 +95,10 @@ describe('ConversationPollService', () => {
     voteRepository = makeRepo();
     conversationRepository = makeRepo();
     memberRepository = makeRepo();
+    userRepository = makeRepo();
 
     outbox = {
-      publish: jest.fn().mockResolvedValue({ status: 'queued' }),
+      publish: jest.fn().mockResolvedValue('queued'),
       publishToTopic: jest.fn().mockResolvedValue({ status: 'queued' }),
     };
 
@@ -126,6 +129,10 @@ describe('ConversationPollService', () => {
         {
           provide: getRepositoryToken(ConversationMember),
           useValue: memberRepository,
+        },
+        {
+          provide: getRepositoryToken(User),
+          useValue: userRepository,
         },
         { provide: NotificationOutboxPublisher, useValue: outbox },
         { provide: PollMetadataBuilder, useValue: metadataBuilder },
@@ -298,6 +305,93 @@ describe('ConversationPollService', () => {
       );
     });
 
+    it('emits NotificationRequested for each non-creator member after createPoll', async () => {
+      conversationRepository.findOne.mockResolvedValueOnce({
+        id: 'c1',
+        type: 'group',
+      });
+      memberRepository.findOne.mockResolvedValueOnce({
+        userId: 'u1',
+        conversationId: 'c1',
+      });
+      // For buildPollNotifications: list of active members in conversation
+      memberRepository.find.mockResolvedValueOnce([
+        { userId: 'u1', conversationId: 'c1' },
+        { userId: 'u2', conversationId: 'c1' },
+        { userId: 'u3', conversationId: 'c1' },
+      ]);
+      userRepository.findOne.mockResolvedValueOnce({
+        id: 'u1',
+        fullName: 'Alice',
+      });
+      installTxMock(pollRepository, (mgr: any) => {
+        mgr.save = jest
+          .fn()
+          .mockImplementationOnce(async (_e: any, data: any) => ({
+            ...data,
+            id: 'poll-uuid',
+          }))
+          .mockImplementationOnce(async (_e: any, arr: any[]) =>
+            arr.map((o, i) => ({ ...o, id: `opt-${i}` })),
+          );
+      });
+
+      await service.createPoll('u1', 'c1', {
+        question: 'Pizza or Burger?',
+        options: [{ label: 'Pizza' }, { label: 'Burger' }],
+      } as any);
+
+      // outbox.publish is what enqueueNotifications calls per recipient.
+      expect(outbox.publish).toHaveBeenCalledTimes(2);
+      const recipients = outbox.publish.mock.calls.map(
+        (c: any[]) => c[0].user_id,
+      );
+      expect(recipients.sort()).toEqual(['u2', 'u3']);
+
+      const sample = outbox.publish.mock.calls[0][0];
+      expect(sample).toMatchObject({
+        channel: 'push',
+        title: 'Alice started a poll',
+        body: 'Pizza or Burger?',
+        type: 'group_poll',
+        data: { poll_id: 'poll-uuid', conversation_id: 'c1' },
+        rich: expect.objectContaining({
+          category: 'group_poll',
+          thread_id: 'c1',
+        }),
+      });
+    });
+
+    it('does not throw if notification dispatch fails', async () => {
+      conversationRepository.findOne.mockResolvedValueOnce({
+        id: 'c1',
+        type: 'group',
+      });
+      memberRepository.findOne.mockResolvedValueOnce({
+        userId: 'u1',
+        conversationId: 'c1',
+      });
+      memberRepository.find.mockRejectedValueOnce(new Error('db boom'));
+      installTxMock(pollRepository, (mgr: any) => {
+        mgr.save = jest
+          .fn()
+          .mockImplementationOnce(async (_e: any, data: any) => ({
+            ...data,
+            id: 'poll-uuid',
+          }))
+          .mockImplementationOnce(async (_e: any, arr: any[]) =>
+            arr.map((o, i) => ({ ...o, id: `opt-${i}` })),
+          );
+      });
+
+      await expect(
+        service.createPoll('u1', 'c1', {
+          question: 'q',
+          options: [{ label: 'a' }, { label: 'b' }],
+        } as any),
+      ).resolves.toMatchObject({ poll_id: 'poll-uuid' });
+    });
+
     it('forces is_anonymous=false even if dto says true', async () => {
       conversationRepository.findOne.mockResolvedValueOnce({
         id: 'c1',
@@ -463,6 +557,137 @@ describe('ConversationPollService', () => {
       await expect(service.closePoll('u1', 'p1')).rejects.toMatchObject({
         response: { error: { message: 'POLL_CLOSED' } },
       });
+    });
+
+    const installCloseTxMock = (rows: any[] = []) => {
+      installTxMock(pollRepository, (mgr: any) => {
+        mgr.update = jest.fn().mockResolvedValue({ affected: 1 });
+        mgr.createQueryBuilder = jest.fn().mockReturnValue({
+          select: () => ({
+            addSelect: () => ({
+              from: () => ({
+                where: () => ({
+                  groupBy: () => ({ getRawMany: async () => rows }),
+                }),
+              }),
+            }),
+          }),
+        });
+      });
+    };
+
+    it('emits notifications with by_creator title when creator closes', async () => {
+      pollRepository.findOne.mockResolvedValueOnce({
+        id: 'p1',
+        creatorId: 'u1',
+        conversationId: 'c1',
+        status: 'active',
+        question: 'Pizza or Burger?',
+        messageId: 'm1',
+      });
+      memberRepository.find.mockResolvedValueOnce([
+        { userId: 'u1' },
+        { userId: 'u2' },
+        { userId: 'u3' },
+      ]);
+      userRepository.findOne.mockResolvedValueOnce({
+        id: 'u1',
+        fullName: 'Alice',
+      });
+      installCloseTxMock();
+
+      await service.closePoll('u1', 'p1');
+
+      expect(outbox.publish).toHaveBeenCalledTimes(2);
+      const sample = outbox.publish.mock.calls[0][0];
+      expect(sample).toMatchObject({
+        channel: 'push',
+        title: 'Alice ended the poll',
+        body: 'Pizza or Burger?',
+        type: 'group_poll_closed',
+        data: { poll_id: 'p1', conversation_id: 'c1' },
+      });
+      const recipients = outbox.publish.mock.calls.map(
+        (c: any[]) => c[0].user_id,
+      );
+      expect(recipients).not.toContain('u1');
+      expect(recipients.sort()).toEqual(['u2', 'u3']);
+    });
+
+    it('emits notifications with by_admin title when admin closes', async () => {
+      pollRepository.findOne.mockResolvedValueOnce({
+        id: 'p1',
+        creatorId: 'creator',
+        conversationId: 'c1',
+        status: 'active',
+        question: 'Q?',
+        messageId: 'm1',
+      });
+      memberRepository.findOne.mockResolvedValueOnce({
+        userId: 'admin1',
+        role: 'admin',
+      });
+      memberRepository.find.mockResolvedValueOnce([
+        { userId: 'admin1' },
+        { userId: 'creator' },
+        { userId: 'u3' },
+      ]);
+      installCloseTxMock();
+
+      await service.closePoll('admin1', 'p1');
+
+      expect(outbox.publish).toHaveBeenCalledTimes(2);
+      const sample = outbox.publish.mock.calls[0][0];
+      expect(sample.title).toBe('An admin ended the poll');
+      // No user lookup for by_admin path
+      expect(userRepository.findOne).not.toHaveBeenCalled();
+      const recipients = outbox.publish.mock.calls.map(
+        (c: any[]) => c[0].user_id,
+      );
+      expect(recipients).not.toContain('admin1');
+    });
+
+    it('emits notifications with generic title when reason=expired', async () => {
+      pollRepository.findOne.mockResolvedValueOnce({
+        id: 'p1',
+        creatorId: 'u1',
+        conversationId: 'c1',
+        status: 'active',
+        question: 'Q?',
+        messageId: 'm1',
+      });
+      memberRepository.find.mockResolvedValueOnce([
+        { userId: 'u1' },
+        { userId: 'u2' },
+      ]);
+      installCloseTxMock();
+
+      await service.closePoll('u1', 'p1', 'expired' as any);
+
+      expect(outbox.publish).toHaveBeenCalledTimes(2);
+      const titles = outbox.publish.mock.calls.map((c: any[]) => c[0].title);
+      titles.forEach((t: string) => expect(t).toBe('Poll has ended'));
+      expect(userRepository.findOne).not.toHaveBeenCalled();
+      const recipients = outbox.publish.mock.calls.map(
+        (c: any[]) => c[0].user_id,
+      );
+      expect(recipients.sort()).toEqual(['u1', 'u2']);
+    });
+
+    it('does not throw if notification dispatch fails on close', async () => {
+      pollRepository.findOne.mockResolvedValueOnce({
+        id: 'p1',
+        creatorId: 'u1',
+        conversationId: 'c1',
+        status: 'active',
+        question: 'Q?',
+        messageId: 'm1',
+      });
+      memberRepository.find.mockRejectedValueOnce(new Error('db boom'));
+      installCloseTxMock();
+
+      const r = await service.closePoll('u1', 'p1');
+      expect(r.status).toBe('closed');
     });
   });
 

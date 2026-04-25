@@ -8,6 +8,8 @@ export enum NotificationType {
   GroupInviteAccepted = 'group_invite_accepted',
   GroupInviteRejected = 'group_invite_rejected',
   GroupInviteCancelled = 'group_invite_cancelled',
+  GroupPoll = 'group_poll',
+  GroupPollClosed = 'group_poll_closed',
   Reaction = 'reaction',
   MissedCall = 'missed_call',
   System = 'system',

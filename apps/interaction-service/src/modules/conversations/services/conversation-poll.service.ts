@@ -22,12 +22,14 @@ import {
 import { BusinessException } from '@app/types';
 import {
   KafkaTopics,
+  NotificationType,
   type ChatPollMessageCommand,
   type ConversationPollClosedEvent,
   type ConversationPollCreatedEvent,
   type ConversationPollEditedEvent,
   type ConversationPollOptionAddedEvent,
   type ConversationPollOptionRemovedEvent,
+  type NotificationRequestedEvent,
   type PollMessageMetadata,
 } from '@libs/contracts';
 import {
@@ -36,8 +38,10 @@ import {
   ConversationPollVote,
   Conversation,
   ConversationMember,
+  User,
 } from '@libs/database/entities';
 import { PollMetadataBuilder } from './poll-metadata.builder';
+import { enqueueNotifications } from '../helper/conversations-notification.helper';
 
 export interface CreatePollInput {
   question: string;
@@ -148,6 +152,8 @@ export class ConversationPollService {
     private readonly conversationRepo: Repository<Conversation>,
     @InjectRepository(ConversationMember)
     private readonly memberRepo: Repository<ConversationMember>,
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
     private readonly outbox: NotificationOutboxPublisher,
     private readonly metadataBuilder: PollMetadataBuilder,
   ) {}
@@ -319,6 +325,39 @@ export class ConversationPollService {
       pollMessageCommand,
     );
 
+    // Best-effort: notify other active members. Failures must NOT fail
+    // the create call — log and continue.
+    try {
+      const creator = await this.userRepo.findOne({ where: { id: userId } });
+      const creatorName = creator?.fullName ?? 'Someone';
+      const title = `${creatorName} started a poll`;
+      const body = trimmedQuestion;
+
+      const notifications = await this.buildPollNotifications({
+        conversationId,
+        excludeUserId: userId,
+        pollId: savedPoll.id,
+        title,
+        body,
+        notificationType: NotificationType.GroupPoll,
+        category: 'group_poll',
+        traceIdPrefix: `group-poll-created:${savedPoll.id}`,
+      });
+
+      await enqueueNotifications(
+        notifications,
+        `group_poll_created:${savedPoll.id}`,
+        this.outbox,
+        this.logger,
+      );
+    } catch (err: unknown) {
+      this.logger.error(
+        `[ConversationPollService] notify-on-create failed poll_id=${savedPoll.id}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+
     return {
       poll_id: savedPoll.id,
       message_id: messageId,
@@ -438,6 +477,44 @@ export class ConversationPollService {
     );
 
     await this.metadataBuilder.emitUpdated(pollId, traceId);
+
+    // Best-effort: notify other active members about the closed poll.
+    try {
+      let title = 'Poll has ended';
+      if (effectiveReason === PollClosedReason.BY_CREATOR) {
+        const creator = await this.userRepo.findOne({
+          where: { id: poll.creatorId },
+        });
+        const creatorName = creator?.fullName ?? 'The creator';
+        title = `${creatorName} ended the poll`;
+      } else if (effectiveReason === PollClosedReason.BY_ADMIN) {
+        title = 'An admin ended the poll';
+      }
+
+      const notifications = await this.buildPollNotifications({
+        conversationId: poll.conversationId,
+        excludeUserId: closedByUserId,
+        pollId,
+        title,
+        body: poll.question,
+        notificationType: NotificationType.GroupPollClosed,
+        category: 'group_poll',
+        traceIdPrefix: `group-poll-closed:${pollId}`,
+      });
+
+      await enqueueNotifications(
+        notifications,
+        `group_poll_closed:${pollId}`,
+        this.outbox,
+        this.logger,
+      );
+    } catch (err: unknown) {
+      this.logger.error(
+        `[ConversationPollService] notify-on-close failed poll_id=${pollId}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
 
     return { poll_id: pollId, status: 'closed', final_tally: tally };
   }
@@ -1009,6 +1086,58 @@ export class ConversationPollService {
       .groupBy('option_id')
       .getRawMany<{ option_id: string; count: string }>();
     return new Map(rows.map((r) => [r.option_id, Number(r.count)]));
+  }
+
+  /**
+   * Build push-notification events for all active members of a conversation,
+   * excluding `excludeUserId` (typically the actor). Returns an empty array
+   * if there are no recipients. Caller is responsible for dispatching via
+   * `enqueueNotifications`.
+   */
+  private async buildPollNotifications(args: {
+    conversationId: string;
+    excludeUserId: string | null;
+    pollId: string;
+    title: string;
+    body: string;
+    notificationType: NotificationType;
+    category: string;
+    traceIdPrefix: string;
+  }): Promise<NotificationRequestedEvent[]> {
+    const members = await this.memberRepo.find({
+      where: {
+        conversationId: args.conversationId,
+        leftAt: IsNull(),
+      },
+    });
+
+    const recipientIds = members
+      .map((m) => m.userId)
+      .filter((id) => !!id && id !== args.excludeUserId);
+
+    if (recipientIds.length === 0) {
+      return [];
+    }
+
+    const requestedAt = Date.now();
+    return recipientIds.map<NotificationRequestedEvent>((recipientId) => ({
+      channel: 'push',
+      user_id: recipientId,
+      title: args.title,
+      body: args.body,
+      type: args.notificationType,
+      data: {
+        poll_id: args.pollId,
+        conversation_id: args.conversationId,
+      },
+      rich: {
+        priority: 'normal',
+        category: args.category,
+        thread_id: args.conversationId,
+      },
+      requested_at: requestedAt,
+      trace_id: `${args.traceIdPrefix}:${recipientId}`,
+    }));
   }
 
   /**

@@ -21,6 +21,7 @@ export interface AppConfig {
 
   redisUrl?: string;
 
+  // Coturn TURN/STUN server configuration
   coturnSecret?: string;
   coturnHost?: string;
   coturnPort?: number;
@@ -253,7 +254,7 @@ export function loadConfig(serviceName: string): AppConfig {
 
     coturnSecret: process.env.COTURN_SECRET?.trim(),
     coturnHost: process.env.COTURN_HOST?.trim(),
-    coturnPort: readNumber(process.env.COTURN_PORT),
+    coturnPort: readPositiveInteger(process.env.COTURN_PORT, 1, 65535),
 
     jwtSecret: process.env.JWT_SECRET?.trim(),
     jwtRefreshSecret: process.env.JWT_REFRESH_SECRET?.trim(),

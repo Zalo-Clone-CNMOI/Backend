@@ -46,9 +46,9 @@ describe('IceServerService', () => {
 
   it('returns TURN and STUN server entries', () => {
     const result = service.getIceServers('user-abc');
-    const urls = result.ice_servers.map((s: { urls: string }) => s.urls);
-    expect(urls.some((u: string) => u.startsWith('turn:'))).toBe(true);
-    expect(urls.some((u: string) => u.startsWith('stun:'))).toBe(true);
+    const urls = result.ice_servers.map((s) => s.urls);
+    expect(urls.some((u) => u.startsWith('turn:'))).toBe(true);
+    expect(urls.some((u) => u.startsWith('stun:'))).toBe(true);
   });
 
   it('returns empty ice_servers when coturnSecret is not configured', async () => {

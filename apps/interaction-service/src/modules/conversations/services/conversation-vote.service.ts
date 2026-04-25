@@ -15,11 +15,7 @@ import {
   ConversationPollOption,
   ConversationPollVote,
 } from '@libs/database/entities';
-import {
-  ErrorCode,
-  PollClosedReason,
-  PollStatus,
-} from '@app/constant';
+import { ErrorCode, PollClosedReason, PollStatus } from '@app/constant';
 import { BusinessException } from '@app/types';
 import {
   KafkaTopics,
@@ -42,16 +38,18 @@ export interface RetractVoteResult {
 }
 
 /**
- * Sentinel object thrown by the castVote transaction body when the poll's
+ * Sentinel error thrown by the castVote transaction body when the poll's
  * `expires_at` has passed and we've just flipped it to CLOSED inside the
  * TX. It is NOT a BusinessException — we catch it OUTSIDE the TX to emit
  * the ConversationPollClosed event and refreshed metadata, then throw a
  * user-facing POLL_EXPIRED conflict. This avoids emitting side effects from
  * within the transaction.
  */
-interface LazyExpiredSentinel {
-  _expired: true;
-  conversationId: string;
+class LazyExpiredSentinel extends Error {
+  readonly _expired = true as const;
+  constructor(public readonly conversationId: string) {
+    super('lazy_expired_close');
+  }
 }
 
 @Injectable()
@@ -147,11 +145,7 @@ export class ConversationVoteService {
           );
           // Not a BusinessException: this is caught by the outer try and
           // triggers the POLL_EXPIRED side effects outside the TX.
-          // eslint-disable-next-line @typescript-eslint/no-throw-literal
-          throw {
-            _expired: true,
-            conversationId: poll.conversationId,
-          } as LazyExpiredSentinel;
+          throw new LazyExpiredSentinel(poll.conversationId);
         }
 
         if (!poll.allowMultiple && dedupedIds.length > 1) {
@@ -186,11 +180,11 @@ export class ConversationVoteService {
         }
 
         // Fetch current user vote set.
-        const currentRows = (await mgr.query(
+        const currentRows: Array<{ option_id: string }> = await mgr.query(
           `SELECT option_id FROM conversation_poll_votes WHERE poll_id = $1 AND user_id = $2`,
           [pollId, userId],
-        )) as Array<{ option_id: string }>;
-        const currentIds = new Set(currentRows.map((r) => r.option_id));
+        );
+        const currentIds = new Set<string>(currentRows.map((r) => r.option_id));
 
         const added = dedupedIds.filter((id) => !currentIds.has(id));
         const removed = [...currentIds].filter(
@@ -227,15 +221,15 @@ export class ConversationVoteService {
         };
       });
     } catch (err) {
-      if (err && (err as LazyExpiredSentinel)._expired === true) {
-        result = err as LazyExpiredSentinel;
+      if (err instanceof LazyExpiredSentinel) {
+        result = err;
       } else {
         throw err;
       }
     }
 
-    if ((result as LazyExpiredSentinel)._expired === true) {
-      const sentinel = result as LazyExpiredSentinel;
+    if (result instanceof LazyExpiredSentinel) {
+      const sentinel = result;
       const closedAtMs = Date.now();
       const closedEvent: ConversationPollClosedEvent = {
         poll_id: pollId,

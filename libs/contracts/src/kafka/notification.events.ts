@@ -1,5 +1,3 @@
-// ── Notification Types ──────────────────────────────────────────────────
-
 export enum NotificationType {
   ChatMessage = 'chat_message',
   FriendRequest = 'friend_request',
@@ -19,8 +17,6 @@ export type NotificationChannel = 'push';
 
 export type NotificationProvider = 'fcm' | 'mock';
 
-// ── Rich Notification ──────────────────────────────────────────────────
-
 export interface RichNotificationPayload {
   image_url?: string;
   action_url?: string;
@@ -32,8 +28,6 @@ export interface RichNotificationPayload {
   ttl_seconds?: number;
   collapse_key?: string;
 }
-
-// ── Commands ───────────────────────────────────────────────────────────
 
 export interface NotificationRequestedEvent {
   channel: NotificationChannel;
@@ -53,8 +47,6 @@ export interface NotificationBatchCommand {
   requested_at: number;
   trace_id?: string;
 }
-
-// ── Events ─────────────────────────────────────────────────────────────
 
 export interface NotificationSentEvent {
   provider: NotificationProvider;

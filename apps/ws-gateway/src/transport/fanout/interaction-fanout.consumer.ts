@@ -245,18 +245,6 @@ export class InteractionFanoutConsumer {
     );
   }
 
-  // ── Conversation Poll Fanout ─────────────────────────────────────────
-  // All poll updates broadcast to the conversation room: every group member
-  // observes poll state changes simultaneously.
-  //
-  // Vote-cast / vote-retracted both map to a single lightweight
-  // `group:poll:vote:updated` signal. The interaction-service Kafka event
-  // does not include the post-vote tally (it would require a join+aggregate
-  // before publishing). The FE refetches poll detail on receipt of this
-  // signal, so we emit empty `tally`/`total_votes`/`total_voters` and use
-  // `voted_at` / `retracted_at` as `updated_at`. This keeps the gateway
-  // pure-fanout (no DB calls) and matches the WS payload contract.
-
   @EventPattern(KafkaTopics.ConversationPollCreated)
   onConversationPollCreated(@Payload() payload: ConversationPollCreatedEvent) {
     this.gateway.broadcastToConversation(

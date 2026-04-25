@@ -363,8 +363,6 @@ export class ConversationsService {
     return { message: 'Call end requested' };
   }
 
-  // ─── Polls (delegates to ConversationPollService / ConversationVoteService) ───
-
   createPoll(
     userId: string,
     conversationId: string,

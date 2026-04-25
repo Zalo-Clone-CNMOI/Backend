@@ -127,8 +127,6 @@ export function inferMediaVisibility(contentType: string): MediaVisibility {
   return 'private';
 }
 
-// ── AI Core Enums ────────────────────────────────────────────────────
-
 export enum AiFeature {
   MODERATION = 'moderation',
   SMART_REPLY = 'smart_reply',

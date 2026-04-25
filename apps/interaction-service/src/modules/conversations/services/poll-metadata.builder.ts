@@ -1,14 +1,3 @@
-/**
- * @file poll-metadata.builder.ts (interaction-service)
- *
- * Injectable helper that (re)builds a fresh `PollMessageMetadata` snapshot
- * for a poll's chat message and publishes a `ChatPollMessageUpdated` event
- * via the outbox.
- *
- * Extracted from `ConversationPollService` so that both the poll service
- * and the new `ConversationVoteService` (Tasks 12-14) can share a single
- * authoritative implementation of the snapshot/emit logic.
- */
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -32,10 +21,6 @@ export class PollMetadataBuilder {
     private readonly outbox: NotificationOutboxPublisher,
   ) {}
 
-  /**
-   * Build a fresh PollMessageMetadata snapshot for a poll's chat message.
-   * Returns null if the poll does not exist or has no linked messageId.
-   */
   async build(pollId: string): Promise<{
     messageId: string;
     conversationId: string;
@@ -107,10 +92,6 @@ export class PollMetadataBuilder {
     };
   }
 
-  /**
-   * Emit a ChatPollMessageUpdated event carrying a refreshed poll metadata
-   * snapshot. No-op if the poll or its message cannot be found.
-   */
   async emitUpdated(pollId: string, traceId: string): Promise<void> {
     const snapshot = await this.build(pollId);
     if (!snapshot) {

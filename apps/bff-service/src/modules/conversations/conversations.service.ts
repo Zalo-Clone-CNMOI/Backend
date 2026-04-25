@@ -229,8 +229,6 @@ export class ConversationsService {
     );
   }
 
-  // ─── Polls passthrough ───────────────────────────────────
-
   async createPoll(
     accessToken: string,
     conversationId: string,

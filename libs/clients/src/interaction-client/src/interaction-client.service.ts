@@ -24,15 +24,6 @@ import type {
   PaginatedResponseConversationListItemDto,
 } from './client/generated';
 
-/**
- * Poll request/response payloads.
- *
- * The OpenAPI client was generated before the poll endpoints existed,
- * so the typed DTOs and methods aren't on the generated `ConversationsApi`.
- * Until the client is regenerated we hand-call the underlying axios
- * instance with raw bodies. The shapes below are aligned with the
- * interaction-service DTOs and PollService results.
- */
 export interface CreatePollPayload {
   question: string;
   options: { label: string }[];
@@ -56,11 +47,6 @@ export interface ListPollsQueryPayload {
   limit?: number;
 }
 
-/**
- * Internal accessor for the protected axios/basePath fields on the
- * generated BaseAPI subclass. We need direct HTTP access for endpoints
- * that aren't in the generated client yet (polls).
- */
 type ApiInternals = {
   axios: AxiosInstance;
   basePath: string;
@@ -76,8 +62,6 @@ export class InteractionClientService extends BaseHttpClient {
   ) {
     super();
   }
-
-  // ==================== FRIENDS METHODS ====================
 
   async getFriends(
     accessToken: string,
@@ -217,8 +201,6 @@ export class InteractionClientService extends BaseHttpClient {
       this.handleError('unblockUser', error);
     }
   }
-
-  // ==================== CONVERSATIONS METHODS ====================
 
   async getConversations(
     accessToken: string,
@@ -568,17 +550,6 @@ export class InteractionClientService extends BaseHttpClient {
     }
   }
 
-  // ==================== POLLS METHODS ====================
-  //
-  // These methods bypass the generated ConversationsApi because the
-  // OpenAPI client predates the poll endpoints. They reuse the axios
-  // instance and basePath already configured on conversationsApi so
-  // baseUrl, interceptors and timeouts stay consistent.
-
-  /**
-   * Reach into the generated client for the configured axios + basePath.
-   * Lets us issue raw HTTP calls without re-registering an HttpService.
-   */
   private getInternals(): ApiInternals {
     return this.conversationsApi as unknown as ApiInternals;
   }

@@ -437,8 +437,6 @@ export class ConversationsController {
     );
   }
 
-  // ─── Polls ──────────────────────────────────────────────
-
   @Post(':conversationId/polls')
   @ApiOperation({ summary: 'Create poll in a group conversation' })
   @ApiResponse({ status: 201, description: 'Poll created' })

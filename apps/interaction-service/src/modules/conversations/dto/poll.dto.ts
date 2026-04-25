@@ -1,14 +1,3 @@
-/**
- * @file poll.dto.ts (interaction-service)
- *
- * Request/query DTOs for the conversation poll endpoints. Mirrors the
- * shape forwarded by the BFF so class-validator runs at the
- * interaction-service boundary as well.
- *
- * Numeric / length limits come from `POLL_LIMITS`. Keep the literal
- * messages in sync with `libs/constant/src/message.ts` (the constant
- * map uses literal strings and isn't auto-templated).
- */
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
@@ -31,10 +20,6 @@ import {
 } from 'class-validator';
 import { POLL_LIMITS, PollStatus } from '@app/constant';
 
-/**
- * Single poll option label payload used at create time and by
- * `edited_option_labels` entries.
- */
 export class PollOptionLabelDto {
   @ApiProperty({
     description: 'Option label (trimmed, non-empty)',
@@ -48,10 +33,6 @@ export class PollOptionLabelDto {
   label: string;
 }
 
-/**
- * Body for editing an option's label (PATCH poll). Used as a nested
- * element inside `EditPollDto.edited_option_labels`.
- */
 export class EditOptionLabelDto {
   @ApiProperty({
     description: 'Option ID to rename',
@@ -72,9 +53,6 @@ export class EditOptionLabelDto {
   label: string;
 }
 
-/**
- * Body for `POST /conversations/:conversationId/polls`.
- */
 export class CreatePollDto {
   @ApiProperty({
     description: 'Poll question',
@@ -148,13 +126,6 @@ export class CreatePollDto {
   expires_in_hours?: number;
 }
 
-/**
- * Body for `POST /conversations/:conversationId/polls/:pollId/vote`.
- *
- * NOTE: `option_ids` is the FULL desired vote set (not a delta). An
- * empty list is rejected by the service — clients should call DELETE
- * vote to retract.
- */
 export class CastVoteDto {
   @ApiProperty({
     description: 'Full set of option IDs the caller is voting for',
@@ -170,9 +141,6 @@ export class CastVoteDto {
   option_ids: string[];
 }
 
-/**
- * Body for `POST /conversations/:conversationId/polls/:pollId/options`.
- */
 export class AddPollOptionDto {
   @ApiProperty({
     description: 'New option label (trimmed, non-empty, unique within poll)',
@@ -187,12 +155,6 @@ export class AddPollOptionDto {
   label: string;
 }
 
-/**
- * Body for `PATCH /conversations/:conversationId/polls/:pollId`.
- *
- * Every field is optional but the request must carry at least one;
- * the service rejects empty patches with `POLL_NO_EDIT_FIELDS`.
- */
 export class EditPollDto {
   @ApiPropertyOptional({
     description: 'New question',
@@ -244,9 +206,6 @@ export class EditPollDto {
   edited_option_labels?: EditOptionLabelDto[];
 }
 
-/**
- * Query for `GET /conversations/:conversationId/polls`.
- */
 export class ListPollsQueryDto {
   @ApiPropertyOptional({
     description: 'Filter by poll status',

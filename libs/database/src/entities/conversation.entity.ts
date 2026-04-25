@@ -35,7 +35,6 @@ export class Conversation extends BaseEntity {
   @Index()
   lastMessageAt: Date | null;
 
-  // Relations
   @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'created_by' })
   createdBy: User | null;

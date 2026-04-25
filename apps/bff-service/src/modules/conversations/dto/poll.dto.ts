@@ -1,15 +1,3 @@
-/**
- * @file poll.dto.ts (bff-service)
- *
- * Request/query DTOs for the BFF poll endpoints. These run
- * class-validator at the BFF boundary BEFORE the request is
- * forwarded to interaction-service. The interaction-service
- * re-validates with its own DTOs — we keep both in sync.
- *
- * NOTE: We deliberately mirror the snake_case field names used by
- * interaction-service (`allow_multiple`, `option_ids`, ...) so the
- * BFF can pass the body straight through without remapping.
- */
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {

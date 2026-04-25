@@ -1,10 +1,3 @@
-/**
- * @file conversation-vote.service.ts (interaction-service)
- *
- * Service for casting/retracting poll votes and reading poll state in a
- * group conversation. Task 12 implements `castVote`. Follow-up tasks
- * (13-14) will add `retractVote`, `listPolls`, and `getPollDetail`.
- */
 import { randomUUID } from 'crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -37,14 +30,6 @@ export interface RetractVoteResult {
   deleted: number;
 }
 
-/**
- * Sentinel error thrown by the castVote transaction body when the poll's
- * `expires_at` has passed and we've just flipped it to CLOSED inside the
- * TX. It is NOT a BusinessException — we catch it OUTSIDE the TX to emit
- * the ConversationPollClosed event and refreshed metadata, then throw a
- * user-facing POLL_EXPIRED conflict. This avoids emitting side effects from
- * within the transaction.
- */
 class LazyExpiredSentinel extends Error {
   readonly _expired = true as const;
   constructor(public readonly conversationId: string) {
@@ -69,30 +54,6 @@ export class ConversationVoteService {
     private readonly metadataBuilder: PollMetadataBuilder,
   ) {}
 
-  /**
-   * Cast (or replace) a user's vote in a poll.
-   *
-   * Semantics:
-   *  - `requestedOptionIds` is the FULL desired vote set (not a patch).
-   *    Duplicates are deduped. An empty list is rejected (use retractVote).
-   *  - For single-choice polls (`allowMultiple=false`), only one id allowed.
-   *  - The poll row is loaded with a pessimistic_write lock so concurrent
-   *    voters cannot race past the expires_at / status check.
-   *  - Lazy-expired close: if `expires_at` has passed and the poll is still
-   *    ACTIVE, flip it to CLOSED(reason=EXPIRED) inside the TX and bubble a
-   *    sentinel out so the caller-visible side effects (closed event +
-   *    metadata refresh + POLL_EXPIRED error) happen post-commit.
-   *  - Vote diff is computed against the user's current vote set:
-   *      added   = desired \ current
-   *      removed = current \ desired
-   *    Removes are DELETEd; adds are upserted via INSERT ... ON CONFLICT DO
-   *    NOTHING (orIgnore) to tolerate unique-key races under concurrency.
-   *
-   * Post-commit side effects:
-   *  - KafkaTopics.ConversationPollVoteCast outbox event.
-   *  - `PollMetadataBuilder.emitUpdated(pollId, traceId)` refreshes the
-   *    chat-message metadata card.
-   */
   async castVote(
     userId: string,
     pollId: string,
@@ -131,7 +92,6 @@ export class ConversationVoteService {
           throw BusinessException.conflict(ErrorCode.POLL_CLOSED);
         }
 
-        // Lazy-expired close: flip row to CLOSED and signal via sentinel.
         if (poll.expiresAt && poll.expiresAt.getTime() <= Date.now()) {
           await mgr.update(
             ConversationPoll,
@@ -143,8 +103,6 @@ export class ConversationVoteService {
               closedReason: PollClosedReason.EXPIRED,
             },
           );
-          // Not a BusinessException: this is caught by the outer try and
-          // triggers the POLL_EXPIRED side effects outside the TX.
           throw new LazyExpiredSentinel(poll.conversationId);
         }
 
@@ -179,7 +137,6 @@ export class ConversationVoteService {
           }
         }
 
-        // Fetch current user vote set.
         const currentRows: Array<{ option_id: string }> = await mgr.query(
           `SELECT option_id FROM conversation_poll_votes WHERE poll_id = $1 AND user_id = $2`,
           [pollId, userId],
@@ -278,23 +235,6 @@ export class ConversationVoteService {
     };
   }
 
-  /**
-   * Retract all of `userId`'s votes in the given poll.
-   *
-   * Semantics:
-   *  - Poll must exist (POLL_NOT_FOUND) and be ACTIVE (POLL_CLOSED).
-   *  - Caller must be a current conversation member (CONVERSATION_NOT_MEMBER).
-   *  - Deletes every vote row for (pollId, userId). Tally is implicit —
-   *    downstream metadata rebuild reads the live DB state.
-   *  - If nothing was deleted (user had no votes), the call is a no-op: no
-   *    event is emitted and the metadata card is not republished. The caller
-   *    still gets `{ deleted: 0 }` so the API is idempotent.
-   *
-   * Post-commit side effects (only when `affected > 0`):
-   *  - KafkaTopics.ConversationPollVoteRetracted outbox event.
-   *  - `PollMetadataBuilder.emitUpdated(pollId, traceId)` refreshes the
-   *    chat-message metadata card.
-   */
   async retractVote(
     userId: string,
     pollId: string,

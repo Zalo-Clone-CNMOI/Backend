@@ -9,14 +9,6 @@ import { MessageRepository } from '@libs/scylla';
 import { CacheService } from '@libs/redis';
 import { MessageConsumerSharedService } from './message-consumer-shared.service';
 
-/**
- * Consumes poll message events emitted by interaction-service via the outbox publisher,
- * persisting them in Scylla so they appear in conversation history.
- *
- * Fanout to clients is handled by ws-gateway, which subscribes to the same poll topics
- * directly (Task 18). This consumer therefore mirrors the invite-message consumer
- * pattern: persist + invalidate recent-messages cache, no chat.message.* re-emit.
- */
 @Controller()
 export class PollMessageConsumer {
   constructor(

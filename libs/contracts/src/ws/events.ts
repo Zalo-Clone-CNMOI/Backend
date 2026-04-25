@@ -10,10 +10,8 @@ export const WsEvents = {
   ChatEdit: 'chat:edit',
   ChatMessageUpdated: 'chat:message:updated',
   ChatDelete: 'chat:delete',
-  // Backward-compatible alias for recall-only semantics.
   ChatRecall: 'chat:delete',
   ChatMessageDeleted: 'chat:message:deleted',
-  // Backward-compatible alias for recall-only semantics.
   ChatMessageRecalled: 'chat:message:deleted',
   ChatReact: 'chat:react',
   ChatUnreact: 'chat:unreact',
@@ -76,14 +74,11 @@ export const WsEvents = {
   ConversationPinned: 'conversation:pinned',
   ConversationUnpinned: 'conversation:unpinned',
 
-  // ── Notification Events ─────────────────────────────────────────────
   NotificationSent: 'notification:sent',
   NotificationFailed: 'notification:failed',
 
-  // ── Error Events ───────────────────────────────────────────────────
   WsError: 'ws:error',
 
-  // ── AI Events ──────────────────────────────────────────────────────
   AiSmartReplyRequest: 'ai:smart-reply:request',
   AiSmartReplyResult: 'ai:smart-reply:result',
   AiSummaryRequest: 'ai:summary:request',
@@ -100,11 +95,6 @@ export const WsEvents = {
 
 export type WsEventName = (typeof WsEvents)[keyof typeof WsEvents];
 
-/**
- * Standardized WS error envelope — emitted on `ws:error` for all auth/authz
- * rejections and unhandled handler exceptions. Mirrors the HTTP envelope's
- * `error.code` / `error.message` fields for client-side symmetry.
- */
 export interface WsErrorPayload {
   code: string;
   message: string;
@@ -194,7 +184,6 @@ export interface WsChatMessageDeletedPayload {
   deleted_at: number;
 }
 
-// Backward-compatible alias for recall-only semantics.
 export type WsChatMessageRecalledPayload = WsChatMessageDeletedPayload;
 
 export interface WsChatReactPayload {
@@ -393,7 +382,6 @@ export interface WsChatAckPayload {
   reason?: string;
 }
 
-// QR Code Login Payloads
 export interface WsQrConfirmedPayload {
   sessionId: string;
   accessToken: string;
@@ -418,7 +406,6 @@ export interface WsQrBindIssuedPayload {
   expiresInSeconds: number;
 }
 
-// Friend Request Payloads
 export interface WsSendFriendRequestPayload {
   requestId: string;
   requester: {
@@ -561,8 +548,6 @@ export interface WsGroupInviteExpiredPayload {
   expired_at: number;
 }
 
-// ── Notification WebSocket Payloads ──────────────────────────────────────
-
 export interface WsNotificationSentPayload {
   provider: string;
   channel: string;
@@ -582,8 +567,6 @@ export interface WsNotificationFailedPayload {
   failed_at: number;
   trace_id?: string;
 }
-
-// ── AI WebSocket Payloads ──────────────────────────────────────────────
 
 export interface WsAiSmartReplyRequestPayload {
   conversation_id: string;
@@ -691,8 +674,6 @@ export interface WsAiStreamCompletePayload {
   feature: string;
   total_chunks: number;
 }
-
-// ── Conversation Poll WebSocket Payloads ──────────────────────────────────
 
 export interface WsConversationPollCreatedPayload {
   poll_id: string;

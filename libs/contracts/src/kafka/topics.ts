@@ -4,10 +4,8 @@ export const KafkaTopics = {
   ChatMessageEdit: 'chat.message.edit',
   ChatMessageUpdated: 'chat.message.updated',
   ChatMessageDelete: 'chat.message.delete',
-  // Backward-compatible alias for recall-only semantics.
   ChatMessageRecall: 'chat.message.delete',
   ChatMessageDeleted: 'chat.message.deleted',
-  // Backward-compatible alias for recall-only semantics.
   ChatMessageRecalled: 'chat.message.deleted',
   ChatMessageForward: 'chat.message.forward',
   ChatReactionAdd: 'chat.reaction.add',
@@ -82,7 +80,6 @@ export const KafkaTopics = {
   ConversationPinned: 'conversation.pinned',
   ConversationUnpinned: 'conversation.unpinned',
 
-  // ── AI Core Topics ──────────────────────────────────────────────────
   AiModerationRequest: 'ai.moderation.request',
   AiModerationResult: 'ai.moderation.result',
   AiModerationEnforcement: 'ai.moderation.enforcement',

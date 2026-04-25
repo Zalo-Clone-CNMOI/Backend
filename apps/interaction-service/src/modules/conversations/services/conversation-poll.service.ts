@@ -1,10 +1,3 @@
-/**
- * @file conversation-poll.service.ts (interaction-service)
- *
- * Service for group conversation polls/votes. Task 8 implements
- * `createPoll`. Follow-up tasks will add closePoll, addOption,
- * editPoll, removeOption.
- */
 import { randomUUID } from 'crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -158,22 +151,6 @@ export class ConversationPollService {
     private readonly metadataBuilder: PollMetadataBuilder,
   ) {}
 
-  /**
-   * Create a new poll in a group conversation.
-   *
-   * Preconditions:
-   *  - Conversation must exist AND be of type GROUP.
-   *  - Caller must be an active member (leftAt IS NULL) of the conversation.
-   *  - dto.options must contain between POLL_LIMITS.MIN_OPTIONS and
-   *    POLL_LIMITS.MAX_OPTIONS unique (trimmed) labels.
-   *
-   * Side effects (post-commit):
-   *  - Emits KafkaTopics.ConversationPollCreated outbox event.
-   *  - Emits KafkaTopics.ChatPollMessageCreated outbox event.
-   *
-   * v1 guard: `is_anonymous` is always forced to `false` regardless of
-   * what the caller passes (anonymous polls are deferred).
-   */
   async createPoll(
     userId: string,
     conversationId: string,
@@ -320,8 +297,6 @@ export class ConversationPollService {
       pollMessageCommand,
     );
 
-    // Best-effort: notify other active members. Failures must NOT fail
-    // the create call — log and continue.
     try {
       const creator = await this.userRepo.findOne({ where: { id: userId } });
       const creatorName = creator?.fullName ?? 'Someone';
@@ -360,25 +335,6 @@ export class ConversationPollService {
     };
   }
 
-  /**
-   * Close an active poll.
-   *
-   * Behavior:
-   *  - POLL_NOT_FOUND if poll does not exist.
-   *  - Idempotent: if already CLOSED, returns the same shape with empty
-   *    final_tally and emits no events.
-   *  - Creator always allowed (keeps passed-in reason, default BY_CREATOR).
-   *  - Active group members with role owner/admin allowed; reason forced to
-   *    BY_ADMIN regardless of caller input.
-   *  - Otherwise POLL_PERMISSION_DENIED.
-   *  - Uses an optimistic-status `UPDATE ... WHERE status = ACTIVE` inside a
-   *    TX; affected=0 means another actor closed first -> POLL_CLOSED.
-   *
-   * Post-commit side effects:
-   *  - KafkaTopics.ConversationPollClosed outbox event with the final tally.
-   *  - KafkaTopics.ChatPollMessageUpdated outbox event carrying the refreshed
-   *    PollMessageMetadata snapshot for the chat message card.
-   */
   async closePoll(
     userId: string,
     pollId: string,
@@ -473,7 +429,6 @@ export class ConversationPollService {
 
     await this.metadataBuilder.emitUpdated(pollId, traceId);
 
-    // Best-effort: notify other active members about the closed poll.
     try {
       let title = 'Poll has ended';
       if (effectiveReason === PollClosedReason.BY_CREATOR) {
@@ -514,22 +469,6 @@ export class ConversationPollService {
     return { poll_id: pollId, status: 'closed', final_tally: tally };
   }
 
-  /**
-   * Add a new option to an existing active poll.
-   *
-   * Preconditions:
-   *  - label must be a non-empty string after trimming.
-   *  - poll must exist and be ACTIVE.
-   *  - poll.allowAddOption must be true.
-   *  - caller must be an active member of the poll's conversation.
-   *  - poll must have fewer than POLL_LIMITS.MAX_OPTIONS active options.
-   *  - label must be unique within the poll (enforced both in app logic
-   *    and via a Postgres unique constraint -> 23505).
-   *
-   * Side effects (post-commit):
-   *  - KafkaTopics.ConversationPollOptionAdded outbox event.
-   *  - KafkaTopics.ChatPollMessageUpdated outbox event (refreshed metadata).
-   */
   async addOption(
     userId: string,
     pollId: string,
@@ -627,25 +566,6 @@ export class ConversationPollService {
     };
   }
 
-  /**
-   * Edit an active poll (Option A edit scope).
-   *
-   * Only the poll creator may edit. Allowed mutations:
-   *  - question (string)
-   *  - allow_multiple (forbidden when any vote exists)
-   *  - allow_add_option
-   *  - expires_at (ISO8601 string, or null to clear). Must be strictly > now.
-   *  - edited_option_labels: rename existing options. Each option must belong
-   *    to the poll (not soft-deleted) and have no votes; otherwise rejected.
-   *
-   * Preconditions:
-   *  - DTO must carry at least one listed field; else POLL_NO_EDIT_FIELDS.
-   *  - Poll must exist and be ACTIVE; closed/missing polls are rejected.
-   *
-   * Side effects (post-commit):
-   *  - KafkaTopics.ConversationPollEdited outbox event with `changes` diff.
-   *  - KafkaTopics.ChatPollMessageUpdated outbox event (refreshed metadata).
-   */
   async editPoll(
     userId: string,
     pollId: string,
@@ -686,7 +606,6 @@ export class ConversationPollService {
       throw new BusinessException(ErrorCode.POLL_CLOSED, ErrorCode.POLL_CLOSED);
     }
 
-    // Parse / validate expires_at if present.
     let nextExpiresAt: Date | null | undefined = undefined;
     if (dto.expires_at !== undefined) {
       if (dto.expires_at === null) {
@@ -706,7 +625,6 @@ export class ConversationPollService {
     const changes: ConversationPollEditedEvent['changes'] = {};
     const pollPatch: Partial<ConversationPoll> = {};
 
-    // allow_multiple diff (with votes guard)
     if (
       dto.allow_multiple !== undefined &&
       dto.allow_multiple !== poll.allowMultiple
@@ -722,7 +640,6 @@ export class ConversationPollService {
       pollPatch.allowMultiple = dto.allow_multiple;
     }
 
-    // edited_option_labels: validate all BEFORE recording any change.
     const normalizedLabelEdits: Array<{ option_id: string; label: string }> =
       [];
     if (
@@ -763,7 +680,6 @@ export class ConversationPollService {
       }
     }
 
-    // question diff
     if (dto.question !== undefined) {
       const trimmedQ = dto.question.trim();
       if (trimmedQ !== poll.question) {
@@ -772,7 +688,6 @@ export class ConversationPollService {
       }
     }
 
-    // allow_add_option diff
     if (
       dto.allow_add_option !== undefined &&
       dto.allow_add_option !== poll.allowAddOption
@@ -781,7 +696,6 @@ export class ConversationPollService {
       pollPatch.allowAddOption = dto.allow_add_option;
     }
 
-    // expires_at diff (undefined means "not provided"; null means "clear")
     if (nextExpiresAt !== undefined) {
       changes.expires_at = nextExpiresAt ? nextExpiresAt.getTime() : null;
       pollPatch.expiresAt = nextExpiresAt;
@@ -828,24 +742,6 @@ export class ConversationPollService {
     };
   }
 
-  /**
-   * Soft-delete an option from an active poll.
-   *
-   * Preconditions:
-   *  - Poll must exist (else POLL_NOT_FOUND).
-   *  - Caller must be the creator (else POLL_PERMISSION_DENIED).
-   *  - Poll must be ACTIVE (else POLL_CLOSED).
-   *  - Option must belong to the poll and not already be soft-deleted
-   *    (else POLL_INVALID_OPTION).
-   *  - Option must have zero votes
-   *    (else POLL_CANNOT_EDIT_OPTION_WITH_VOTES).
-   *  - Removing this option must not drop the active option count below
-   *    POLL_LIMITS.MIN_OPTIONS (else POLL_MIN_OPTIONS_REQUIRED).
-   *
-   * Side effects (post-commit):
-   *  - KafkaTopics.ConversationPollOptionRemoved outbox event.
-   *  - KafkaTopics.ChatPollMessageUpdated outbox event (refreshed metadata).
-   */
   async removeOption(
     userId: string,
     pollId: string,
@@ -921,17 +817,6 @@ export class ConversationPollService {
     return { option_id: optionId };
   }
 
-  /**
-   * List polls in a conversation with pagination + optional status filter.
-   *
-   * Preconditions:
-   *  - Caller must be an active member of the conversation. Non-members
-   *    get CONVERSATION_NOT_MEMBER (forbidden).
-   *
-   * Pagination is clamped: page >= 1, 1 <= limit <= 50 (default 20).
-   * Results are ordered by createdAt DESC. Each item's `options_count`
-   * excludes soft-deleted options.
-   */
   async listPolls(
     userId: string,
     conversationId: string,
@@ -980,21 +865,6 @@ export class ConversationPollService {
     return { items, total, page, limit };
   }
 
-  /**
-   * Return full detail for a single poll — options (with tally), caller's
-   * votes, and total_votes.
-   *
-   * Preconditions:
-   *  - Poll must exist (else POLL_NOT_FOUND).
-   *  - Caller must be an active member of the poll's conversation
-   *    (else CONVERSATION_NOT_MEMBER forbidden).
-   *
-   * Soft-deleted options are filtered out. `my_vote` contains the
-   * optionIds the caller has voted for (empty array when none).
-   * `total_votes` is the sum of per-option vote counts across active
-   * (non-deleted) options — note: votes attached to soft-deleted options
-   * are excluded from the visible tally.
-   */
   async getPollDetail(
     userId: string,
     pollId: string,
@@ -1055,13 +925,6 @@ export class ConversationPollService {
     };
   }
 
-  /**
-   * Load per-option vote counts for a poll.
-   *
-   * Returns a Map keyed by option_id with the vote count as a number.
-   * Options with zero votes are absent from the map (callers should
-   * fall back to 0).
-   */
   private async loadTally(pollId: string): Promise<Map<string, number>> {
     const rows = await this.pollRepo.manager
       .createQueryBuilder()
@@ -1074,12 +937,6 @@ export class ConversationPollService {
     return new Map(rows.map((r) => [r.option_id, Number(r.count)]));
   }
 
-  /**
-   * Build push-notification events for all active members of a conversation,
-   * excluding `excludeUserId` (typically the actor). Returns an empty array
-   * if there are no recipients. Caller is responsible for dispatching via
-   * `enqueueNotifications`.
-   */
   private async buildPollNotifications(args: {
     conversationId: string;
     excludeUserId: string | null;
@@ -1126,11 +983,6 @@ export class ConversationPollService {
     }));
   }
 
-  /**
-   * Detects a Postgres unique-constraint violation. Handles both:
-   *   - Raw driver errors with `.code === '23505'`
-   *   - TypeORM QueryFailedError wrapping `driverError.code === '23505'`
-   */
   private isUniqueViolationError(err: unknown): boolean {
     if (!err || typeof err !== 'object') {
       return false;

@@ -190,8 +190,8 @@ export class CallConsumer {
     state.status = 'ongoing';
     state.trace_id = cmd.trace_id;
 
-    await this.stateStore.set(cmd.conversation_id, state);
     await this.callTimeoutService.cancelTimeout(cmd.call_id, cmd.conversation_id);
+    await this.stateStore.set(cmd.conversation_id, state);
 
     const acceptedEvent: CallAcceptedEvent = {
       call_id: cmd.call_id,

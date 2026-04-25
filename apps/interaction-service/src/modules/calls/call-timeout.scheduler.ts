@@ -23,12 +23,13 @@ export class CallTimeoutScheduler {
 
   @Interval(5000)
   async checkTimeouts(): Promise<void> {
-    let due: DueTimeout[];
+    let due: DueTimeout[] = [];
     try {
       due = await this.timeoutService.pollDueTimeouts();
     } catch (err) {
       this.logger.error(
         `Failed to poll due timeouts: ${err instanceof Error ? err.message : String(err)}`,
+        err instanceof Error ? err.stack : undefined,
       );
       return;
     }
@@ -39,6 +40,7 @@ export class CallTimeoutScheduler {
       } catch (err) {
         this.logger.error(
           `Timeout processing failed call=${callId}: ${err instanceof Error ? err.message : String(err)}`,
+          err instanceof Error ? err.stack : undefined,
         );
       }
     }
@@ -78,6 +80,7 @@ export class CallTimeoutScheduler {
       trace_id: traceId,
     } satisfies CallEndedEvent);
 
+    this.logger.log(`Clearing call state for timed-out call=${callId}`);
     await this.stateStore.clear(conversationId);
   }
 }

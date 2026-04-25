@@ -4,4 +4,5 @@ export * from './call-membership-access.service';
 export * from './call-participants.util';
 export * from './call-state.store';
 export * from './calls.module';
+export * from './ice-server.controller';
 export * from './ice-server.service';

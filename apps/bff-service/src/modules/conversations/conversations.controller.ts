@@ -399,6 +399,7 @@ export class ConversationsController {
   @Get('ice-servers')
   @ApiOperation({ summary: 'Get ICE server credentials for WebRTC (TURN/STUN)' })
   @ApiResponse({ status: 200, description: 'Ephemeral Coturn TURN/STUN credentials' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getIceServers(@AccessToken() token: string) {
     return this.conversationsService.getIceServers(token);
   }

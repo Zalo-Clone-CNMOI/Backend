@@ -1,4 +1,4 @@
-import { Controller, Inject } from '@nestjs/common';
+import { Controller, Inject, Logger } from '@nestjs/common';
 import { EventPattern, Payload } from '@nestjs/microservices';
 import type { ClientKafka } from '@nestjs/microservices';
 import {
@@ -32,6 +32,8 @@ import { uniqueParticipants } from './call-participants.util';
 @Controller()
 @Public()
 export class CallConsumer {
+  private readonly logger = new Logger(CallConsumer.name);
+
   constructor(
     @Inject(KAFKA_CLIENT) private readonly kafkaClient: ClientKafka,
     private readonly membershipAccess: CallMembershipAccessService,
@@ -91,15 +93,19 @@ export class CallConsumer {
 
     await this.stateStore.set(cmd.conversation_id, state);
     await this.callTimeoutService.scheduleTimeout(cmd.call_id, cmd.conversation_id);
-    await this.callHistoryService.createSession({
-      id: cmd.call_id,
-      conversationId: cmd.conversation_id,
-      initiatorId: cmd.initiator_id,
-      callType: cmd.call_type as CallType,
-      conversationType: cmd.conversation_type as ConversationType,
-      startedAt: cmd.started_at,
-      participantIds,
-    });
+    this.callHistoryService
+      .createSession({
+        id: cmd.call_id,
+        conversationId: cmd.conversation_id,
+        initiatorId: cmd.initiator_id,
+        callType: cmd.call_type as CallType,
+        conversationType: cmd.conversation_type as ConversationType,
+        startedAt: cmd.started_at,
+        participantIds,
+      })
+      .catch((err: Error) =>
+        this.logger.error(`createSession failed call=${cmd.call_id}: ${err.message}`, err.stack),
+      );
 
     const startedEvent: CallStartedEvent = {
       call_id: cmd.call_id,
@@ -456,11 +462,15 @@ export class CallConsumer {
 
     this.kafkaClient.emit(KafkaTopics.CallEnded, endedEvent);
     await this.stateStore.clear(state.conversation_id);
-    await this.callHistoryService.closeSession(state.call_id, {
-      endedAt,
-      startedAt: state.started_at,
-      reason,
-    });
+    this.callHistoryService
+      .closeSession(state.call_id, {
+        endedAt,
+        startedAt: state.started_at,
+        reason,
+      })
+      .catch((err: Error) =>
+        this.logger.error(`closeSession failed call=${state.call_id}: ${err.message}`, err.stack),
+      );
     this.eventsPublisher.publishStateUpdate(state.conversation_id, null, {
       reason: reason ?? 'ended',
       traceId,

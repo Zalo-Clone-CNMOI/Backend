@@ -48,6 +48,7 @@ export interface CallStartedEvent {
   participant_ids: string[];
   started_at: number;
   trace_id?: string;
+  push_recipient_ids?: string[]; // participant_ids minus initiator, for VoIP push
 }
 
 export interface CallSignalCommand {

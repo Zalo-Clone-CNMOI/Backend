@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
-import { KafkaModule } from '@libs/kafka';
+import { KafkaModule, NotificationOutboxModule } from '@libs/kafka';
 import { ConversationMembershipModule } from '@libs/mvp-access';
 import { CallSession } from '@libs/database/entities';
 import { CallConsumer } from './call.consumer';
@@ -18,6 +18,7 @@ import { CallHistoryController } from './call-history.controller';
 @Module({
   imports: [
     KafkaModule,
+    NotificationOutboxModule,
     ConversationMembershipModule,
     ScheduleModule.forRoot(),
     TypeOrmModule.forFeature([CallSession]),

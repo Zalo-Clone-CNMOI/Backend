@@ -22,6 +22,7 @@ import {
 import { Public } from '@app/decorator';
 import { CallType, ConversationType } from '@app/constant';
 import { KAFKA_CLIENT } from '@libs/kafka';
+import { NotificationOutboxPublisher } from '@libs/kafka/publisher/notification-outbox.publisher';
 import { CallStateStore } from './call-state.store';
 import { CallEventsPublisher } from './call-events.publisher';
 import { CallMembershipAccessService } from './call-membership-access.service';
@@ -41,6 +42,7 @@ export class CallConsumer {
     private readonly eventsPublisher: CallEventsPublisher,
     private readonly callTimeoutService: CallTimeoutService,
     private readonly callHistoryService: CallHistoryService,
+    private readonly outbox: NotificationOutboxPublisher,
   ) {}
 
   @EventPattern(KafkaTopics.CallStart)
@@ -118,6 +120,10 @@ export class CallConsumer {
     };
 
     this.kafkaClient.emit(KafkaTopics.CallStarted, startedEvent);
+    await this.outbox.publishToTopic(KafkaTopics.CallStarted, {
+      ...startedEvent,
+      push_recipient_ids: participantIds.filter((id) => id !== cmd.initiator_id),
+    });
     this.eventsPublisher.publishStateUpdate(cmd.conversation_id, state, {
       traceId: cmd.trace_id,
     });

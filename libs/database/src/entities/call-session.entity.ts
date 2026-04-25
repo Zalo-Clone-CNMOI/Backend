@@ -1,11 +1,15 @@
 import {
   Entity,
   Column,
-  Index,
   CreateDateColumn,
   UpdateDateColumn,
   PrimaryColumn,
 } from 'typeorm';
+
+const bigintTransformer = {
+  to: (value: number | null) => value,
+  from: (value: string | null) => (value === null ? null : Number(value)),
+};
 
 @Entity('call_sessions')
 export class CallSession {
@@ -13,7 +17,6 @@ export class CallSession {
   id: string;
 
   @Column({ type: 'uuid', name: 'conversation_id' })
-  @Index('IDX_call_sessions_conv_id')
   conversationId: string;
 
   @Column({ type: 'uuid', name: 'initiator_id' })
@@ -28,10 +31,10 @@ export class CallSession {
   @Column({ type: 'varchar', length: 20 })
   status: 'completed' | 'missed' | 'rejected' | 'timeout';
 
-  @Column({ type: 'bigint', name: 'started_at' })
+  @Column({ type: 'bigint', name: 'started_at', transformer: bigintTransformer })
   startedAt: number;
 
-  @Column({ type: 'bigint', name: 'ended_at', nullable: true })
+  @Column({ type: 'bigint', name: 'ended_at', nullable: true, transformer: bigintTransformer })
   endedAt: number | null;
 
   @Column({ type: 'int', name: 'duration_ms', nullable: true })

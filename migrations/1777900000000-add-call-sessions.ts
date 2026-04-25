@@ -34,9 +34,9 @@ export class AddCallSessions1777900000000 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP INDEX "IDX_call_sessions_started_at"`);
-    await queryRunner.query(`DROP INDEX "IDX_call_sessions_initiator_id"`);
-    await queryRunner.query(`DROP INDEX "IDX_call_sessions_conversation_id"`);
-    await queryRunner.query(`DROP TABLE "call_sessions"`);
+    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_call_sessions_started_at"`);
+    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_call_sessions_initiator_id"`);
+    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_call_sessions_conversation_id"`);
+    await queryRunner.query(`DROP TABLE IF EXISTS "call_sessions"`);
   }
 }

@@ -14,6 +14,13 @@ import {
   type GroupInviteRejectedEvent,
   type GroupInviteCancelledEvent,
   type GroupInviteExpiredEvent,
+  type ConversationPollCreatedEvent,
+  type ConversationPollEditedEvent,
+  type ConversationPollClosedEvent,
+  type ConversationPollVoteCastEvent,
+  type ConversationPollVoteRetractedEvent,
+  type ConversationPollOptionAddedEvent,
+  type ConversationPollOptionRemovedEvent,
 } from '@libs/contracts';
 import { ChatGateway } from '../../socket/chat.gateway';
 
@@ -234,6 +241,127 @@ export class InteractionFanoutConsumer {
         invited_user_id: payload.invited_user_id,
         status: payload.status,
         expired_at: payload.expired_at,
+      },
+    );
+  }
+
+  @EventPattern(KafkaTopics.ConversationPollCreated)
+  onConversationPollCreated(@Payload() payload: ConversationPollCreatedEvent) {
+    this.gateway.broadcastToConversation(
+      payload.conversation_id,
+      WsEvents.ConversationPollCreated,
+      {
+        poll_id: payload.poll_id,
+        conversation_id: payload.conversation_id,
+        message_id: payload.message_id,
+        creator_id: payload.creator_id,
+        question: payload.question,
+        options: payload.options,
+        allow_multiple: payload.allow_multiple,
+        allow_add_option: payload.allow_add_option,
+        expires_at: payload.expires_at,
+        created_at: payload.created_at,
+      },
+    );
+  }
+
+  @EventPattern(KafkaTopics.ConversationPollEdited)
+  onConversationPollEdited(@Payload() payload: ConversationPollEditedEvent) {
+    this.gateway.broadcastToConversation(
+      payload.conversation_id,
+      WsEvents.ConversationPollEdited,
+      {
+        poll_id: payload.poll_id,
+        conversation_id: payload.conversation_id,
+        editor_user_id: payload.editor_user_id,
+        changes: payload.changes,
+        edited_at: payload.edited_at,
+      },
+    );
+  }
+
+  @EventPattern(KafkaTopics.ConversationPollOptionAdded)
+  onConversationPollOptionAdded(
+    @Payload() payload: ConversationPollOptionAddedEvent,
+  ) {
+    this.gateway.broadcastToConversation(
+      payload.conversation_id,
+      WsEvents.ConversationPollOptionAdded,
+      {
+        poll_id: payload.poll_id,
+        conversation_id: payload.conversation_id,
+        option_id: payload.option_id,
+        label: payload.label,
+        order_index: payload.order_index,
+        added_by_user_id: payload.added_by_user_id,
+      },
+    );
+  }
+
+  @EventPattern(KafkaTopics.ConversationPollOptionRemoved)
+  onConversationPollOptionRemoved(
+    @Payload() payload: ConversationPollOptionRemovedEvent,
+  ) {
+    this.gateway.broadcastToConversation(
+      payload.conversation_id,
+      WsEvents.ConversationPollOptionRemoved,
+      {
+        poll_id: payload.poll_id,
+        conversation_id: payload.conversation_id,
+        option_id: payload.option_id,
+        removed_by_user_id: payload.removed_by_user_id,
+      },
+    );
+  }
+
+  @EventPattern(KafkaTopics.ConversationPollClosed)
+  onConversationPollClosed(@Payload() payload: ConversationPollClosedEvent) {
+    this.gateway.broadcastToConversation(
+      payload.conversation_id,
+      WsEvents.ConversationPollClosed,
+      {
+        poll_id: payload.poll_id,
+        conversation_id: payload.conversation_id,
+        closed_by_user_id: payload.closed_by_user_id,
+        reason: payload.reason,
+        final_tally: payload.final_tally,
+        closed_at: payload.closed_at,
+      },
+    );
+  }
+
+  @EventPattern(KafkaTopics.ConversationPollVoteCast)
+  onConversationPollVoteCast(
+    @Payload() payload: ConversationPollVoteCastEvent,
+  ) {
+    this.gateway.broadcastToConversation(
+      payload.conversation_id,
+      WsEvents.ConversationPollVoteUpdated,
+      {
+        poll_id: payload.poll_id,
+        conversation_id: payload.conversation_id,
+        tally: [],
+        total_votes: 0,
+        total_voters: 0,
+        updated_at: payload.voted_at,
+      },
+    );
+  }
+
+  @EventPattern(KafkaTopics.ConversationPollVoteRetracted)
+  onConversationPollVoteRetracted(
+    @Payload() payload: ConversationPollVoteRetractedEvent,
+  ) {
+    this.gateway.broadcastToConversation(
+      payload.conversation_id,
+      WsEvents.ConversationPollVoteUpdated,
+      {
+        poll_id: payload.poll_id,
+        conversation_id: payload.conversation_id,
+        tally: [],
+        total_votes: 0,
+        total_voters: 0,
+        updated_at: payload.retracted_at,
       },
     );
   }

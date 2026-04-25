@@ -89,14 +89,14 @@ export interface ForwardedFrom {
 }
 
 export interface ChatMessageForwardCommand {
-  message_id: string; // target-specific UUID, BFF-generated
-  conversation_id: string; // target conversation
+  message_id: string;
+  conversation_id: string;
   sender_id: string;
   sent_at: number;
-  body: string; // original message body
-  attachments?: MessageAttachment[]; // cloned keys from media-service
+  body: string;
+  attachments?: MessageAttachment[];
   forwarded_from: ForwardedFrom;
-  forward_id: string; // idempotency across the whole forward operation
+  forward_id: string;
   trace_id?: string;
 }
 
@@ -259,4 +259,41 @@ export interface ChatMessageUnpinnedEvent {
   unpinned_by: string;
   unpinned_at: number;
   trace_id?: string;
+}
+
+export interface PollMessageMetadata {
+  poll_id: string;
+  question: string;
+  options: Array<{
+    option_id: string;
+    label: string;
+    order_index: number;
+    vote_count: number;
+  }>;
+  total_votes: number;
+  total_voters: number;
+  allow_multiple: boolean;
+  allow_add_option: boolean;
+  status: 'active' | 'closed';
+  expires_at: number | null;
+  closed_at: number | null;
+  closed_reason: 'by_creator' | 'by_admin' | 'expired' | null;
+}
+
+export interface ChatPollMessageCommand {
+  message_id: string;
+  conversation_id: string;
+  sender_id: string;
+  message_type: 'poll';
+  metadata: PollMessageMetadata;
+  body: string;
+  created_at: number;
+  trace_id: string;
+}
+
+export interface ChatPollMessageUpdatedEvent {
+  message_id: string;
+  conversation_id: string;
+  metadata: PollMessageMetadata;
+  trace_id: string;
 }

@@ -39,6 +39,15 @@ describe('ConversationsController (BFF)', () => {
       endConversationCall: jest
         .fn()
         .mockResolvedValue({ message: 'Call end requested' }),
+      createPoll: jest.fn().mockResolvedValue({ id: 'poll-1' }),
+      listPolls: jest.fn().mockResolvedValue({ items: [], total: 0 }),
+      getPollDetail: jest.fn().mockResolvedValue({ id: 'poll-1' }),
+      editPoll: jest.fn().mockResolvedValue({ id: 'poll-1' }),
+      castPollVote: jest.fn().mockResolvedValue({ ok: true }),
+      retractPollVote: jest.fn().mockResolvedValue({ ok: true }),
+      addPollOption: jest.fn().mockResolvedValue({ id: 'opt-1' }),
+      removePollOption: jest.fn().mockResolvedValue({ ok: true }),
+      closePoll: jest.fn().mockResolvedValue({ ok: true }),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -267,6 +276,141 @@ describe('ConversationsController (BFF)', () => {
         dto,
       );
       expect(result).toEqual({ message: 'Call end requested' });
+    });
+  });
+
+  // ─── Polls ──────────────────────────────────────────────
+
+  describe('POST /:conversationId/polls (createPoll)', () => {
+    it('should delegate with token, conversationId, and DTO', async () => {
+      const dto = {
+        question: 'Lunch?',
+        options: [{ label: 'A' }, { label: 'B' }],
+      };
+      const result = await controller.createPoll(TOKEN, 'conv-1', dto);
+
+      expect(svc.createPoll).toHaveBeenCalledWith(TOKEN, 'conv-1', dto);
+      expect(result).toEqual({ id: 'poll-1' });
+    });
+  });
+
+  describe('GET /:conversationId/polls (listPolls)', () => {
+    it('should delegate with token, conversationId, and query', async () => {
+      const query = { page: 1, limit: 20 };
+      const result = await controller.listPolls(TOKEN, 'conv-1', query);
+
+      expect(svc.listPolls).toHaveBeenCalledWith(TOKEN, 'conv-1', query);
+      expect(result).toEqual({ items: [], total: 0 });
+    });
+  });
+
+  describe('GET /:conversationId/polls/:pollId (getPollDetail)', () => {
+    it('should delegate with token, conversationId, and pollId', async () => {
+      const result = await controller.getPollDetail(TOKEN, 'conv-1', 'poll-1');
+
+      expect(svc.getPollDetail).toHaveBeenCalledWith(TOKEN, 'conv-1', 'poll-1');
+      expect(result).toEqual({ id: 'poll-1' });
+    });
+  });
+
+  describe('PATCH /:conversationId/polls/:pollId (editPoll)', () => {
+    it('should delegate with token, conversationId, pollId, and DTO', async () => {
+      const dto = { question: 'Updated?' };
+      const result = await controller.editPoll(TOKEN, 'conv-1', 'poll-1', dto);
+
+      expect(svc.editPoll).toHaveBeenCalledWith(TOKEN, 'conv-1', 'poll-1', dto);
+      expect(result).toEqual({ id: 'poll-1' });
+    });
+  });
+
+  describe('POST /:conversationId/polls/:pollId/vote (castPollVote)', () => {
+    it('should delegate option_ids array (not the wrapper DTO)', async () => {
+      const dto = { option_ids: ['opt-1', 'opt-2'] };
+      const result = await controller.castPollVote(
+        TOKEN,
+        'conv-1',
+        'poll-1',
+        dto,
+      );
+
+      expect(svc.castPollVote).toHaveBeenCalledWith(TOKEN, 'conv-1', 'poll-1', [
+        'opt-1',
+        'opt-2',
+      ]);
+      expect(result).toEqual({ ok: true });
+    });
+  });
+
+  describe('DELETE /:conversationId/polls/:pollId/vote (retractPollVote)', () => {
+    it('should delegate with token, conversationId, and pollId', async () => {
+      const result = await controller.retractPollVote(
+        TOKEN,
+        'conv-1',
+        'poll-1',
+      );
+
+      expect(svc.retractPollVote).toHaveBeenCalledWith(
+        TOKEN,
+        'conv-1',
+        'poll-1',
+      );
+      expect(result).toEqual({ ok: true });
+    });
+  });
+
+  describe('POST /:conversationId/polls/:pollId/options (addPollOption)', () => {
+    it('should delegate label string (not the wrapper DTO)', async () => {
+      const dto = { label: 'Pho' };
+      const result = await controller.addPollOption(
+        TOKEN,
+        'conv-1',
+        'poll-1',
+        dto,
+      );
+
+      expect(svc.addPollOption).toHaveBeenCalledWith(
+        TOKEN,
+        'conv-1',
+        'poll-1',
+        'Pho',
+      );
+      expect(result).toEqual({ id: 'opt-1' });
+    });
+  });
+
+  describe('DELETE /:conversationId/polls/:pollId/options/:optionId (removePollOption)', () => {
+    it('should delegate with token, conversationId, pollId, optionId', async () => {
+      const result = await controller.removePollOption(
+        TOKEN,
+        'conv-1',
+        'poll-1',
+        'opt-2',
+      );
+
+      expect(svc.removePollOption).toHaveBeenCalledWith(
+        TOKEN,
+        'conv-1',
+        'poll-1',
+        'opt-2',
+      );
+      expect(result).toEqual({ ok: true });
+    });
+
+    it('should propagate permission errors', async () => {
+      svc.removePollOption.mockRejectedValue(new Error('Forbidden'));
+
+      await expect(
+        controller.removePollOption(TOKEN, 'conv-1', 'poll-1', 'opt-2'),
+      ).rejects.toThrow('Forbidden');
+    });
+  });
+
+  describe('POST /:conversationId/polls/:pollId/close (closePoll)', () => {
+    it('should delegate with token, conversationId, and pollId', async () => {
+      const result = await controller.closePoll(TOKEN, 'conv-1', 'poll-1');
+
+      expect(svc.closePoll).toHaveBeenCalledWith(TOKEN, 'conv-1', 'poll-1');
+      expect(result).toEqual({ ok: true });
     });
   });
 });

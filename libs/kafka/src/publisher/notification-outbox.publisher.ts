@@ -12,7 +12,16 @@ import { randomUUID } from 'crypto';
 import { APP_CONFIG, type AppConfig } from '@libs/config';
 import {
   KafkaTopics,
+  type ChatPollMessageCommand,
+  type ChatPollMessageUpdatedEvent,
   type ConversationMemberAddedEvent,
+  type ConversationPollClosedEvent,
+  type ConversationPollCreatedEvent,
+  type ConversationPollEditedEvent,
+  type ConversationPollOptionAddedEvent,
+  type ConversationPollOptionRemovedEvent,
+  type ConversationPollVoteCastEvent,
+  type ConversationPollVoteRetractedEvent,
   type GroupInviteAcceptedEvent,
   type GroupInviteCancelledEvent,
   type GroupInviteExpiredEvent,
@@ -47,6 +56,15 @@ type OutboxTopicPayloadMap = {
   [KafkaTopics.GroupInviteRejected]: GroupInviteRejectedEvent;
   [KafkaTopics.GroupInviteCancelled]: GroupInviteCancelledEvent;
   [KafkaTopics.ConversationMemberAdded]: ConversationMemberAddedEvent;
+  [KafkaTopics.ConversationPollCreated]: ConversationPollCreatedEvent;
+  [KafkaTopics.ConversationPollClosed]: ConversationPollClosedEvent;
+  [KafkaTopics.ConversationPollOptionAdded]: ConversationPollOptionAddedEvent;
+  [KafkaTopics.ConversationPollOptionRemoved]: ConversationPollOptionRemovedEvent;
+  [KafkaTopics.ConversationPollEdited]: ConversationPollEditedEvent;
+  [KafkaTopics.ConversationPollVoteCast]: ConversationPollVoteCastEvent;
+  [KafkaTopics.ConversationPollVoteRetracted]: ConversationPollVoteRetractedEvent;
+  [KafkaTopics.ChatPollMessageCreated]: ChatPollMessageCommand;
+  [KafkaTopics.ChatPollMessageUpdated]: ChatPollMessageUpdatedEvent;
 };
 
 type RedisClaimResult =

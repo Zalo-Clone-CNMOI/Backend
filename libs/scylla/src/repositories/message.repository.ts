@@ -118,9 +118,6 @@ export class MessageRepository {
       ? JSON.stringify(message.forwarded_from)
       : null;
 
-    // Logged BATCH ensures both tables are written atomically.
-    // If the coordinator fails after the batch log is written, the batch
-    // will be replayed by the cluster on recovery.
     await this.client.batch(
       [
         {
@@ -196,6 +193,48 @@ export class MessageRepository {
   }
 
   async insertInviteMessage(message: {
+    message_id: string;
+    conversation_id: string;
+    sender_id: string;
+    message_type: string;
+    metadata: Record<string, unknown>;
+    body: string;
+    created_at: number;
+  }): Promise<void> {
+    const metadataJson = JSON.stringify(message.metadata);
+
+    await this.client.batch(
+      [
+        {
+          query: `INSERT INTO messages_by_conversation
+                  (conversation_id, created_at, message_id, sender_id, body,
+                   message_type, metadata)
+                  VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          params: [
+            message.conversation_id,
+            message.created_at,
+            message.message_id,
+            message.sender_id,
+            message.body,
+            message.message_type,
+            metadataJson,
+          ],
+        },
+        {
+          query:
+            'INSERT INTO messages_by_id (message_id, conversation_id, created_at) VALUES (?, ?, ?)',
+          params: [
+            message.message_id,
+            message.conversation_id,
+            message.created_at,
+          ],
+        },
+      ],
+      { prepare: true },
+    );
+  }
+
+  async insertPollMessage(message: {
     message_id: string;
     conversation_id: string;
     sender_id: string;
@@ -486,10 +525,9 @@ export class MessageRepository {
       { prepare: true },
     );
 
-    // Counter table: atomic increment — no race conditions
     await this.client.execute(
-      `UPDATE message_reaction_counts 
-       SET count = count + 1 
+      `UPDATE message_reaction_counts
+       SET count = count + 1
        WHERE message_id = ? AND reaction_type = ?`,
       [reaction.message_id, reaction.reaction_type],
       { prepare: true },
@@ -510,7 +548,6 @@ export class MessageRepository {
     );
 
     if (result.rowLength > 0) {
-      // Counter table: one atomic decrement per reaction_type row
       const decrementPromises: Promise<types.ResultSet>[] = [];
       for (const row of result.rows) {
         const reactionType = row.get('reaction_type') as string;
@@ -575,7 +612,6 @@ export class MessageRepository {
     const stats: Record<string, number> = {};
     for (const row of result.rows) {
       const reactionType = row.get('reaction_type') as string;
-      // ScyllaDB counters are returned as Long; coerce to JS number
       const count = row.get('count') as { toNumber?: () => number } | number;
       stats[reactionType] =
         typeof count === 'object' && count !== null && 'toNumber' in count

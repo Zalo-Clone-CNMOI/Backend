@@ -10,10 +10,8 @@ export const WsEvents = {
   ChatEdit: 'chat:edit',
   ChatMessageUpdated: 'chat:message:updated',
   ChatDelete: 'chat:delete',
-  // Backward-compatible alias for recall-only semantics.
   ChatRecall: 'chat:delete',
   ChatMessageDeleted: 'chat:message:deleted',
-  // Backward-compatible alias for recall-only semantics.
   ChatMessageRecalled: 'chat:message:deleted',
   ChatReact: 'chat:react',
   ChatUnreact: 'chat:unreact',
@@ -52,6 +50,13 @@ export const WsEvents = {
   GroupInviteCancelled: 'group:invite:cancelled',
   GroupInviteExpired: 'group:invite:expired',
 
+  ConversationPollCreated: 'group:poll:created',
+  ConversationPollEdited: 'group:poll:edited',
+  ConversationPollVoteUpdated: 'group:poll:vote:updated',
+  ConversationPollOptionAdded: 'group:poll:option:added',
+  ConversationPollOptionRemoved: 'group:poll:option:removed',
+  ConversationPollClosed: 'group:poll:closed',
+
   PresenceHeartbeat: 'presence:heartbeat',
   PresenceUpdate: 'presence:update',
 
@@ -69,14 +74,11 @@ export const WsEvents = {
   ConversationPinned: 'conversation:pinned',
   ConversationUnpinned: 'conversation:unpinned',
 
-  // ── Notification Events ─────────────────────────────────────────────
   NotificationSent: 'notification:sent',
   NotificationFailed: 'notification:failed',
 
-  // ── Error Events ───────────────────────────────────────────────────
   WsError: 'ws:error',
 
-  // ── AI Events ──────────────────────────────────────────────────────
   AiSmartReplyRequest: 'ai:smart-reply:request',
   AiSmartReplyResult: 'ai:smart-reply:result',
   AiSummaryRequest: 'ai:summary:request',
@@ -93,11 +95,6 @@ export const WsEvents = {
 
 export type WsEventName = (typeof WsEvents)[keyof typeof WsEvents];
 
-/**
- * Standardized WS error envelope — emitted on `ws:error` for all auth/authz
- * rejections and unhandled handler exceptions. Mirrors the HTTP envelope's
- * `error.code` / `error.message` fields for client-side symmetry.
- */
 export interface WsErrorPayload {
   code: string;
   message: string;
@@ -187,7 +184,6 @@ export interface WsChatMessageDeletedPayload {
   deleted_at: number;
 }
 
-// Backward-compatible alias for recall-only semantics.
 export type WsChatMessageRecalledPayload = WsChatMessageDeletedPayload;
 
 export interface WsChatReactPayload {
@@ -386,7 +382,6 @@ export interface WsChatAckPayload {
   reason?: string;
 }
 
-// QR Code Login Payloads
 export interface WsQrConfirmedPayload {
   sessionId: string;
   accessToken: string;
@@ -411,7 +406,6 @@ export interface WsQrBindIssuedPayload {
   expiresInSeconds: number;
 }
 
-// Friend Request Payloads
 export interface WsSendFriendRequestPayload {
   requestId: string;
   requester: {
@@ -554,8 +548,6 @@ export interface WsGroupInviteExpiredPayload {
   expired_at: number;
 }
 
-// ── Notification WebSocket Payloads ──────────────────────────────────────
-
 export interface WsNotificationSentPayload {
   provider: string;
   channel: string;
@@ -575,8 +567,6 @@ export interface WsNotificationFailedPayload {
   failed_at: number;
   trace_id?: string;
 }
-
-// ── AI WebSocket Payloads ──────────────────────────────────────────────
 
 export interface WsAiSmartReplyRequestPayload {
   conversation_id: string;
@@ -683,4 +673,65 @@ export interface WsAiStreamCompletePayload {
   conversation_id: string;
   feature: string;
   total_chunks: number;
+}
+
+export interface WsConversationPollCreatedPayload {
+  poll_id: string;
+  conversation_id: string;
+  message_id: string;
+  creator_id: string;
+  question: string;
+  options: Array<{ option_id: string; label: string; order_index: number }>;
+  allow_multiple: boolean;
+  allow_add_option: boolean;
+  expires_at: number | null;
+  created_at: number;
+}
+
+export interface WsConversationPollVoteUpdatedPayload {
+  poll_id: string;
+  conversation_id: string;
+  tally: Array<{ option_id: string; vote_count: number }>;
+  total_votes: number;
+  total_voters: number;
+  updated_at: number;
+}
+
+export interface WsConversationPollOptionAddedPayload {
+  poll_id: string;
+  conversation_id: string;
+  option_id: string;
+  label: string;
+  order_index: number;
+  added_by_user_id: string;
+}
+
+export interface WsConversationPollOptionRemovedPayload {
+  poll_id: string;
+  conversation_id: string;
+  option_id: string;
+  removed_by_user_id: string;
+}
+
+export interface WsConversationPollEditedPayload {
+  poll_id: string;
+  conversation_id: string;
+  editor_user_id: string;
+  changes: {
+    question?: string;
+    allow_multiple?: boolean;
+    allow_add_option?: boolean;
+    expires_at?: number | null;
+    edited_option_labels?: Array<{ option_id: string; label: string }>;
+  };
+  edited_at: number;
+}
+
+export interface WsConversationPollClosedPayload {
+  poll_id: string;
+  conversation_id: string;
+  closed_by_user_id: string | null;
+  reason: 'by_creator' | 'by_admin' | 'expired';
+  final_tally: Array<{ option_id: string; vote_count: number }>;
+  closed_at: number;
 }

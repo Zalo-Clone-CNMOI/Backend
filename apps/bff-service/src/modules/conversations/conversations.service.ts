@@ -12,6 +12,7 @@ import {
   UpdateMemberSettingsDto,
   EndConversationCallDto,
 } from '@app/clients/interaction-client';
+import { CreatePollDto, EditPollDto, ListPollsQueryDto } from './dto';
 
 @Injectable()
 export class ConversationsService {
@@ -225,6 +226,110 @@ export class ConversationsService {
       conversationId,
       callId,
       dto,
+    );
+  }
+
+  async createPoll(
+    accessToken: string,
+    conversationId: string,
+    dto: CreatePollDto,
+  ) {
+    return this.interactionClient.createPoll(accessToken, conversationId, dto);
+  }
+
+  async listPolls(
+    accessToken: string,
+    conversationId: string,
+    query: ListPollsQueryDto,
+  ) {
+    return this.interactionClient.listPolls(accessToken, conversationId, query);
+  }
+
+  async getPollDetail(
+    accessToken: string,
+    conversationId: string,
+    pollId: string,
+  ) {
+    return this.interactionClient.getPollDetail(
+      accessToken,
+      conversationId,
+      pollId,
+    );
+  }
+
+  async editPoll(
+    accessToken: string,
+    conversationId: string,
+    pollId: string,
+    dto: EditPollDto,
+  ) {
+    return this.interactionClient.editPoll(
+      accessToken,
+      conversationId,
+      pollId,
+      dto,
+    );
+  }
+
+  async castPollVote(
+    accessToken: string,
+    conversationId: string,
+    pollId: string,
+    optionIds: string[],
+  ) {
+    return this.interactionClient.castPollVote(
+      accessToken,
+      conversationId,
+      pollId,
+      optionIds,
+    );
+  }
+
+  async retractPollVote(
+    accessToken: string,
+    conversationId: string,
+    pollId: string,
+  ) {
+    return this.interactionClient.retractPollVote(
+      accessToken,
+      conversationId,
+      pollId,
+    );
+  }
+
+  async addPollOption(
+    accessToken: string,
+    conversationId: string,
+    pollId: string,
+    label: string,
+  ) {
+    return this.interactionClient.addPollOption(
+      accessToken,
+      conversationId,
+      pollId,
+      label,
+    );
+  }
+
+  async removePollOption(
+    accessToken: string,
+    conversationId: string,
+    pollId: string,
+    optionId: string,
+  ) {
+    return this.interactionClient.removePollOption(
+      accessToken,
+      conversationId,
+      pollId,
+      optionId,
+    );
+  }
+
+  async closePoll(accessToken: string, conversationId: string, pollId: string) {
+    return this.interactionClient.closePoll(
+      accessToken,
+      conversationId,
+      pollId,
     );
   }
 }

@@ -1,5 +1,3 @@
-// ── Notification Types ──────────────────────────────────────────────────
-
 export enum NotificationType {
   ChatMessage = 'chat_message',
   FriendRequest = 'friend_request',
@@ -8,6 +6,8 @@ export enum NotificationType {
   GroupInviteAccepted = 'group_invite_accepted',
   GroupInviteRejected = 'group_invite_rejected',
   GroupInviteCancelled = 'group_invite_cancelled',
+  GroupPoll = 'group_poll',
+  GroupPollClosed = 'group_poll_closed',
   Reaction = 'reaction',
   MissedCall = 'missed_call',
   System = 'system',
@@ -16,8 +16,6 @@ export enum NotificationType {
 export type NotificationChannel = 'push';
 
 export type NotificationProvider = 'fcm' | 'mock';
-
-// ── Rich Notification ──────────────────────────────────────────────────
 
 export interface RichNotificationPayload {
   image_url?: string;
@@ -30,8 +28,6 @@ export interface RichNotificationPayload {
   ttl_seconds?: number;
   collapse_key?: string;
 }
-
-// ── Commands ───────────────────────────────────────────────────────────
 
 export interface NotificationRequestedEvent {
   channel: NotificationChannel;
@@ -51,8 +47,6 @@ export interface NotificationBatchCommand {
   requested_at: number;
   trace_id?: string;
 }
-
-// ── Events ─────────────────────────────────────────────────────────────
 
 export interface NotificationSentEvent {
   provider: NotificationProvider;

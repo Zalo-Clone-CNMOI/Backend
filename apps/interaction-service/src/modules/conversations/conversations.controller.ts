@@ -44,6 +44,11 @@ import {
   ConversationListItemDto,
   ConversationDetailDto,
   ConversationCallStateResponseDto,
+  CreatePollDto,
+  EditPollDto,
+  CastVoteDto,
+  AddPollOptionDto,
+  ListPollsQueryDto,
 } from './dto';
 
 @ApiTags('Conversations')
@@ -52,9 +57,6 @@ import {
 export class ConversationsController {
   constructor(private readonly conversationsService: ConversationsService) {}
 
-  /**
-   * Get conversations for current user
-   */
   @Get()
   @Throttle({ default: { limit: 20, ttl: 60000 } })
   @ApiOperation({ summary: 'Get conversations for current user' })
@@ -70,9 +72,6 @@ export class ConversationsController {
     return this.conversationsService.getConversations(user.id, query);
   }
 
-  /**
-   * Get conversation by ID
-   */
   @Get(':conversationId')
   @Throttle({ default: { limit: 30, ttl: 60000 } })
   @ApiOperation({ summary: 'Get conversation details' })
@@ -93,9 +92,6 @@ export class ConversationsController {
     );
   }
 
-  /**
-   * Create group conversation
-   */
   @Post('group')
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({ summary: 'Create group conversation' })
@@ -111,9 +107,6 @@ export class ConversationsController {
     return this.conversationsService.createGroupConversation(user.id, dto);
   }
 
-  /**
-   * Create or get direct conversation
-   */
   @Post('direct')
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({ summary: 'Create or get direct conversation' })
@@ -129,9 +122,6 @@ export class ConversationsController {
     return this.conversationsService.createDirectConversation(user.id, dto);
   }
 
-  /**
-   * Update conversation (group only)
-   */
   @Patch(':conversationId')
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({ summary: 'Update conversation' })
@@ -153,9 +143,6 @@ export class ConversationsController {
     );
   }
 
-  /**
-   * Add members to group
-   */
   @Post(':conversationId/members')
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({ summary: 'Add members to group conversation' })
@@ -173,9 +160,6 @@ export class ConversationsController {
     return this.conversationsService.addMembers(user.id, conversationId, dto);
   }
 
-  /**
-   * Remove member from group
-   */
   @Delete(':conversationId/members/:memberId')
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({ summary: 'Remove member from group conversation' })
@@ -194,9 +178,6 @@ export class ConversationsController {
     );
   }
 
-  /**
-   * Leave conversation
-   */
   @Post(':conversationId/leave')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 10, ttl: 60000 } })
@@ -210,9 +191,6 @@ export class ConversationsController {
     return this.conversationsService.leaveConversation(user.id, conversationId);
   }
 
-  /**
-   * Disband group conversation
-   */
   @Post(':conversationId/disband')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 5, ttl: 60000 } })
@@ -229,9 +207,6 @@ export class ConversationsController {
     );
   }
 
-  /**
-   * Transfer ownership to another member
-   */
   @Post(':conversationId/transfer-ownership')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 5, ttl: 60000 } })
@@ -252,9 +227,6 @@ export class ConversationsController {
     );
   }
 
-  /**
-   * Send group invites
-   */
   @Post(':conversationId/invites')
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({ summary: 'Send invites to group conversation users' })
@@ -272,9 +244,6 @@ export class ConversationsController {
     );
   }
 
-  /**
-   * Get pending invites for current user
-   */
   @Get('invites/pending')
   @Throttle({ default: { limit: 20, ttl: 60000 } })
   @ApiOperation({ summary: 'Get pending group invites for current user' })
@@ -286,9 +255,6 @@ export class ConversationsController {
     return this.conversationsService.getPendingGroupInvites(user.id, query);
   }
 
-  /**
-   * Get invites by conversation (admin/owner)
-   */
   @Get(':conversationId/invites')
   @Throttle({ default: { limit: 20, ttl: 60000 } })
   @ApiOperation({ summary: 'Get group invites by conversation' })
@@ -306,9 +272,6 @@ export class ConversationsController {
     );
   }
 
-  /**
-   * Accept invite
-   */
   @Post(':conversationId/invites/:inviteId/accept')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 20, ttl: 60000 } })
@@ -328,9 +291,6 @@ export class ConversationsController {
     );
   }
 
-  /**
-   * Reject invite
-   */
   @Post(':conversationId/invites/:inviteId/reject')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 20, ttl: 60000 } })
@@ -350,9 +310,6 @@ export class ConversationsController {
     );
   }
 
-  /**
-   * Cancel invite
-   */
   @Post(':conversationId/invites/:inviteId/cancel')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 20, ttl: 60000 } })
@@ -372,9 +329,6 @@ export class ConversationsController {
     );
   }
 
-  /**
-   * Update member role
-   */
   @Patch(':conversationId/members/:memberId/role')
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({ summary: 'Update member role (owner only)' })
@@ -395,9 +349,6 @@ export class ConversationsController {
     );
   }
 
-  /**
-   * Update my settings in conversation
-   */
   @Patch(':conversationId/settings')
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({ summary: 'Update my settings in conversation' })
@@ -415,9 +366,6 @@ export class ConversationsController {
     );
   }
 
-  /**
-   * Mark conversation as read
-   */
   @Post(':conversationId/read')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 20, ttl: 60000 } })
@@ -431,9 +379,6 @@ export class ConversationsController {
     return this.conversationsService.markAsRead(user.id, conversationId);
   }
 
-  /**
-   * Pin conversation for current user
-   */
   @Post(':conversationId/pin')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 20, ttl: 60000 } })
@@ -447,9 +392,6 @@ export class ConversationsController {
     return this.conversationsService.pinConversation(user.id, conversationId);
   }
 
-  /**
-   * Unpin conversation for current user
-   */
   @Delete(':conversationId/pin')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 20, ttl: 60000 } })
@@ -463,9 +405,6 @@ export class ConversationsController {
     return this.conversationsService.unpinConversation(user.id, conversationId);
   }
 
-  /**
-   * Get active call state for conversation
-   */
   @Get(':conversationId/call-state')
   @Throttle({ default: { limit: 30, ttl: 60000 } })
   @ApiOperation({ summary: 'Get active call state for a conversation' })
@@ -485,9 +424,6 @@ export class ConversationsController {
     );
   }
 
-  /**
-   * End active call for conversation
-   */
   @Post(':conversationId/calls/:callId/end')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 20, ttl: 60000 } })
@@ -507,5 +443,146 @@ export class ConversationsController {
       callId,
       dto,
     );
+  }
+
+  @Post(':conversationId/polls')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @ApiOperation({ summary: 'Create poll in a group conversation' })
+  @ApiParam({ name: 'conversationId', description: 'Conversation ID' })
+  @ApiResponse({ status: 201, description: 'Poll created' })
+  async createPoll(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('conversationId', ParseUUIDPipe) conversationId: string,
+    @Body() dto: CreatePollDto,
+  ) {
+    return this.conversationsService.createPoll(user.id, conversationId, dto);
+  }
+
+  @Get(':conversationId/polls')
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
+  @ApiOperation({ summary: 'List polls in a conversation' })
+  @ApiParam({ name: 'conversationId', description: 'Conversation ID' })
+  @ApiResponse({ status: 200, description: 'Poll list' })
+  async listPolls(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('conversationId', ParseUUIDPipe) conversationId: string,
+    @Query() query: ListPollsQueryDto,
+  ) {
+    return this.conversationsService.listPolls(user.id, conversationId, query);
+  }
+
+  @Get(':conversationId/polls/:pollId')
+  @Throttle({ default: { limit: 60, ttl: 60000 } })
+  @ApiOperation({ summary: 'Get poll detail' })
+  @ApiParam({ name: 'conversationId', description: 'Conversation ID' })
+  @ApiParam({ name: 'pollId', description: 'Poll ID' })
+  @ApiResponse({ status: 200, description: 'Poll detail' })
+  async getPollDetail(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('conversationId', ParseUUIDPipe) _conversationId: string,
+    @Param('pollId', ParseUUIDPipe) pollId: string,
+  ) {
+    return this.conversationsService.getPollDetail(user.id, pollId);
+  }
+
+  @Patch(':conversationId/polls/:pollId')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @ApiOperation({ summary: 'Edit poll (creator only)' })
+  @ApiParam({ name: 'conversationId', description: 'Conversation ID' })
+  @ApiParam({ name: 'pollId', description: 'Poll ID' })
+  @ApiResponse({ status: 200, description: 'Poll edited' })
+  async editPoll(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('conversationId', ParseUUIDPipe) _conversationId: string,
+    @Param('pollId', ParseUUIDPipe) pollId: string,
+    @Body() dto: EditPollDto,
+  ) {
+    return this.conversationsService.editPoll(user.id, pollId, dto);
+  }
+
+  @Post(':conversationId/polls/:pollId/vote')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
+  @ApiOperation({ summary: 'Cast or replace vote (full desired option set)' })
+  @ApiParam({ name: 'conversationId', description: 'Conversation ID' })
+  @ApiParam({ name: 'pollId', description: 'Poll ID' })
+  @ApiResponse({ status: 200, description: 'Vote recorded' })
+  async castPollVote(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('conversationId', ParseUUIDPipe) _conversationId: string,
+    @Param('pollId', ParseUUIDPipe) pollId: string,
+    @Body() dto: CastVoteDto,
+  ) {
+    return this.conversationsService.castPollVote(
+      user.id,
+      pollId,
+      dto.option_ids,
+    );
+  }
+
+  @Delete(':conversationId/polls/:pollId/vote')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
+  @ApiOperation({ summary: "Retract all of caller's votes" })
+  @ApiParam({ name: 'conversationId', description: 'Conversation ID' })
+  @ApiParam({ name: 'pollId', description: 'Poll ID' })
+  @ApiResponse({ status: 200, description: 'Votes retracted (idempotent)' })
+  async retractPollVote(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('conversationId', ParseUUIDPipe) _conversationId: string,
+    @Param('pollId', ParseUUIDPipe) pollId: string,
+  ) {
+    return this.conversationsService.retractPollVote(user.id, pollId);
+  }
+
+  @Post(':conversationId/polls/:pollId/options')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @ApiOperation({ summary: 'Add option to an active poll' })
+  @ApiParam({ name: 'conversationId', description: 'Conversation ID' })
+  @ApiParam({ name: 'pollId', description: 'Poll ID' })
+  @ApiResponse({ status: 201, description: 'Option added' })
+  async addPollOption(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('conversationId', ParseUUIDPipe) _conversationId: string,
+    @Param('pollId', ParseUUIDPipe) pollId: string,
+    @Body() dto: AddPollOptionDto,
+  ) {
+    return this.conversationsService.addPollOption(user.id, pollId, dto.label);
+  }
+
+  @Delete(':conversationId/polls/:pollId/options/:optionId')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @ApiOperation({ summary: 'Remove option from poll (creator only)' })
+  @ApiParam({ name: 'conversationId', description: 'Conversation ID' })
+  @ApiParam({ name: 'pollId', description: 'Poll ID' })
+  @ApiParam({ name: 'optionId', description: 'Option ID' })
+  @ApiResponse({ status: 200, description: 'Option removed' })
+  async removePollOption(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('conversationId', ParseUUIDPipe) _conversationId: string,
+    @Param('pollId', ParseUUIDPipe) pollId: string,
+    @Param('optionId', ParseUUIDPipe) optionId: string,
+  ) {
+    return this.conversationsService.removePollOption(
+      user.id,
+      pollId,
+      optionId,
+    );
+  }
+
+  @Post(':conversationId/polls/:pollId/close')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @ApiOperation({ summary: 'Close poll' })
+  @ApiParam({ name: 'conversationId', description: 'Conversation ID' })
+  @ApiParam({ name: 'pollId', description: 'Poll ID' })
+  @ApiResponse({ status: 200, description: 'Poll closed' })
+  async closePoll(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('conversationId', ParseUUIDPipe) _conversationId: string,
+    @Param('pollId', ParseUUIDPipe) pollId: string,
+  ) {
+    return this.conversationsService.closePoll(user.id, pollId);
   }
 }

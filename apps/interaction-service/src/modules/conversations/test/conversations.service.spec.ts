@@ -21,6 +21,8 @@ import { UpdateMemberRoleDtoRoleEnum } from '@app/constant';
 import { ConversationCoreService } from '../services/conversation-core.service';
 import { ConversationMemberService } from '../services/conversation-member.service';
 import { GroupInviteService } from '../services/group-invite.service';
+import { ConversationPollService } from '../services/conversation-poll.service';
+import { ConversationVoteService } from '../services/conversation-vote.service';
 import { IsNull } from 'typeorm';
 
 // ─── Mock Enums ──────────────────────────────────────────
@@ -98,6 +100,8 @@ describe('ConversationsService', () => {
   let kafkaClient: Record<string, jest.Mock>;
   let notificationPublisher: Record<string, jest.Mock>;
   let redisClient: Record<string, jest.Mock>;
+  let pollService: Record<string, jest.Mock>;
+  let voteService: Record<string, jest.Mock>;
 
   beforeEach(async () => {
     userRepository = {
@@ -165,12 +169,41 @@ describe('ConversationsService', () => {
       del: jest.fn().mockResolvedValue(1),
     };
 
+    pollService = {
+      createPoll: jest.fn().mockResolvedValue({ poll_id: uuid(5) }),
+      listPolls: jest
+        .fn()
+        .mockResolvedValue({ items: [], total: 0, page: 1, limit: 20 }),
+      getPollDetail: jest.fn().mockResolvedValue({ poll_id: uuid(5) }),
+      editPoll: jest.fn().mockResolvedValue({ poll_id: uuid(5), edited_at: 1 }),
+      addOption: jest.fn().mockResolvedValue({ option_id: uuid(6) }),
+      removeOption: jest.fn().mockResolvedValue({ option_id: uuid(6) }),
+      closePoll: jest.fn().mockResolvedValue({
+        poll_id: uuid(5),
+        status: 'closed',
+        final_tally: [],
+      }),
+    };
+
+    voteService = {
+      castVote: jest.fn().mockResolvedValue({
+        poll_id: uuid(5),
+        option_ids_added: [],
+        option_ids_removed: [],
+      }),
+      retractVote: jest
+        .fn()
+        .mockResolvedValue({ poll_id: uuid(5), deleted: 0 }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ConversationsService,
         ConversationCoreService,
         ConversationMemberService,
         GroupInviteService,
+        { provide: ConversationPollService, useValue: pollService },
+        { provide: ConversationVoteService, useValue: voteService },
         { provide: getRepositoryToken(User), useValue: userRepository },
         {
           provide: getRepositoryToken(Conversation),
@@ -1293,6 +1326,78 @@ describe('ConversationsService', () => {
       expect(redisClient.del).toHaveBeenCalledWith(
         `conversation:unread:${uuid(2)}:${uuid(1)}`,
       );
+    });
+  });
+
+  // ─── Polls (passthrough delegation) ──────────────────────
+
+  describe('poll passthroughs', () => {
+    const userId = uuid(2);
+    const convId = uuid(1);
+    const pollId = uuid(5);
+    const optionId = uuid(6);
+
+    it('createPoll delegates to pollService.createPoll', async () => {
+      const dto = {
+        question: 'Q?',
+        options: [{ label: 'A' }, { label: 'B' }],
+      } as unknown as Parameters<typeof service.createPoll>[2];
+
+      const result = await service.createPoll(userId, convId, dto);
+
+      expect(pollService.createPoll).toHaveBeenCalledWith(userId, convId, dto);
+      expect(result).toEqual({ poll_id: uuid(5) });
+    });
+
+    it('listPolls delegates to pollService.listPolls', async () => {
+      const query = { page: 1, limit: 20 };
+      await service.listPolls(userId, convId, query);
+      expect(pollService.listPolls).toHaveBeenCalledWith(userId, convId, query);
+    });
+
+    it('getPollDetail delegates to pollService.getPollDetail', async () => {
+      await service.getPollDetail(userId, pollId);
+      expect(pollService.getPollDetail).toHaveBeenCalledWith(userId, pollId);
+    });
+
+    it('editPoll delegates to pollService.editPoll', async () => {
+      const dto = { question: 'New?' };
+      await service.editPoll(userId, pollId, dto);
+      expect(pollService.editPoll).toHaveBeenCalledWith(userId, pollId, dto);
+    });
+
+    it('castPollVote delegates to voteService.castVote', async () => {
+      const ids = [optionId];
+      await service.castPollVote(userId, pollId, ids);
+      expect(voteService.castVote).toHaveBeenCalledWith(userId, pollId, ids);
+    });
+
+    it('retractPollVote delegates to voteService.retractVote', async () => {
+      await service.retractPollVote(userId, pollId);
+      expect(voteService.retractVote).toHaveBeenCalledWith(userId, pollId);
+    });
+
+    it('addPollOption delegates to pollService.addOption', async () => {
+      await service.addPollOption(userId, pollId, 'Vietnamese');
+      expect(pollService.addOption).toHaveBeenCalledWith(
+        userId,
+        pollId,
+        'Vietnamese',
+      );
+    });
+
+    it('removePollOption delegates to pollService.removeOption', async () => {
+      await service.removePollOption(userId, pollId, optionId);
+      expect(pollService.removeOption).toHaveBeenCalledWith(
+        userId,
+        pollId,
+        optionId,
+      );
+    });
+
+    it('closePoll delegates to pollService.closePoll', async () => {
+      await service.closePoll(userId, pollId);
+      expect(pollService.closePoll).toHaveBeenCalledWith(userId, pollId);
     });
   });
 });

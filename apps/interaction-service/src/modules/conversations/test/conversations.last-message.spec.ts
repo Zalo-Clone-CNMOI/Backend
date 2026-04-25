@@ -14,6 +14,8 @@ import { UpdateMemberRoleDtoRoleEnum } from '@app/constant';
 import { ConversationCoreService } from '../services/conversation-core.service';
 import { ConversationMemberService } from '../services/conversation-member.service';
 import { GroupInviteService } from '../services/group-invite.service';
+import { ConversationPollService } from '../services/conversation-poll.service';
+import { ConversationVoteService } from '../services/conversation-vote.service';
 
 const ConversationType = { DIRECT: 'direct', GROUP: 'group' };
 const uuid = (n: number) => `00000000-0000-0000-0000-00000000000${n}`;
@@ -143,6 +145,8 @@ describe('ConversationsService lastMessage projection', () => {
         ConversationCoreService,
         ConversationMemberService,
         GroupInviteService,
+        { provide: ConversationPollService, useValue: {} },
+        { provide: ConversationVoteService, useValue: {} },
         { provide: getRepositoryToken(User), useValue: userRepository },
         {
           provide: getRepositoryToken(Conversation),

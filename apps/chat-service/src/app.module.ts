@@ -9,6 +9,7 @@ import { HealthCheckService } from '@libs/shared';
 import { DatabaseModule, User, ConversationMember } from '@libs/database';
 import { ConversationMembershipModule } from '@libs/mvp-access';
 import { PersistMessageConsumer } from './consumers/persist-message.consumer';
+import { PollMessageConsumer } from './consumers/poll-message.consumer';
 import { SendMessageHandler } from './consumers/send-message.handler';
 import { ModerationResultHandler } from './consumers/moderation-result.handler';
 import { MessageConsumerSharedService } from './consumers/message-consumer-shared.service';
@@ -29,7 +30,7 @@ import { HealthController } from './health.controller';
     ConversationMembershipModule,
     MessagesModule,
   ],
-  controllers: [PersistMessageConsumer, HealthController],
+  controllers: [PersistMessageConsumer, PollMessageConsumer, HealthController],
   providers: [
     ChatPublisher,
     HealthCheckService,

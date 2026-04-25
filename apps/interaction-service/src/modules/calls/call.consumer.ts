@@ -24,6 +24,7 @@ import { KAFKA_CLIENT } from '@libs/kafka';
 import { CallStateStore } from './call-state.store';
 import { CallEventsPublisher } from './call-events.publisher';
 import { CallMembershipAccessService } from './call-membership-access.service';
+import { CallTimeoutService } from './call-timeout.service';
 import { uniqueParticipants } from './call-participants.util';
 
 @Controller()
@@ -34,6 +35,7 @@ export class CallConsumer {
     private readonly membershipAccess: CallMembershipAccessService,
     private readonly stateStore: CallStateStore,
     private readonly eventsPublisher: CallEventsPublisher,
+    private readonly callTimeoutService: CallTimeoutService,
   ) {}
 
   @EventPattern(KafkaTopics.CallStart)
@@ -85,6 +87,7 @@ export class CallConsumer {
     };
 
     await this.stateStore.set(cmd.conversation_id, state);
+    await this.callTimeoutService.scheduleTimeout(cmd.call_id, cmd.conversation_id);
 
     const startedEvent: CallStartedEvent = {
       call_id: cmd.call_id,
@@ -423,6 +426,7 @@ export class CallConsumer {
     reason?: string,
     traceId?: string,
   ): Promise<void> {
+    await this.callTimeoutService.cancelTimeout(state.call_id, state.conversation_id);
     state.status = 'ended';
     state.ended_at = endedAt;
     state.participants[userId] = 'left';

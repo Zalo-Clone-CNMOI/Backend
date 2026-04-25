@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 import { KafkaModule } from '@libs/kafka';
 import { ConversationMembershipModule } from '@libs/mvp-access';
 import { CallConsumer } from './call.consumer';
@@ -7,15 +8,19 @@ import { CallEventsPublisher } from './call-events.publisher';
 import { CallMembershipAccessService } from './call-membership-access.service';
 import { IceServerService } from './ice-server.service';
 import { IceServerController } from './ice-server.controller';
+import { CallTimeoutService } from './call-timeout.service';
+import { CallTimeoutScheduler } from './call-timeout.scheduler';
 
 @Module({
-  imports: [KafkaModule, ConversationMembershipModule],
+  imports: [KafkaModule, ConversationMembershipModule, ScheduleModule.forRoot()],
   controllers: [CallConsumer, IceServerController],
   providers: [
     CallStateStore,
     CallEventsPublisher,
     CallMembershipAccessService,
     IceServerService,
+    CallTimeoutService,
+    CallTimeoutScheduler,
   ],
 })
 export class CallsModule {}

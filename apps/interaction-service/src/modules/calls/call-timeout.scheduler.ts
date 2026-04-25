@@ -8,7 +8,7 @@ import {
   type CallEndedEvent,
 } from '@libs/contracts';
 import { KAFKA_CLIENT } from '@libs/kafka';
-import { CallTimeoutService } from './call-timeout.service';
+import { CallTimeoutService, type DueTimeout } from './call-timeout.service';
 import { CallStateStore } from './call-state.store';
 
 @Injectable()
@@ -23,43 +23,61 @@ export class CallTimeoutScheduler {
 
   @Interval(5000)
   async checkTimeouts(): Promise<void> {
-    const due = await this.timeoutService.pollDueTimeouts();
-    for (const { callId, conversationId } of due) {
-      await this.timeoutService.cancelTimeout(callId, conversationId);
-
-      const state = await this.stateStore.get(conversationId);
-      if (!state || state.call_id !== callId || state.status !== 'ringing') {
-        continue;
-      }
-
-      this.logger.log(
-        `Ring timeout fired: call=${callId} conversation=${conversationId}`,
+    let due: DueTimeout[];
+    try {
+      due = await this.timeoutService.pollDueTimeouts();
+    } catch (err) {
+      this.logger.error(
+        `Failed to poll due timeouts: ${err instanceof Error ? err.message : String(err)}`,
       );
-
-      const now = Date.now();
-      const traceId = randomUUID();
-
-      const timedOutEvent: CallTimedOutEvent = {
-        call_id: callId,
-        conversation_id: conversationId,
-        timed_out_at: now,
-        trace_id: traceId,
-      };
-      this.kafkaClient.emit(KafkaTopics.CallTimedOut, timedOutEvent);
-
-      const endedEvent: CallEndedEvent = {
-        call_id: callId,
-        conversation_id: conversationId,
-        user_id: state.initiator_id,
-        reason: 'timeout',
-        ended_at: now,
-        trace_id: traceId,
-      };
-      this.kafkaClient.emit(KafkaTopics.CallEnded, endedEvent);
-
-      state.status = 'ended';
-      state.ended_at = now;
-      await this.stateStore.clear(conversationId);
+      return;
     }
+
+    for (const { callId, conversationId } of due) {
+      try {
+        await this.processOneTimeout(callId, conversationId);
+      } catch (err) {
+        this.logger.error(
+          `Timeout processing failed call=${callId}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+  }
+
+  private async processOneTimeout(
+    callId: string,
+    conversationId: string,
+  ): Promise<void> {
+    await this.timeoutService.cancelTimeout(callId, conversationId);
+
+    const state = await this.stateStore.get(conversationId);
+    if (!state || state.call_id !== callId || state.status !== 'ringing') {
+      return;
+    }
+
+    this.logger.log(
+      `Ring timeout fired: call=${callId} conversation=${conversationId}`,
+    );
+
+    const now = Date.now();
+    const traceId = randomUUID();
+
+    this.kafkaClient.emit(KafkaTopics.CallTimedOut, {
+      call_id: callId,
+      conversation_id: conversationId,
+      timed_out_at: now,
+      trace_id: traceId,
+    } satisfies CallTimedOutEvent);
+
+    this.kafkaClient.emit(KafkaTopics.CallEnded, {
+      call_id: callId,
+      conversation_id: conversationId,
+      user_id: state.initiator_id,
+      reason: 'timeout',
+      ended_at: now,
+      trace_id: traceId,
+    } satisfies CallEndedEvent);
+
+    await this.stateStore.clear(conversationId);
   }
 }

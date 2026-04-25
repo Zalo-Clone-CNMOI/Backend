@@ -191,6 +191,7 @@ export class CallConsumer {
     state.trace_id = cmd.trace_id;
 
     await this.stateStore.set(cmd.conversation_id, state);
+    await this.callTimeoutService.cancelTimeout(cmd.call_id, cmd.conversation_id);
 
     const acceptedEvent: CallAcceptedEvent = {
       call_id: cmd.call_id,

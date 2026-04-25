@@ -2,6 +2,7 @@
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { CallSession } from '@libs/database/entities';
+import { CallType, ConversationType } from '@app/constant';
 import { CallHistoryService } from './call-history.service';
 
 describe('CallHistoryService', () => {
@@ -35,8 +36,8 @@ describe('CallHistoryService', () => {
         id: 'call-1',
         conversationId: 'conv-1',
         initiatorId: 'user-1',
-        callType: 'audio' as const,
-        conversationType: 'direct' as const,
+        callType: CallType.AUDIO,
+        conversationType: ConversationType.DIRECT,
         startedAt: 1000,
         participantIds: ['user-1', 'user-2'],
       };

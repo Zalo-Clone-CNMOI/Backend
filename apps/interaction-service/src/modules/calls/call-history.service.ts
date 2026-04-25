@@ -8,8 +8,8 @@ export interface CreateSessionPayload {
   id: string;
   conversationId: string;
   initiatorId: string;
-  callType: CallType | 'audio' | 'video';
-  conversationType: ConversationType | 'direct' | 'group';
+  callType: CallType;
+  conversationType: ConversationType;
   startedAt: number;
   participantIds: string[];
 }
@@ -32,8 +32,8 @@ export class CallHistoryService {
       id: payload.id,
       conversationId: payload.conversationId,
       initiatorId: payload.initiatorId,
-      callType: payload.callType as CallType,
-      conversationType: payload.conversationType as ConversationType,
+      callType: payload.callType,
+      conversationType: payload.conversationType,
       startedAt: payload.startedAt,
       participantIds: payload.participantIds,
       status: CallSessionStatus.MISSED,
@@ -46,7 +46,7 @@ export class CallHistoryService {
 
   async closeSession(callId: string, payload: CloseSessionPayload): Promise<void> {
     const status = this.resolveStatus(payload.reason);
-    const durationMs = payload.endedAt - payload.startedAt;
+    const durationMs = Math.max(0, payload.endedAt - payload.startedAt);
     await this.repo.update(
       { id: callId },
       {

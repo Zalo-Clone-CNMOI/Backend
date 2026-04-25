@@ -35,10 +35,28 @@ import {
   ConversationListItemDto,
   ConversationDetailDto,
   ConversationCallStateResponseDto,
+  CreatePollDto,
+  EditPollDto,
+  ListPollsQueryDto,
 } from './dto';
 import { ConversationCoreService } from './services/conversation-core.service';
 import { ConversationMemberService } from './services/conversation-member.service';
 import { GroupInviteService } from './services/group-invite.service';
+import {
+  ConversationPollService,
+  type CreatePollResult,
+  type ClosePollResult,
+  type AddOptionResult,
+  type RemoveOptionResult,
+  type EditPollResult,
+  type ListPollsResult,
+  type PollDetailResult,
+} from './services/conversation-poll.service';
+import {
+  ConversationVoteService,
+  type CastVoteResult,
+  type RetractVoteResult,
+} from './services/conversation-vote.service';
 
 @Injectable()
 export class ConversationsService {
@@ -53,6 +71,8 @@ export class ConversationsService {
     private readonly coreService: ConversationCoreService,
     private readonly memberService: ConversationMemberService,
     private readonly inviteService: GroupInviteService,
+    private readonly pollService: ConversationPollService,
+    private readonly voteService: ConversationVoteService,
   ) {}
 
   getConversations(
@@ -341,6 +361,71 @@ export class ConversationsService {
     this.kafkaClient.emit(KafkaTopics.CallEnd, command);
 
     return { message: 'Call end requested' };
+  }
+
+  // ─── Polls (delegates to ConversationPollService / ConversationVoteService) ───
+
+  createPoll(
+    userId: string,
+    conversationId: string,
+    dto: CreatePollDto,
+  ): Promise<CreatePollResult> {
+    return this.pollService.createPoll(userId, conversationId, dto);
+  }
+
+  listPolls(
+    userId: string,
+    conversationId: string,
+    query: ListPollsQueryDto,
+  ): Promise<ListPollsResult> {
+    return this.pollService.listPolls(userId, conversationId, query);
+  }
+
+  getPollDetail(userId: string, pollId: string): Promise<PollDetailResult> {
+    return this.pollService.getPollDetail(userId, pollId);
+  }
+
+  editPoll(
+    userId: string,
+    pollId: string,
+    dto: EditPollDto,
+  ): Promise<EditPollResult> {
+    return this.pollService.editPoll(userId, pollId, dto);
+  }
+
+  castPollVote(
+    userId: string,
+    pollId: string,
+    optionIds: string[],
+  ): Promise<CastVoteResult> {
+    return this.voteService.castVote(userId, pollId, optionIds);
+  }
+
+  retractPollVote(
+    userId: string,
+    pollId: string,
+  ): Promise<RetractVoteResult> {
+    return this.voteService.retractVote(userId, pollId);
+  }
+
+  addPollOption(
+    userId: string,
+    pollId: string,
+    label: string,
+  ): Promise<AddOptionResult> {
+    return this.pollService.addOption(userId, pollId, label);
+  }
+
+  removePollOption(
+    userId: string,
+    pollId: string,
+    optionId: string,
+  ): Promise<RemoveOptionResult> {
+    return this.pollService.removeOption(userId, pollId, optionId);
+  }
+
+  closePoll(userId: string, pollId: string): Promise<ClosePollResult> {
+    return this.pollService.closePoll(userId, pollId);
   }
 
   private async getCallStateSnapshot(

@@ -44,6 +44,11 @@ import {
   ConversationListItemDto,
   ConversationDetailDto,
   ConversationCallStateResponseDto,
+  CreatePollDto,
+  EditPollDto,
+  CastVoteDto,
+  AddPollOptionDto,
+  ListPollsQueryDto,
 } from './dto';
 
 @ApiTags('Conversations')
@@ -507,5 +512,183 @@ export class ConversationsController {
       callId,
       dto,
     );
+  }
+
+  // ─── Polls ──────────────────────────────────────────────
+
+  /**
+   * Create poll in a group conversation
+   */
+  @Post(':conversationId/polls')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @ApiOperation({ summary: 'Create poll in a group conversation' })
+  @ApiParam({ name: 'conversationId', description: 'Conversation ID' })
+  @ApiResponse({ status: 201, description: 'Poll created' })
+  async createPoll(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('conversationId', ParseUUIDPipe) conversationId: string,
+    @Body() dto: CreatePollDto,
+  ) {
+    return this.conversationsService.createPoll(user.id, conversationId, dto);
+  }
+
+  /**
+   * List polls in a conversation (paginated)
+   */
+  @Get(':conversationId/polls')
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
+  @ApiOperation({ summary: 'List polls in a conversation' })
+  @ApiParam({ name: 'conversationId', description: 'Conversation ID' })
+  @ApiResponse({ status: 200, description: 'Poll list' })
+  async listPolls(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('conversationId', ParseUUIDPipe) conversationId: string,
+    @Query() query: ListPollsQueryDto,
+  ) {
+    return this.conversationsService.listPolls(
+      user.id,
+      conversationId,
+      query,
+    );
+  }
+
+  /**
+   * Get poll detail (options + caller's votes + tally)
+   */
+  @Get(':conversationId/polls/:pollId')
+  @Throttle({ default: { limit: 60, ttl: 60000 } })
+  @ApiOperation({ summary: 'Get poll detail' })
+  @ApiParam({ name: 'conversationId', description: 'Conversation ID' })
+  @ApiParam({ name: 'pollId', description: 'Poll ID' })
+  @ApiResponse({ status: 200, description: 'Poll detail' })
+  async getPollDetail(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('conversationId', ParseUUIDPipe) _conversationId: string,
+    @Param('pollId', ParseUUIDPipe) pollId: string,
+  ) {
+    return this.conversationsService.getPollDetail(user.id, pollId);
+  }
+
+  /**
+   * Edit poll (creator only, while ACTIVE)
+   */
+  @Patch(':conversationId/polls/:pollId')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @ApiOperation({ summary: 'Edit poll (creator only)' })
+  @ApiParam({ name: 'conversationId', description: 'Conversation ID' })
+  @ApiParam({ name: 'pollId', description: 'Poll ID' })
+  @ApiResponse({ status: 200, description: 'Poll edited' })
+  async editPoll(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('conversationId', ParseUUIDPipe) _conversationId: string,
+    @Param('pollId', ParseUUIDPipe) pollId: string,
+    @Body() dto: EditPollDto,
+  ) {
+    return this.conversationsService.editPoll(user.id, pollId, dto);
+  }
+
+  /**
+   * Cast/replace vote on a poll
+   */
+  @Post(':conversationId/polls/:pollId/vote')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
+  @ApiOperation({ summary: 'Cast or replace vote (full desired option set)' })
+  @ApiParam({ name: 'conversationId', description: 'Conversation ID' })
+  @ApiParam({ name: 'pollId', description: 'Poll ID' })
+  @ApiResponse({ status: 200, description: 'Vote recorded' })
+  async castPollVote(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('conversationId', ParseUUIDPipe) _conversationId: string,
+    @Param('pollId', ParseUUIDPipe) pollId: string,
+    @Body() dto: CastVoteDto,
+  ) {
+    return this.conversationsService.castPollVote(
+      user.id,
+      pollId,
+      dto.option_ids,
+    );
+  }
+
+  /**
+   * Retract all of caller's votes on a poll
+   */
+  @Delete(':conversationId/polls/:pollId/vote')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
+  @ApiOperation({ summary: 'Retract all of caller\'s votes' })
+  @ApiParam({ name: 'conversationId', description: 'Conversation ID' })
+  @ApiParam({ name: 'pollId', description: 'Poll ID' })
+  @ApiResponse({ status: 200, description: 'Votes retracted (idempotent)' })
+  async retractPollVote(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('conversationId', ParseUUIDPipe) _conversationId: string,
+    @Param('pollId', ParseUUIDPipe) pollId: string,
+  ) {
+    return this.conversationsService.retractPollVote(user.id, pollId);
+  }
+
+  /**
+   * Add option to poll (when allow_add_option=true)
+   */
+  @Post(':conversationId/polls/:pollId/options')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @ApiOperation({ summary: 'Add option to an active poll' })
+  @ApiParam({ name: 'conversationId', description: 'Conversation ID' })
+  @ApiParam({ name: 'pollId', description: 'Poll ID' })
+  @ApiResponse({ status: 201, description: 'Option added' })
+  async addPollOption(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('conversationId', ParseUUIDPipe) _conversationId: string,
+    @Param('pollId', ParseUUIDPipe) pollId: string,
+    @Body() dto: AddPollOptionDto,
+  ) {
+    return this.conversationsService.addPollOption(
+      user.id,
+      pollId,
+      dto.label,
+    );
+  }
+
+  /**
+   * Remove option from poll (creator only, zero votes, > MIN_OPTIONS)
+   */
+  @Delete(':conversationId/polls/:pollId/options/:optionId')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @ApiOperation({ summary: 'Remove option from poll (creator only)' })
+  @ApiParam({ name: 'conversationId', description: 'Conversation ID' })
+  @ApiParam({ name: 'pollId', description: 'Poll ID' })
+  @ApiParam({ name: 'optionId', description: 'Option ID' })
+  @ApiResponse({ status: 200, description: 'Option removed' })
+  async removePollOption(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('conversationId', ParseUUIDPipe) _conversationId: string,
+    @Param('pollId', ParseUUIDPipe) pollId: string,
+    @Param('optionId', ParseUUIDPipe) optionId: string,
+  ) {
+    return this.conversationsService.removePollOption(
+      user.id,
+      pollId,
+      optionId,
+    );
+  }
+
+  /**
+   * Close poll (creator OR group owner/admin)
+   */
+  @Post(':conversationId/polls/:pollId/close')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @ApiOperation({ summary: 'Close poll' })
+  @ApiParam({ name: 'conversationId', description: 'Conversation ID' })
+  @ApiParam({ name: 'pollId', description: 'Poll ID' })
+  @ApiResponse({ status: 200, description: 'Poll closed' })
+  async closePoll(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('conversationId', ParseUUIDPipe) _conversationId: string,
+    @Param('pollId', ParseUUIDPipe) pollId: string,
+  ) {
+    return this.conversationsService.closePoll(user.id, pollId);
   }
 }

@@ -12,6 +12,8 @@ import { ConversationsService } from '../conversations.service';
 import { ConversationCoreService } from '../services/conversation-core.service';
 import { ConversationMemberService } from '../services/conversation-member.service';
 import { GroupInviteService } from '../services/group-invite.service';
+import { ConversationPollService } from '../services/conversation-poll.service';
+import { ConversationVoteService } from '../services/conversation-vote.service';
 import {
   User,
   Conversation,
@@ -155,6 +157,8 @@ describe('ConversationsService', () => {
         ConversationCoreService,
         ConversationMemberService,
         GroupInviteService,
+        { provide: ConversationPollService, useValue: {} },
+        { provide: ConversationVoteService, useValue: {} },
         { provide: getRepositoryToken(User), useValue: userRepository },
         {
           provide: getRepositoryToken(Conversation),

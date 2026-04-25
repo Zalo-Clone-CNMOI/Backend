@@ -20,11 +20,16 @@ import { AccessToken } from '@app/decorator';
 import { ConversationsService } from './conversations.service';
 import {
   AddMembersDto,
+  AddPollOptionDto,
+  CastVoteDto,
   ConversationCallStateResponseDto,
   CreateDirectConversationDto,
   CreateGroupConversationDto,
+  CreatePollDto,
+  EditPollDto,
   EndConversationCallDto,
   GetGroupInvitesQueryDto,
+  ListPollsQueryDto,
   SendGroupInvitesDto,
   UpdateConversationDto,
   UpdateMemberRoleDto,
@@ -430,5 +435,167 @@ export class ConversationsController {
       callId,
       dto,
     );
+  }
+
+  // ─── Polls ──────────────────────────────────────────────
+
+  @Post(':conversationId/polls')
+  @ApiOperation({ summary: 'Create poll in a group conversation' })
+  @ApiResponse({ status: 201, description: 'Poll created' })
+  @ApiResponse({ status: 400, description: 'Validation error' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  async createPoll(
+    @AccessToken() token: string,
+    @Param('conversationId') conversationId: string,
+    @Body() dto: CreatePollDto,
+  ) {
+    return this.conversationsService.createPoll(token, conversationId, dto);
+  }
+
+  @Get(':conversationId/polls')
+  @ApiOperation({ summary: 'List polls in a conversation' })
+  @ApiResponse({ status: 200, description: 'Poll list' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async listPolls(
+    @AccessToken() token: string,
+    @Param('conversationId') conversationId: string,
+    @Query() query: ListPollsQueryDto,
+  ) {
+    return this.conversationsService.listPolls(token, conversationId, query);
+  }
+
+  @Get(':conversationId/polls/:pollId')
+  @ApiOperation({ summary: 'Get poll detail' })
+  @ApiResponse({ status: 200, description: 'Poll detail' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Poll not found' })
+  async getPollDetail(
+    @AccessToken() token: string,
+    @Param('conversationId') conversationId: string,
+    @Param('pollId') pollId: string,
+  ) {
+    return this.conversationsService.getPollDetail(
+      token,
+      conversationId,
+      pollId,
+    );
+  }
+
+  @Patch(':conversationId/polls/:pollId')
+  @ApiOperation({ summary: 'Edit poll (creator only)' })
+  @ApiResponse({ status: 200, description: 'Poll edited' })
+  @ApiResponse({ status: 400, description: 'Validation error' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  @ApiResponse({ status: 404, description: 'Poll not found' })
+  async editPoll(
+    @AccessToken() token: string,
+    @Param('conversationId') conversationId: string,
+    @Param('pollId') pollId: string,
+    @Body() dto: EditPollDto,
+  ) {
+    return this.conversationsService.editPoll(
+      token,
+      conversationId,
+      pollId,
+      dto,
+    );
+  }
+
+  @Post(':conversationId/polls/:pollId/vote')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Cast or replace vote (full desired option set)' })
+  @ApiResponse({ status: 200, description: 'Vote recorded' })
+  @ApiResponse({ status: 400, description: 'Validation error' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Poll not found' })
+  async castPollVote(
+    @AccessToken() token: string,
+    @Param('conversationId') conversationId: string,
+    @Param('pollId') pollId: string,
+    @Body() dto: CastVoteDto,
+  ) {
+    return this.conversationsService.castPollVote(
+      token,
+      conversationId,
+      pollId,
+      dto.option_ids,
+    );
+  }
+
+  @Delete(':conversationId/polls/:pollId/vote')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Retract all of caller\'s votes' })
+  @ApiResponse({ status: 200, description: 'Votes retracted (idempotent)' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Poll not found' })
+  async retractPollVote(
+    @AccessToken() token: string,
+    @Param('conversationId') conversationId: string,
+    @Param('pollId') pollId: string,
+  ) {
+    return this.conversationsService.retractPollVote(
+      token,
+      conversationId,
+      pollId,
+    );
+  }
+
+  @Post(':conversationId/polls/:pollId/options')
+  @ApiOperation({ summary: 'Add option to an active poll' })
+  @ApiResponse({ status: 201, description: 'Option added' })
+  @ApiResponse({ status: 400, description: 'Validation error' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  @ApiResponse({ status: 404, description: 'Poll not found' })
+  async addPollOption(
+    @AccessToken() token: string,
+    @Param('conversationId') conversationId: string,
+    @Param('pollId') pollId: string,
+    @Body() dto: AddPollOptionDto,
+  ) {
+    return this.conversationsService.addPollOption(
+      token,
+      conversationId,
+      pollId,
+      dto.label,
+    );
+  }
+
+  @Delete(':conversationId/polls/:pollId/options/:optionId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Remove option from poll (creator only)' })
+  @ApiResponse({ status: 200, description: 'Option removed' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  @ApiResponse({ status: 404, description: 'Option not found' })
+  async removePollOption(
+    @AccessToken() token: string,
+    @Param('conversationId') conversationId: string,
+    @Param('pollId') pollId: string,
+    @Param('optionId') optionId: string,
+  ) {
+    return this.conversationsService.removePollOption(
+      token,
+      conversationId,
+      pollId,
+      optionId,
+    );
+  }
+
+  @Post(':conversationId/polls/:pollId/close')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Close poll (creator or group owner/admin)' })
+  @ApiResponse({ status: 200, description: 'Poll closed' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  @ApiResponse({ status: 404, description: 'Poll not found' })
+  async closePoll(
+    @AccessToken() token: string,
+    @Param('conversationId') conversationId: string,
+    @Param('pollId') pollId: string,
+  ) {
+    return this.conversationsService.closePoll(token, conversationId, pollId);
   }
 }

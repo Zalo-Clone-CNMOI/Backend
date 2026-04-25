@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import type { AxiosInstance } from 'axios';
 import { FriendsApi, ConversationsApi } from './client/generated';
 import { BaseHttpClient } from '../../base-http-client';
 import type {
@@ -22,6 +23,48 @@ import type {
   PaginatedResponseSentFriendRequestResponseDto,
   PaginatedResponseConversationListItemDto,
 } from './client/generated';
+
+/**
+ * Poll request/response payloads.
+ *
+ * The OpenAPI client was generated before the poll endpoints existed,
+ * so the typed DTOs and methods aren't on the generated `ConversationsApi`.
+ * Until the client is regenerated we hand-call the underlying axios
+ * instance with raw bodies. The shapes below are aligned with the
+ * interaction-service DTOs and PollService results.
+ */
+export interface CreatePollPayload {
+  question: string;
+  options: { label: string }[];
+  allow_multiple?: boolean;
+  allow_add_option?: boolean;
+  is_anonymous?: boolean;
+  expires_in_hours?: number;
+}
+
+export interface EditPollPayload {
+  question?: string;
+  allow_multiple?: boolean;
+  allow_add_option?: boolean;
+  expires_at?: string | null;
+  edited_option_labels?: { option_id: string; label: string }[];
+}
+
+export interface ListPollsQueryPayload {
+  status?: string;
+  page?: number;
+  limit?: number;
+}
+
+/**
+ * Internal accessor for the protected axios/basePath fields on the
+ * generated BaseAPI subclass. We need direct HTTP access for endpoints
+ * that aren't in the generated client yet (polls).
+ */
+type ApiInternals = {
+  axios: AxiosInstance;
+  basePath: string;
+};
 
 @Injectable()
 export class InteractionClientService extends BaseHttpClient {
@@ -522,6 +565,190 @@ export class InteractionClientService extends BaseHttpClient {
       return response.data as { message: string };
     } catch (error) {
       this.handleError('endConversationCall', error);
+    }
+  }
+
+  // ==================== POLLS METHODS ====================
+  //
+  // These methods bypass the generated ConversationsApi because the
+  // OpenAPI client predates the poll endpoints. They reuse the axios
+  // instance and basePath already configured on conversationsApi so
+  // baseUrl, interceptors and timeouts stay consistent.
+
+  /**
+   * Reach into the generated client for the configured axios + basePath.
+   * Lets us issue raw HTTP calls without re-registering an HttpService.
+   */
+  private getInternals(): ApiInternals {
+    return this.conversationsApi as unknown as ApiInternals;
+  }
+
+  private authHeaders(accessToken: string) {
+    return { Authorization: `Bearer ${accessToken}` };
+  }
+
+  async createPoll(
+    accessToken: string,
+    conversationId: string,
+    dto: CreatePollPayload,
+  ): Promise<unknown> {
+    try {
+      const { axios, basePath } = this.getInternals();
+      const response = await axios.post(
+        `${basePath}/conversations/${conversationId}/polls`,
+        dto,
+        { headers: this.authHeaders(accessToken) },
+      );
+      return response.data;
+    } catch (error) {
+      this.handleError('createPoll', error);
+    }
+  }
+
+  async listPolls(
+    accessToken: string,
+    conversationId: string,
+    query: ListPollsQueryPayload = {},
+  ): Promise<unknown> {
+    try {
+      const { axios, basePath } = this.getInternals();
+      const response = await axios.get(
+        `${basePath}/conversations/${conversationId}/polls`,
+        {
+          params: query,
+          headers: this.authHeaders(accessToken),
+        },
+      );
+      return response.data;
+    } catch (error) {
+      this.handleError('listPolls', error);
+    }
+  }
+
+  async getPollDetail(
+    accessToken: string,
+    conversationId: string,
+    pollId: string,
+  ): Promise<unknown> {
+    try {
+      const { axios, basePath } = this.getInternals();
+      const response = await axios.get(
+        `${basePath}/conversations/${conversationId}/polls/${pollId}`,
+        { headers: this.authHeaders(accessToken) },
+      );
+      return response.data;
+    } catch (error) {
+      this.handleError('getPollDetail', error);
+    }
+  }
+
+  async editPoll(
+    accessToken: string,
+    conversationId: string,
+    pollId: string,
+    dto: EditPollPayload,
+  ): Promise<unknown> {
+    try {
+      const { axios, basePath } = this.getInternals();
+      const response = await axios.patch(
+        `${basePath}/conversations/${conversationId}/polls/${pollId}`,
+        dto,
+        { headers: this.authHeaders(accessToken) },
+      );
+      return response.data;
+    } catch (error) {
+      this.handleError('editPoll', error);
+    }
+  }
+
+  async castPollVote(
+    accessToken: string,
+    conversationId: string,
+    pollId: string,
+    optionIds: string[],
+  ): Promise<unknown> {
+    try {
+      const { axios, basePath } = this.getInternals();
+      const response = await axios.post(
+        `${basePath}/conversations/${conversationId}/polls/${pollId}/vote`,
+        { option_ids: optionIds },
+        { headers: this.authHeaders(accessToken) },
+      );
+      return response.data;
+    } catch (error) {
+      this.handleError('castPollVote', error);
+    }
+  }
+
+  async retractPollVote(
+    accessToken: string,
+    conversationId: string,
+    pollId: string,
+  ): Promise<unknown> {
+    try {
+      const { axios, basePath } = this.getInternals();
+      const response = await axios.delete(
+        `${basePath}/conversations/${conversationId}/polls/${pollId}/vote`,
+        { headers: this.authHeaders(accessToken) },
+      );
+      return response.data;
+    } catch (error) {
+      this.handleError('retractPollVote', error);
+    }
+  }
+
+  async addPollOption(
+    accessToken: string,
+    conversationId: string,
+    pollId: string,
+    label: string,
+  ): Promise<unknown> {
+    try {
+      const { axios, basePath } = this.getInternals();
+      const response = await axios.post(
+        `${basePath}/conversations/${conversationId}/polls/${pollId}/options`,
+        { label },
+        { headers: this.authHeaders(accessToken) },
+      );
+      return response.data;
+    } catch (error) {
+      this.handleError('addPollOption', error);
+    }
+  }
+
+  async removePollOption(
+    accessToken: string,
+    conversationId: string,
+    pollId: string,
+    optionId: string,
+  ): Promise<unknown> {
+    try {
+      const { axios, basePath } = this.getInternals();
+      const response = await axios.delete(
+        `${basePath}/conversations/${conversationId}/polls/${pollId}/options/${optionId}`,
+        { headers: this.authHeaders(accessToken) },
+      );
+      return response.data;
+    } catch (error) {
+      this.handleError('removePollOption', error);
+    }
+  }
+
+  async closePoll(
+    accessToken: string,
+    conversationId: string,
+    pollId: string,
+  ): Promise<unknown> {
+    try {
+      const { axios, basePath } = this.getInternals();
+      const response = await axios.post(
+        `${basePath}/conversations/${conversationId}/polls/${pollId}/close`,
+        undefined,
+        { headers: this.authHeaders(accessToken) },
+      );
+      return response.data;
+    } catch (error) {
+      this.handleError('closePoll', error);
     }
   }
 }

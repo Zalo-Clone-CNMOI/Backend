@@ -19,7 +19,11 @@ export class AddCallSessions1777900000000 implements MigrationInterface {
         "reason"            VARCHAR(50),
         "created_at"        TIMESTAMPTZ   NOT NULL DEFAULT now(),
         "updated_at"        TIMESTAMPTZ   NOT NULL DEFAULT now(),
-        CONSTRAINT "PK_call_sessions" PRIMARY KEY ("id")
+        CONSTRAINT "PK_call_sessions" PRIMARY KEY ("id"),
+        CONSTRAINT "FK_call_sessions_conversation" FOREIGN KEY ("conversation_id")
+          REFERENCES "conversations"("id") ON DELETE CASCADE,
+        CONSTRAINT "FK_call_sessions_initiator" FOREIGN KEY ("initiator_id")
+          REFERENCES "users"("id") ON DELETE CASCADE
       )
     `);
     await queryRunner.query(
@@ -37,6 +41,8 @@ export class AddCallSessions1777900000000 implements MigrationInterface {
     await queryRunner.query(`DROP INDEX IF EXISTS "IDX_call_sessions_started_at"`);
     await queryRunner.query(`DROP INDEX IF EXISTS "IDX_call_sessions_initiator_id"`);
     await queryRunner.query(`DROP INDEX IF EXISTS "IDX_call_sessions_conversation_id"`);
+    await queryRunner.query(`ALTER TABLE "call_sessions" DROP CONSTRAINT IF EXISTS "FK_call_sessions_conversation"`);
+    await queryRunner.query(`ALTER TABLE "call_sessions" DROP CONSTRAINT IF EXISTS "FK_call_sessions_initiator"`);
     await queryRunner.query(`DROP TABLE IF EXISTS "call_sessions"`);
   }
 }

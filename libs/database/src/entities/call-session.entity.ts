@@ -6,9 +6,10 @@ import {
   PrimaryColumn,
   ValueTransformer,
 } from 'typeorm';
+import { CallType, CallSessionStatus, ConversationType } from '@app/constant';
 
 const bigintTransformer: ValueTransformer = {
-  to: (value: number | null) => value,
+  to: (value: number | null | undefined) => value ?? null,
   from: (value: string | null) => (value === null ? null : Number(value)),
 };
 
@@ -24,13 +25,13 @@ export class CallSession {
   initiatorId: string;
 
   @Column({ type: 'varchar', length: 10, name: 'call_type' })
-  callType: 'audio' | 'video';
+  callType: CallType;
 
   @Column({ type: 'varchar', length: 10, name: 'conversation_type' })
-  conversationType: 'direct' | 'group';
+  conversationType: ConversationType;
 
   @Column({ type: 'varchar', length: 20 })
-  status: 'completed' | 'missed' | 'rejected' | 'timeout';
+  status: CallSessionStatus;
 
   @Column({ type: 'bigint', name: 'started_at', transformer: bigintTransformer })
   startedAt: number;

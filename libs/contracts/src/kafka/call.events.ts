@@ -163,3 +163,17 @@ export interface CallStateUpdatedEvent {
   reason?: string;
   trace_id?: string;
 }
+
+export interface CallTimeoutCommand {
+  call_id: string;
+  conversation_id: string;
+  scheduled_at: number;
+  trace_id?: string;
+}
+
+export interface CallTimedOutEvent {
+  call_id: string;
+  conversation_id: string;
+  timed_out_at: number;
+  trace_id?: string;
+}

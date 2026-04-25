@@ -175,14 +175,14 @@ describe('ConversationsService', () => {
         .fn()
         .mockResolvedValue({ items: [], total: 0, page: 1, limit: 20 }),
       getPollDetail: jest.fn().mockResolvedValue({ poll_id: uuid(5) }),
-      editPoll: jest
-        .fn()
-        .mockResolvedValue({ poll_id: uuid(5), edited_at: 1 }),
+      editPoll: jest.fn().mockResolvedValue({ poll_id: uuid(5), edited_at: 1 }),
       addOption: jest.fn().mockResolvedValue({ option_id: uuid(6) }),
       removeOption: jest.fn().mockResolvedValue({ option_id: uuid(6) }),
-      closePoll: jest
-        .fn()
-        .mockResolvedValue({ poll_id: uuid(5), status: 'closed', final_tally: [] }),
+      closePoll: jest.fn().mockResolvedValue({
+        poll_id: uuid(5),
+        status: 'closed',
+        final_tally: [],
+      }),
     };
 
     voteService = {
@@ -815,11 +815,8 @@ describe('ConversationsService', () => {
     // Full behavior is covered in conversation-member.service.spec.ts.
     // This block validates that the facade delegates correctly under the new
     // transactional API.
-    const installTxMock = (
-      conv: ReturnType<typeof createMockConversation>,
-    ) => {
-      const activeMembers = (conv.members as ReturnType<typeof createMockMember>[])
-        .filter((m) => m.leftAt === null);
+    const installTxMock = (conv: ReturnType<typeof createMockConversation>) => {
+      const activeMembers = conv.members.filter((m) => m.leftAt === null);
       const memberUpdate = jest.fn().mockResolvedValue({ affected: 1 });
 
       const mockManager = {
@@ -897,9 +894,7 @@ describe('ConversationsService', () => {
     const installUpdateRoleTxMock = (
       conv: ReturnType<typeof createMockConversation>,
     ) => {
-      const activeMembers = (
-        conv.members as ReturnType<typeof createMockMember>[]
-      ).filter((m) => m.leftAt === null);
+      const activeMembers = conv.members.filter((m) => m.leftAt === null);
       const memberUpdate = jest.fn().mockResolvedValue({ affected: 1 });
 
       const mockManager = {
@@ -927,9 +922,7 @@ describe('ConversationsService', () => {
       (memberRepository as any).manager = {
         transaction: jest
           .fn()
-          .mockImplementation((cb: (m: unknown) => unknown) =>
-            cb(mockManager),
-          ),
+          .mockImplementation((cb: (m: unknown) => unknown) => cb(mockManager)),
       };
 
       return { memberUpdate };
@@ -1026,7 +1019,9 @@ describe('ConversationsService', () => {
         });
         throw new Error('should have thrown');
       } catch (err: unknown) {
-        const response = (err as { getResponse?: () => unknown }).getResponse?.();
+        const response = (
+          err as { getResponse?: () => unknown }
+        ).getResponse?.();
         expect(response).toMatchObject({
           error: { message: 'OWNER_TRANSFER_REQUIRED' },
         });
@@ -1040,12 +1035,8 @@ describe('ConversationsService', () => {
   // ─── transferOwnership ────────────────────────────────
 
   describe('transferOwnership', () => {
-    const installTxMock = (
-      conv: ReturnType<typeof createMockConversation>,
-    ) => {
-      const activeMembers = (
-        conv.members as ReturnType<typeof createMockMember>[]
-      ).filter((m) => m.leftAt === null);
+    const installTxMock = (conv: ReturnType<typeof createMockConversation>) => {
+      const activeMembers = conv.members.filter((m) => m.leftAt === null);
       const memberUpdate = jest.fn().mockResolvedValue({ affected: 1 });
 
       const mockManager = {
@@ -1073,9 +1064,7 @@ describe('ConversationsService', () => {
       (memberRepository as any).manager = {
         transaction: jest
           .fn()
-          .mockImplementation((cb: (m: unknown) => unknown) =>
-            cb(mockManager),
-          ),
+          .mockImplementation((cb: (m: unknown) => unknown) => cb(mockManager)),
       };
 
       return { memberUpdate };

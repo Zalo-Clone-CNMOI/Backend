@@ -184,9 +184,7 @@ export class ConversationPollService {
     });
 
     if (!conversation || conversation.type !== ConversationType.GROUP) {
-      throw BusinessException.badRequest(
-        ErrorCode.POLL_NOT_GROUP_CONVERSATION,
-      );
+      throw BusinessException.badRequest(ErrorCode.POLL_NOT_GROUP_CONVERSATION);
     }
 
     const membership = await this.memberRepo.findOne({
@@ -241,10 +239,7 @@ export class ConversationPollService {
           messageId,
         });
 
-        const persistedPoll = (await manager.save(
-          ConversationPoll,
-          pollDraft,
-        )) as ConversationPoll;
+        const persistedPoll = await manager.save(ConversationPoll, pollDraft);
 
         const optionDrafts = trimmedLabels.map((label, idx) =>
           manager.create(ConversationPollOption, {
@@ -255,10 +250,10 @@ export class ConversationPollService {
           }),
         );
 
-        const persistedOptions = (await manager.save(
+        const persistedOptions = await manager.save(
           ConversationPollOption,
           optionDrafts,
-        )) as ConversationPollOption[];
+        );
 
         return { savedPoll: persistedPoll, savedOptions: persistedOptions };
       },
@@ -557,10 +552,7 @@ export class ConversationPollService {
     }
 
     if (poll.status !== PollStatus.ACTIVE) {
-      throw new BusinessException(
-        ErrorCode.POLL_CLOSED,
-        ErrorCode.POLL_CLOSED,
-      );
+      throw new BusinessException(ErrorCode.POLL_CLOSED, ErrorCode.POLL_CLOSED);
     }
 
     if (!poll.allowAddOption) {
@@ -691,10 +683,7 @@ export class ConversationPollService {
     }
 
     if (poll.status !== PollStatus.ACTIVE) {
-      throw new BusinessException(
-        ErrorCode.POLL_CLOSED,
-        ErrorCode.POLL_CLOSED,
-      );
+      throw new BusinessException(ErrorCode.POLL_CLOSED, ErrorCode.POLL_CLOSED);
     }
 
     // Parse / validate expires_at if present.
@@ -878,10 +867,7 @@ export class ConversationPollService {
     }
 
     if (poll.status !== PollStatus.ACTIVE) {
-      throw new BusinessException(
-        ErrorCode.POLL_CLOSED,
-        ErrorCode.POLL_CLOSED,
-      );
+      throw new BusinessException(ErrorCode.POLL_CLOSED, ErrorCode.POLL_CLOSED);
     }
 
     const option = await this.optionRepo.findOne({
@@ -1161,5 +1147,4 @@ export class ConversationPollService {
     }
     return false;
   }
-
 }

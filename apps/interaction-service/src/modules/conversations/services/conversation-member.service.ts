@@ -441,8 +441,7 @@ export class ConversationMemberService {
           const newOwner =
             candidates
               .filter((m) => m.role === UpdateMemberRoleDtoRoleEnum.ADMIN)
-              .sort(sortByJoined)[0] ||
-            candidates.sort(sortByJoined)[0];
+              .sort(sortByJoined)[0] || candidates.sort(sortByJoined)[0];
 
           if (!newOwner) {
             throw BusinessException.internal(
@@ -474,9 +473,7 @@ export class ConversationMemberService {
             { role: UpdateMemberRoleDtoRoleEnum.OWNER },
           );
           if ((promote.affected ?? 0) !== 1) {
-            throw BusinessException.internal(
-              'Owner transfer promote failed',
-            );
+            throw BusinessException.internal('Owner transfer promote failed');
           }
 
           transferredTo = {
@@ -608,9 +605,7 @@ export class ConversationMemberService {
           { role: UpdateMemberRoleDtoRoleEnum.OWNER },
         );
         if ((promote.affected ?? 0) !== 1) {
-          throw BusinessException.internal(
-            'Owner transfer promote failed',
-          );
+          throw BusinessException.internal('Owner transfer promote failed');
         }
 
         return { previousTargetRole };

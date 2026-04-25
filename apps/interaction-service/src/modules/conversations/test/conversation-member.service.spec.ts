@@ -547,12 +547,12 @@ describe('ConversationsService', () => {
   });
 
   describe('leaveConversation', () => {
-    const installLeaveTxMock = (conv: ReturnType<typeof createMockConversation>) => {
+    const installLeaveTxMock = (
+      conv: ReturnType<typeof createMockConversation>,
+    ) => {
       const memberUpdate = jest.fn().mockResolvedValue({ affected: 1 });
       const memberSave = jest.fn().mockResolvedValue({});
-      const activeMembers = (conv.members as ReturnType<typeof createMockMember>[]).filter(
-        (m) => m.leftAt === null,
-      );
+      const activeMembers = conv.members.filter((m) => m.leftAt === null);
 
       const mockManager = {
         getRepository: jest.fn((entity: unknown) => {
@@ -583,7 +583,12 @@ describe('ConversationsService', () => {
           .mockImplementation((cb: (m: unknown) => unknown) => cb(mockManager)),
       };
 
-      return { memberUpdate, memberSave, transactionSpy: (memberRepository as unknown as InviteRepositoryMock).manager.transaction };
+      return {
+        memberUpdate,
+        memberSave,
+        transactionSpy: (memberRepository as unknown as InviteRepositoryMock)
+          .manager.transaction,
+      };
     };
 
     it('should set leftAt on membership via conditional UPDATE inside a TX', async () => {
@@ -606,7 +611,9 @@ describe('ConversationsService', () => {
     });
 
     it('should reject leaving direct conversation', async () => {
-      const directConv = createMockConversation({ type: ConversationType.DIRECT });
+      const directConv = createMockConversation({
+        type: ConversationType.DIRECT,
+      });
       installLeaveTxMock(directConv);
 
       await expect(

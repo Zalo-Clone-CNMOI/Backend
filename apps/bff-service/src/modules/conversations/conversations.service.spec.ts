@@ -418,11 +418,7 @@ describe('ConversationsService (BFF)', () => {
     it('should delegate with token, conversationId, and pollId', async () => {
       const result = await service.closePoll(TOKEN, 'conv-1', 'poll-1');
 
-      expect(client.closePoll).toHaveBeenCalledWith(
-        TOKEN,
-        'conv-1',
-        'poll-1',
-      );
+      expect(client.closePoll).toHaveBeenCalledWith(TOKEN, 'conv-1', 'poll-1');
       expect(result).toEqual({ ok: true });
     });
 

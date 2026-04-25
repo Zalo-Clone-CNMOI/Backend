@@ -124,9 +124,6 @@ export class PollMetadataBuilder {
       trace_id: traceId,
     };
 
-    await this.outbox.publishToTopic(
-      KafkaTopics.ChatPollMessageUpdated,
-      event,
-    );
+    await this.outbox.publishToTopic(KafkaTopics.ChatPollMessageUpdated, event);
   }
 }

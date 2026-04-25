@@ -132,7 +132,8 @@ export class CreatePollDto {
   is_anonymous?: boolean;
 
   @ApiPropertyOptional({
-    description: 'Auto-close after N hours (max 7 days). Omit/null = no expiry.',
+    description:
+      'Auto-close after N hours (max 7 days). Omit/null = no expiry.',
     example: 24,
     minimum: 1,
     maximum: POLL_LIMITS.MAX_EXPIRES_IN_HOURS,

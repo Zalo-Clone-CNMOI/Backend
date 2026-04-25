@@ -401,10 +401,7 @@ export class ConversationsService {
     return this.voteService.castVote(userId, pollId, optionIds);
   }
 
-  retractPollVote(
-    userId: string,
-    pollId: string,
-  ): Promise<RetractVoteResult> {
+  retractPollVote(userId: string, pollId: string): Promise<RetractVoteResult> {
     return this.voteService.retractVote(userId, pollId);
   }
 

@@ -38,15 +38,15 @@ describe('GroupInviteService', () => {
   beforeEach(async () => {
     userRepository = {
       find: jest.fn().mockResolvedValue([]),
-      findOne: jest
-        .fn()
-        .mockResolvedValue({ id: uuid(2), fullName: 'Inviter', avatarUrl: null }),
+      findOne: jest.fn().mockResolvedValue({
+        id: uuid(2),
+        fullName: 'Inviter',
+        avatarUrl: null,
+      }),
     };
 
     conversationRepository = {
-      findOne: jest
-        .fn()
-        .mockResolvedValue({ id: uuid(1), name: 'Test Group' }),
+      findOne: jest.fn().mockResolvedValue({ id: uuid(1), name: 'Test Group' }),
       createQueryBuilder: jest.fn(),
     };
 
@@ -83,9 +83,7 @@ describe('GroupInviteService', () => {
     };
 
     coreService = {
-      createDirectConversation: jest
-        .fn()
-        .mockResolvedValue({ id: uuid(7) }),
+      createDirectConversation: jest.fn().mockResolvedValue({ id: uuid(7) }),
       getConversationById: jest.fn(),
     };
 
@@ -245,17 +243,19 @@ describe('GroupInviteService', () => {
 
     it('should fan out createDirectConversation for all saved invites in parallel', async () => {
       // Build 3 saved invites.
-      const savedInvites = [uuid(3), uuid(4), uuid(5)].map((invitedUserId, i) => ({
-        id: `00000000-0000-0000-0000-00000000000a${i}`,
-        conversationId: uuid(1),
-        inviterUserId: uuid(2),
-        invitedUserId,
-        status: GroupInviteStatus.PENDING,
-        expiresAt: new Date(Date.now() + 3600_000),
-        messageId: `00000000-0000-0000-0000-00000000000b${i}`,
-        message: null,
-        createdAt: new Date(),
-      }));
+      const savedInvites = [uuid(3), uuid(4), uuid(5)].map(
+        (invitedUserId, i) => ({
+          id: `00000000-0000-0000-0000-00000000000a${i}`,
+          conversationId: uuid(1),
+          inviterUserId: uuid(2),
+          invitedUserId,
+          status: GroupInviteStatus.PENDING,
+          expiresAt: new Date(Date.now() + 3600_000),
+          messageId: `00000000-0000-0000-0000-00000000000b${i}`,
+          message: null,
+          createdAt: new Date(),
+        }),
+      );
 
       inviteRepository.manager.transaction.mockImplementation(
         (cb: (m: unknown) => unknown) =>

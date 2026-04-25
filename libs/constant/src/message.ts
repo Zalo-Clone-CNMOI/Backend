@@ -123,8 +123,7 @@ export const ErrorMessage: Record<ErrorCode, string> = {
     'Adding new options is disabled for this poll.',
   [ErrorCode.POLL_OPTION_LIMIT_REACHED]:
     'Poll cannot have more than 20 options.',
-  [ErrorCode.POLL_MIN_OPTIONS_REQUIRED]:
-    'Poll must retain at least 2 options.',
+  [ErrorCode.POLL_MIN_OPTIONS_REQUIRED]: 'Poll must retain at least 2 options.',
   [ErrorCode.POLL_SINGLE_CHOICE_VIOLATION]:
     'This poll only allows a single option.',
   [ErrorCode.POLL_DUPLICATE_OPTION_LABEL]: 'Duplicate option label.',

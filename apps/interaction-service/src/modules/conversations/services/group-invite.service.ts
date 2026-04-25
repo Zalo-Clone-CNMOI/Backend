@@ -291,10 +291,7 @@ export class GroupInviteService {
           sent_at: invite.createdAt.getTime(),
           trace_id: `group-invite-sent:${invite.id}`,
         };
-        await this.publishKafkaOutbox(
-          KafkaTopics.GroupInviteSent,
-          sentEvent,
-        );
+        await this.publishKafkaOutbox(KafkaTopics.GroupInviteSent, sentEvent);
 
         const directConv = await this.coreService.createDirectConversation(
           userId,
@@ -318,10 +315,7 @@ export class GroupInviteService {
           body: `${inviter?.fullName ?? 'Someone'} invited you to join ${txResult.conversationName || 'a group'}.`,
           created_at: invite.createdAt.getTime(),
         };
-        this.kafkaClient.emit(
-          KafkaTopics.ChatInviteMessageCreated,
-          inviteMsg,
-        );
+        this.kafkaClient.emit(KafkaTopics.ChatInviteMessageCreated, inviteMsg);
 
         const notification: NotificationRequestedEvent = {
           channel: 'push',

@@ -12,11 +12,7 @@ import {
   UpdateMemberSettingsDto,
   EndConversationCallDto,
 } from '@app/clients/interaction-client';
-import {
-  CreatePollDto,
-  EditPollDto,
-  ListPollsQueryDto,
-} from './dto';
+import { CreatePollDto, EditPollDto, ListPollsQueryDto } from './dto';
 
 @Injectable()
 export class ConversationsService {
@@ -248,11 +244,7 @@ export class ConversationsService {
     conversationId: string,
     query: ListPollsQueryDto,
   ) {
-    return this.interactionClient.listPolls(
-      accessToken,
-      conversationId,
-      query,
-    );
+    return this.interactionClient.listPolls(accessToken, conversationId, query);
   }
 
   async getPollDetail(
@@ -335,11 +327,7 @@ export class ConversationsService {
     );
   }
 
-  async closePoll(
-    accessToken: string,
-    conversationId: string,
-    pollId: string,
-  ) {
+  async closePoll(accessToken: string, conversationId: string, pollId: string) {
     return this.interactionClient.closePoll(
       accessToken,
       conversationId,

@@ -526,7 +526,7 @@ export class ConversationsController {
 
   @Delete(':conversationId/polls/:pollId/vote')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Retract all of caller\'s votes' })
+  @ApiOperation({ summary: "Retract all of caller's votes" })
   @ApiResponse({ status: 200, description: 'Votes retracted (idempotent)' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Poll not found' })

@@ -545,11 +545,7 @@ export class ConversationsController {
     @Param('conversationId', ParseUUIDPipe) conversationId: string,
     @Query() query: ListPollsQueryDto,
   ) {
-    return this.conversationsService.listPolls(
-      user.id,
-      conversationId,
-      query,
-    );
+    return this.conversationsService.listPolls(user.id, conversationId, query);
   }
 
   /**
@@ -616,7 +612,7 @@ export class ConversationsController {
   @Delete(':conversationId/polls/:pollId/vote')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 30, ttl: 60000 } })
-  @ApiOperation({ summary: 'Retract all of caller\'s votes' })
+  @ApiOperation({ summary: "Retract all of caller's votes" })
   @ApiParam({ name: 'conversationId', description: 'Conversation ID' })
   @ApiParam({ name: 'pollId', description: 'Poll ID' })
   @ApiResponse({ status: 200, description: 'Votes retracted (idempotent)' })
@@ -643,11 +639,7 @@ export class ConversationsController {
     @Param('pollId', ParseUUIDPipe) pollId: string,
     @Body() dto: AddPollOptionDto,
   ) {
-    return this.conversationsService.addPollOption(
-      user.id,
-      pollId,
-      dto.label,
-    );
+    return this.conversationsService.addPollOption(user.id, pollId, dto.label);
   }
 
   /**

@@ -193,12 +193,8 @@ describe('ConversationsService', () => {
   // ─── updateMemberRole ────────────────────────────────
 
   describe('updateMemberRole', () => {
-    const installTxMock = (
-      conv: ReturnType<typeof createMockConversation>,
-    ) => {
-      const activeMembers = (
-        conv.members as ReturnType<typeof createMockMember>[]
-      ).filter((m) => m.leftAt === null);
+    const installTxMock = (conv: ReturnType<typeof createMockConversation>) => {
+      const activeMembers = conv.members.filter((m) => m.leftAt === null);
       const memberUpdate = jest.fn().mockResolvedValue({ affected: 1 });
 
       const mockManager = {
@@ -226,9 +222,7 @@ describe('ConversationsService', () => {
       (memberRepository as any).manager = {
         transaction: jest
           .fn()
-          .mockImplementation((cb: (m: unknown) => unknown) =>
-            cb(mockManager),
-          ),
+          .mockImplementation((cb: (m: unknown) => unknown) => cb(mockManager)),
       };
 
       return { memberUpdate };
@@ -238,12 +232,9 @@ describe('ConversationsService', () => {
       const conv = createMockConversation();
       const { memberUpdate } = installTxMock(conv);
 
-      const result = await service.updateMemberRole(
-        uuid(2),
-        uuid(1),
-        uuid(3),
-        { role: UpdateMemberRoleDtoRoleEnum.ADMIN },
-      );
+      const result = await service.updateMemberRole(uuid(2), uuid(1), uuid(3), {
+        role: UpdateMemberRoleDtoRoleEnum.ADMIN,
+      });
 
       expect(result.message).toContain('updated');
       expect(memberUpdate).toHaveBeenCalledWith(

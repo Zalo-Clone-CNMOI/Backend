@@ -84,9 +84,7 @@ export class PollMessageConsumer {
   }
 
   @EventPattern(KafkaTopics.ChatPollMessageUpdated)
-  async onPollMessageUpdated(
-    @Payload() payload: ChatPollMessageUpdatedEvent,
-  ) {
+  async onPollMessageUpdated(@Payload() payload: ChatPollMessageUpdatedEvent) {
     const traceId = payload.trace_id;
 
     try {

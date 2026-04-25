@@ -306,17 +306,9 @@ describe('ConversationsController (BFF)', () => {
 
   describe('GET /:conversationId/polls/:pollId (getPollDetail)', () => {
     it('should delegate with token, conversationId, and pollId', async () => {
-      const result = await controller.getPollDetail(
-        TOKEN,
-        'conv-1',
-        'poll-1',
-      );
+      const result = await controller.getPollDetail(TOKEN, 'conv-1', 'poll-1');
 
-      expect(svc.getPollDetail).toHaveBeenCalledWith(
-        TOKEN,
-        'conv-1',
-        'poll-1',
-      );
+      expect(svc.getPollDetail).toHaveBeenCalledWith(TOKEN, 'conv-1', 'poll-1');
       expect(result).toEqual({ id: 'poll-1' });
     });
   });
@@ -324,19 +316,9 @@ describe('ConversationsController (BFF)', () => {
   describe('PATCH /:conversationId/polls/:pollId (editPoll)', () => {
     it('should delegate with token, conversationId, pollId, and DTO', async () => {
       const dto = { question: 'Updated?' };
-      const result = await controller.editPoll(
-        TOKEN,
-        'conv-1',
-        'poll-1',
-        dto,
-      );
+      const result = await controller.editPoll(TOKEN, 'conv-1', 'poll-1', dto);
 
-      expect(svc.editPoll).toHaveBeenCalledWith(
-        TOKEN,
-        'conv-1',
-        'poll-1',
-        dto,
-      );
+      expect(svc.editPoll).toHaveBeenCalledWith(TOKEN, 'conv-1', 'poll-1', dto);
       expect(result).toEqual({ id: 'poll-1' });
     });
   });
@@ -351,12 +333,10 @@ describe('ConversationsController (BFF)', () => {
         dto,
       );
 
-      expect(svc.castPollVote).toHaveBeenCalledWith(
-        TOKEN,
-        'conv-1',
-        'poll-1',
-        ['opt-1', 'opt-2'],
-      );
+      expect(svc.castPollVote).toHaveBeenCalledWith(TOKEN, 'conv-1', 'poll-1', [
+        'opt-1',
+        'opt-2',
+      ]);
       expect(result).toEqual({ ok: true });
     });
   });

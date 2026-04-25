@@ -151,7 +151,9 @@ describe('PollMessageConsumer', () => {
     it('clears the processing lock and rethrows when insert fails', async () => {
       const cmd = baseCommand();
       repo.tryBeginMessageProcessing.mockResolvedValue(true);
-      repo.insertPollMessage.mockRejectedValue(new Error('Scylla write failed'));
+      repo.insertPollMessage.mockRejectedValue(
+        new Error('Scylla write failed'),
+      );
 
       await expect(consumer.onPollMessageCreated(cmd)).rejects.toThrow(
         'Scylla write failed',

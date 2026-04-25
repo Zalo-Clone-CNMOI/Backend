@@ -13,6 +13,7 @@ import { IceServerController } from './ice-server.controller';
 import { CallTimeoutService } from './call-timeout.service';
 import { CallTimeoutScheduler } from './call-timeout.scheduler';
 import { CallHistoryService } from './call-history.service';
+import { CallHistoryController } from './call-history.controller';
 
 @Module({
   imports: [
@@ -21,7 +22,7 @@ import { CallHistoryService } from './call-history.service';
     ScheduleModule.forRoot(),
     TypeOrmModule.forFeature([CallSession]),
   ],
-  controllers: [CallConsumer, IceServerController],
+  controllers: [CallConsumer, IceServerController, CallHistoryController],
   providers: [
     CallStateStore,
     CallEventsPublisher,

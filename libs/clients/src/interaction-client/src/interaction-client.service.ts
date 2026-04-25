@@ -60,6 +60,27 @@ export interface IceServersResponse {
   ice_servers: IceServerConfigEntry[];
 }
 
+export interface CallHistoryItem {
+  id: string;
+  conversationId: string;
+  initiatorId: string;
+  callType: 'audio' | 'video';
+  conversationType: 'direct' | 'group';
+  status: 'completed' | 'missed' | 'rejected' | 'timeout';
+  startedAt: number;
+  endedAt: number | null;
+  durationMs: number | null;
+  participantIds: string[];
+  reason: string | null;
+}
+
+export interface CallHistoryResponse {
+  items: CallHistoryItem[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
 type ApiInternals = {
   axios: AxiosInstance;
   basePath: string;
@@ -746,6 +767,27 @@ export class InteractionClientService extends BaseHttpClient {
       return response.data;
     } catch (error) {
       this.handleError('getIceServers', error);
+    }
+  }
+
+  async getCallHistory(
+    accessToken: string,
+    conversationId: string,
+    page?: number,
+    limit?: number,
+  ): Promise<CallHistoryResponse> {
+    try {
+      const { axios, basePath } = this.getInternals();
+      const response = await axios.get<CallHistoryResponse>(
+        `${basePath}/conversations/${conversationId}/calls`,
+        {
+          params: { page, limit },
+          headers: this.authHeaders(accessToken),
+        },
+      );
+      return response.data;
+    } catch (error) {
+      this.handleError('getCallHistory', error);
     }
   }
 }

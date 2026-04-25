@@ -15,7 +15,7 @@ const bigintTransformer: ValueTransformer = {
 
 @Entity('call_sessions')
 export class CallSession {
-  @PrimaryColumn({ type: 'varchar', length: 36 })
+  @PrimaryColumn({ type: 'uuid' })
   id: string;
 
   @Column({ type: 'uuid', name: 'conversation_id' })
@@ -24,13 +24,13 @@ export class CallSession {
   @Column({ type: 'uuid', name: 'initiator_id' })
   initiatorId: string;
 
-  @Column({ type: 'varchar', length: 10, name: 'call_type' })
+  @Column({ type: 'enum', enum: CallType, name: 'call_type' })
   callType: CallType;
 
-  @Column({ type: 'varchar', length: 10, name: 'conversation_type' })
+  @Column({ type: 'enum', enum: ConversationType, name: 'conversation_type' })
   conversationType: ConversationType;
 
-  @Column({ type: 'varchar', length: 20 })
+  @Column({ type: 'enum', enum: CallSessionStatus })
   status: CallSessionStatus;
 
   @Column({ type: 'bigint', name: 'started_at', transformer: bigintTransformer })

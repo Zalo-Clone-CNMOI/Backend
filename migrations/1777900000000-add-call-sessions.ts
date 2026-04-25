@@ -4,14 +4,23 @@ export class AddCallSessions1777900000000 implements MigrationInterface {
   name = 'AddCallSessions1777900000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(
+      `CREATE TYPE "public"."call_sessions_call_type_enum" AS ENUM ('audio', 'video')`,
+    );
+    await queryRunner.query(
+      `CREATE TYPE "public"."call_sessions_conversation_type_enum" AS ENUM ('direct', 'group')`,
+    );
+    await queryRunner.query(
+      `CREATE TYPE "public"."call_sessions_status_enum" AS ENUM ('completed', 'missed', 'rejected', 'timeout')`,
+    );
     await queryRunner.query(`
       CREATE TABLE "call_sessions" (
-        "id"                VARCHAR(36)   NOT NULL,
-        "conversation_id"   UUID          NOT NULL,
-        "initiator_id"      UUID          NOT NULL,
-        "call_type"         VARCHAR(10)   NOT NULL,
-        "conversation_type" VARCHAR(10)   NOT NULL,
-        "status"            VARCHAR(20)   NOT NULL,
+        "id"                UUID                                          NOT NULL,
+        "conversation_id"   UUID                                          NOT NULL,
+        "initiator_id"      UUID                                          NOT NULL,
+        "call_type"         "public"."call_sessions_call_type_enum"       NOT NULL,
+        "conversation_type" "public"."call_sessions_conversation_type_enum" NOT NULL,
+        "status"            "public"."call_sessions_status_enum"          NOT NULL,
         "started_at"        BIGINT        NOT NULL,
         "ended_at"          BIGINT,
         "duration_ms"       INTEGER,
@@ -44,5 +53,8 @@ export class AddCallSessions1777900000000 implements MigrationInterface {
     await queryRunner.query(`ALTER TABLE "call_sessions" DROP CONSTRAINT IF EXISTS "FK_call_sessions_conversation"`);
     await queryRunner.query(`ALTER TABLE "call_sessions" DROP CONSTRAINT IF EXISTS "FK_call_sessions_initiator"`);
     await queryRunner.query(`DROP TABLE IF EXISTS "call_sessions"`);
+    await queryRunner.query(`DROP TYPE IF EXISTS "public"."call_sessions_status_enum"`);
+    await queryRunner.query(`DROP TYPE IF EXISTS "public"."call_sessions_conversation_type_enum"`);
+    await queryRunner.query(`DROP TYPE IF EXISTS "public"."call_sessions_call_type_enum"`);
   }
 }

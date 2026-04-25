@@ -47,6 +47,19 @@ export interface ListPollsQueryPayload {
   limit?: number;
 }
 
+export interface IceServerConfigEntry {
+  urls: string;
+  username?: string;
+  credential?: string;
+}
+
+export interface IceServersResponse {
+  username: string;
+  credential: string;
+  ttl: number;
+  ice_servers: IceServerConfigEntry[];
+}
+
 type ApiInternals = {
   axios: AxiosInstance;
   basePath: string;
@@ -720,6 +733,19 @@ export class InteractionClientService extends BaseHttpClient {
       return response.data;
     } catch (error) {
       this.handleError('closePoll', error);
+    }
+  }
+
+  async getIceServers(accessToken: string): Promise<IceServersResponse> {
+    try {
+      const { axios, basePath } = this.getInternals();
+      const response = await axios.get<IceServersResponse>(
+        `${basePath}/calls/ice-servers`,
+        { headers: this.authHeaders(accessToken) },
+      );
+      return response.data;
+    } catch (error) {
+      this.handleError('getIceServers', error);
     }
   }
 }

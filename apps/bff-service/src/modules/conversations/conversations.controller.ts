@@ -396,6 +396,13 @@ export class ConversationsController {
     return this.conversationsService.unpinConversation(token, conversationId);
   }
 
+  @Get('ice-servers')
+  @ApiOperation({ summary: 'Get ICE server credentials for WebRTC (TURN/STUN)' })
+  @ApiResponse({ status: 200, description: 'Ephemeral Coturn TURN/STUN credentials' })
+  async getIceServers(@AccessToken() token: string) {
+    return this.conversationsService.getIceServers(token);
+  }
+
   @Get(':conversationId/call-state')
   @ApiOperation({ summary: 'Get active call state for a conversation' })
   @ApiResponse({

@@ -332,4 +332,8 @@ export class ConversationsService {
       pollId,
     );
   }
+
+  async getIceServers(token: string) {
+    return this.interactionClient.getIceServers(token);
+  }
 }

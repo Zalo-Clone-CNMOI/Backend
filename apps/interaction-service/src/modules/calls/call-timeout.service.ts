@@ -11,13 +11,12 @@ export interface DueTimeout {
 export class CallTimeoutService {
   static readonly TIMEOUT_KEY = 'call:ring-timeout:zset';
   static readonly RING_TIMEOUT_MS = 45_000;
-  private readonly ringTimeoutMs = CallTimeoutService.RING_TIMEOUT_MS;
   private readonly logger = new Logger(CallTimeoutService.name);
 
   constructor(@Inject(REDIS_CLIENT) private readonly redis: RedisClientType) {}
 
   async scheduleTimeout(callId: string, conversationId: string): Promise<void> {
-    const fireAt = Date.now() + this.ringTimeoutMs;
+    const fireAt = Date.now() + CallTimeoutService.RING_TIMEOUT_MS;
     await this.redis.zAdd(CallTimeoutService.TIMEOUT_KEY, {
       score: fireAt,
       value: `${callId}:${conversationId}`,

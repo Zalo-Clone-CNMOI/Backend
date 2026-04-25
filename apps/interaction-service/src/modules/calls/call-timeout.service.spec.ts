@@ -72,4 +72,10 @@ describe('CallTimeoutService', () => {
     expect(call[2]).toBeGreaterThanOrEqual(now);
     expect(call[2]).toBeLessThanOrEqual(now + 100);
   });
+
+  it('pollDueTimeouts skips malformed entries with no colon separator', async () => {
+    redis.zRangeByScore.mockResolvedValue(['malformed', 'call-4:conv-4']);
+    const due = await service.pollDueTimeouts();
+    expect(due).toEqual([{ callId: 'call-4', conversationId: 'conv-4' }]);
+  });
 });

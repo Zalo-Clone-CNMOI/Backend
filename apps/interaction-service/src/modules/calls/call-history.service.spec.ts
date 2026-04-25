@@ -13,7 +13,6 @@ describe('CallHistoryService', () => {
     repo = {
       save: jest.fn().mockImplementation((d: any) => Promise.resolve(d)),
       create: jest.fn().mockImplementation((d: any) => d),
-      findOne: jest.fn(),
       findAndCount: jest.fn().mockResolvedValue([[], 0]),
       update: jest.fn().mockResolvedValue({ affected: 1 }),
     };
@@ -86,6 +85,29 @@ describe('CallHistoryService', () => {
       expect(repo.update).toHaveBeenCalledWith(
         { id: 'call-1' },
         expect.objectContaining({ status: 'rejected' }),
+      );
+    });
+
+    it('stores durationMs=0 when endedAt < startedAt (clock skew guard)', async () => {
+      await service.closeSession('call-1', {
+        endedAt: 500,
+        startedAt: 1000,
+        reason: 'normal',
+      });
+      expect(repo.update).toHaveBeenCalledWith(
+        { id: 'call-1' },
+        expect.objectContaining({ durationMs: 0 }),
+      );
+    });
+
+    it('sets reason=null when reason is undefined', async () => {
+      await service.closeSession('call-1', {
+        endedAt: 2000,
+        startedAt: 1000,
+      });
+      expect(repo.update).toHaveBeenCalledWith(
+        { id: 'call-1' },
+        expect.objectContaining({ reason: null, status: 'completed' }),
       );
     });
   });

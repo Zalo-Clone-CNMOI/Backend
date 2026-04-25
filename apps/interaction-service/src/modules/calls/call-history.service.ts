@@ -1,8 +1,14 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CallSession } from '@libs/database/entities';
 import { CallType, CallSessionStatus, ConversationType } from '@app/constant';
+
+const CALL_END_REASONS = {
+  TIMEOUT: 'timeout',
+  REJECTED: 'rejected',
+  MISSED: 'missed',
+} as const;
 
 export interface CreateSessionPayload {
   id: string;
@@ -20,8 +26,17 @@ export interface CloseSessionPayload {
   reason?: string;
 }
 
+export interface PaginatedCallSessions {
+  items: CallSession[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
 @Injectable()
 export class CallHistoryService {
+  private readonly logger = new Logger(CallHistoryService.name);
+
   constructor(
     @InjectRepository(CallSession)
     private readonly repo: Repository<CallSession>,
@@ -47,7 +62,7 @@ export class CallHistoryService {
   async closeSession(callId: string, payload: CloseSessionPayload): Promise<void> {
     const status = this.resolveStatus(payload.reason);
     const durationMs = Math.max(0, payload.endedAt - payload.startedAt);
-    await this.repo.update(
+    const result = await this.repo.update(
       { id: callId },
       {
         endedAt: payload.endedAt,
@@ -56,22 +71,31 @@ export class CallHistoryService {
         reason: payload.reason ?? null,
       },
     );
+    if ((result.affected ?? 0) === 0) {
+      this.logger.warn(`closeSession: no call_session found for callId=${callId}`);
+    }
   }
 
-  async listForConversation(conversationId: string, page: number, limit: number) {
+  async listForConversation(
+    conversationId: string,
+    page: number,
+    limit: number,
+  ): Promise<PaginatedCallSessions> {
+    const safePage = Math.max(1, page);
+    const safeLimit = Math.min(Math.max(1, limit), 100);
     const [items, total] = await this.repo.findAndCount({
       where: { conversationId },
       order: { startedAt: 'DESC' },
-      skip: (page - 1) * limit,
-      take: limit,
+      skip: (safePage - 1) * safeLimit,
+      take: safeLimit,
     });
-    return { items, total, page, limit };
+    return { items, total, page: safePage, limit: safeLimit };
   }
 
   private resolveStatus(reason?: string): CallSessionStatus {
-    if (reason === 'timeout') return CallSessionStatus.TIMEOUT;
-    if (reason === 'rejected') return CallSessionStatus.REJECTED;
-    if (reason === 'missed') return CallSessionStatus.MISSED;
+    if (reason === CALL_END_REASONS.TIMEOUT) return CallSessionStatus.TIMEOUT;
+    if (reason === CALL_END_REASONS.REJECTED) return CallSessionStatus.REJECTED;
+    if (reason === CALL_END_REASONS.MISSED) return CallSessionStatus.MISSED;
     return CallSessionStatus.COMPLETED;
   }
 }

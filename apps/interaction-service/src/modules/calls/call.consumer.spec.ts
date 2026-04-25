@@ -22,6 +22,16 @@ describe('CallConsumer', () => {
     ensureMember: jest.fn(),
   };
 
+  const callTimeoutService = {
+    scheduleTimeout: jest.fn(),
+    cancelTimeout: jest.fn(),
+  };
+
+  const callHistoryService = {
+    createSession: jest.fn(),
+    closeSession: jest.fn(),
+  };
+
   let consumer: CallConsumer;
 
   const makeDirectState = (overrides = {}) => ({
@@ -58,11 +68,17 @@ describe('CallConsumer', () => {
     callStateStore.get.mockResolvedValue(null);
     callStateStore.set.mockResolvedValue(undefined);
     callStateStore.clear.mockResolvedValue(undefined);
+    callTimeoutService.scheduleTimeout.mockResolvedValue(undefined);
+    callTimeoutService.cancelTimeout.mockResolvedValue(undefined);
+    callHistoryService.createSession.mockResolvedValue(undefined);
+    callHistoryService.closeSession.mockResolvedValue(undefined);
     consumer = new CallConsumer(
       kafkaClient as never,
       callMembershipAccessService as never,
       callStateStore as never,
       callEventsPublisher as never,
+      callTimeoutService as never,
+      callHistoryService as never,
     );
   });
 

@@ -20,11 +20,13 @@ import {
   type CallStateSnapshot,
 } from '@libs/contracts';
 import { Public } from '@app/decorator';
+import { CallType, ConversationType } from '@app/constant';
 import { KAFKA_CLIENT } from '@libs/kafka';
 import { CallStateStore } from './call-state.store';
 import { CallEventsPublisher } from './call-events.publisher';
 import { CallMembershipAccessService } from './call-membership-access.service';
 import { CallTimeoutService } from './call-timeout.service';
+import { CallHistoryService } from './call-history.service';
 import { uniqueParticipants } from './call-participants.util';
 
 @Controller()
@@ -36,6 +38,7 @@ export class CallConsumer {
     private readonly stateStore: CallStateStore,
     private readonly eventsPublisher: CallEventsPublisher,
     private readonly callTimeoutService: CallTimeoutService,
+    private readonly callHistoryService: CallHistoryService,
   ) {}
 
   @EventPattern(KafkaTopics.CallStart)
@@ -88,6 +91,15 @@ export class CallConsumer {
 
     await this.stateStore.set(cmd.conversation_id, state);
     await this.callTimeoutService.scheduleTimeout(cmd.call_id, cmd.conversation_id);
+    await this.callHistoryService.createSession({
+      id: cmd.call_id,
+      conversationId: cmd.conversation_id,
+      initiatorId: cmd.initiator_id,
+      callType: cmd.call_type as CallType,
+      conversationType: cmd.conversation_type as ConversationType,
+      startedAt: cmd.started_at,
+      participantIds,
+    });
 
     const startedEvent: CallStartedEvent = {
       call_id: cmd.call_id,
@@ -444,6 +456,11 @@ export class CallConsumer {
 
     this.kafkaClient.emit(KafkaTopics.CallEnded, endedEvent);
     await this.stateStore.clear(state.conversation_id);
+    await this.callHistoryService.closeSession(state.call_id, {
+      endedAt,
+      startedAt: state.started_at,
+      reason,
+    });
     this.eventsPublisher.publishStateUpdate(state.conversation_id, null, {
       reason: reason ?? 'ended',
       traceId,

@@ -21,6 +21,9 @@ import {
   AiUsageLog,
   DocumentMetadata,
   DocumentChunk,
+  ConversationPoll,
+  ConversationPollOption,
+  ConversationPollVote,
 } from './entities';
 
 export const entities = [
@@ -43,6 +46,9 @@ export const entities = [
   AiUsageLog,
   DocumentMetadata,
   DocumentChunk,
+  ConversationPoll,
+  ConversationPollOption,
+  ConversationPollVote,
 ];
 
 // const useSsl = process.env.DB_SSL === 'true';

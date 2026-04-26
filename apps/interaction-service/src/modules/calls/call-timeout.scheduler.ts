@@ -10,6 +10,7 @@ import {
 import { KAFKA_CLIENT } from '@libs/kafka';
 import { CallTimeoutService, type DueTimeout } from './call-timeout.service';
 import { CallStateStore } from './call-state.store';
+import { CallHistoryService } from './call-history.service';
 
 @Injectable()
 export class CallTimeoutScheduler {
@@ -19,6 +20,7 @@ export class CallTimeoutScheduler {
     private readonly timeoutService: CallTimeoutService,
     private readonly stateStore: CallStateStore,
     @Inject(KAFKA_CLIENT) private readonly kafkaClient: ClientKafka,
+    private readonly callHistoryService: CallHistoryService,
   ) {}
 
   @Interval(5000)
@@ -82,5 +84,18 @@ export class CallTimeoutScheduler {
 
     this.logger.log(`Clearing call state for timed-out call=${callId}`);
     await this.stateStore.clear(conversationId);
+
+    this.callHistoryService
+      .closeSession(callId, {
+        endedAt: now,
+        startedAt: state.started_at,
+        reason: 'timeout',
+      })
+      .catch((err: Error) =>
+        this.logger.error(
+          `closeSession failed for timed-out call=${callId}: ${err.message}`,
+          err.stack,
+        ),
+      );
   }
 }

@@ -3,6 +3,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import { AiGatewayService } from '../ai-gateway/services/ai-gateway.service';
 import { PromptBuilderService } from '../ai-gateway/services/prompt-builder.service';
 import { AiMetricsService } from '../ai-gateway/services/ai-metrics.service';
+import {
+  parseJsonResponse,
+  validateSuggestions,
+} from '../ai-gateway/services/parse-json.util';
 import type {
   AiSmartReplyRequestEvent,
   AiSmartReplyResultEvent,
@@ -88,16 +92,11 @@ export class SmartReplyEngine {
 
   private parseResponse(content: string): { suggestions: string[] } {
     try {
-      const json = JSON.parse(content);
-      return {
-        suggestions: Array.isArray(json.suggestions)
-          ? json.suggestions.slice(0, 3)
-          : [],
-      };
+      const json = parseJsonResponse(content);
+      return { suggestions: validateSuggestions(json.suggestions) };
     } catch {
       this.logger.warn('Failed to parse smart reply response');
       return { suggestions: [] };
     }
   }
 }
-

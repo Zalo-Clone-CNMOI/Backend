@@ -4,6 +4,10 @@ import { RedisService } from '@libs/redis';
 import { AiGatewayService } from '../ai-gateway/services/ai-gateway.service';
 import { PromptBuilderService } from '../ai-gateway/services/prompt-builder.service';
 import { AiMetricsService } from '../ai-gateway/services/ai-metrics.service';
+import {
+  parseJsonResponse,
+  validateLanguageCode,
+} from '../ai-gateway/services/parse-json.util';
 import type {
   AiTranslateRequestEvent,
   AiTranslateResultEvent,
@@ -154,10 +158,13 @@ export class TranslationEngine {
     source_language: string;
   } {
     try {
-      const json = JSON.parse(content);
+      const json = parseJsonResponse(content);
       return {
-        translated_text: json.translated_text ?? content,
-        source_language: json.source_language ?? 'auto',
+        translated_text:
+          typeof json.translated_text === 'string'
+            ? json.translated_text
+            : content,
+        source_language: validateLanguageCode(json.source_language, 'auto'),
       };
     } catch {
       return { translated_text: content, source_language: 'auto' };

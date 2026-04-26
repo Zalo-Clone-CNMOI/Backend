@@ -5,6 +5,7 @@ import { RedisService } from '@libs/redis';
 import { AiGatewayService } from '../ai-gateway/services/ai-gateway.service';
 import { PromptBuilderService } from '../ai-gateway/services/prompt-builder.service';
 import { AiMetricsService } from '../ai-gateway/services/ai-metrics.service';
+import { parseJsonResponse } from '../ai-gateway/services/parse-json.util';
 import type {
   AiSummaryRequestEvent,
   AiSummaryResultEvent,
@@ -147,7 +148,7 @@ export class SummaryEngine {
 
   private parseResponse(content: string): { summary: string } {
     try {
-      const json = JSON.parse(content);
+      const json = parseJsonResponse(content);
       return {
         summary: typeof json.summary === 'string' ? json.summary : content,
       };

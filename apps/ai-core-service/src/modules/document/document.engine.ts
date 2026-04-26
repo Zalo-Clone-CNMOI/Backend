@@ -8,6 +8,10 @@ import { AiGatewayService } from '../ai-gateway/services/ai-gateway.service';
 import { PromptBuilderService } from '../ai-gateway/services/prompt-builder.service';
 import { AiMetricsService } from '../ai-gateway/services/ai-metrics.service';
 import { OpenAiProvider } from '../ai-gateway/providers/openai.provider';
+import {
+  parseJsonResponse,
+  validateSourceIndices,
+} from '../ai-gateway/services/parse-json.util';
 import type {
   AiDocumentUploadEvent,
   AiDocumentProcessedEvent,
@@ -236,7 +240,10 @@ export class DocumentEngine {
         temperature: 0.3,
       });
 
-      const parsed = this.parseQueryResponse(result.content);
+      const parsed = this.parseQueryResponse(
+        result.content,
+        relevantChunks.length,
+      );
 
       this.aiMetrics.recordRequest(
         'document_analysis',
@@ -306,17 +313,18 @@ export class DocumentEngine {
     return chunks;
   }
 
-  private parseQueryResponse(content: string): {
+  private parseQueryResponse(
+    content: string,
+    chunkCount: number,
+  ): {
     answer: string;
     source_indices: number[];
   } {
     try {
-      const json = JSON.parse(content);
+      const json = parseJsonResponse(content);
       return {
-        answer: json.answer ?? content,
-        source_indices: Array.isArray(json.source_indices)
-          ? json.source_indices
-          : [],
+        answer: typeof json.answer === 'string' ? json.answer : content,
+        source_indices: validateSourceIndices(json.source_indices, chunkCount),
       };
     } catch {
       return { answer: content, source_indices: [] };

@@ -73,8 +73,7 @@ describe('PromptBuilderService', () => {
 
     it('omits context block when context is empty', () => {
       const result = builder.buildSmartReplyPrompt('Hi', []);
-      // user content should only contain the last message phrase
-      expect(result[1].content).not.toContain('Recent conversation');
+      expect(result[1].content).not.toContain('Lịch sử cuộc trò chuyện');
     });
   });
 
@@ -180,14 +179,14 @@ describe('PromptBuilderService', () => {
       expect(result[0].content).toContain('source_indices');
     });
 
-    it('labels chunks as [Source N] in user content', () => {
+    it('labels chunks as [Nguồn N] in user content', () => {
       const chunks = [
         { content: 'Alpha', chunkIndex: 0 },
         { content: 'Beta', chunkIndex: 1 },
       ];
       const result = builder.buildDocumentQueryPrompt('?', chunks);
-      expect(result[1].content).toContain('[Source 1]');
-      expect(result[1].content).toContain('[Source 2]');
+      expect(result[1].content).toContain('[Nguồn 1]');
+      expect(result[1].content).toContain('[Nguồn 2]');
     });
   });
 });

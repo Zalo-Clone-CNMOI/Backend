@@ -12,6 +12,7 @@ import { randomUUID } from 'crypto';
 import { APP_CONFIG, type AppConfig } from '@libs/config';
 import {
   KafkaTopics,
+  type CallStartedEvent,
   type ChatPollMessageCommand,
   type ChatPollMessageUpdatedEvent,
   type ConversationMemberAddedEvent,
@@ -50,6 +51,7 @@ interface NotificationOutboxItem {
 
 type OutboxTopicPayloadMap = {
   [KafkaTopics.NotificationRequested]: NotificationRequestedEvent;
+  [KafkaTopics.CallStarted]: CallStartedEvent;
   [KafkaTopics.GroupInviteSent]: GroupInviteSentEvent;
   [KafkaTopics.GroupInviteExpired]: GroupInviteExpiredEvent;
   [KafkaTopics.GroupInviteAccepted]: GroupInviteAcceptedEvent;

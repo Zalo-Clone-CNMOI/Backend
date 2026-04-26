@@ -18,6 +18,7 @@ import {
   AiHandler,
   TypingHandler,
 } from './socket/handlers';
+import { CallRateLimiter } from './socket/handlers/call-rate-limiter';
 import {
   ChatFanoutConsumer,
   PresenceFanoutConsumer,
@@ -58,6 +59,7 @@ import {
     ChatGateway,
     ChatHandler,
     CallHandler,
+    CallRateLimiter,
     PresenceHandler,
     AiHandler,
     TypingHandler,

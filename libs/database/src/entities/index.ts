@@ -21,3 +21,4 @@ export * from './document-chunk.entity';
 export * from './conversation-poll.entity';
 export * from './conversation-poll-option.entity';
 export * from './conversation-poll-vote.entity';
+export * from './call-session.entity';

@@ -21,6 +21,11 @@ export interface AppConfig {
 
   redisUrl?: string;
 
+  // Coturn TURN/STUN server configuration
+  coturnSecret?: string;
+  coturnHost?: string;
+  coturnPort?: number;
+
   // JWT secrets — populated for services with requiresJwt: true
   jwtSecret?: string;
   jwtRefreshSecret?: string;
@@ -246,6 +251,10 @@ export function loadConfig(serviceName: string): AppConfig {
     postgresPassword: process.env.DB_PASSWORD?.trim(),
     postgresDatabase: process.env.DB_NAME?.trim(),
     redisUrl: process.env.REDIS_URL?.trim(),
+
+    coturnSecret: process.env.COTURN_SECRET?.trim(),
+    coturnHost: process.env.COTURN_HOST?.trim(),
+    coturnPort: readPositiveInteger(process.env.COTURN_PORT, 1, 65535),
 
     jwtSecret: process.env.JWT_SECRET?.trim(),
     jwtRefreshSecret: process.env.JWT_REFRESH_SECRET?.trim(),

@@ -32,6 +32,8 @@ export const KafkaTopics = {
   CallStateUpdated: 'call.state.updated',
   CallLeave: 'call.leave',
   CallLeft: 'call.left',
+  CallTimeout: 'call.timeout',
+  CallTimedOut: 'call.timed-out',
 
   ConversationCreated: 'conversation.created',
   ConversationUpdated: 'conversation.updated',

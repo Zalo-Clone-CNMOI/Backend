@@ -332,4 +332,22 @@ export class ConversationsService {
       pollId,
     );
   }
+
+  async getIceServers(token: string) {
+    return this.interactionClient.getIceServers(token);
+  }
+
+  async getCallHistory(
+    token: string,
+    conversationId: string,
+    page?: number,
+    limit?: number,
+  ) {
+    return this.interactionClient.getCallHistory(
+      token,
+      conversationId,
+      page,
+      limit,
+    );
+  }
 }

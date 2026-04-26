@@ -1,5 +1,6 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
 import { KafkaTopics } from '@libs/contracts';
-import { CallConsumer } from './call.consumer';
+import { CallConsumer } from '../consumers/call.consumer';
 
 describe('CallConsumer', () => {
   const callStateStore = {
@@ -20,6 +21,20 @@ describe('CallConsumer', () => {
 
   const callMembershipAccessService = {
     ensureMember: jest.fn(),
+  };
+
+  const callTimeoutService = {
+    scheduleTimeout: jest.fn(),
+    cancelTimeout: jest.fn(),
+  };
+
+  const callHistoryService = {
+    createSession: jest.fn(),
+    closeSession: jest.fn(),
+  };
+
+  const outbox = {
+    publishToTopic: jest.fn().mockResolvedValue('queued'),
   };
 
   let consumer: CallConsumer;
@@ -58,11 +73,19 @@ describe('CallConsumer', () => {
     callStateStore.get.mockResolvedValue(null);
     callStateStore.set.mockResolvedValue(undefined);
     callStateStore.clear.mockResolvedValue(undefined);
+    callTimeoutService.scheduleTimeout.mockResolvedValue(undefined);
+    callTimeoutService.cancelTimeout.mockResolvedValue(undefined);
+    callHistoryService.createSession.mockResolvedValue(undefined);
+    callHistoryService.closeSession.mockResolvedValue(undefined);
+    outbox.publishToTopic.mockResolvedValue('queued');
     consumer = new CallConsumer(
       kafkaClient as never,
       callMembershipAccessService as never,
       callStateStore as never,
       callEventsPublisher as never,
+      callTimeoutService as never,
+      callHistoryService as never,
+      outbox as never,
     );
   });
 
@@ -87,7 +110,7 @@ describe('CallConsumer', () => {
         conversation_type: 'direct',
       }),
     );
-    expect(kafkaClient.emit).toHaveBeenCalledWith(
+    expect(outbox.publishToTopic).toHaveBeenCalledWith(
       KafkaTopics.CallStarted,
       expect.objectContaining({ call_id: 'call-1', conversation_id: 'conv-1' }),
     );

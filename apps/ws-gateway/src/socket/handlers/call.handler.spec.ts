@@ -10,12 +10,23 @@ describe('CallHandler', () => {
     canUserAccessConversation: jest.fn(),
   };
 
+  const rateLimiter = {
+    checkStart: jest.fn(),
+    checkEvent: jest.fn(),
+  };
+
   let handler: CallHandler;
 
   beforeEach(() => {
     jest.clearAllMocks();
     membershipService.canUserAccessConversation.mockResolvedValue(true);
-    handler = new CallHandler(kafka as never, membershipService as never);
+    rateLimiter.checkStart.mockResolvedValue(0);
+    rateLimiter.checkEvent.mockResolvedValue(0);
+    handler = new CallHandler(
+      kafka as never,
+      membershipService as never,
+      rateLimiter as never,
+    );
   });
 
   it('publishes call start command when user is a member', async () => {

@@ -47,6 +47,18 @@ export enum PollClosedReason {
   EXPIRED = 'expired',
 }
 
+export enum CallType {
+  AUDIO = 'audio',
+  VIDEO = 'video',
+}
+
+export enum CallSessionStatus {
+  COMPLETED = 'completed',
+  MISSED = 'missed',
+  REJECTED = 'rejected',
+  TIMEOUT = 'timeout',
+}
+
 export enum MessageType {
   TEXT = 'text',
   IMAGE = 'image',

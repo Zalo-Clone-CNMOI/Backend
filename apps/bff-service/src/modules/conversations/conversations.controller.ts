@@ -396,6 +396,36 @@ export class ConversationsController {
     return this.conversationsService.unpinConversation(token, conversationId);
   }
 
+  @Get('ice-servers')
+  @ApiOperation({
+    summary: 'Get ICE server credentials for WebRTC (TURN/STUN)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Ephemeral Coturn TURN/STUN credentials',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getIceServers(@AccessToken() token: string) {
+    return this.conversationsService.getIceServers(token);
+  }
+
+  @Get(':conversationId/calls')
+  @ApiOperation({ summary: 'List call history for a conversation' })
+  @ApiResponse({ status: 200, description: 'Paginated call history' })
+  async getCallHistory(
+    @AccessToken() token: string,
+    @Param('conversationId') conversationId: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.conversationsService.getCallHistory(
+      token,
+      conversationId,
+      page,
+      limit,
+    );
+  }
+
   @Get(':conversationId/call-state')
   @ApiOperation({ summary: 'Get active call state for a conversation' })
   @ApiResponse({

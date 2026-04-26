@@ -23,6 +23,7 @@ import {
 } from '@libs/contracts';
 import type { Socket } from 'socket.io';
 import type { DefaultEventsMap } from 'socket.io/dist/typed-events';
+import { CallRateLimiter } from './call-rate-limiter';
 
 type SocketData = { userId?: string };
 type AuthedSocket = Socket<
@@ -37,10 +38,16 @@ export class CallHandler {
   constructor(
     @Inject(KAFKA_CLIENT) private readonly kafka: ClientKafka,
     private readonly membershipService: ConversationMembershipService,
+    private readonly rateLimiter: CallRateLimiter,
   ) {}
 
   async handleStart(socket: AuthedSocket, body: WsCallStartPayload) {
     const userId = String(socket.data.userId);
+    const retryAfter = await this.rateLimiter.checkStart(userId);
+    if (retryAfter > 0) {
+      this.emitRateLimited(socket, retryAfter);
+      return;
+    }
     const canAccess = await this.membershipService.canUserAccessConversation(
       userId,
       body.conversation_id,
@@ -66,6 +73,11 @@ export class CallHandler {
 
   async handleSignal(socket: AuthedSocket, body: WsCallSignalPayload) {
     const userId = String(socket.data.userId);
+    const retryAfter = await this.rateLimiter.checkEvent(userId);
+    if (retryAfter > 0) {
+      this.emitRateLimited(socket, retryAfter);
+      return;
+    }
     const canAccess = await this.membershipService.canUserAccessConversation(
       userId,
       body.conversation_id,
@@ -94,6 +106,11 @@ export class CallHandler {
 
   async handleAccept(socket: AuthedSocket, body: WsCallAcceptPayload) {
     const userId = String(socket.data.userId);
+    const retryAfter = await this.rateLimiter.checkEvent(userId);
+    if (retryAfter > 0) {
+      this.emitRateLimited(socket, retryAfter);
+      return;
+    }
     const canAccess = await this.membershipService.canUserAccessConversation(
       userId,
       body.conversation_id,
@@ -116,6 +133,11 @@ export class CallHandler {
 
   async handleReject(socket: AuthedSocket, body: WsCallRejectPayload) {
     const userId = String(socket.data.userId);
+    const retryAfter = await this.rateLimiter.checkEvent(userId);
+    if (retryAfter > 0) {
+      this.emitRateLimited(socket, retryAfter);
+      return;
+    }
     const canAccess = await this.membershipService.canUserAccessConversation(
       userId,
       body.conversation_id,
@@ -139,6 +161,11 @@ export class CallHandler {
 
   async handleEnd(socket: AuthedSocket, body: WsCallEndPayload) {
     const userId = String(socket.data.userId);
+    const retryAfter = await this.rateLimiter.checkEvent(userId);
+    if (retryAfter > 0) {
+      this.emitRateLimited(socket, retryAfter);
+      return;
+    }
     const canAccess = await this.membershipService.canUserAccessConversation(
       userId,
       body.conversation_id,
@@ -162,6 +189,11 @@ export class CallHandler {
 
   async handleLeave(socket: AuthedSocket, body: WsCallLeavePayload) {
     const userId = String(socket.data.userId);
+    const retryAfter = await this.rateLimiter.checkEvent(userId);
+    if (retryAfter > 0) {
+      this.emitRateLimited(socket, retryAfter);
+      return;
+    }
     const canAccess = await this.membershipService.canUserAccessConversation(
       userId,
       body.conversation_id,
@@ -212,6 +244,15 @@ export class CallHandler {
       code: 'FORBIDDEN',
       message: 'not_member',
       details: { conversation_id: conversationId },
+      timestamp: new Date().toISOString(),
+    } satisfies WsErrorPayload);
+  }
+
+  private emitRateLimited(socket: AuthedSocket, retryAfterSeconds: number) {
+    socket.emit(WsEvents.WsError, {
+      code: 'RATE_LIMITED',
+      message: 'too_many_requests',
+      details: { retry_after: retryAfterSeconds },
       timestamp: new Date().toISOString(),
     } satisfies WsErrorPayload);
   }

@@ -48,6 +48,7 @@ export interface CallStartedEvent {
   participant_ids: string[];
   started_at: number;
   trace_id?: string;
+  push_recipient_ids?: string[]; // participant_ids minus initiator, for VoIP push
 }
 
 export interface CallSignalCommand {
@@ -161,5 +162,19 @@ export interface CallStateUpdatedEvent {
   requested_by?: string;
   updated_at: number;
   reason?: string;
+  trace_id?: string;
+}
+
+export interface CallTimeoutCommand {
+  call_id: string;
+  conversation_id: string;
+  scheduled_at: number;
+  trace_id?: string;
+}
+
+export interface CallTimedOutEvent {
+  call_id: string;
+  conversation_id: string;
+  timed_out_at: number;
   trace_id?: string;
 }

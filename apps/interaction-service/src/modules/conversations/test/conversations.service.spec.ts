@@ -842,7 +842,7 @@ describe('ConversationsService', () => {
         }),
       };
 
-      (memberRepository as any).manager = {
+      memberRepository.manager = {
         transaction: jest
           .fn()
           .mockImplementation((cb: (m: unknown) => unknown) => cb(mockManager)),
@@ -919,7 +919,7 @@ describe('ConversationsService', () => {
         }),
       };
 
-      (memberRepository as any).manager = {
+      memberRepository.manager = {
         transaction: jest
           .fn()
           .mockImplementation((cb: (m: unknown) => unknown) => cb(mockManager)),
@@ -1061,7 +1061,7 @@ describe('ConversationsService', () => {
         }),
       };
 
-      (memberRepository as any).manager = {
+      memberRepository.manager = {
         transaction: jest
           .fn()
           .mockImplementation((cb: (m: unknown) => unknown) => cb(mockManager)),

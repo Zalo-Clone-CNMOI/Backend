@@ -397,8 +397,13 @@ export class ConversationsController {
   }
 
   @Get('ice-servers')
-  @ApiOperation({ summary: 'Get ICE server credentials for WebRTC (TURN/STUN)' })
-  @ApiResponse({ status: 200, description: 'Ephemeral Coturn TURN/STUN credentials' })
+  @ApiOperation({
+    summary: 'Get ICE server credentials for WebRTC (TURN/STUN)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Ephemeral Coturn TURN/STUN credentials',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getIceServers(@AccessToken() token: string) {
     return this.conversationsService.getIceServers(token);
@@ -413,7 +418,12 @@ export class ConversationsController {
     @Query('page') page?: number,
     @Query('limit') limit?: number,
   ) {
-    return this.conversationsService.getCallHistory(token, conversationId, page, limit);
+    return this.conversationsService.getCallHistory(
+      token,
+      conversationId,
+      page,
+      limit,
+    );
   }
 
   @Get(':conversationId/call-state')

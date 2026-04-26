@@ -33,10 +33,19 @@ export class CallSession {
   @Column({ type: 'enum', enum: CallSessionStatus })
   status: CallSessionStatus;
 
-  @Column({ type: 'bigint', name: 'started_at', transformer: bigintTransformer })
+  @Column({
+    type: 'bigint',
+    name: 'started_at',
+    transformer: bigintTransformer,
+  })
   startedAt: number;
 
-  @Column({ type: 'bigint', name: 'ended_at', nullable: true, transformer: bigintTransformer })
+  @Column({
+    type: 'bigint',
+    name: 'ended_at',
+    nullable: true,
+    transformer: bigintTransformer,
+  })
   endedAt: number | null;
 
   @Column({ type: 'int', name: 'duration_ms', nullable: true })

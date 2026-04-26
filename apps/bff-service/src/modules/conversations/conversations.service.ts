@@ -337,7 +337,17 @@ export class ConversationsService {
     return this.interactionClient.getIceServers(token);
   }
 
-  async getCallHistory(token: string, conversationId: string, page?: number, limit?: number) {
-    return this.interactionClient.getCallHistory(token, conversationId, page, limit);
+  async getCallHistory(
+    token: string,
+    conversationId: string,
+    page?: number,
+    limit?: number,
+  ) {
+    return this.interactionClient.getCallHistory(
+      token,
+      conversationId,
+      page,
+      limit,
+    );
   }
 }

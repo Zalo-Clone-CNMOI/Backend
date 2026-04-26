@@ -50,10 +50,7 @@ export class AiConsumer {
       `Smart reply request for conversation: ${event.conversation_id} (${event.context_messages.length} context msgs)`,
     );
 
-    const result = await this.smartReplyEngine.generateReplies(
-      event,
-      event.context_messages,
-    );
+    const result = await this.smartReplyEngine.generateReplies(event);
 
     await this.publisher.emit(KafkaTopics.AiSmartReplyResult, result);
   }

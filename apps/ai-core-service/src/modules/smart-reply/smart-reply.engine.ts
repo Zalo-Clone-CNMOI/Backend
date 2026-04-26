@@ -28,12 +28,11 @@ export class SmartReplyEngine {
    */
   async generateReplies(
     event: AiSmartReplyRequestEvent,
-    conversationContext: string[] = [],
   ): Promise<AiSmartReplyResultEvent> {
     try {
       const messages = this.promptBuilder.buildSmartReplyPrompt(
         event.last_message_body,
-        conversationContext,
+        event.context_messages,
       );
 
       const result = await this.gateway.complete(event.user_id, {

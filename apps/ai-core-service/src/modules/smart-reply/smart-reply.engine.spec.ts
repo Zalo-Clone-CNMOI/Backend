@@ -9,7 +9,7 @@
  *  - generateReplies() records metrics on success
  *  - generateReplies() returns empty array on LLM failure
  *  - generateReplies() returns empty array when JSON is malformed
- *  - generateReplies() passes conversation context to prompt builder
+ *  - generateReplies() passes typed conversation context to prompt builder
  */
 /* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
@@ -17,7 +17,7 @@ import { SmartReplyEngine } from './smart-reply.engine';
 import { AiGatewayService } from '../ai-gateway/services/ai-gateway.service';
 import { PromptBuilderService } from '../ai-gateway/services/prompt-builder.service';
 import { AiMetricsService } from '../ai-gateway/services/ai-metrics.service';
-import type { AiSmartReplyRequestEvent } from '@libs/contracts';
+import type { AiSmartReplyRequestEvent, AiSmartReplyContextMessage } from '@libs/contracts';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -57,6 +57,11 @@ function llmResult(suggestions: string[]) {
   };
 }
 
+const CTX: AiSmartReplyContextMessage[] = [
+  { role: 'them', body: 'Alo bạn' },
+  { role: 'me', body: 'Hi!' },
+];
+
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 describe('SmartReplyEngine', () => {
@@ -85,14 +90,10 @@ describe('SmartReplyEngine', () => {
   describe('generateReplies() — success', () => {
     it('returns 3 suggestions from LLM response', async () => {
       gateway.complete.mockResolvedValue(
-        llmResult([
-          'I am fine!',
-          'Doing well, thanks!',
-          'Great, how about you?',
-        ]),
+        llmResult(['I am fine!', 'Doing well, thanks!', 'Great, how about you?']),
       );
 
-      const result = await engine.generateReplies(makeEvent(), []);
+      const result = await engine.generateReplies(makeEvent());
 
       expect(result.suggestions).toEqual([
         'I am fine!',
@@ -102,11 +103,9 @@ describe('SmartReplyEngine', () => {
     });
 
     it('trims suggestions to maximum 3', async () => {
-      gateway.complete.mockResolvedValue(
-        llmResult(['S1', 'S2', 'S3', 'S4', 'S5']),
-      );
+      gateway.complete.mockResolvedValue(llmResult(['S1', 'S2', 'S3', 'S4', 'S5']));
 
-      const result = await engine.generateReplies(makeEvent(), []);
+      const result = await engine.generateReplies(makeEvent());
 
       expect(result.suggestions).toHaveLength(3);
       expect(result.suggestions).toEqual(['S1', 'S2', 'S3']);
@@ -117,7 +116,6 @@ describe('SmartReplyEngine', () => {
 
       const result = await engine.generateReplies(
         makeEvent({ conversation_id: 'conv-xyz', user_id: 'user-xyz' }),
-        [],
       );
 
       expect(result.conversation_id).toBe('conv-xyz');
@@ -127,7 +125,7 @@ describe('SmartReplyEngine', () => {
     it('records success metrics', async () => {
       gateway.complete.mockResolvedValue(llmResult(['ok']));
 
-      await engine.generateReplies(makeEvent(), []);
+      await engine.generateReplies(makeEvent());
 
       expect(metrics.recordRequest).toHaveBeenCalledWith(
         'smart_reply',
@@ -142,25 +140,23 @@ describe('SmartReplyEngine', () => {
 
     it('includes token count in result', async () => {
       gateway.complete.mockResolvedValue(llmResult(['a', 'b', 'c']));
-      // tokensIn=80, tokensOut=40 → 120
 
-      const result = await engine.generateReplies(makeEvent(), []);
+      const result = await engine.generateReplies(makeEvent());
 
-      expect(result.tokens_used).toBe(120);
+      expect(result.tokens_used).toBe(120); // tokensIn=80 + tokensOut=40
     });
 
-    it('passes context messages to prompt builder', async () => {
+    it('passes typed context messages to prompt builder with correct role labels', async () => {
       gateway.complete.mockResolvedValue(llmResult(['ok']));
-      const ctx = ['User A: Hi', 'User B: Hello'];
 
-      await engine.generateReplies(makeEvent(), ctx);
+      await engine.generateReplies(makeEvent({ context_messages: CTX }));
 
-      // Gateway should have been called with messages containing the context
       const calledOptions = gateway.complete.mock.calls[0][1];
       const userContent =
         calledOptions.messages.find((m: { role: string }) => m.role === 'user')
           ?.content ?? '';
-      expect(userContent).toContain('User A: Hi');
+      expect(userContent).toContain('Họ: Alo bạn');
+      expect(userContent).toContain('Bạn: Hi!');
     });
   });
 
@@ -170,7 +166,7 @@ describe('SmartReplyEngine', () => {
     it('returns empty suggestions when LLM throws', async () => {
       gateway.complete.mockRejectedValue(new Error('LLM down'));
 
-      const result = await engine.generateReplies(makeEvent(), []);
+      const result = await engine.generateReplies(makeEvent());
 
       expect(result.suggestions).toEqual([]);
       expect(result.tokens_used).toBe(0);
@@ -186,7 +182,7 @@ describe('SmartReplyEngine', () => {
         latencyMs: 120,
       });
 
-      const result = await engine.generateReplies(makeEvent(), []);
+      const result = await engine.generateReplies(makeEvent());
 
       expect(result.suggestions).toEqual([]);
     });
@@ -201,7 +197,7 @@ describe('SmartReplyEngine', () => {
         latencyMs: 120,
       });
 
-      const result = await engine.generateReplies(makeEvent(), []);
+      const result = await engine.generateReplies(makeEvent());
 
       expect(result.suggestions).toEqual([]);
     });
@@ -209,7 +205,7 @@ describe('SmartReplyEngine', () => {
     it('records failure metrics when LLM throws', async () => {
       gateway.complete.mockRejectedValue(new Error('timeout'));
 
-      await engine.generateReplies(makeEvent(), []);
+      await engine.generateReplies(makeEvent());
 
       expect(metrics.recordRequest).toHaveBeenCalledWith(
         'smart_reply',
@@ -227,7 +223,6 @@ describe('SmartReplyEngine', () => {
 
       const result = await engine.generateReplies(
         makeEvent({ conversation_id: 'c-abc', user_id: 'u-abc' }),
-        [],
       );
 
       expect(result.conversation_id).toBe('c-abc');

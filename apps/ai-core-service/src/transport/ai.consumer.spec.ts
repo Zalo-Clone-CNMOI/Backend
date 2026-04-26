@@ -135,7 +135,7 @@ describe('AiConsumer', () => {
         user_id: 'user-1',
         last_message_id: 'msg-1',
         last_message_body: 'How are you?',
-        context_messages: ['Hey', 'Hi'],
+        context_messages: [{ role: 'them', body: 'Hey' }, { role: 'me', body: 'Hi' }],
         requested_at: Date.now(),
       };
       const mockResult = { conversation_id: 'conv-1', suggestions: ['Fine!'] };
@@ -143,10 +143,7 @@ describe('AiConsumer', () => {
 
       await consumer.onSmartReplyRequest(event);
 
-      expect(smartReplyEngine.generateReplies).toHaveBeenCalledWith(
-        event,
-        event.context_messages,
-      );
+      expect(smartReplyEngine.generateReplies).toHaveBeenCalledWith(event);
       expect(publisher.emit).toHaveBeenCalledWith(
         KafkaTopics.AiSmartReplyResult,
         mockResult,

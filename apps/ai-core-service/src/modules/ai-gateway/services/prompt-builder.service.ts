@@ -1,6 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { LlmChatMessage } from '../interfaces';
 
+export interface SmartReplyContextMessage {
+  role: 'me' | 'them';
+  body: string;
+}
+
 // Static prefix — placed first in system prompts so OpenAI/LocDo prefix caching
 // can cache this block across requests. Dynamic context (app context) goes last.
 const LANGUAGE_RULE =
@@ -37,10 +42,10 @@ Respond ONLY with the JSON object, no explanation.`,
 
   buildSmartReplyPrompt(
     lastMessage: string,
-    contextMessages: string[],
+    contextMessages: SmartReplyContextMessage[],
   ): LlmChatMessage[] {
     const contextBlock = contextMessages.length
-      ? `Lịch sử cuộc trò chuyện:\n${contextMessages.join('\n')}\n\n`
+      ? `Lịch sử cuộc trò chuyện:\n${contextMessages.map((m) => `${m.role === 'me' ? 'Bạn' : 'Họ'}: ${m.body}`).join('\n')}\n\n`
       : '';
 
     return [
@@ -112,6 +117,67 @@ Respond ONLY with the JSON object.`,
       {
         role: 'user',
         content: text,
+      },
+    ];
+  }
+
+  buildEntityDetectionPrompt(body: string): LlmChatMessage[] {
+    return [
+      {
+        role: 'system',
+        content: `${APP_CONTEXT}
+Your task: detect named entities in the chat message that are worth explaining to users.
+${LANGUAGE_RULE}
+
+Entity types: tool | company | person | concept | location | product | other
+
+Rules:
+- Only include entities with confidence >= 0.75
+- Do NOT include common words, pronouns, or generic nouns
+- Return ONLY the entity text and type — do not guess character positions
+
+Return a JSON object with:
+- "entities": array of objects, each with:
+  - "text": string (exact text as it appears in the message)
+  - "type": one of the entity types above
+  - "confidence": number between 0.75 and 1
+
+Respond ONLY with the JSON object, no explanation.`,
+      },
+      {
+        role: 'user',
+        content: body,
+      },
+    ];
+  }
+
+  buildEntityInfoPrompt(
+    text: string,
+    type: string,
+    language: string,
+  ): LlmChatMessage[] {
+    return [
+      {
+        role: 'system',
+        content: `You are a knowledgeable assistant providing concise info panel content for a chat application.
+Generate factual information about the given entity in ${language === 'vi' ? 'Vietnamese' : 'English'}.
+
+Rules:
+- Write only facts you are confident about. If uncertain about specific dates, numbers, or statistics, omit them rather than guess.
+- Do not fabricate information. If you have limited knowledge about this entity, say so briefly.
+- Keep the summary to 2-3 sentences. Keep details to 150-200 words.
+
+Return a JSON object with:
+- "title": string (display name, may differ from raw input)
+- "summary": string (2-3 sentence overview)
+- "details": string (150-200 words, factual content)
+- "related_entities": array of strings (3-5 related names, empty array if none)
+
+Respond ONLY with the JSON object, no explanation.`,
+      },
+      {
+        role: 'user',
+        content: `Entity: "${text}" (type: ${type})`,
       },
     ];
   }

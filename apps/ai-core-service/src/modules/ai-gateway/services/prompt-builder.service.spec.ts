@@ -59,11 +59,14 @@ describe('PromptBuilderService', () => {
       expect(result[1].content).toContain('Are you free tonight?');
     });
 
-    it('includes context messages when provided', () => {
-      const ctx = ['User A: Hello', 'User B: How are you?'];
+    it('includes context messages when provided with role labels', () => {
+      const ctx = [
+        { role: 'them' as const, body: 'Hello' },
+        { role: 'me' as const, body: 'How are you?' },
+      ];
       const result = builder.buildSmartReplyPrompt('I am fine', ctx);
-      expect(result[1].content).toContain('User A: Hello');
-      expect(result[1].content).toContain('User B: How are you?');
+      expect(result[1].content).toContain('Họ: Hello');
+      expect(result[1].content).toContain('Bạn: How are you?');
     });
 
     it('system prompt requests suggestions array', () => {
@@ -187,6 +190,92 @@ describe('PromptBuilderService', () => {
       const result = builder.buildDocumentQueryPrompt('?', chunks);
       expect(result[1].content).toContain('[Nguồn 1]');
       expect(result[1].content).toContain('[Nguồn 2]');
+    });
+  });
+
+  // ── buildEntityDetectionPrompt ────────────────────────────────────
+
+  describe('buildEntityDetectionPrompt', () => {
+    it('returns exactly 2 messages: system + user', () => {
+      const result = builder.buildEntityDetectionPrompt('Tôi dùng Telegram mỗi ngày');
+      expect(result).toHaveLength(2);
+      expect(result[0].role).toBe('system');
+      expect(result[1].role).toBe('user');
+    });
+
+    it('puts the message body as user content', () => {
+      const body = 'Figma là tool thiết kế tốt nhất';
+      const result = builder.buildEntityDetectionPrompt(body);
+      expect(result[1].content).toBe(body);
+    });
+
+    it('system prompt requests entities array with text, type, confidence', () => {
+      const result = builder.buildEntityDetectionPrompt('test');
+      expect(result[0].content).toContain('entities');
+      expect(result[0].content).toContain('text');
+      expect(result[0].content).toContain('type');
+      expect(result[0].content).toContain('confidence');
+    });
+
+    it('system prompt lists all entity types', () => {
+      const result = builder.buildEntityDetectionPrompt('test');
+      const content = result[0].content;
+      expect(content).toContain('tool');
+      expect(content).toContain('company');
+      expect(content).toContain('person');
+      expect(content).toContain('concept');
+      expect(content).toContain('location');
+      expect(content).toContain('product');
+    });
+
+    it('system prompt mentions confidence threshold 0.75', () => {
+      const result = builder.buildEntityDetectionPrompt('test');
+      expect(result[0].content).toContain('0.75');
+    });
+  });
+
+  // ── buildEntityInfoPrompt ─────────────────────────────────────────
+
+  describe('buildEntityInfoPrompt', () => {
+    it('returns exactly 2 messages: system + user', () => {
+      const result = builder.buildEntityInfoPrompt('Telegram', 'tool', 'vi');
+      expect(result).toHaveLength(2);
+      expect(result[0].role).toBe('system');
+      expect(result[1].role).toBe('user');
+    });
+
+    it('puts entity name in user content', () => {
+      const result = builder.buildEntityInfoPrompt('Elon Musk', 'person', 'en');
+      expect(result[1].content).toContain('Elon Musk');
+    });
+
+    it('puts entity type in user content', () => {
+      const result = builder.buildEntityInfoPrompt('Docker', 'tool', 'en');
+      expect(result[1].content).toContain('tool');
+    });
+
+    it('uses Vietnamese in system prompt when language is vi', () => {
+      const result = builder.buildEntityInfoPrompt('Hà Nội', 'location', 'vi');
+      expect(result[0].content).toContain('Vietnamese');
+    });
+
+    it('uses English in system prompt when language is en', () => {
+      const result = builder.buildEntityInfoPrompt('Silicon Valley', 'location', 'en');
+      expect(result[0].content).toContain('English');
+    });
+
+    it('system prompt requests title, summary, details, related_entities', () => {
+      const result = builder.buildEntityInfoPrompt('ChatGPT', 'product', 'vi');
+      const content = result[0].content;
+      expect(content).toContain('title');
+      expect(content).toContain('summary');
+      expect(content).toContain('details');
+      expect(content).toContain('related_entities');
+    });
+
+    it('system prompt includes uncertainty guard', () => {
+      const result = builder.buildEntityInfoPrompt('ChatGPT', 'product', 'vi');
+      expect(result[0].content).toContain('omit');
     });
   });
 });

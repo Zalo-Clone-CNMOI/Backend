@@ -17,7 +17,10 @@ import { SmartReplyEngine } from './smart-reply.engine';
 import { AiGatewayService } from '../ai-gateway/services/ai-gateway.service';
 import { PromptBuilderService } from '../ai-gateway/services/prompt-builder.service';
 import { AiMetricsService } from '../ai-gateway/services/ai-metrics.service';
-import type { AiSmartReplyRequestEvent, AiSmartReplyContextMessage } from '@libs/contracts';
+import type {
+  AiSmartReplyRequestEvent,
+  AiSmartReplyContextMessage,
+} from '@libs/contracts';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -90,7 +93,11 @@ describe('SmartReplyEngine', () => {
   describe('generateReplies() — success', () => {
     it('returns 3 suggestions from LLM response', async () => {
       gateway.complete.mockResolvedValue(
-        llmResult(['I am fine!', 'Doing well, thanks!', 'Great, how about you?']),
+        llmResult([
+          'I am fine!',
+          'Doing well, thanks!',
+          'Great, how about you?',
+        ]),
       );
 
       const result = await engine.generateReplies(makeEvent());
@@ -103,7 +110,9 @@ describe('SmartReplyEngine', () => {
     });
 
     it('trims suggestions to maximum 3', async () => {
-      gateway.complete.mockResolvedValue(llmResult(['S1', 'S2', 'S3', 'S4', 'S5']));
+      gateway.complete.mockResolvedValue(
+        llmResult(['S1', 'S2', 'S3', 'S4', 'S5']),
+      );
 
       const result = await engine.generateReplies(makeEvent());
 

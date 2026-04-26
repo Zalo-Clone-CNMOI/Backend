@@ -8,6 +8,8 @@ import type {
   AiTranslateRequestEvent,
   AiDocumentUploadEvent,
   AiDocumentQueryEvent,
+  AiEntityDetectionRequestEvent,
+  AiEntityInfoRequestEvent,
 } from '@libs/contracts';
 import { S3Service } from '@libs/s3';
 import { AiPublisher } from './ai.publisher';
@@ -16,6 +18,7 @@ import { SmartReplyEngine } from '../modules/smart-reply/smart-reply.engine';
 import { SummaryEngine } from '../modules/summary/summary.engine';
 import { TranslationEngine } from '../modules/translation/translation.engine';
 import { DocumentEngine } from '../modules/document/document.engine';
+import { EntityDetectionEngine } from '../modules/entity-detection/entity-detection.engine';
 
 @Controller()
 export class AiConsumer {
@@ -28,6 +31,7 @@ export class AiConsumer {
     private readonly summaryEngine: SummaryEngine,
     private readonly translationEngine: TranslationEngine,
     private readonly documentEngine: DocumentEngine,
+    private readonly entityDetectionEngine: EntityDetectionEngine,
     private readonly s3Service: S3Service,
   ) {}
 
@@ -154,5 +158,31 @@ export class AiConsumer {
     const result = await this.documentEngine.queryDocument(event);
 
     await this.publisher.emit(KafkaTopics.AiDocumentQueryResult, result);
+  }
+
+  // ── Entity Detection ───────────────────────────────────────────────
+
+  @EventPattern(KafkaTopics.AiEntityDetectionRequest)
+  async onEntityDetectionRequest(
+    @Payload() event: AiEntityDetectionRequestEvent,
+  ) {
+    this.logger.log(
+      `Entity detection request for message: ${event.message_id}`,
+    );
+
+    const result = await this.entityDetectionEngine.detect(event);
+
+    await this.publisher.emit(KafkaTopics.AiEntityDetectionResult, result);
+  }
+
+  @EventPattern(KafkaTopics.AiEntityInfoRequest)
+  async onEntityInfoRequest(@Payload() event: AiEntityInfoRequestEvent) {
+    this.logger.log(
+      `Entity info request: "${event.entity_text}" (${event.entity_type})`,
+    );
+
+    const result = await this.entityDetectionEngine.generateInfo(event);
+
+    await this.publisher.emit(KafkaTopics.AiEntityInfoResult, result);
   }
 }

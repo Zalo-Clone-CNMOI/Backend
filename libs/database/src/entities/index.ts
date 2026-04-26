@@ -16,6 +16,7 @@ export * from './notification-log.entity';
 export * from './notification-outbox.entity';
 export * from './ai-moderation-log.entity';
 export * from './ai-usage-log.entity';
+export * from './ai-entity-detection-log.entity';
 export * from './document-metadata.entity';
 export * from './document-chunk.entity';
 export * from './conversation-poll.entity';

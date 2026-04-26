@@ -6,3 +6,4 @@ export {
 } from './interaction-client/src';
 export { ChatClientService, ChatClientModule } from './chat-client/src';
 export { MediaClientService, MediaClientModule } from './media-client/src';
+export { AiCoreClientService, AiCoreClientModule } from './ai-core-client/src';

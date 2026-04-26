@@ -60,7 +60,12 @@ async function buildModule(config: object): Promise<TestingModule> {
           gemini: GeminiProvider,
           anthropic: AnthropicProvider,
         ) => [locdo, openai, gemini, anthropic],
-        inject: [LocDoRouterProvider, OpenAiProvider, GeminiProvider, AnthropicProvider],
+        inject: [
+          LocDoRouterProvider,
+          OpenAiProvider,
+          GeminiProvider,
+          AnthropicProvider,
+        ],
       },
       { provide: APP_CONFIG, useValue: config },
     ],

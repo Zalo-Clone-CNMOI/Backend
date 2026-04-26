@@ -20,6 +20,7 @@ import { SmartReplyEngine } from '../modules/smart-reply/smart-reply.engine';
 import { SummaryEngine } from '../modules/summary/summary.engine';
 import { TranslationEngine } from '../modules/translation/translation.engine';
 import { DocumentEngine } from '../modules/document/document.engine';
+import { EntityDetectionEngine } from '../modules/entity-detection/entity-detection.engine';
 import { S3Service } from '@libs/s3';
 import { KafkaTopics } from '@libs/contracts';
 import type {
@@ -29,6 +30,8 @@ import type {
   AiTranslateRequestEvent,
   AiDocumentUploadEvent,
   AiDocumentQueryEvent,
+  AiEntityDetectionRequestEvent,
+  AiEntityInfoRequestEvent,
 } from '@libs/contracts';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -64,6 +67,10 @@ function makeS3() {
   return { download: jest.fn() };
 }
 
+function makeEntityDetection() {
+  return { detect: jest.fn(), generateInfo: jest.fn() };
+}
+
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 describe('AiConsumer', () => {
@@ -74,6 +81,7 @@ describe('AiConsumer', () => {
   let summaryEngine: ReturnType<typeof makeSummary>;
   let translationEngine: ReturnType<typeof makeTranslation>;
   let documentEngine: ReturnType<typeof makeDocument>;
+  let entityDetectionEngine: ReturnType<typeof makeEntityDetection>;
   let s3Service: ReturnType<typeof makeS3>;
 
   beforeEach(async () => {
@@ -83,6 +91,7 @@ describe('AiConsumer', () => {
     summaryEngine = makeSummary();
     translationEngine = makeTranslation();
     documentEngine = makeDocument();
+    entityDetectionEngine = makeEntityDetection();
     s3Service = makeS3();
 
     const module: TestingModule = await Test.createTestingModule({
@@ -94,6 +103,7 @@ describe('AiConsumer', () => {
         { provide: SummaryEngine, useValue: summaryEngine },
         { provide: TranslationEngine, useValue: translationEngine },
         { provide: DocumentEngine, useValue: documentEngine },
+        { provide: EntityDetectionEngine, useValue: entityDetectionEngine },
         { provide: S3Service, useValue: s3Service },
       ],
     }).compile();
@@ -135,7 +145,10 @@ describe('AiConsumer', () => {
         user_id: 'user-1',
         last_message_id: 'msg-1',
         last_message_body: 'How are you?',
-        context_messages: [{ role: 'them', body: 'Hey' }, { role: 'me', body: 'Hi' }],
+        context_messages: [
+          { role: 'them', body: 'Hey' },
+          { role: 'me', body: 'Hi' },
+        ],
         requested_at: Date.now(),
       };
       const mockResult = { conversation_id: 'conv-1', suggestions: ['Fine!'] };
@@ -302,6 +315,61 @@ describe('AiConsumer', () => {
       expect(documentEngine.queryDocument).toHaveBeenCalledWith(event);
       expect(publisher.emit).toHaveBeenCalledWith(
         KafkaTopics.AiDocumentQueryResult,
+        mockResult,
+      );
+    });
+  });
+
+  // ── onEntityDetectionRequest ──────────────────────────────────────
+
+  describe('onEntityDetectionRequest()', () => {
+    it('delegates to entityDetectionEngine.detect and emits result', async () => {
+      const event: AiEntityDetectionRequestEvent = {
+        message_id: 'msg-1',
+        conversation_id: 'conv-1',
+        sender_id: 'user-1',
+        body: 'Tôi dùng Telegram mỗi ngày',
+        created_at: Date.now(),
+      };
+      const mockResult = {
+        message_id: 'msg-1',
+        entities: [{ text: 'Telegram', type: 'tool', confidence: 0.95 }],
+      };
+      entityDetectionEngine.detect.mockResolvedValue(mockResult);
+
+      await consumer.onEntityDetectionRequest(event);
+
+      expect(entityDetectionEngine.detect).toHaveBeenCalledWith(event);
+      expect(publisher.emit).toHaveBeenCalledWith(
+        KafkaTopics.AiEntityDetectionResult,
+        mockResult,
+      );
+    });
+  });
+
+  // ── onEntityInfoRequest ───────────────────────────────────────────
+
+  describe('onEntityInfoRequest()', () => {
+    it('delegates to entityDetectionEngine.generateInfo and emits result', async () => {
+      const event: AiEntityInfoRequestEvent = {
+        entity_text: 'Telegram',
+        entity_type: 'tool',
+        user_id: 'user-1',
+        language: 'vi',
+      };
+      const mockResult = {
+        entity_text: 'Telegram',
+        title: 'Telegram',
+        summary: 'Ứng dụng nhắn tin...',
+        details: '...',
+      };
+      entityDetectionEngine.generateInfo.mockResolvedValue(mockResult);
+
+      await consumer.onEntityInfoRequest(event);
+
+      expect(entityDetectionEngine.generateInfo).toHaveBeenCalledWith(event);
+      expect(publisher.emit).toHaveBeenCalledWith(
+        KafkaTopics.AiEntityInfoResult,
         mockResult,
       );
     });

@@ -30,10 +30,7 @@ export function parseJsonResponse(content: string): any {
 // ── Per-feature output validators ────────────────────────────────────────────
 
 /** Clamp each suggestion to maxLen chars and return at most 3. */
-export function validateSuggestions(
-  raw: unknown,
-  maxLen = 80,
-): string[] {
+export function validateSuggestions(raw: unknown, maxLen = 80): string[] {
   if (!Array.isArray(raw)) return [];
   return (raw as unknown[])
     .filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
@@ -45,10 +42,7 @@ export function validateSuggestions(
  * Normalise an ISO 639-1 language code.
  * Returns the code as-is if it is 2 alphabetic chars; otherwise `fallback`.
  */
-export function validateLanguageCode(
-  raw: unknown,
-  fallback: string,
-): string {
+export function validateLanguageCode(raw: unknown, fallback: string): string {
   if (typeof raw === 'string' && /^[a-z]{2}$/i.test(raw.trim())) {
     return raw.trim().toLowerCase();
   }
@@ -65,7 +59,9 @@ export function validateSourceIndices(
 ): number[] {
   if (!Array.isArray(raw)) return [];
   const valid = (raw as unknown[])
-    .filter((n): n is number => typeof n === 'number' && n >= 1 && n <= chunkCount)
+    .filter(
+      (n): n is number => typeof n === 'number' && n >= 1 && n <= chunkCount,
+    )
     .map(Math.round);
   return [...new Set(valid)].sort((a, b) => a - b);
 }

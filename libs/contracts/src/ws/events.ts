@@ -91,6 +91,7 @@ export const WsEvents = {
   AiDocumentQueryResult: 'ai:document:query:result',
   AiStreamChunk: 'ai:stream:chunk',
   AiStreamComplete: 'ai:stream:complete',
+  MessageEntities: 'message:entities',
 } as const;
 
 export type WsEventName = (typeof WsEvents)[keyof typeof WsEvents];

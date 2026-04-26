@@ -9,7 +9,6 @@ import {
   LlmEmbeddingResult,
 } from '../interfaces';
 
-
 @Injectable()
 export class LocDoRouterProvider implements ILlmProvider {
   private readonly logger = new Logger(LocDoRouterProvider.name);

@@ -12,6 +12,7 @@ import {
   type AiDocumentQueryResultEvent,
   type AiStreamChunkEvent,
   type AiStreamCompleteEvent,
+  type AiEntityDetectionResultEvent,
 } from '@libs/contracts';
 import { ChatGateway } from '../../socket/chat.gateway';
 
@@ -160,5 +161,25 @@ export class AiFanoutConsumer {
       feature: payload.feature,
       total_chunks: payload.total_chunks,
     });
+  }
+
+  /**
+   * Handle Entity Detection Result.
+   * Broadcast detected entities to the conversation room so all members
+   * see the same highlights for a given message.
+   */
+  @EventPattern(KafkaTopics.AiEntityDetectionResult)
+  onAiEntityDetectionResult(@Payload() payload: AiEntityDetectionResultEvent) {
+    if (!payload.entities || payload.entities.length === 0) return;
+
+    this.gateway.broadcastToConversation(
+      payload.conversation_id,
+      WsEvents.MessageEntities,
+      {
+        message_id: payload.message_id,
+        conversation_id: payload.conversation_id,
+        entities: payload.entities,
+      },
+    );
   }
 }

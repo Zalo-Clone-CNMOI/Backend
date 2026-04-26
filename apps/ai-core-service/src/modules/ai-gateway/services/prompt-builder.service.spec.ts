@@ -197,7 +197,9 @@ describe('PromptBuilderService', () => {
 
   describe('buildEntityDetectionPrompt', () => {
     it('returns exactly 2 messages: system + user', () => {
-      const result = builder.buildEntityDetectionPrompt('Tôi dùng Telegram mỗi ngày');
+      const result = builder.buildEntityDetectionPrompt(
+        'Tôi dùng Telegram mỗi ngày',
+      );
       expect(result).toHaveLength(2);
       expect(result[0].role).toBe('system');
       expect(result[1].role).toBe('user');
@@ -260,7 +262,11 @@ describe('PromptBuilderService', () => {
     });
 
     it('uses English in system prompt when language is en', () => {
-      const result = builder.buildEntityInfoPrompt('Silicon Valley', 'location', 'en');
+      const result = builder.buildEntityInfoPrompt(
+        'Silicon Valley',
+        'location',
+        'en',
+      );
       expect(result[0].content).toContain('English');
     });
 

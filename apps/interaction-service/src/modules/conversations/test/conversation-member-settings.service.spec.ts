@@ -83,7 +83,14 @@ describe('ConversationsService', () => {
   let service: ConversationsService;
   let userRepository: Record<string, jest.Mock>;
   let conversationRepository: Record<string, jest.Mock>;
-  let memberRepository: Record<string, jest.Mock>;
+  let memberRepository: {
+    findOne: jest.Mock;
+    find: jest.Mock;
+    create: jest.Mock;
+    save: jest.Mock;
+    createQueryBuilder: jest.Mock;
+    manager?: { transaction: jest.Mock };
+  };
   let inviteRepository: InviteRepositoryMock;
   let cacheService: Record<string, jest.Mock>;
   let kafkaClient: Record<string, jest.Mock>;
@@ -219,7 +226,7 @@ describe('ConversationsService', () => {
         }),
       };
 
-      (memberRepository as any).manager = {
+      memberRepository.manager = {
         transaction: jest
           .fn()
           .mockImplementation((cb: (m: unknown) => unknown) => cb(mockManager)),

@@ -25,15 +25,60 @@ import {
 
 const uuid = (n: number) => `00000000-0000-0000-0000-00000000000${n}`;
 
+type InviteRepoMock = {
+  findOne: jest.Mock;
+  find: jest.Mock;
+  findAndCount: jest.Mock;
+  create: jest.Mock;
+  save: jest.Mock;
+  update: jest.Mock;
+  createQueryBuilder: jest.Mock;
+  manager: { transaction: jest.Mock };
+};
+
+type MemberRepoMock = {
+  findOne: jest.Mock;
+  find: jest.Mock;
+  create: jest.Mock;
+  save: jest.Mock;
+  update: jest.Mock;
+  insert: jest.Mock;
+  createQueryBuilder: jest.Mock;
+};
+
+type ConversationRepoMock = {
+  findOne: jest.Mock;
+  createQueryBuilder: jest.Mock;
+};
+
+type UserRepoMock = {
+  find: jest.Mock;
+  findOne: jest.Mock;
+};
+
+type NotificationPublisherMock = {
+  publish: jest.Mock;
+  publishToTopic: jest.Mock;
+};
+
+type KafkaClientMock = {
+  emit: jest.Mock;
+};
+
+type CoreServiceMock = {
+  createDirectConversation: jest.Mock;
+  getConversationById: jest.Mock;
+};
+
 describe('GroupInviteService', () => {
   let service: GroupInviteService;
-  let inviteRepository: any;
-  let memberRepository: any;
-  let conversationRepository: any;
-  let userRepository: any;
-  let notificationPublisher: any;
-  let kafkaClient: any;
-  let coreService: any;
+  let inviteRepository: InviteRepoMock;
+  let memberRepository: MemberRepoMock;
+  let conversationRepository: ConversationRepoMock;
+  let userRepository: UserRepoMock;
+  let notificationPublisher: NotificationPublisherMock;
+  let kafkaClient: KafkaClientMock;
+  let coreService: CoreServiceMock;
 
   beforeEach(async () => {
     userRepository = {
@@ -53,8 +98,10 @@ describe('GroupInviteService', () => {
     memberRepository = {
       findOne: jest.fn(),
       find: jest.fn().mockResolvedValue([]),
-      create: jest.fn().mockImplementation((data) => data),
-      save: jest.fn().mockImplementation((data) => Promise.resolve(data)),
+      create: jest.fn().mockImplementation((data: unknown) => data),
+      save: jest
+        .fn()
+        .mockImplementation((data: unknown) => Promise.resolve(data)),
       update: jest.fn().mockResolvedValue({ affected: 1 }),
       insert: jest.fn().mockResolvedValue({}),
       createQueryBuilder: jest.fn(),
@@ -64,8 +111,10 @@ describe('GroupInviteService', () => {
       findOne: jest.fn(),
       find: jest.fn().mockResolvedValue([]),
       findAndCount: jest.fn().mockResolvedValue([[], 0]),
-      create: jest.fn().mockImplementation((data) => data),
-      save: jest.fn().mockImplementation((data) => Promise.resolve(data)),
+      create: jest.fn().mockImplementation((data: unknown) => data),
+      save: jest
+        .fn()
+        .mockImplementation((data: unknown) => Promise.resolve(data)),
       update: jest.fn().mockResolvedValue({ affected: 1 }),
       createQueryBuilder: jest.fn(),
       manager: {
@@ -153,11 +202,11 @@ describe('GroupInviteService', () => {
     });
 
     const makeMockManager = (opts: {
-      invite: any;
-      conversation: any;
+      invite: unknown;
+      conversation: unknown;
       insertSpy: jest.Mock;
     }) => ({
-      getRepository: jest.fn((entity: any) => {
+      getRepository: jest.fn((entity: unknown) => {
         if (entity === ConversationInvite) {
           return {
             createQueryBuilder: () => ({
@@ -204,8 +253,8 @@ describe('GroupInviteService', () => {
         conversation: buildActiveConversation(),
         insertSpy,
       });
-      inviteRepository.manager.transaction.mockImplementation((cb: any) =>
-        cb(mockManager),
+      inviteRepository.manager.transaction.mockImplementation(
+        (cb: (manager: unknown) => unknown) => cb(mockManager),
       );
 
       await service.acceptGroupInvite(uuid(2), uuid(1), uuid(3));
@@ -224,15 +273,15 @@ describe('GroupInviteService', () => {
         conversation: buildActiveConversation(),
         insertSpy,
       });
-      inviteRepository.manager.transaction.mockImplementation((cb: any) =>
-        cb(mockManager),
+      inviteRepository.manager.transaction.mockImplementation(
+        (cb: (manager: unknown) => unknown) => cb(mockManager),
       );
 
       await service.acceptGroupInvite(uuid(2), uuid(1), uuid(3));
 
-      const topics = notificationPublisher.publishToTopic.mock.calls.map(
-        (call: any[]) => call[0],
-      );
+      const topics = (
+        notificationPublisher.publishToTopic.mock.calls as unknown[][]
+      ).map((call) => call[0]);
       expect(topics).toEqual(
         expect.arrayContaining([
           expect.stringContaining('invite'),
@@ -339,8 +388,8 @@ describe('GroupInviteService', () => {
         conversation: disbandedConv,
         insertSpy,
       });
-      inviteRepository.manager.transaction.mockImplementation((cb: any) =>
-        cb(mockManager),
+      inviteRepository.manager.transaction.mockImplementation(
+        (cb: (manager: unknown) => unknown) => cb(mockManager),
       );
 
       await expect(

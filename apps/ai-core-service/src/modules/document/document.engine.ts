@@ -13,23 +13,12 @@ import type {
   AiDocumentProcessedEvent,
   AiDocumentQueryEvent,
   AiDocumentQueryResultEvent,
-  AiProviderType,
 } from '@libs/contracts';
+import { toAiProviderType } from '@libs/contracts';
 
 interface SimilarityRow {
   similarity?: string;
 }
-
-const toAiProviderType = (provider: string): AiProviderType => {
-  if (
-    provider === 'openai' ||
-    provider === 'gemini' ||
-    provider === 'anthropic'
-  ) {
-    return provider;
-  }
-  return 'openai';
-};
 
 /**
  * DocumentEngine — document processing + pgvector RAG pipeline.

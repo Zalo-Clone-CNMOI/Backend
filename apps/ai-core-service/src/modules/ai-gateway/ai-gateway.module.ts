@@ -2,6 +2,7 @@ import { Module, Global } from '@nestjs/common';
 import { OpenAiProvider } from './providers/openai.provider';
 import { GeminiProvider } from './providers/gemini.provider';
 import { AnthropicProvider } from './providers/anthropic.provider';
+import { LocDoRouterProvider } from './providers/locdo-router.provider';
 import { LLM_PROVIDERS } from './interfaces';
 import { DataSanitizer } from './services/data-sanitizer.service';
 import { TokenBudgetService } from './services/token-budget.service';
@@ -12,17 +13,24 @@ import { AiMetricsService } from './services/ai-metrics.service';
 @Global()
 @Module({
   providers: [
+    LocDoRouterProvider,
     OpenAiProvider,
     GeminiProvider,
     AnthropicProvider,
     {
       provide: LLM_PROVIDERS,
       useFactory: (
+        locdo: LocDoRouterProvider,
         openai: OpenAiProvider,
         gemini: GeminiProvider,
         anthropic: AnthropicProvider,
-      ) => [openai, gemini, anthropic],
-      inject: [OpenAiProvider, GeminiProvider, AnthropicProvider],
+      ) => [locdo, openai, gemini, anthropic],
+      inject: [
+        LocDoRouterProvider,
+        OpenAiProvider,
+        GeminiProvider,
+        AnthropicProvider,
+      ],
     },
     DataSanitizer,
     TokenBudgetService,

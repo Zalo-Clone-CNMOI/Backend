@@ -6,8 +6,8 @@ import { AiMetricsService } from '../ai-gateway/services/ai-metrics.service';
 import type {
   AiSmartReplyRequestEvent,
   AiSmartReplyResultEvent,
-  AiProviderType,
 } from '@libs/contracts';
+import { toAiProviderType } from '@libs/contracts';
 
 @Injectable()
 export class SmartReplyEngine {
@@ -101,13 +101,3 @@ export class SmartReplyEngine {
   }
 }
 
-const toAiProviderType = (provider: string): AiProviderType => {
-  if (
-    provider === 'openai' ||
-    provider === 'gemini' ||
-    provider === 'anthropic'
-  ) {
-    return provider;
-  }
-  return 'openai';
-};

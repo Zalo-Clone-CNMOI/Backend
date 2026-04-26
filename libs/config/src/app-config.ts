@@ -46,6 +46,9 @@ export interface AppConfig {
   openaiApiKey?: string;
   geminiApiKey?: string;
   anthropicApiKey?: string;
+  lcdoRouterUrl?: string;
+  lcdoRouterKey?: string;
+  lcdoRouterModel?: string;
   aiDefaultModel?: string;
   aiEmbeddingModel?: string;
   aiDailyTokenBudget?: number;
@@ -275,6 +278,9 @@ export function loadConfig(serviceName: string): AppConfig {
     openaiApiKey: process.env.OPENAI_API_KEY,
     geminiApiKey: process.env.GEMINI_API_KEY,
     anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+    lcdoRouterUrl: process.env.LCDO_ROUTER_URL?.trim(),
+    lcdoRouterKey: process.env.LCDO_ROUTER_KEY?.trim(),
+    lcdoRouterModel: process.env.LCDO_ROUTER_MODEL?.trim(),
     aiDefaultModel: process.env.AI_DEFAULT_MODEL ?? 'gpt-4o-mini',
     aiEmbeddingModel:
       process.env.AI_EMBEDDING_MODEL ?? 'text-embedding-3-small',

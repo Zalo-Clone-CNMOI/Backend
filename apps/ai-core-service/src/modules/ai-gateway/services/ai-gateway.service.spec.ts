@@ -352,4 +352,128 @@ describe('AiGatewayService', () => {
       expect(provider).toBeUndefined();
     });
   });
+
+  // ── locdo_router — smoke tests ────────────────────────────────────
+  // Verify LocDoRouterProvider integrates correctly with AiGatewayService
+  // as the primary provider in the fallback chain.
+
+  describe('locdo_router provider integration', () => {
+    let lcdoProvider: jest.Mocked<ILlmProvider>;
+    let openaiProvider: jest.Mocked<ILlmProvider>;
+    let gatewayWithLocdo: AiGatewayService;
+
+    beforeEach(async () => {
+      lcdoProvider = makeProvider('locdo_router');
+      openaiProvider = makeProvider('openai');
+
+      const m = await Test.createTestingModule({
+        providers: [
+          AiGatewayService,
+          {
+            provide: LLM_PROVIDERS,
+            useValue: [lcdoProvider, openaiProvider],
+          },
+          { provide: DataSanitizer, useValue: sanitizer },
+          { provide: TokenBudgetService, useValue: budget },
+        ],
+      }).compile();
+
+      gatewayWithLocdo = m.get(AiGatewayService);
+    });
+
+    it('uses locdo_router as the first (primary) provider', async () => {
+      lcdoProvider.complete.mockResolvedValue(
+        makeResult({ provider: 'locdo_router', model: 'claude-sonnet-4-6' }),
+      );
+
+      const result = await gatewayWithLocdo.complete('user1', BASE_OPTIONS);
+
+      expect(result.provider).toBe('locdo_router');
+      expect(lcdoProvider.complete).toHaveBeenCalledTimes(1);
+      expect(openaiProvider.complete).not.toHaveBeenCalled();
+    });
+
+    it('falls back to openai when locdo_router fails', async () => {
+      lcdoProvider.complete.mockRejectedValue(new Error('router down'));
+      openaiProvider.complete.mockResolvedValue(
+        makeResult({ provider: 'openai' }),
+      );
+
+      const result = await gatewayWithLocdo.complete('user1', BASE_OPTIONS);
+
+      expect(result.provider).toBe('openai');
+      expect(lcdoProvider.complete).toHaveBeenCalledTimes(1);
+      expect(openaiProvider.complete).toHaveBeenCalledTimes(1);
+    });
+
+    it('throws when both locdo_router and openai fail', async () => {
+      lcdoProvider.complete.mockRejectedValue(new Error('router down'));
+      openaiProvider.complete.mockRejectedValue(new Error('openai down'));
+
+      await expect(
+        gatewayWithLocdo.complete('user1', BASE_OPTIONS),
+      ).rejects.toThrow('All LLM providers failed');
+    });
+
+    it('skips locdo_router when it is unavailable and uses openai', async () => {
+      const unavailableLocdo = makeProvider('locdo_router', false);
+      openaiProvider.complete.mockResolvedValue(
+        makeResult({ provider: 'openai' }),
+      );
+
+      const m = await Test.createTestingModule({
+        providers: [
+          AiGatewayService,
+          {
+            provide: LLM_PROVIDERS,
+            useValue: [unavailableLocdo, openaiProvider],
+          },
+          { provide: DataSanitizer, useValue: sanitizer },
+          { provide: TokenBudgetService, useValue: budget },
+        ],
+      }).compile();
+
+      const gw = m.get(AiGatewayService);
+      const result = await gw.complete('user1', BASE_OPTIONS);
+
+      expect(unavailableLocdo.complete).not.toHaveBeenCalled();
+      expect(result.provider).toBe('openai');
+    });
+
+    it('can retrieve locdo_router via getProvider()', () => {
+      const provider = gatewayWithLocdo.getProvider('locdo_router');
+      expect(provider).toBe(lcdoProvider);
+    });
+
+    it('opens circuit for locdo_router after 5 consecutive failures', async () => {
+      lcdoProvider.complete.mockRejectedValue(new Error('router down'));
+      openaiProvider.complete.mockResolvedValue(makeResult());
+
+      for (let i = 0; i < 5; i++) {
+        await gatewayWithLocdo.complete('user1', BASE_OPTIONS);
+      }
+
+      lcdoProvider.complete.mockClear();
+      openaiProvider.complete.mockClear();
+      openaiProvider.complete.mockResolvedValue(makeResult());
+
+      await gatewayWithLocdo.complete('user1', BASE_OPTIONS);
+
+      expect(lcdoProvider.complete).not.toHaveBeenCalled();
+      expect(openaiProvider.complete).toHaveBeenCalledTimes(1);
+    });
+
+    it('applies PII sanitization to messages before calling locdo_router', async () => {
+      sanitizer.sanitize.mockReturnValue('[REDACTED]');
+      lcdoProvider.complete.mockResolvedValue(makeResult());
+
+      await gatewayWithLocdo.complete('user1', {
+        messages: [{ role: 'user', content: 'user@example.com' }],
+      });
+
+      expect(sanitizer.sanitize).toHaveBeenCalledWith('user@example.com');
+      const calledWith = lcdoProvider.complete.mock.calls[0][0];
+      expect(calledWith.messages[0].content).toBe('[REDACTED]');
+    });
+  });
 });

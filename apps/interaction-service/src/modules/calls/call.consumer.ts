@@ -119,7 +119,6 @@ export class CallConsumer {
       trace_id: cmd.trace_id,
     };
 
-    this.kafkaClient.emit(KafkaTopics.CallStarted, startedEvent);
     await this.outbox.publishToTopic(KafkaTopics.CallStarted, {
       ...startedEvent,
       push_recipient_ids: participantIds.filter((id) => id !== cmd.initiator_id),

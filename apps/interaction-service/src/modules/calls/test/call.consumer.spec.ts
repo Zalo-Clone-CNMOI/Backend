@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
 import { KafkaTopics } from '@libs/contracts';
-import { CallConsumer } from '../call.consumer';
+import { CallConsumer } from '../consumers/call.consumer';
 
 describe('CallConsumer', () => {
   const callStateStore = {

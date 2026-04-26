@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-argument */
 import { Test } from '@nestjs/testing';
-import { CallConsumer } from '../call.consumer';
 import { CallStateStore } from '../utils/call-state.store';
 import { CallEventsPublisher } from '../services/call-events.publisher';
 import { CallMembershipAccessService } from '../services/call-membership-access.service';
@@ -9,6 +8,7 @@ import { CallHistoryService } from '../services/call-history.service';
 import { NotificationOutboxPublisher } from '@libs/kafka/publisher/notification-outbox.publisher';
 import { KAFKA_CLIENT } from '@libs/kafka';
 import { KafkaTopics } from '@libs/contracts';
+import { CallConsumer } from '../consumers/call.consumer';
 
 describe('CallConsumer — VoIP push outbox', () => {
   let consumer: CallConsumer;

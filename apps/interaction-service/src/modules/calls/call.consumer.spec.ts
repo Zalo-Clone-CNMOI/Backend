@@ -32,6 +32,10 @@ describe('CallConsumer', () => {
     closeSession: jest.fn(),
   };
 
+  const outbox = {
+    publishToTopic: jest.fn().mockResolvedValue('queued'),
+  };
+
   let consumer: CallConsumer;
 
   const makeDirectState = (overrides = {}) => ({
@@ -72,6 +76,7 @@ describe('CallConsumer', () => {
     callTimeoutService.cancelTimeout.mockResolvedValue(undefined);
     callHistoryService.createSession.mockResolvedValue(undefined);
     callHistoryService.closeSession.mockResolvedValue(undefined);
+    outbox.publishToTopic.mockResolvedValue('queued');
     consumer = new CallConsumer(
       kafkaClient as never,
       callMembershipAccessService as never,
@@ -79,6 +84,7 @@ describe('CallConsumer', () => {
       callEventsPublisher as never,
       callTimeoutService as never,
       callHistoryService as never,
+      outbox as never,
     );
   });
 
@@ -103,7 +109,7 @@ describe('CallConsumer', () => {
         conversation_type: 'direct',
       }),
     );
-    expect(kafkaClient.emit).toHaveBeenCalledWith(
+    expect(outbox.publishToTopic).toHaveBeenCalledWith(
       KafkaTopics.CallStarted,
       expect.objectContaining({ call_id: 'call-1', conversation_id: 'conv-1' }),
     );

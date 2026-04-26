@@ -9,7 +9,7 @@ import {
 } from '@libs/contracts';
 import { KAFKA_CLIENT } from '@libs/kafka';
 import { CallTimeoutService, type DueTimeout } from './call-timeout.service';
-import { CallStateStore } from './call-state.store';
+import { CallStateStore } from '../utils/call-state.store';
 import { CallHistoryService } from './call-history.service';
 
 @Injectable()

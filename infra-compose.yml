@@ -86,6 +86,19 @@ services:
     profiles:
       - migration
 
+  coturn:
+    image: coturn/coturn:4.6
+    container_name: zalo_coturn
+    network_mode: host
+    volumes:
+      - ./infra/coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 3478 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
   nginx:
     image: nginx:alpine
     container_name: zalo_nginx

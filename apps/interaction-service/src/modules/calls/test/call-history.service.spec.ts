@@ -3,7 +3,7 @@ import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { CallSession } from '@libs/database/entities';
 import { CallType, ConversationType } from '@app/constant';
-import { CallHistoryService } from './call-history.service';
+import { CallHistoryService } from '../services/call-history.service';
 
 describe('CallHistoryService', () => {
   let service: CallHistoryService;

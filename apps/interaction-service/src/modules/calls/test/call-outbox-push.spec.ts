@@ -1,11 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 import { Test } from '@nestjs/testing';
-import { CallConsumer } from './call.consumer';
-import { CallStateStore } from './call-state.store';
-import { CallEventsPublisher } from './call-events.publisher';
-import { CallMembershipAccessService } from './call-membership-access.service';
-import { CallTimeoutService } from './call-timeout.service';
-import { CallHistoryService } from './call-history.service';
+import { CallConsumer } from '../call.consumer';
+import { CallStateStore } from '../utils/call-state.store';
+import { CallEventsPublisher } from '../services/call-events.publisher';
+import { CallMembershipAccessService } from '../services/call-membership-access.service';
+import { CallTimeoutService } from '../services/call-timeout.service';
+import { CallHistoryService } from '../services/call-history.service';
 import { NotificationOutboxPublisher } from '@libs/kafka/publisher/notification-outbox.publisher';
 import { KAFKA_CLIENT } from '@libs/kafka';
 import { KafkaTopics } from '@libs/contracts';

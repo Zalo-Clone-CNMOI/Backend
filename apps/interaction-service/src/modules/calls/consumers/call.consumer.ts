@@ -23,12 +23,12 @@ import { Public } from '@app/decorator';
 import { CallType, ConversationType } from '@app/constant';
 import { KAFKA_CLIENT } from '@libs/kafka';
 import { NotificationOutboxPublisher } from '@libs/kafka/publisher/notification-outbox.publisher';
-import { CallStateStore } from './call-state.store';
-import { CallEventsPublisher } from './call-events.publisher';
-import { CallMembershipAccessService } from './call-membership-access.service';
-import { CallTimeoutService } from './call-timeout.service';
-import { CallHistoryService } from './call-history.service';
-import { uniqueParticipants } from './call-participants.util';
+import { CallEventsPublisher } from '../services/call-events.publisher';
+import { CallHistoryService } from '../services/call-history.service';
+import { CallMembershipAccessService } from '../services/call-membership-access.service';
+import { CallTimeoutService } from '../services/call-timeout.service';
+import { uniqueParticipants } from '../utils/call-participants.util';
+import { CallStateStore } from '../utils/call-state.store';
 
 @Controller()
 @Public()
@@ -94,7 +94,10 @@ export class CallConsumer {
     };
 
     await this.stateStore.set(cmd.conversation_id, state);
-    await this.callTimeoutService.scheduleTimeout(cmd.call_id, cmd.conversation_id);
+    await this.callTimeoutService.scheduleTimeout(
+      cmd.call_id,
+      cmd.conversation_id,
+    );
     this.callHistoryService
       .createSession({
         id: cmd.call_id,
@@ -106,7 +109,10 @@ export class CallConsumer {
         participantIds,
       })
       .catch((err: Error) =>
-        this.logger.error(`createSession failed call=${cmd.call_id}: ${err.message}`, err.stack),
+        this.logger.error(
+          `createSession failed call=${cmd.call_id}: ${err.message}`,
+          err.stack,
+        ),
       );
 
     const startedEvent: CallStartedEvent = {
@@ -121,7 +127,9 @@ export class CallConsumer {
 
     await this.outbox.publishToTopic(KafkaTopics.CallStarted, {
       ...startedEvent,
-      push_recipient_ids: participantIds.filter((id) => id !== cmd.initiator_id),
+      push_recipient_ids: participantIds.filter(
+        (id) => id !== cmd.initiator_id,
+      ),
     });
     this.eventsPublisher.publishStateUpdate(cmd.conversation_id, state, {
       traceId: cmd.trace_id,
@@ -213,7 +221,10 @@ export class CallConsumer {
     state.status = 'ongoing';
     state.trace_id = cmd.trace_id;
 
-    await this.callTimeoutService.cancelTimeout(cmd.call_id, cmd.conversation_id);
+    await this.callTimeoutService.cancelTimeout(
+      cmd.call_id,
+      cmd.conversation_id,
+    );
     await this.stateStore.set(cmd.conversation_id, state);
 
     const acceptedEvent: CallAcceptedEvent = {
@@ -450,7 +461,10 @@ export class CallConsumer {
     reason?: string,
     traceId?: string,
   ): Promise<void> {
-    await this.callTimeoutService.cancelTimeout(state.call_id, state.conversation_id);
+    await this.callTimeoutService.cancelTimeout(
+      state.call_id,
+      state.conversation_id,
+    );
     state.status = 'ended';
     state.ended_at = endedAt;
     state.participants[userId] = 'left';
@@ -474,7 +488,10 @@ export class CallConsumer {
         reason,
       })
       .catch((err: Error) =>
-        this.logger.error(`closeSession failed call=${state.call_id}: ${err.message}`, err.stack),
+        this.logger.error(
+          `closeSession failed call=${state.call_id}: ${err.message}`,
+          err.stack,
+        ),
       );
     this.eventsPublisher.publishStateUpdate(state.conversation_id, null, {
       reason: reason ?? 'ended',

@@ -1,5 +1,15 @@
-import { Controller, Get, Param, Query, ParseIntPipe, DefaultValuePipe } from '@nestjs/common';
-import { CallHistoryService, PaginatedCallSessions } from './call-history.service';
+import {
+  Controller,
+  Get,
+  Param,
+  Query,
+  ParseIntPipe,
+  DefaultValuePipe,
+} from '@nestjs/common';
+import {
+  CallHistoryService,
+  PaginatedCallSessions,
+} from './services/call-history.service';
 
 @Controller('conversations/:conversationId/calls')
 export class CallHistoryController {

@@ -1,5 +1,5 @@
 import { Test } from '@nestjs/testing';
-import { IceServerService } from './ice-server.service';
+import { IceServerService } from '../services/ice-server.service';
 import { APP_CONFIG } from '@libs/config';
 
 describe('IceServerService', () => {
@@ -55,7 +55,10 @@ describe('IceServerService', () => {
     const m = await Test.createTestingModule({
       providers: [
         IceServerService,
-        { provide: APP_CONFIG, useValue: { ...mockConfig, coturnSecret: undefined } },
+        {
+          provide: APP_CONFIG,
+          useValue: { ...mockConfig, coturnSecret: undefined },
+        },
       ],
     }).compile();
     const svc = m.get(IceServerService);

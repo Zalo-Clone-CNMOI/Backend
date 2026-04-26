@@ -46,7 +46,9 @@ export class CallTimeoutService {
         this.logger.warn(`Skipping malformed timeout entry: "${m}"`);
         return [];
       }
-      return [{ callId: m.substring(0, idx), conversationId: m.substring(idx + 1) }];
+      return [
+        { callId: m.substring(0, idx), conversationId: m.substring(idx + 1) },
+      ];
     });
   }
 }

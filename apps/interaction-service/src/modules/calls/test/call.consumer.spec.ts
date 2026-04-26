@@ -1,5 +1,5 @@
 import { KafkaTopics } from '@libs/contracts';
-import { CallConsumer } from './call.consumer';
+import { CallConsumer } from '../call.consumer';
 
 describe('CallConsumer', () => {
   const callStateStore = {

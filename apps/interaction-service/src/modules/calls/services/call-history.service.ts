@@ -59,7 +59,10 @@ export class CallHistoryService {
     await this.repo.save(session);
   }
 
-  async closeSession(callId: string, payload: CloseSessionPayload): Promise<void> {
+  async closeSession(
+    callId: string,
+    payload: CloseSessionPayload,
+  ): Promise<void> {
     const status = this.resolveStatus(payload.reason);
     const durationMs = Math.max(0, payload.endedAt - payload.startedAt);
     const result = await this.repo.update(
@@ -72,7 +75,9 @@ export class CallHistoryService {
       },
     );
     if ((result.affected ?? 0) === 0) {
-      this.logger.warn(`closeSession: no call_session found for callId=${callId}`);
+      this.logger.warn(
+        `closeSession: no call_session found for callId=${callId}`,
+      );
     }
   }
 

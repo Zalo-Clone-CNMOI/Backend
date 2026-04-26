@@ -1,7 +1,7 @@
 import { Controller, Get } from '@nestjs/common';
 import { CurrentUser } from '@app/decorator';
 import type { AuthenticatedUser } from '@app/types';
-import { IceServerService } from './ice-server.service';
+import { IceServerService } from './services/ice-server.service';
 
 @Controller('calls')
 export class IceServerController {

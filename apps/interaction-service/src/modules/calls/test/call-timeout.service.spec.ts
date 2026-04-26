@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 import { Test } from '@nestjs/testing';
-import { CallTimeoutService } from './call-timeout.service';
+import { CallTimeoutService } from '../services/call-timeout.service';
 import { REDIS_CLIENT } from '@libs/redis/redis.tokens';
 
 describe('CallTimeoutService', () => {
@@ -34,9 +34,14 @@ describe('CallTimeoutService', () => {
         value: 'call-1:conv-1',
       }),
     );
-    const call = redis.zAdd.mock.calls[0] as [string, { score: number; value: string }];
+    const call = redis.zAdd.mock.calls[0] as [
+      string,
+      { score: number; value: string },
+    ];
     const score = call[1].score;
-    expect(score).toBeGreaterThanOrEqual(now + CallTimeoutService.RING_TIMEOUT_MS);
+    expect(score).toBeGreaterThanOrEqual(
+      now + CallTimeoutService.RING_TIMEOUT_MS,
+    );
     expect(score).toBeLessThan(now + CallTimeoutService.RING_TIMEOUT_MS + 1000);
   });
 

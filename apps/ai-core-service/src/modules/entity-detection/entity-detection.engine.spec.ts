@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Logger } from '@nestjs/common';
@@ -19,6 +20,7 @@ function makeMetrics(): jest.Mocked<AiMetricsService> {
 
 function makeRepo() {
   return {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     create: jest.fn((data) => data),
     save: jest.fn().mockResolvedValue(undefined),
   };
@@ -59,6 +61,10 @@ describe('EntityDetectionEngine', () => {
     engine = module.get(EntityDetectionEngine);
     jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
     jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   // ── detect() ──────────────────────────────────────────────────────
@@ -174,6 +180,130 @@ describe('EntityDetectionEngine', () => {
       const result = await engine.detect(baseEvent);
 
       expect(result.entities).toHaveLength(1);
+    });
+
+    // ── Retry on malformed parse ────────────────────────────────────
+
+    it('retries once when first response is malformed and recovers entities', async () => {
+      gateway.complete
+        .mockResolvedValueOnce(
+          llmResult(
+            'Sure! Here are the entities: this is not valid JSON at all.',
+          ),
+        )
+        .mockResolvedValueOnce(
+          llmResult(
+            JSON.stringify({
+              entities: [{ text: 'Telegram', type: 'tool', confidence: 0.9 }],
+            }),
+          ),
+        );
+
+      const result = await engine.detect(baseEvent);
+
+      expect(gateway.complete).toHaveBeenCalledTimes(2);
+      expect(result.entities).toHaveLength(1);
+      expect(result.entities[0].text).toBe('Telegram');
+      // Tokens from BOTH calls should be summed
+      expect(result.tokens_used).toBe(160); // 2 × (50+30)
+    });
+
+    it('does NOT retry when first response is legitimately empty', async () => {
+      // Valid JSON with empty array — LLM said "no entities found"
+      gateway.complete.mockResolvedValueOnce(
+        llmResult(JSON.stringify({ entities: [] })),
+      );
+
+      const result = await engine.detect(baseEvent);
+
+      expect(gateway.complete).toHaveBeenCalledTimes(1);
+      expect(result.entities).toEqual([]);
+    });
+
+    it('does NOT retry when JSON has entities key but array is empty', async () => {
+      // Different shape of legitimate empty: extra metadata around empty list
+      gateway.complete.mockResolvedValueOnce(
+        llmResult(JSON.stringify({ entities: [], notes: 'no entities found' })),
+      );
+
+      const result = await engine.detect(baseEvent);
+
+      expect(gateway.complete).toHaveBeenCalledTimes(1);
+      expect(result.entities).toEqual([]);
+    });
+
+    it('returns empty when both initial call and retry fail to parse', async () => {
+      gateway.complete
+        .mockResolvedValueOnce(llmResult('garbage response one'))
+        .mockResolvedValueOnce(llmResult('garbage response two'));
+
+      const result = await engine.detect(baseEvent);
+
+      expect(gateway.complete).toHaveBeenCalledTimes(2);
+      expect(result.entities).toEqual([]);
+    });
+
+    it('records retry conversation includes original assistant message and corrective user message', async () => {
+      const malformed = 'I think the entities are Telegram and Figma';
+      gateway.complete
+        .mockResolvedValueOnce(llmResult(malformed))
+        .mockResolvedValueOnce(llmResult(JSON.stringify({ entities: [] })));
+
+      await engine.detect(baseEvent);
+
+      expect(gateway.complete).toHaveBeenCalledTimes(2);
+      const retryMessages = gateway.complete.mock.calls[1][1].messages;
+      // Retry must include the original conversation + bad assistant + corrective user
+      const assistantMsg = retryMessages.find(
+        (m: { role: string }) => m.role === 'assistant',
+      );
+      expect(assistantMsg?.content).toBe(malformed);
+      const lastUserMsg = retryMessages[retryMessages.length - 1];
+      expect(lastUserMsg.role).toBe('user');
+      expect(lastUserMsg.content).toMatch(/not valid JSON|valid JSON/i);
+    });
+
+    it('records failure metric (success=false) when both retries fail to parse', async () => {
+      gateway.complete
+        .mockResolvedValueOnce(llmResult('garbage one'))
+        .mockResolvedValueOnce(llmResult('garbage two'));
+
+      await engine.detect(baseEvent);
+
+      expect(metrics.recordRequest).toHaveBeenCalledWith(
+        'entity_detection',
+        expect.any(String),
+        expect.any(String),
+        expect.any(Number),
+        expect.any(Number),
+        expect.any(Number),
+        false, // success flag
+      );
+    });
+
+    it('sums latencyMs across both calls when retry happens', async () => {
+      gateway.complete
+        .mockResolvedValueOnce({ ...llmResult('garbage'), latencyMs: 100 })
+        .mockResolvedValueOnce({
+          ...llmResult(
+            JSON.stringify({
+              entities: [{ text: 'Telegram', type: 'tool', confidence: 0.9 }],
+            }),
+          ),
+          latencyMs: 150,
+        });
+
+      await engine.detect(baseEvent);
+
+      expect(metrics.recordRequest).toHaveBeenCalledWith(
+        'entity_detection',
+        expect.any(String),
+        expect.any(String),
+        expect.any(Number),
+        expect.any(Number),
+        250, // 100 + 150
+        true,
+      );
     });
   });
 

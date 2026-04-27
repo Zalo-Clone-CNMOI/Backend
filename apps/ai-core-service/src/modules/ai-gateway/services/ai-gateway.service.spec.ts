@@ -353,6 +353,167 @@ describe('AiGatewayService', () => {
     });
   });
 
+  // ── completeEnsemble() ────────────────────────────────────────────
+
+  describe('completeEnsemble()', () => {
+    it('calls all listed providers in parallel and returns successful results', async () => {
+      primaryProvider.complete.mockResolvedValue(
+        makeResult({ provider: 'openai' }),
+      );
+      secondaryProvider.complete.mockResolvedValue(
+        makeResult({ provider: 'gemini' }),
+      );
+
+      const results = await gateway.completeEnsemble('user1', BASE_OPTIONS, [
+        'openai',
+        'gemini',
+      ]);
+
+      expect(results).toHaveLength(2);
+      expect(primaryProvider.complete).toHaveBeenCalledTimes(1);
+      expect(secondaryProvider.complete).toHaveBeenCalledTimes(1);
+    });
+
+    it('skips providers that are not registered', async () => {
+      primaryProvider.complete.mockResolvedValue(makeResult());
+
+      const results = await gateway.completeEnsemble('user1', BASE_OPTIONS, [
+        'openai',
+        'no-such-provider',
+      ]);
+
+      expect(results).toHaveLength(1);
+      expect(results[0].provider).toBe('openai');
+    });
+
+    it('skips providers with isAvailable=false', async () => {
+      const unavailable = makeProvider('openai', false);
+      const available = makeProvider('gemini', true);
+      available.complete.mockResolvedValue(makeResult({ provider: 'gemini' }));
+
+      const m = await Test.createTestingModule({
+        providers: [
+          AiGatewayService,
+          { provide: LLM_PROVIDERS, useValue: [unavailable, available] },
+          { provide: DataSanitizer, useValue: sanitizer },
+          { provide: TokenBudgetService, useValue: budget },
+        ],
+      }).compile();
+      const gw = m.get(AiGatewayService);
+
+      const results = await gw.completeEnsemble('user1', BASE_OPTIONS, [
+        'openai',
+        'gemini',
+      ]);
+
+      expect(unavailable.complete).not.toHaveBeenCalled();
+      expect(results).toHaveLength(1);
+      expect(results[0].provider).toBe('gemini');
+    });
+
+    it('drops failed provider results, keeps successes', async () => {
+      primaryProvider.complete.mockRejectedValue(new Error('openai down'));
+      secondaryProvider.complete.mockResolvedValue(
+        makeResult({ provider: 'gemini' }),
+      );
+
+      const results = await gateway.completeEnsemble('user1', BASE_OPTIONS, [
+        'openai',
+        'gemini',
+      ]);
+
+      expect(results).toHaveLength(1);
+      expect(results[0].provider).toBe('gemini');
+    });
+
+    it('returns empty array when all providers fail (does NOT throw)', async () => {
+      primaryProvider.complete.mockRejectedValue(new Error('a'));
+      secondaryProvider.complete.mockRejectedValue(new Error('b'));
+
+      const results = await gateway.completeEnsemble('user1', BASE_OPTIONS, [
+        'openai',
+        'gemini',
+      ]);
+
+      expect(results).toEqual([]);
+    });
+
+    it('returns empty array when no providers are eligible', async () => {
+      const results = await gateway.completeEnsemble('user1', BASE_OPTIONS, [
+        'no-such-provider',
+      ]);
+      expect(results).toEqual([]);
+    });
+
+    it('sanitizes messages once for all providers (PII stripped)', async () => {
+      sanitizer.sanitize.mockReturnValue('[SANITIZED]');
+      primaryProvider.complete.mockResolvedValue(makeResult());
+      secondaryProvider.complete.mockResolvedValue(makeResult());
+
+      await gateway.completeEnsemble('user1', BASE_OPTIONS, [
+        'openai',
+        'gemini',
+      ]);
+
+      const opts1 = primaryProvider.complete.mock.calls[0][0];
+      const opts2 = secondaryProvider.complete.mock.calls[0][0];
+      expect(opts1.messages[0].content).toBe('[SANITIZED]');
+      expect(opts2.messages[0].content).toBe('[SANITIZED]');
+    });
+
+    it('throws when budget cannot cover all providers', async () => {
+      budget.canConsume.mockResolvedValue(false);
+
+      await expect(
+        gateway.completeEnsemble('user1', BASE_OPTIONS, ['openai', 'gemini']),
+      ).rejects.toThrow('Daily token budget exceeded');
+    });
+
+    it('consumes tokens for each successful provider', async () => {
+      primaryProvider.complete.mockResolvedValue(
+        makeResult({ tokensIn: 100, tokensOut: 50 }),
+      );
+      secondaryProvider.complete.mockResolvedValue(
+        makeResult({ tokensIn: 80, tokensOut: 40 }),
+      );
+
+      await gateway.completeEnsemble('user1', BASE_OPTIONS, [
+        'openai',
+        'gemini',
+      ]);
+
+      expect(budget.consume).toHaveBeenCalledWith('user1', 150);
+      expect(budget.consume).toHaveBeenCalledWith('user1', 120);
+    });
+
+    it('skips providers with open circuit breaker', async () => {
+      // Trigger 5 consecutive failures on primary to open its circuit
+      primaryProvider.complete.mockRejectedValue(new Error('fail'));
+      secondaryProvider.complete.mockResolvedValue(
+        makeResult({ provider: 'gemini' }),
+      );
+      for (let i = 0; i < 5; i++) {
+        await gateway.complete('user1', BASE_OPTIONS);
+      }
+
+      // Now ensemble should skip openai (circuit open) but try gemini
+      primaryProvider.complete.mockClear();
+      secondaryProvider.complete.mockClear();
+      secondaryProvider.complete.mockResolvedValue(
+        makeResult({ provider: 'gemini' }),
+      );
+
+      const results = await gateway.completeEnsemble('user1', BASE_OPTIONS, [
+        'openai',
+        'gemini',
+      ]);
+
+      expect(primaryProvider.complete).not.toHaveBeenCalled();
+      expect(results).toHaveLength(1);
+      expect(results[0].provider).toBe('gemini');
+    });
+  });
+
   // ── locdo_router — smoke tests ────────────────────────────────────
   // Verify LocDoRouterProvider integrates correctly with AiGatewayService
   // as the primary provider in the fallback chain.

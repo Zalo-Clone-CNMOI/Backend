@@ -1,4 +1,4 @@
-import { Controller, Get, Query, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -7,10 +7,12 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
-import { AccessToken } from '@app/decorator';
-import { JwtService } from '@libs/auth';
+import { CurrentUser } from '@app/decorator';
+import { BusinessException, type AuthenticatedUser } from '@app/types';
+import { JwtAuthGuard } from '@libs/auth';
 import { EntityInfoService } from './entity-info.service';
 import type { EntityType } from '@libs/contracts';
+import { EntityInfoQueryDto } from './dto/entity-info-query.dto';
 
 const VALID_TYPES: readonly EntityType[] = [
   'tool',
@@ -24,12 +26,10 @@ const VALID_TYPES: readonly EntityType[] = [
 
 @ApiTags('Entity Info')
 @ApiBearerAuth('BearerAuth')
+@UseGuards(JwtAuthGuard)
 @Controller('entity-info')
 export class EntityInfoController {
-  constructor(
-    private readonly service: EntityInfoService,
-    private readonly jwtService: JwtService,
-  ) {}
+  constructor(private readonly service: EntityInfoService) {}
 
   @Get()
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
@@ -49,30 +49,31 @@ export class EntityInfoController {
   @ApiResponse({ status: 200, description: 'Entity info panel content' })
   @ApiResponse({ status: 400, description: 'Invalid query parameters' })
   async getEntityInfo(
-    @AccessToken() token: string,
-    @Query('text') text: string,
-    @Query('type') type: string,
-    @Query('lang') lang?: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: EntityInfoQueryDto,
   ) {
-    if (!text || text.trim().length === 0) {
-      throw new BadRequestException('text query parameter is required');
+    const text = query.text?.trim();
+    if (!text) {
+      throw BusinessException.badRequest('text query parameter is required');
     }
     if (text.length > 200) {
-      throw new BadRequestException('text exceeds 200 characters');
+      throw BusinessException.badRequest('text exceeds 200 characters');
     }
-    if (!type || !(VALID_TYPES as readonly string[]).includes(type)) {
-      throw new BadRequestException(
+    if (
+      !query.type ||
+      !(VALID_TYPES as readonly string[]).includes(query.type)
+    ) {
+      throw BusinessException.badRequest(
         `type must be one of: ${VALID_TYPES.join(', ')}`,
       );
     }
-    const language = lang === 'en' ? 'en' : 'vi';
-    const userId = this.jwtService.verifyToken(token).userId;
+    const language = query.lang === 'en' ? 'en' : 'vi';
 
-    return this.service.getEntityInfo(
-      text.trim(),
-      type as EntityType,
-      language,
-      userId,
-    );
+    return this.service.getEntityInfo({
+      text,
+      type: query.type as EntityType,
+      lang: language,
+      userId: user.id,
+    });
   }
 }

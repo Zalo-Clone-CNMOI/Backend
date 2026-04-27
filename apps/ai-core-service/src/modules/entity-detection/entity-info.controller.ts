@@ -1,7 +1,9 @@
-import { Controller, Get, Query, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { EntityDetectionEngine } from './entity-detection.engine';
 import type { EntityType, AiEntityInfoResultEvent } from '@libs/contracts';
+import { BusinessException } from '@app/types';
+import { EntityInfoQueryDto } from './dto/entity-info-query.dto';
 
 const VALID_TYPES: readonly EntityType[] = [
   'tool',
@@ -46,28 +48,29 @@ export class EntityInfoController {
   @ApiResponse({ status: 200, description: 'Entity info panel content' })
   @ApiResponse({ status: 400, description: 'Invalid query parameters' })
   async getInfo(
-    @Query('text') text: string,
-    @Query('type') type: string,
-    @Query('lang') lang?: string,
-    @Query('user_id') userId?: string,
+    @Query() query: EntityInfoQueryDto,
   ): Promise<AiEntityInfoResultEvent> {
-    if (!text || text.trim().length === 0) {
-      throw new BadRequestException('text query parameter is required');
+    const text = query.text?.trim();
+    if (!text) {
+      throw BusinessException.badRequest('text query parameter is required');
     }
     if (text.length > 200) {
-      throw new BadRequestException('text exceeds 200 characters');
+      throw BusinessException.badRequest('text exceeds 200 characters');
     }
-    if (!type || !(VALID_TYPES as readonly string[]).includes(type)) {
-      throw new BadRequestException(
+    if (
+      !query.type ||
+      !(VALID_TYPES as readonly string[]).includes(query.type)
+    ) {
+      throw BusinessException.badRequest(
         `type must be one of: ${VALID_TYPES.join(', ')}`,
       );
     }
 
     return this.engine.generateInfo({
-      entity_text: text.trim(),
-      entity_type: type as EntityType,
-      user_id: userId ?? 'system',
-      language: lang === 'en' ? 'en' : 'vi',
+      entity_text: text,
+      entity_type: query.type as EntityType,
+      user_id: query.user_id ?? 'system',
+      language: query.lang === 'en' ? 'en' : 'vi',
     });
   }
 }

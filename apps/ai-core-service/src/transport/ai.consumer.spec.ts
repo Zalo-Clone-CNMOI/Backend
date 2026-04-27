@@ -20,6 +20,7 @@ import { SmartReplyEngine } from '../modules/smart-reply/smart-reply.engine';
 import { SummaryEngine } from '../modules/summary/summary.engine';
 import { TranslationEngine } from '../modules/translation/translation.engine';
 import { DocumentEngine } from '../modules/document/document.engine';
+import { TextExtractorService } from '../modules/document/text-extractor.service';
 import { EntityDetectionEngine } from '../modules/entity-detection/entity-detection.engine';
 import { S3Service } from '@libs/s3';
 import { KafkaTopics } from '@libs/contracts';
@@ -60,11 +61,20 @@ function makeDocument() {
   return {
     processDocument: jest.fn(),
     queryDocument: jest.fn(),
+    recordDocumentFailure: jest.fn(),
   };
 }
 
 function makeS3() {
   return { download: jest.fn() };
+}
+
+function makeTextExtractor() {
+  return {
+    extract: jest.fn((buffer: Buffer) =>
+      Promise.resolve(buffer.toString('utf-8')),
+    ),
+  };
 }
 
 function makeEntityDetection() {
@@ -81,6 +91,7 @@ describe('AiConsumer', () => {
   let summaryEngine: ReturnType<typeof makeSummary>;
   let translationEngine: ReturnType<typeof makeTranslation>;
   let documentEngine: ReturnType<typeof makeDocument>;
+  let textExtractor: ReturnType<typeof makeTextExtractor>;
   let entityDetectionEngine: ReturnType<typeof makeEntityDetection>;
   let s3Service: ReturnType<typeof makeS3>;
 
@@ -91,6 +102,7 @@ describe('AiConsumer', () => {
     summaryEngine = makeSummary();
     translationEngine = makeTranslation();
     documentEngine = makeDocument();
+    textExtractor = makeTextExtractor();
     entityDetectionEngine = makeEntityDetection();
     s3Service = makeS3();
 
@@ -103,12 +115,17 @@ describe('AiConsumer', () => {
         { provide: SummaryEngine, useValue: summaryEngine },
         { provide: TranslationEngine, useValue: translationEngine },
         { provide: DocumentEngine, useValue: documentEngine },
+        { provide: TextExtractorService, useValue: textExtractor },
         { provide: EntityDetectionEngine, useValue: entityDetectionEngine },
         { provide: S3Service, useValue: s3Service },
       ],
     }).compile();
 
     consumer = module.get(AiConsumer);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   // ── onModerationRequest ───────────────────────────────────────────
@@ -250,17 +267,15 @@ describe('AiConsumer', () => {
       );
     });
 
-    it('processes document with error text when S3 download fails', async () => {
+    it('records failure when S3 download fails', async () => {
       s3Service.download.mockRejectedValue(new Error('S3 unavailable'));
       const mockResult = { document_id: 'doc-1', status: 'failed' };
-      documentEngine.processDocument.mockResolvedValue(mockResult);
+      documentEngine.recordDocumentFailure.mockResolvedValue(mockResult);
 
       await consumer.onDocumentUpload(makeUploadEvent());
 
-      // processDocument should still be called with error placeholder text
-      const calledText = documentEngine.processDocument.mock
-        .calls[0][1] as string;
-      expect(calledText).toContain('[Error:');
+      expect(documentEngine.processDocument).not.toHaveBeenCalled();
+      expect(documentEngine.recordDocumentFailure).toHaveBeenCalled();
       expect(publisher.emit).toHaveBeenCalledWith(
         KafkaTopics.AiDocumentProcessed,
         mockResult,
@@ -277,9 +292,11 @@ describe('AiConsumer', () => {
       expect(documentEngine.processDocument.mock.calls[0][1]).toBe(content);
     });
 
-    it('returns unsupported format stub for PDF content type', async () => {
-      s3Service.download.mockResolvedValue(Buffer.from('%PDF-1.4...')); // binary stub
-      documentEngine.processDocument.mockResolvedValue({ status: 'failed' });
+    it('delegates PDF extraction to TextExtractorService', async () => {
+      const buffer = Buffer.from('%PDF-1.4...');
+      s3Service.download.mockResolvedValue(buffer);
+      textExtractor.extract.mockResolvedValue('Extracted PDF body text');
+      documentEngine.processDocument.mockResolvedValue({ status: 'completed' });
 
       await consumer.onDocumentUpload({
         ...makeUploadEvent(),
@@ -287,9 +304,33 @@ describe('AiConsumer', () => {
         file_name: 'report.pdf',
       });
 
-      const calledText = documentEngine.processDocument.mock
-        .calls[0][1] as string;
-      expect(calledText).toContain('[Unsupported binary format');
+      expect(textExtractor.extract).toHaveBeenCalledWith(
+        buffer,
+        'application/pdf',
+        'report.pdf',
+      );
+      expect(documentEngine.processDocument.mock.calls[0][1]).toBe(
+        'Extracted PDF body text',
+      );
+    });
+
+    it('records failure when extractor throws', async () => {
+      s3Service.download.mockResolvedValue(Buffer.from('garbage'));
+      textExtractor.extract.mockRejectedValue(
+        new Error('Failed to extract pdf'),
+      );
+      documentEngine.recordDocumentFailure.mockResolvedValue({
+        status: 'failed',
+      });
+
+      await consumer.onDocumentUpload({
+        ...makeUploadEvent(),
+        content_type: 'application/pdf',
+        file_name: 'corrupt.pdf',
+      });
+
+      expect(documentEngine.processDocument).not.toHaveBeenCalled();
+      expect(documentEngine.recordDocumentFailure).toHaveBeenCalled();
     });
   });
 

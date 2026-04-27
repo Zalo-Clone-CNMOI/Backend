@@ -14,6 +14,18 @@ const LANGUAGE_RULE =
 const APP_CONTEXT =
   'You are an AI assistant embedded in a Vietnamese chat application (similar to Zalo). Users send casual messages in Vietnamese or English.';
 
+// Vietnamese diacritics regex — used to pick label language for context blocks
+// so labels match the conversation language (avoid Vietnamese labels around English content)
+const VI_DIACRITICS_RE =
+  /[àáảãạăắằẳẵặâấầẩẫậèéẻẽẹêếềểễệìíỉĩịòóỏõọôốồổỗộơớờởỡợùúủũụưứừửữựỳýỷỹỵđ]/i;
+
+function looksVietnamese(...samples: string[]): boolean {
+  for (const s of samples) {
+    if (s && VI_DIACRITICS_RE.test(s)) return true;
+  }
+  return false;
+}
+
 @Injectable()
 export class PromptBuilderService {
   private readonly logger = new Logger(PromptBuilderService.name);
@@ -44,8 +56,26 @@ Respond ONLY with the JSON object, no explanation.`,
     lastMessage: string,
     contextMessages: SmartReplyContextMessage[],
   ): LlmChatMessage[] {
+    const isVi = looksVietnamese(
+      lastMessage,
+      ...contextMessages.map((m) => m.body),
+    );
+    const labels = isVi
+      ? {
+          history: 'Lịch sử cuộc trò chuyện',
+          me: 'Bạn',
+          them: 'Họ',
+          last: 'Tin nhắn cuối',
+        }
+      : {
+          history: 'Recent conversation',
+          me: 'You',
+          them: 'Them',
+          last: 'Last message',
+        };
+
     const contextBlock = contextMessages.length
-      ? `Lịch sử cuộc trò chuyện:\n${contextMessages.map((m) => `${m.role === 'me' ? 'Bạn' : 'Họ'}: ${m.body}`).join('\n')}\n\n`
+      ? `${labels.history}:\n${contextMessages.map((m) => `${m.role === 'me' ? labels.me : labels.them}: ${m.body}`).join('\n')}\n\n`
       : '';
 
     return [
@@ -67,7 +97,7 @@ Respond ONLY with the JSON object, no explanation.`,
       },
       {
         role: 'user',
-        content: `${contextBlock}Tin nhắn cuối: "${lastMessage}"`,
+        content: `${contextBlock}${labels.last}: "${lastMessage}"`,
       },
     ];
   }

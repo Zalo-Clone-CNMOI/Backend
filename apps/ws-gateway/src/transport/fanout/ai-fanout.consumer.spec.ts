@@ -137,4 +137,56 @@ describe('AiFanoutConsumer', () => {
       },
     );
   });
+
+  describe('onAiStreamComplete', () => {
+    it('forwards stream complete event to the user', () => {
+      consumer.onAiStreamComplete({
+        stream_id: 'stream-1',
+        user_id: 'user-1',
+        conversation_id: 'conv-1',
+        feature: 'summary',
+        total_chunks: 3,
+        total_tokens: 100,
+        provider: 'openai',
+        completed_at: Date.now(),
+      });
+
+      expect(gateway.emitToUser).toHaveBeenCalledWith(
+        'user-1',
+        WsEvents.AiStreamComplete,
+        expect.objectContaining({
+          stream_id: 'stream-1',
+          feature: 'summary',
+          total_chunks: 3,
+        }),
+      );
+    });
+  });
+
+  describe('onAiStreamChunk', () => {
+    it('forwards stream chunk event to the user', () => {
+      consumer.onAiStreamChunk({
+        stream_id: 'stream-2',
+        user_id: 'user-2',
+        conversation_id: 'conv-2',
+        feature: 'summary',
+        chunk_index: 1,
+        content: 'partial response',
+        is_final: false,
+      });
+
+      expect(gateway.emitToUser).toHaveBeenCalledWith(
+        'user-2',
+        WsEvents.AiStreamChunk,
+        expect.objectContaining({
+          stream_id: 'stream-2',
+          conversation_id: 'conv-2',
+          feature: 'summary',
+          chunk_index: 1,
+          content: 'partial response',
+          is_final: false,
+        }),
+      );
+    });
+  });
 });

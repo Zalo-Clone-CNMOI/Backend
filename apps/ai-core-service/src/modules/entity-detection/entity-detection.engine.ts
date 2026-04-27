@@ -54,7 +54,45 @@ export class EntityDetectionEngine {
         temperature: 0,
       });
 
-      const entities = this.parseEntities(result.content, event.body);
+      let parsed = this.parseEntities(result.content, event.body);
+      let totalTokensIn = result.tokensIn;
+      let totalTokensOut = result.tokensOut;
+      let totalLatencyMs = result.latencyMs;
+      let parseFailedAfterRetry = false;
+
+      // Retry once if first response was malformed (parse returned null).
+      // Empty array → LLM legitimately said "no entities found", do NOT retry.
+      if (parsed === null) {
+        this.logger.warn(
+          `Entity detection retry for message ${event.message_id} — initial parse failed for ${result.content.length}-char response`,
+        );
+        const retry = await this.gateway.complete(event.sender_id, {
+          messages: [
+            ...messages,
+            { role: 'assistant', content: result.content },
+            {
+              role: 'user',
+              content:
+                'Your previous response was not valid JSON. Return ONLY a valid JSON object with the "entities" array, no prose, no markdown fences.',
+            },
+          ],
+          maxTokens: 512,
+          temperature: 0,
+        });
+        parsed = this.parseEntities(retry.content, event.body);
+        totalTokensIn += retry.tokensIn;
+        totalTokensOut += retry.tokensOut;
+        totalLatencyMs += retry.latencyMs;
+        if (parsed === null) {
+          parseFailedAfterRetry = true;
+          this.logger.error(
+            `Entity detection retry also failed to parse for message ${event.message_id}`,
+          );
+        }
+      }
+
+      // After retry, treat any remaining null as empty for downstream.
+      const entities = parsed ?? [];
 
       const log = this.logRepo.create({
         messageId: event.message_id,
@@ -62,7 +100,7 @@ export class EntityDetectionEngine {
         senderId: event.sender_id,
         entities,
         provider: result.provider,
-        tokensUsed: result.tokensIn + result.tokensOut,
+        tokensUsed: totalTokensIn + totalTokensOut,
         traceId: event.trace_id ?? null,
       });
       await this.logRepo.save(log);
@@ -71,10 +109,10 @@ export class EntityDetectionEngine {
         'entity_detection',
         result.provider,
         result.model,
-        result.tokensIn,
-        result.tokensOut,
-        result.latencyMs,
-        true,
+        totalTokensIn,
+        totalTokensOut,
+        totalLatencyMs,
+        !parseFailedAfterRetry,
       );
 
       return {
@@ -82,7 +120,7 @@ export class EntityDetectionEngine {
         conversation_id: event.conversation_id,
         entities,
         provider: toAiProviderType(result.provider),
-        tokens_used: result.tokensIn + result.tokensOut,
+        tokens_used: totalTokensIn + totalTokensOut,
         processed_at: Date.now(),
         trace_id: event.trace_id,
       };
@@ -185,18 +223,32 @@ export class EntityDetectionEngine {
     }
   }
 
-  private parseEntities(content: string, body: string): DetectedEntity[] {
+  /**
+   * Parse entities from raw LLM response.
+   * Returns `null` if JSON parsing fails OR the response lacks an `entities` array
+   * (signal to retry); returns `[]` only when the LLM legitimately said "no entities".
+   */
+  private parseEntities(
+    content: string,
+    body: string,
+  ): DetectedEntity[] | null {
+    let json: unknown;
     try {
-      const json = parseJsonResponse(content);
-      const raw = Array.isArray(json.entities) ? json.entities : [];
-
-      return (raw as unknown[])
-        .map((e) => this.normalizeEntity(e, body))
-        .filter((e): e is DetectedEntity => e !== null);
+      json = parseJsonResponse(content);
     } catch {
       this.logger.warn('Failed to parse entity detection response');
-      return [];
+      return null;
     }
+    if (!json || typeof json !== 'object' || !('entities' in json)) {
+      return null;
+    }
+    const entitiesRaw = (json as { entities: unknown }).entities;
+    if (!Array.isArray(entitiesRaw)) {
+      return null;
+    }
+    return (entitiesRaw as unknown[])
+      .map((e) => this.normalizeEntity(e, body))
+      .filter((e): e is DetectedEntity => e !== null);
   }
 
   private normalizeEntity(raw: unknown, body: string): DetectedEntity | null {

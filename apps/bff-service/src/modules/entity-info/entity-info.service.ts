@@ -15,13 +15,13 @@ export class EntityInfoService {
     private readonly cache: CacheService,
   ) {}
 
-  async getEntityInfo(
-    text: string,
-    type: EntityType,
-    lang: string,
-    userId: string,
-  ): Promise<AiEntityInfoResultEvent> {
-    const cacheKey = this.cacheKey(text, type, lang);
+  async getEntityInfo(params: {
+    text: string;
+    type: EntityType;
+    lang: string;
+    userId: string;
+  }): Promise<AiEntityInfoResultEvent> {
+    const cacheKey = this.cacheKey(params.text, params.type, params.lang);
 
     const cached = await this.cache.get<AiEntityInfoResultEvent>(cacheKey);
     if (cached) {
@@ -29,12 +29,7 @@ export class EntityInfoService {
       return cached;
     }
 
-    const result = await this.aiCoreClient.getEntityInfo(
-      text,
-      type,
-      lang,
-      userId,
-    );
+    const result = await this.aiCoreClient.getEntityInfo(params);
     await this.cache.set(cacheKey, result, CACHE_TTL_SECONDS);
     return result;
   }

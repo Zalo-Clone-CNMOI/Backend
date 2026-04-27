@@ -61,8 +61,8 @@ function llmResult(suggestions: string[]) {
 }
 
 const CTX: AiSmartReplyContextMessage[] = [
-  { role: 'them', body: 'Alo bạn' },
-  { role: 'me', body: 'Hi!' },
+  { role: 'them', body: 'Bạn khỏe không?' },
+  { role: 'me', body: 'Tớ ổn' },
 ];
 
 // ── Tests ────────────────────────────────────────────────────────────────────
@@ -164,8 +164,8 @@ describe('SmartReplyEngine', () => {
       const userContent =
         calledOptions.messages.find((m: { role: string }) => m.role === 'user')
           ?.content ?? '';
-      expect(userContent).toContain('Họ: Alo bạn');
-      expect(userContent).toContain('Bạn: Hi!');
+      expect(userContent).toContain('Họ: Bạn khỏe không?');
+      expect(userContent).toContain('Bạn: Tớ ổn');
     });
   });
 

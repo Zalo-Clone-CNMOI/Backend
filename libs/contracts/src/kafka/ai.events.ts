@@ -19,13 +19,19 @@ export type ModerationLabelType =
   | 'violence'
   | 'self_harm';
 
-export type AiProviderType = 'openai' | 'gemini' | 'anthropic' | 'locdo_router';
+export type AiProviderType =
+  | 'openai'
+  | 'gemini'
+  | 'anthropic'
+  | 'locdo_router'
+  | 'ensemble';
 
 const AI_PROVIDER_VALUES: readonly AiProviderType[] = [
   'openai',
   'gemini',
   'anthropic',
   'locdo_router',
+  'ensemble',
 ];
 
 export function toAiProviderType(provider: string): AiProviderType {

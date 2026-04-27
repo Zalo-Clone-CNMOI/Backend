@@ -59,14 +59,39 @@ describe('PromptBuilderService', () => {
       expect(result[1].content).toContain('Are you free tonight?');
     });
 
-    it('includes context messages when provided with role labels', () => {
+    it('uses Vietnamese labels (Họ/Bạn) when conversation is in Vietnamese', () => {
       const ctx = [
-        { role: 'them' as const, body: 'Hello' },
-        { role: 'me' as const, body: 'How are you?' },
+        { role: 'them' as const, body: 'Bạn khỏe không?' },
+        { role: 'me' as const, body: 'Tớ ổn' },
       ];
-      const result = builder.buildSmartReplyPrompt('I am fine', ctx);
-      expect(result[1].content).toContain('Họ: Hello');
-      expect(result[1].content).toContain('Bạn: How are you?');
+      const result = builder.buildSmartReplyPrompt('Đi cà phê đi', ctx);
+      expect(result[1].content).toContain('Lịch sử cuộc trò chuyện');
+      expect(result[1].content).toContain('Họ: Bạn khỏe không?');
+      expect(result[1].content).toContain('Bạn: Tớ ổn');
+      expect(result[1].content).toContain('Tin nhắn cuối');
+    });
+
+    it('uses English labels (Them/You) when conversation is in English', () => {
+      const ctx = [
+        { role: 'them' as const, body: 'Hello, how are you?' },
+        { role: 'me' as const, body: 'I am good' },
+      ];
+      const result = builder.buildSmartReplyPrompt('Want to grab coffee?', ctx);
+      expect(result[1].content).toContain('Recent conversation');
+      expect(result[1].content).toContain('Them: Hello, how are you?');
+      expect(result[1].content).toContain('You: I am good');
+      expect(result[1].content).toContain('Last message');
+      expect(result[1].content).not.toContain('Họ:');
+      expect(result[1].content).not.toContain('Bạn:');
+    });
+
+    it('detects Vietnamese from any message in context (not just last)', () => {
+      const ctx = [
+        { role: 'them' as const, body: 'Chào bạn' },
+        { role: 'me' as const, body: 'Hi' },
+      ];
+      const result = builder.buildSmartReplyPrompt('Yes', ctx);
+      expect(result[1].content).toContain('Họ:');
     });
 
     it('system prompt requests suggestions array', () => {
@@ -77,6 +102,7 @@ describe('PromptBuilderService', () => {
     it('omits context block when context is empty', () => {
       const result = builder.buildSmartReplyPrompt('Hi', []);
       expect(result[1].content).not.toContain('Lịch sử cuộc trò chuyện');
+      expect(result[1].content).not.toContain('Recent conversation');
     });
   });
 

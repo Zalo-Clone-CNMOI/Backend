@@ -11,18 +11,18 @@ export class AiCoreClientService extends BaseHttpClient {
     super();
   }
 
-  async getEntityInfo(
-    text: string,
-    type: EntityType,
-    lang: string,
-    userId: string,
-  ): Promise<AiEntityInfoResultEvent> {
+  async getEntityInfo(params: {
+    text: string;
+    type: EntityType;
+    lang: string;
+    userId: string;
+  }): Promise<AiEntityInfoResultEvent> {
     try {
       const response = await this.entityInfoApi.getEntityInfo({
-        text,
-        type,
-        lang,
-        user_id: userId,
+        text: params.text,
+        type: params.type,
+        lang: params.lang,
+        user_id: params.userId,
       });
       return response.data;
     } catch (error) {

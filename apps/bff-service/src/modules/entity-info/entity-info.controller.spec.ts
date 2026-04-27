@@ -1,13 +1,10 @@
 import { Test } from '@nestjs/testing';
-import { BadRequestException } from '@nestjs/common';
+import { BusinessException, type AuthenticatedUser } from '@app/types';
 import { EntityInfoController } from './entity-info.controller';
 import { EntityInfoService } from './entity-info.service';
-import { JwtService } from '@libs/auth';
 
 const mockService = { getEntityInfo: jest.fn() };
-const mockJwt = {
-  verifyToken: jest.fn().mockReturnValue({ userId: 'user-123' }),
-};
+const mockUser = { id: 'user-123' } as AuthenticatedUser;
 
 const SAMPLE_RESULT = {
   entity_text: 'React',
@@ -27,10 +24,7 @@ describe('EntityInfoController', () => {
     jest.clearAllMocks();
     const module = await Test.createTestingModule({
       controllers: [EntityInfoController],
-      providers: [
-        { provide: EntityInfoService, useValue: mockService },
-        { provide: JwtService, useValue: mockJwt },
-      ],
+      providers: [{ provide: EntityInfoService, useValue: mockService }],
     }).compile();
 
     controller = module.get(EntityInfoController);
@@ -40,66 +34,70 @@ describe('EntityInfoController', () => {
     it('delegates to service with correct params', async () => {
       mockService.getEntityInfo.mockResolvedValue(SAMPLE_RESULT);
 
-      const result = await controller.getEntityInfo(
-        'bearer-token',
-        'React',
-        'tool',
-        'vi',
-      );
+      const result = await controller.getEntityInfo(mockUser, {
+        text: 'React',
+        type: 'tool',
+        lang: 'vi',
+      });
 
-      expect(mockJwt.verifyToken).toHaveBeenCalledWith('bearer-token');
-      expect(mockService.getEntityInfo).toHaveBeenCalledWith(
-        'React',
-        'tool',
-        'vi',
-        'user-123',
-      );
+      expect(mockService.getEntityInfo).toHaveBeenCalledWith({
+        text: 'React',
+        type: 'tool',
+        lang: 'vi',
+        userId: 'user-123',
+      });
       expect(result).toEqual(SAMPLE_RESULT);
     });
 
     it('defaults lang to vi when not provided', async () => {
       mockService.getEntityInfo.mockResolvedValue(SAMPLE_RESULT);
 
-      await controller.getEntityInfo('bearer-token', 'React', 'tool');
+      await controller.getEntityInfo(mockUser, { text: 'React', type: 'tool' });
 
-      expect(mockService.getEntityInfo).toHaveBeenCalledWith(
-        'React',
-        'tool',
-        'vi',
-        'user-123',
-      );
+      expect(mockService.getEntityInfo).toHaveBeenCalledWith({
+        text: 'React',
+        type: 'tool',
+        lang: 'vi',
+        userId: 'user-123',
+      });
     });
 
     it('throws BadRequestException when text is empty', async () => {
       await expect(
-        controller.getEntityInfo('bearer-token', '', 'tool'),
-      ).rejects.toThrow(BadRequestException);
+        controller.getEntityInfo(mockUser, { text: '', type: 'tool' }),
+      ).rejects.toThrow(BusinessException);
     });
 
     it('throws BadRequestException when text exceeds 200 chars', async () => {
       const longText = 'a'.repeat(201);
       await expect(
-        controller.getEntityInfo('bearer-token', longText, 'tool'),
-      ).rejects.toThrow(BadRequestException);
+        controller.getEntityInfo(mockUser, { text: longText, type: 'tool' }),
+      ).rejects.toThrow(BusinessException);
     });
 
     it('throws BadRequestException for invalid type', async () => {
       await expect(
-        controller.getEntityInfo('bearer-token', 'React', 'invalid-type'),
-      ).rejects.toThrow(BadRequestException);
+        controller.getEntityInfo(mockUser, {
+          text: 'React',
+          type: 'invalid-type',
+        }),
+      ).rejects.toThrow(BusinessException);
     });
 
     it('trims whitespace from text before passing to service', async () => {
       mockService.getEntityInfo.mockResolvedValue(SAMPLE_RESULT);
 
-      await controller.getEntityInfo('bearer-token', '  React  ', 'tool');
+      await controller.getEntityInfo(mockUser, {
+        text: '  React  ',
+        type: 'tool',
+      });
 
-      expect(mockService.getEntityInfo).toHaveBeenCalledWith(
-        'React',
-        'tool',
-        'vi',
-        'user-123',
-      );
+      expect(mockService.getEntityInfo).toHaveBeenCalledWith({
+        text: 'React',
+        type: 'tool',
+        lang: 'vi',
+        userId: 'user-123',
+      });
     });
   });
 });

@@ -44,12 +44,12 @@ describe('EntityInfoService', () => {
     it('returns cached result when available', async () => {
       mockCache.get.mockResolvedValue(SAMPLE_RESULT);
 
-      const result = await service.getEntityInfo(
-        'React',
-        'tool',
-        'vi',
-        'user-1',
-      );
+      const result = await service.getEntityInfo({
+        text: 'React',
+        type: 'tool',
+        lang: 'vi',
+        userId: 'user-1',
+      });
 
       expect(result).toEqual(SAMPLE_RESULT);
       expect(mockAiCoreClient.getEntityInfo).not.toHaveBeenCalled();
@@ -60,19 +60,19 @@ describe('EntityInfoService', () => {
       mockCache.get.mockResolvedValue(null);
       mockAiCoreClient.getEntityInfo.mockResolvedValue(SAMPLE_RESULT);
 
-      const result = await service.getEntityInfo(
-        'React',
-        'tool',
-        'vi',
-        'user-1',
-      );
+      const result = await service.getEntityInfo({
+        text: 'React',
+        type: 'tool',
+        lang: 'vi',
+        userId: 'user-1',
+      });
 
-      expect(mockAiCoreClient.getEntityInfo).toHaveBeenCalledWith(
-        'React',
-        'tool',
-        'vi',
-        'user-1',
-      );
+      expect(mockAiCoreClient.getEntityInfo).toHaveBeenCalledWith({
+        text: 'React',
+        type: 'tool',
+        lang: 'vi',
+        userId: 'user-1',
+      });
       expect(mockCache.set).toHaveBeenCalledWith(
         expect.stringMatching(/^ai:entity-info:/),
         SAMPLE_RESULT,
@@ -85,8 +85,18 @@ describe('EntityInfoService', () => {
       mockCache.get.mockResolvedValue(null);
       mockAiCoreClient.getEntityInfo.mockResolvedValue(SAMPLE_RESULT);
 
-      await service.getEntityInfo('React', 'tool', 'vi', 'user-1');
-      await service.getEntityInfo('React', 'tool', 'vi', 'user-2');
+      await service.getEntityInfo({
+        text: 'React',
+        type: 'tool',
+        lang: 'vi',
+        userId: 'user-1',
+      });
+      await service.getEntityInfo({
+        text: 'React',
+        type: 'tool',
+        lang: 'vi',
+        userId: 'user-2',
+      });
 
       const [key1] = mockCache.set.mock.calls[0] as [string, ...unknown[]];
       const [key2] = mockCache.set.mock.calls[1] as [string, ...unknown[]];
@@ -100,7 +110,12 @@ describe('EntityInfoService', () => {
       );
 
       await expect(
-        service.getEntityInfo('React', 'tool', 'vi', 'user-1'),
+        service.getEntityInfo({
+          text: 'React',
+          type: 'tool',
+          lang: 'vi',
+          userId: 'user-1',
+        }),
       ).rejects.toThrow('AI unavailable');
     });
   });

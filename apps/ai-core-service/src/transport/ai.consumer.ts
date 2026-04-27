@@ -18,6 +18,11 @@ import { SmartReplyEngine } from '../modules/smart-reply/smart-reply.engine';
 import { SummaryEngine } from '../modules/summary/summary.engine';
 import { TranslationEngine } from '../modules/translation/translation.engine';
 import { DocumentEngine } from '../modules/document/document.engine';
+import {
+  TextExtractorService,
+  UnsupportedDocumentFormatError,
+  DocumentExtractionError,
+} from '../modules/document/text-extractor.service';
 import { EntityDetectionEngine } from '../modules/entity-detection/entity-detection.engine';
 
 @Controller()
@@ -31,6 +36,7 @@ export class AiConsumer {
     private readonly summaryEngine: SummaryEngine,
     private readonly translationEngine: TranslationEngine,
     private readonly documentEngine: DocumentEngine,
+    private readonly textExtractor: TextExtractorService,
     private readonly entityDetectionEngine: EntityDetectionEngine,
     private readonly s3Service: S3Service,
   ) {}
@@ -87,66 +93,51 @@ export class AiConsumer {
 
   // ── Document Upload ────────────────────────────────────────────────
 
-  /** MIME types we can extract text from directly (UTF-8 decode). */
-  private static readonly TEXT_MIME_TYPES = new Set([
-    'text/plain',
-    'text/csv',
-    'text/markdown',
-  ]);
-
   @EventPattern(KafkaTopics.AiDocumentUpload)
   async onDocumentUpload(@Payload() event: AiDocumentUploadEvent) {
     this.logger.log(
       `Document upload: ${event.document_id} (${event.file_name})`,
     );
 
-    let textContent: string;
-
     try {
       const buffer = await this.s3Service.download(event.file_key);
-      textContent = this.extractText(buffer, event.content_type);
+      const textContent = await this.textExtractor.extract(
+        buffer,
+        event.content_type,
+        event.file_name,
+      );
 
       this.logger.debug(
         `Extracted ${textContent.length} chars from ${event.file_name}`,
       );
-    } catch (error) {
-      this.logger.error(
-        `Failed to download/extract document ${event.document_id}: ${error}`,
+      const result = await this.documentEngine.processDocument(
+        event,
+        textContent,
       );
-      textContent = `[Error: Could not extract text from ${event.file_name}]`;
+
+      await this.publisher.emit(KafkaTopics.AiDocumentProcessed, result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const isExtractionFailure =
+        error instanceof UnsupportedDocumentFormatError ||
+        error instanceof DocumentExtractionError;
+
+      if (isExtractionFailure) {
+        this.logger.warn(
+          `Unsupported or failed extraction for ${event.document_id}: ${message}`,
+        );
+      } else {
+        this.logger.error(
+          `Failed to download/extract document ${event.document_id}: ${message}`,
+        );
+      }
+
+      const result = await this.documentEngine.recordDocumentFailure(
+        event,
+        message,
+      );
+      await this.publisher.emit(KafkaTopics.AiDocumentProcessed, result);
     }
-
-    const result = await this.documentEngine.processDocument(
-      event,
-      textContent,
-    );
-
-    await this.publisher.emit(KafkaTopics.AiDocumentProcessed, result);
-  }
-
-  /**
-   * Extract plain text from a downloaded S3 buffer based on its MIME type.
-   *
-   * Currently supports text-based formats (plain, csv, markdown).
-   * Binary formats (PDF, DOCX, XLSX) return a stub message —
-   * integrate a parser library (e.g. pdf-parse, mammoth) when needed.
-   */
-  private extractText(buffer: Buffer, contentType: string): string {
-    if (AiConsumer.TEXT_MIME_TYPES.has(contentType)) {
-      return buffer.toString('utf-8');
-    }
-    if (
-      contentType === 'application/pdf' ||
-      contentType === 'application/msword' ||
-      contentType ===
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-      contentType ===
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    ) {
-      return `[Unsupported binary format: ${contentType}. Text extraction not yet implemented.]`;
-    }
-
-    return buffer.toString('utf-8');
   }
 
   // ── Document Query ─────────────────────────────────────────────────

@@ -225,7 +225,7 @@ describe('LocDoRouterProvider', () => {
     it('calls onChunk for each delta and returns accumulated content', async () => {
       const provider = await buildProvider();
 
-      async function* fakeStream() {
+      function* fakeStream() {
         yield {
           choices: [{ delta: { content: 'Hello' }, finish_reason: null }],
           usage: null,
@@ -246,7 +246,9 @@ describe('LocDoRouterProvider', () => {
       };
 
       const chunks: string[] = [];
-      const onChunk = jest.fn((chunk) => chunks.push(chunk.content));
+      const onChunk = jest.fn((chunk: { content: string }) =>
+        chunks.push(chunk.content),
+      );
 
       const result = await provider.completeStream(makeOptions(), onChunk);
 
@@ -274,7 +276,7 @@ describe('LocDoRouterProvider', () => {
     it('emits a final isFinal chunk when stream finishes', async () => {
       const provider = await buildProvider();
 
-      async function* fakeStream() {
+      function* fakeStream() {
         yield {
           choices: [{ delta: { content: 'hi' }, finish_reason: null }],
           usage: null,

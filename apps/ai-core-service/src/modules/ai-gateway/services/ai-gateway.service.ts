@@ -175,6 +175,83 @@ export class AiGatewayService {
     return this.providers.find((p) => p.name === name);
   }
 
+  /**
+   * Run the same prompt against multiple providers in parallel and return all
+   * successful results. Used for ensemble voting (e.g. moderation).
+   *
+   * Differences from `complete`:
+   *  - No fallback chain — providers are queried in PARALLEL, not sequentially
+   *  - Returns array of successes (skipped/failed providers are dropped)
+   *  - Each successful provider's tokens are consumed against the user's budget
+   *  - Circuit breaker state is updated per result, just like `complete`
+   *
+   * Caller is responsible for deciding what to do with an empty result.
+   */
+  async completeEnsemble(
+    userId: string,
+    options: LlmCompletionOptions,
+    providerNames: string[],
+    opts?: { skipBudgetCheck?: boolean; skipSanitize?: boolean },
+  ): Promise<LlmCompletionResult[]> {
+    if (!opts?.skipSanitize) {
+      options = {
+        ...options,
+        messages: options.messages.map((m) => ({
+          ...m,
+          content: this.sanitizer.sanitize(m.content),
+        })),
+      };
+    }
+
+    const eligible = providerNames
+      .map((n) => this.getProvider(n))
+      .filter(
+        (p): p is ILlmProvider =>
+          !!p && p.isAvailable && this.isCircuitAllowed(p.name),
+      );
+
+    if (eligible.length === 0) return [];
+
+    if (!opts?.skipBudgetCheck) {
+      // Budget estimate scales with provider count.
+      const canConsume = await this.tokenBudget.canConsume(
+        userId,
+        2000 * eligible.length,
+      );
+      if (!canConsume) {
+        throw new Error('Daily token budget exceeded');
+      }
+    }
+
+    const settled = await Promise.allSettled(
+      eligible.map((p) => p.complete(options)),
+    );
+
+    // Token consumption is sequential (not concurrent) so each consume() call
+    // sees the result of the previous one. If TokenBudgetService.consume()
+    // ever becomes async-fire-and-forget, batch the sum here instead.
+    const successes: LlmCompletionResult[] = [];
+    for (let i = 0; i < settled.length; i++) {
+      const provider = eligible[i];
+      const r = settled[i];
+      if (r.status === 'fulfilled') {
+        this.onSuccess(provider.name);
+        await this.tokenBudget.consume(
+          userId,
+          r.value.tokensIn + r.value.tokensOut,
+        );
+        successes.push(r.value);
+      } else {
+        const msg =
+          r.reason instanceof Error ? r.reason.message : String(r.reason);
+        this.logger.error(`Ensemble provider ${provider.name} failed: ${msg}`);
+        this.onFailure(provider.name);
+      }
+    }
+
+    return successes;
+  }
+
   private getAvailableProviders(): ILlmProvider[] {
     return this.providers.filter((p) => p.isAvailable);
   }

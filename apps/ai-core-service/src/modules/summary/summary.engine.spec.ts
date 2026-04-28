@@ -1,17 +1,3 @@
-/**
- * @file summary.engine.spec.ts
- *
- * Unit tests for SummaryEngine — conversation summarization with Redis cache.
- *
- * Covers:
- *  - Cache hit: returns cached value with cached=true, no LLM call
- *  - Cache miss: calls LLM, generates summary, stores to cache
- *  - Success path: correct result shape including message_range
- *  - Failure path: graceful fallback when LLM throws
- *  - Cache disabled: always generates, never reads/writes cache
- *  - Corrupted cache: regenerates on parse error
- */
-/* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
 import { SummaryEngine } from './summary.engine';
 import { AiGatewayService } from '../ai-gateway/services/ai-gateway.service';
@@ -20,8 +6,6 @@ import { AiMetricsService } from '../ai-gateway/services/ai-metrics.service';
 import { APP_CONFIG } from '@libs/config';
 import { RedisService } from '@libs/redis';
 import type { AiSummaryRequestEvent } from '@libs/contracts';
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function makeEvent(
   overrides: Partial<AiSummaryRequestEvent> = {},
@@ -69,8 +53,6 @@ function llmResult(content: string) {
   };
 }
 
-// ── Tests ────────────────────────────────────────────────────────────────────
-
 describe('SummaryEngine', () => {
   let engine: SummaryEngine;
   let gateway: jest.Mocked<AiGatewayService>;
@@ -95,8 +77,6 @@ describe('SummaryEngine', () => {
 
     engine = module.get(SummaryEngine);
   });
-
-  // ── Cache hit ─────────────────────────────────────────────────────
 
   describe('summarize() — cache hit', () => {
     it('returns cached result with cached=true', async () => {
@@ -159,8 +139,6 @@ describe('SummaryEngine', () => {
       expect(result.user_id).toBe('user-current');
     });
   });
-
-  // ── Cache miss → generate ─────────────────────────────────────────
 
   describe('summarize() — cache miss', () => {
     it('calls LLM and returns generated summary', async () => {
@@ -247,8 +225,6 @@ describe('SummaryEngine', () => {
     });
   });
 
-  // ── Failure / fallback ────────────────────────────────────────────
-
   describe('summarize() — failure fallback', () => {
     it('returns failure summary when LLM throws', async () => {
       redis.get.mockResolvedValue(null);
@@ -291,8 +267,6 @@ describe('SummaryEngine', () => {
     });
   });
 
-  // ── Corrupted cache ───────────────────────────────────────────────
-
   describe('summarize() — corrupted cache', () => {
     it('regenerates when cached value is invalid JSON', async () => {
       redis.get.mockResolvedValue('{invalid json}');
@@ -307,8 +281,6 @@ describe('SummaryEngine', () => {
       expect(result.summary).toBe('Regenerated.');
     });
   });
-
-  // ── Cache disabled ────────────────────────────────────────────────
 
   describe('summarize() — cache disabled', () => {
     it('does not read or write Redis when cache is disabled', async () => {

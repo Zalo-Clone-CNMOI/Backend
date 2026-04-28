@@ -1,5 +1,3 @@
-// ── LLM Provider Interface ──────────────────────────────────────────────────
-
 export interface LlmChatMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;

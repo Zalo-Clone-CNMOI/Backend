@@ -1,21 +1,3 @@
-/**
- * @file ai-gateway.service.spec.ts
- *
- * Unit tests for AiGatewayService — provider routing with circuit breaker,
- * PII sanitization middleware, and daily token budget enforcement.
- *
- * Covers:
- *  - complete() success path (PII stripped, budget consumed)
- *  - complete() budget exceeded
- *  - complete() all providers fail (error thrown)
- *  - complete() unavailable provider skipped
- *  - Circuit breaker: open after CIRCUIT_THRESHOLD failures
- *  - Circuit breaker: half-open after CIRCUIT_RESET_MS elapsed
- *  - Circuit breaker: reset to closed on success
- *  - embed() delegates to OpenAI provider
- *  - skipSanitize / skipBudgetCheck opts
- */
-/* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
 import { Logger } from '@nestjs/common';
 import { AiGatewayService } from './ai-gateway.service';
@@ -26,8 +8,6 @@ import {
   ILlmProvider,
   LlmCompletionResult,
 } from '../interfaces';
-
-// ── Helpers ─────────────────────────────────────────────────────────────────
 
 function makeProvider(
   name: string,
@@ -74,8 +54,6 @@ function makeBudget(canConsume = true): jest.Mocked<TokenBudgetService> {
   } as unknown as jest.Mocked<TokenBudgetService>;
 }
 
-// ── Tests ────────────────────────────────────────────────────────────────────
-
 describe('AiGatewayService', () => {
   let gateway: AiGatewayService;
   let primaryProvider: jest.Mocked<ILlmProvider>;
@@ -109,8 +87,6 @@ describe('AiGatewayService', () => {
 
     jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
   });
-
-  // ── complete — happy path ─────────────────────────────────────────
 
   describe('complete()', () => {
     it('returns result from the first available provider', async () => {
@@ -175,7 +151,7 @@ describe('AiGatewayService', () => {
 
       await gateway.complete('user1', BASE_OPTIONS);
 
-      expect(budget.consume).toHaveBeenCalledWith('user1', 300); // 200 + 100
+      expect(budget.consume).toHaveBeenCalledWith('user1', 300);
     });
 
     it('throws when budget is exceeded', async () => {
@@ -207,7 +183,6 @@ describe('AiGatewayService', () => {
     });
 
     it('skips unavailable providers', async () => {
-      // Recreate gateway with one unavailable provider
       const unavailableProvider = makeProvider('openai', false);
       const availableProvider = makeProvider('gemini', true);
       availableProvider.complete.mockResolvedValue(
@@ -234,8 +209,6 @@ describe('AiGatewayService', () => {
     });
   });
 
-  // ── Circuit breaker ───────────────────────────────────────────────
-
   describe('circuit breaker', () => {
     it('opens circuit after 5 consecutive failures', async () => {
       primaryProvider.complete.mockRejectedValue(new Error('fail'));
@@ -243,12 +216,10 @@ describe('AiGatewayService', () => {
         makeResult({ provider: 'gemini' }),
       );
 
-      // Trigger 5 failures on primary: each call falls back to secondary
       for (let i = 0; i < 5; i++) {
         await gateway.complete('user1', BASE_OPTIONS);
       }
 
-      // On 6th call, primary should be skipped (circuit open)
       primaryProvider.complete.mockClear();
       secondaryProvider.complete.mockClear();
       secondaryProvider.complete.mockResolvedValue(
@@ -261,7 +232,6 @@ describe('AiGatewayService', () => {
     });
 
     it('resets circuit to closed on successful call', async () => {
-      // Trigger 5 failures to open circuit
       primaryProvider.complete.mockRejectedValue(new Error('fail'));
       secondaryProvider.complete.mockResolvedValue(makeResult());
 
@@ -269,10 +239,8 @@ describe('AiGatewayService', () => {
         await gateway.complete('user1', BASE_OPTIONS);
       }
 
-      // Wait for circuit reset (mock Date.now)
       jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 35_000);
 
-      // Next call: circuit transitions to half-open, provider succeeds → closed
       primaryProvider.complete.mockResolvedValue(makeResult());
       const result = await gateway.complete('user1', BASE_OPTIONS);
 
@@ -281,8 +249,6 @@ describe('AiGatewayService', () => {
       jest.restoreAllMocks();
     });
   });
-
-  // ── embed() ───────────────────────────────────────────────────────
 
   describe('embed()', () => {
     it('delegates to the openai provider', async () => {
@@ -339,8 +305,6 @@ describe('AiGatewayService', () => {
     });
   });
 
-  // ── getProvider() ─────────────────────────────────────────────────
-
   describe('getProvider()', () => {
     it('returns provider by name', () => {
       const provider = gateway.getProvider('openai');
@@ -352,8 +316,6 @@ describe('AiGatewayService', () => {
       expect(provider).toBeUndefined();
     });
   });
-
-  // ── completeEnsemble() ────────────────────────────────────────────
 
   describe('completeEnsemble()', () => {
     it('calls all listed providers in parallel and returns successful results', async () => {
@@ -487,7 +449,6 @@ describe('AiGatewayService', () => {
     });
 
     it('skips providers with open circuit breaker', async () => {
-      // Trigger 5 consecutive failures on primary to open its circuit
       primaryProvider.complete.mockRejectedValue(new Error('fail'));
       secondaryProvider.complete.mockResolvedValue(
         makeResult({ provider: 'gemini' }),
@@ -496,7 +457,6 @@ describe('AiGatewayService', () => {
         await gateway.complete('user1', BASE_OPTIONS);
       }
 
-      // Now ensemble should skip openai (circuit open) but try gemini
       primaryProvider.complete.mockClear();
       secondaryProvider.complete.mockClear();
       secondaryProvider.complete.mockResolvedValue(
@@ -513,10 +473,6 @@ describe('AiGatewayService', () => {
       expect(results[0].provider).toBe('gemini');
     });
   });
-
-  // ── locdo_router — smoke tests ────────────────────────────────────
-  // Verify LocDoRouterProvider integrates correctly with AiGatewayService
-  // as the primary provider in the fallback chain.
 
   describe('locdo_router provider integration', () => {
     let lcdoProvider: jest.Mocked<ILlmProvider>;

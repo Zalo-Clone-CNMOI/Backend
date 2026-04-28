@@ -2,10 +2,6 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { APP_CONFIG } from '@libs/config';
 import { LocDoRouterProvider } from './locdo-router.provider';
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function makeConfig(overrides: Record<string, unknown> = {}) {
   return {
     lcdoRouterUrl: 'https://ai-router.locdo.tech',
@@ -27,17 +23,12 @@ function makeOptions(overrides: Record<string, unknown> = {}) {
   };
 }
 
-// Minimal OpenAI chat completion response shape
 function makeChatResponse(content: string, tokensIn = 10, tokensOut = 20) {
   return {
     choices: [{ message: { content }, finish_reason: 'stop' }],
     usage: { prompt_tokens: tokensIn, completion_tokens: tokensOut },
   };
 }
-
-// ---------------------------------------------------------------------------
-// Setup
-// ---------------------------------------------------------------------------
 
 async function buildProvider(configOverrides: Record<string, unknown> = {}) {
   const module: TestingModule = await Test.createTestingModule({
@@ -50,10 +41,6 @@ async function buildProvider(configOverrides: Record<string, unknown> = {}) {
   return module.get(LocDoRouterProvider);
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 describe('LocDoRouterProvider', () => {
   describe('name', () => {
     it('has name "locdo_router"', async () => {
@@ -62,7 +49,6 @@ describe('LocDoRouterProvider', () => {
     });
   });
 
-  // ── isAvailable ─────────────────────────────────────────────────────────
   describe('isAvailable', () => {
     it('returns true when both url and key are set', async () => {
       const provider = await buildProvider();
@@ -100,12 +86,10 @@ describe('LocDoRouterProvider', () => {
     });
   });
 
-  // ── complete() ───────────────────────────────────────────────────────────
   describe('complete()', () => {
     it('returns content, token counts, provider name, and latency', async () => {
       const provider = await buildProvider();
 
-      // Stub the internal OpenAI client after lazy init
       const mockCreate = jest
         .fn()
         .mockResolvedValue(makeChatResponse('Hello back!', 15, 25));
@@ -220,7 +204,6 @@ describe('LocDoRouterProvider', () => {
     });
   });
 
-  // ── completeStream() ─────────────────────────────────────────────────────
   describe('completeStream()', () => {
     it('calls onChunk for each delta and returns accumulated content', async () => {
       const provider = await buildProvider();
@@ -303,7 +286,6 @@ describe('LocDoRouterProvider', () => {
     });
   });
 
-  // ── embed() ──────────────────────────────────────────────────────────────
   describe('embed()', () => {
     it('throws because LocDo Router does not support embeddings', async () => {
       const provider = await buildProvider();
@@ -314,18 +296,14 @@ describe('LocDoRouterProvider', () => {
     });
   });
 
-  // ── baseURL construction ─────────────────────────────────────────────────
   describe('baseURL construction', () => {
     it('strips trailing slash from lcdoRouterUrl before appending /v2', async () => {
       const provider = await buildProvider({
         lcdoRouterUrl: 'https://ai-router.locdo.tech/',
       });
 
-      // Trigger lazy client init by calling complete (client will be built)
       const mockCreate = jest.fn().mockResolvedValue(makeChatResponse('ok'));
 
-      // Intercept the OpenAI constructor by inspecting via private field
-      // We validate indirectly: complete() must not throw due to bad baseURL
       (provider as unknown as Record<string, unknown>).client = {
         chat: { completions: { create: mockCreate } },
       };

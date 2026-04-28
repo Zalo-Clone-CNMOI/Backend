@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 import { Injectable, Logger } from '@nestjs/common';
 import { AiGatewayService } from '../ai-gateway/services/ai-gateway.service';
 import { PromptBuilderService } from '../ai-gateway/services/prompt-builder.service';
@@ -23,9 +22,6 @@ export class SmartReplyEngine {
     private readonly aiMetrics: AiMetricsService,
   ) {}
 
-  /**
-   * Generate smart reply suggestions for a conversation.
-   */
   async generateReplies(
     event: AiSmartReplyRequestEvent,
   ): Promise<AiSmartReplyResultEvent> {
@@ -91,7 +87,7 @@ export class SmartReplyEngine {
 
   private parseResponse(content: string): { suggestions: string[] } {
     try {
-      const json = parseJsonResponse(content);
+      const json = parseJsonResponse(content) as Record<string, unknown>;
       return { suggestions: validateSuggestions(json.suggestions) };
     } catch {
       this.logger.warn('Failed to parse smart reply response');

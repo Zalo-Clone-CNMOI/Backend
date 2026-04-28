@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars, @typescript-eslint/require-await */
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { APP_CONFIG, AppConfig } from '@libs/config';
 import type { GoogleGenerativeAI } from '@google/generative-ai';
@@ -38,7 +37,6 @@ export class GeminiProvider implements ILlmProvider {
       const client = await this.getClient();
       const genModel = client.getGenerativeModel({ model });
 
-      // Convert messages to Gemini format
       const systemMsg = options.messages.find((m) => m.role === 'system');
       const chatMessages = options.messages
         .filter((m) => m.role !== 'system')
@@ -149,7 +147,7 @@ export class GeminiProvider implements ILlmProvider {
     }
   }
 
-  async embed(_text: string, _model?: string): Promise<LlmEmbeddingResult> {
+  embed(): Promise<LlmEmbeddingResult> {
     throw new Error(
       'Gemini embedding not implemented. Use OpenAI provider for embeddings.',
     );

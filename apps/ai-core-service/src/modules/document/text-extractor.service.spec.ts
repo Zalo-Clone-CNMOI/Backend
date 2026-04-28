@@ -127,19 +127,17 @@ describe('TextExtractorService', () => {
   describe('XLSX extraction', () => {
     const xlsxMime =
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-    let xlsxBuffer: Buffer;
 
-    beforeAll(async () => {
+    it('extracts CSV content from a simple XLSX buffer', async () => {
       const ExcelJS = await import('exceljs');
       const workbook = new ExcelJS.Workbook();
       const sheet = workbook.addWorksheet('Sheet1');
       sheet.addRow(['A', 'B']);
       sheet.addRow(['1', '2']);
-      xlsxBuffer = Buffer.from(await workbook.xlsx.writeBuffer());
-    }, 30000);
 
-    it('extracts CSV content from a simple XLSX buffer', async () => {
-      const result = await service.extract(xlsxBuffer, xlsxMime, 'sample.xlsx');
+      const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+      const result = await service.extract(buffer, xlsxMime, 'sample.xlsx');
+
       expect(result).toContain('## Sheet: Sheet1');
       expect(result).toContain('A,B');
       expect(result).toContain('1,2');

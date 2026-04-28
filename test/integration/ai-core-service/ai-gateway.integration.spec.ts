@@ -7,7 +7,7 @@
  * Mock boundary: LLM providers (ILlmProvider), RedisService.
  * Real components: AiGatewayService, DataSanitizer, TokenBudgetService.
  */
-/* eslint-disable @typescript-eslint/unbound-method */
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { AiGatewayService } from '../../../apps/ai-core-service/src/modules/ai-gateway/services/ai-gateway.service';
 import { DataSanitizer } from '../../../apps/ai-core-service/src/modules/ai-gateway/services/data-sanitizer.service';

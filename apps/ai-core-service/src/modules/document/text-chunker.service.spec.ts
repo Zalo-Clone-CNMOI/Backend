@@ -7,8 +7,6 @@ describe('TextChunkerService', () => {
     service = new TextChunkerService();
   });
 
-  // ── Edge cases ──────────────────────────────────────────────────────
-
   describe('edge cases', () => {
     it('returns empty array for empty input', async () => {
       const result = await service.chunk('', { size: 100, overlap: 20 });
@@ -57,10 +55,7 @@ describe('TextChunkerService', () => {
     });
   });
 
-  // ── Token-based chunking ────────────────────────────────────────────
-
   describe('token-based chunking', () => {
-    // ~600 tokens of English text
     const longEnglish = Array(200)
       .fill('The quick brown fox jumps over the lazy dog.')
       .join(' ');
@@ -80,7 +75,7 @@ describe('TextChunkerService', () => {
       });
       for (const chunk of chunks) {
         const count = await service.countTokens(chunk);
-        // Allow small tolerance because trim() can drop a token boundary
+
         expect(count).toBeLessThanOrEqual(110);
       }
     });
@@ -91,9 +86,6 @@ describe('TextChunkerService', () => {
       const chunks = await service.chunk(longEnglish, { size, overlap });
       expect(chunks.length).toBeGreaterThanOrEqual(2);
 
-      // Sliding-window contract: sum of chunk token counts > total text token count
-      // because the overlap region is counted twice. If chunks were disjoint
-      // (no overlap), sum would equal text token count.
       const totalTextTokens = await service.countTokens(longEnglish);
       const chunkTokenCounts = await Promise.all(
         chunks.map((c) => service.countTokens(c)),
@@ -101,14 +93,11 @@ describe('TextChunkerService', () => {
       const summedChunkTokens = chunkTokenCounts.reduce((a, b) => a + b, 0);
       expect(summedChunkTokens).toBeGreaterThan(totalTextTokens);
 
-      // First chunk should be roughly `size` tokens
       const firstChunkTokens = chunkTokenCounts[0];
       expect(firstChunkTokens).toBeGreaterThanOrEqual(size - overlap);
       expect(firstChunkTokens).toBeLessThanOrEqual(size + 5);
     });
   });
-
-  // ── Vietnamese support ──────────────────────────────────────────────
 
   describe('Vietnamese text', () => {
     const longVietnamese = Array(100)
@@ -124,7 +113,6 @@ describe('TextChunkerService', () => {
       });
       expect(chunks.length).toBeGreaterThan(1);
       for (const chunk of chunks) {
-        // Output should preserve Vietnamese characters readably
         expect(chunk).toMatch(
           /[àáảãạăắằẳẵặâấầẩẫậèéẻẽẹêếềểễệìíỉĩịòóỏõọôốồổỗộơớờởỡợùúủũụưứừửữựỳýỷỹỵđ]/i,
         );
@@ -135,12 +123,10 @@ describe('TextChunkerService', () => {
       const text = 'Cửa hàng số 5 ở Hà Nội';
       const wordCount = text.split(/\s+/).length;
       const tokenCount = await service.countTokens(text);
-      // Diacritic-heavy Vietnamese typically tokenizes to >1.5x word count
+
       expect(tokenCount).toBeGreaterThan(wordCount);
     });
   });
-
-  // ── countTokens ─────────────────────────────────────────────────────
 
   describe('countTokens', () => {
     it('returns 0 for empty string', async () => {
@@ -153,13 +139,8 @@ describe('TextChunkerService', () => {
     });
   });
 
-  // ── Encoder reuse ───────────────────────────────────────────────────
-
   describe('encoder caching', () => {
     it('reuses same encoder across calls with same model', async () => {
-      // Two consecutive calls — the second should hit the cached encoder.
-      // We can't directly observe the cache, but timing + correctness gives
-      // confidence; main test is that it doesn't throw.
       await service.chunk('Hello world', { size: 50, overlap: 10 });
       const chunks = await service.chunk('Foo bar baz', {
         size: 50,
@@ -174,7 +155,7 @@ describe('TextChunkerService', () => {
         overlap: 10,
         model: 'text-embedding-3-small',
       });
-      // Different model — should swap the cached encoder without error.
+
       const chunks = await service.chunk('Hello world', {
         size: 50,
         overlap: 10,

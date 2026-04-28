@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -44,21 +43,6 @@ function resolveEmbeddingModel(configured: string | undefined): TiktokenModel {
   return configured as TiktokenModel;
 }
 
-/**
- * DocumentEngine — document processing + pgvector RAG pipeline.
- *
- * Processing flow:
- *   1. Parse document (PDF/DOCX/CSV/TXT)
- *   2. Chunk text with overlap
- *   3. Generate embeddings via OpenAI text-embedding-3-small
- *   4. Store chunks + embeddings in PostgreSQL with pgvector
- *
- * Query flow:
- *   1. Embed query text
- *   2. Similarity search using pgvector cosine distance
- *   3. Build RAG prompt with top-k chunks
- *   4. Generate answer via LLM
- */
 @Injectable()
 export class DocumentEngine {
   private readonly logger = new Logger(DocumentEngine.name);
@@ -83,20 +67,15 @@ export class DocumentEngine {
     this.embeddingModel = resolveEmbeddingModel(this.config.aiEmbeddingModel);
   }
 
-  /**
-   * Process an uploaded document: parse, chunk, embed, store.
-   */
   async processDocument(
     event: AiDocumentUploadEvent,
     textContent: string,
   ): Promise<AiDocumentProcessedEvent> {
     try {
-      // Validate size
       if (event.file_size > this.maxDocSizeMb * 1024 * 1024) {
         throw new Error(`Document exceeds ${this.maxDocSizeMb}MB limit`);
       }
 
-      // Upsert metadata row and set status to processing
       const processingMetadata = this.docMetaRepo.create({
         id: event.document_id,
         conversationId: event.conversation_id,
@@ -109,15 +88,12 @@ export class DocumentEngine {
       });
       await this.docMetaRepo.save(processingMetadata);
 
-      // Chunk the text by token count (not words) to keep each chunk
-      // safely under the embedding model's context window.
       const chunks = await this.chunker.chunk(textContent, {
         size: 400,
         overlap: 50,
         model: this.embeddingModel,
       });
 
-      // Generate embeddings and store chunks
       let totalTokens = 0;
       const chunkEntities: DocumentChunk[] = [];
 
@@ -142,10 +118,8 @@ export class DocumentEngine {
         chunkEntities.push(chunkEntity);
       }
 
-      // Batch save chunks
       await this.chunkRepo.save(chunkEntities);
 
-      // Update document metadata
       await this.docMetaRepo.update(
         { id: event.document_id },
         {
@@ -239,10 +213,6 @@ export class DocumentEngine {
     };
   }
 
-  /**
-   * Embed the query and run pgvector similarity search.
-   * Shared by both sync and streaming Q&A paths.
-   */
   private async searchRelevantChunks(event: AiDocumentQueryEvent): Promise<{
     chunks: Array<{
       content: string;
@@ -258,8 +228,6 @@ export class DocumentEngine {
       this.embeddingModel,
     );
 
-    // Vector similarity search using pgvector
-    // NOTE: Requires pgvector extension and proper column type via migration
     const result = await this.chunkRepo
       .createQueryBuilder('chunk')
       .select(['chunk.id', 'chunk.chunkIndex', 'chunk.content'])
@@ -284,9 +252,6 @@ export class DocumentEngine {
     return { chunks, embeddingTokens: queryEmbedding.tokensUsed };
   }
 
-  /**
-   * Query a document using vector similarity search + RAG.
-   */
   async queryDocument(
     event: AiDocumentQueryEvent,
   ): Promise<AiDocumentQueryResultEvent> {
@@ -294,7 +259,6 @@ export class DocumentEngine {
       const { chunks: relevantChunks, embeddingTokens } =
         await this.searchRelevantChunks(event);
 
-      // Build RAG prompt and generate answer
       const messages = this.promptBuilder.buildDocumentQueryPrompt(
         event.query,
         relevantChunks.map((c) => ({
@@ -368,7 +332,7 @@ export class DocumentEngine {
     source_indices: number[];
   } {
     try {
-      const json = parseJsonResponse(content);
+      const json = parseJsonResponse(content) as Record<string, unknown>;
       return {
         answer: typeof json.answer === 'string' ? json.answer : content,
         source_indices: validateSourceIndices(json.source_indices, chunkCount),

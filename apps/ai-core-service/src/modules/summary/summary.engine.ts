@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return */
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { APP_CONFIG, AppConfig } from '@libs/config';
 import { RedisService } from '@libs/redis';
@@ -12,17 +11,11 @@ import type {
 } from '@libs/contracts';
 import { toAiProviderType } from '@libs/contracts';
 
-/**
- * SummaryEngine — generates conversation summaries with caching.
- *
- * Cache key: ai:summary:{conversationId}
- * Cache TTL: 1 hour (conversation-level summary cache)
- */
 @Injectable()
 export class SummaryEngine {
   private readonly logger = new Logger(SummaryEngine.name);
   private readonly cacheEnabled: boolean;
-  private readonly CACHE_TTL = 3600; // 1 hour
+  private readonly CACHE_TTL = 3600;
 
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
@@ -34,9 +27,6 @@ export class SummaryEngine {
     this.cacheEnabled = config.aiEnableConversationCache !== false;
   }
 
-  /**
-   * Generate or retrieve cached summary for a conversation.
-   */
   async summarize(
     event: AiSummaryRequestEvent,
     messages: string[],
@@ -48,14 +38,14 @@ export class SummaryEngine {
       if (cached) {
         this.logger.debug(`Cache hit for summary: ${event.conversation_id}`);
         try {
-          const parsed = JSON.parse(cached);
+          const parsed = JSON.parse(cached) as Record<string, unknown>;
           return {
             ...parsed,
             user_id: event.user_id,
             cached: true,
             processed_at: Date.now(),
             trace_id: event.trace_id,
-          };
+          } as AiSummaryResultEvent;
         } catch {
           this.logger.warn(
             `Invalid cached summary payload: ${event.conversation_id}`,
@@ -148,7 +138,7 @@ export class SummaryEngine {
 
   private parseResponse(content: string): { summary: string } {
     try {
-      const json = parseJsonResponse(content);
+      const json = parseJsonResponse(content) as Record<string, unknown>;
       return {
         summary: typeof json.summary === 'string' ? json.summary : content,
       };

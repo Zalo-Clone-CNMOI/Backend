@@ -1,12 +1,3 @@
-/**
- * @file token-budget.service.spec.ts
- *
- * Unit tests for TokenBudgetService — Redis-backed daily token quota.
- *
- * Tests: canConsume (within/over budget), consume (TTL set/skip),
- * getRemaining, getUsage.  Uses a plain mock for RedisService.
- */
-/* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
 import { TokenBudgetService } from './token-budget.service';
 import { APP_CONFIG } from '@libs/config';
@@ -47,8 +38,6 @@ describe('TokenBudgetService', () => {
     service = module.get(TokenBudgetService);
   });
 
-  // ── canConsume ────────────────────────────────────────────────────
-
   describe('canConsume', () => {
     it('returns true when user has used nothing', async () => {
       redis.get.mockResolvedValue(null);
@@ -59,15 +48,15 @@ describe('TokenBudgetService', () => {
     });
 
     it('returns true when estimated tokens fit within remaining budget', async () => {
-      redis.get.mockResolvedValue('10000'); // 10k already used
+      redis.get.mockResolvedValue('10000');
 
-      const result = await service.canConsume('user1', 5000); // needs 5k more
+      const result = await service.canConsume('user1', 5000);
 
       expect(result).toBe(true);
     });
 
     it('returns false when estimated tokens exceed daily budget', async () => {
-      redis.get.mockResolvedValue(String(DAILY_BUDGET - 100)); // 100 remaining
+      redis.get.mockResolvedValue(String(DAILY_BUDGET - 100));
 
       const result = await service.canConsume('user1', 500);
 
@@ -100,12 +89,10 @@ describe('TokenBudgetService', () => {
     });
   });
 
-  // ── consume ───────────────────────────────────────────────────────
-
   describe('consume', () => {
     it('increments the budget key and returns new total', async () => {
       redis.incrBy.mockResolvedValue(5000);
-      redis.ttl.mockResolvedValue(3600); // TTL already set
+      redis.ttl.mockResolvedValue(3600);
 
       const total = await service.consume('user1', 500);
 
@@ -118,7 +105,7 @@ describe('TokenBudgetService', () => {
 
     it('sets 24h TTL when key has no expiry (ttl returns -1)', async () => {
       redis.incrBy.mockResolvedValue(1000);
-      redis.ttl.mockResolvedValue(-1); // no TTL
+      redis.ttl.mockResolvedValue(-1);
       redis.expire.mockResolvedValue(true);
 
       await service.consume('user1', 1000);
@@ -131,7 +118,7 @@ describe('TokenBudgetService', () => {
 
     it('sets TTL when key does not exist (ttl returns -2)', async () => {
       redis.incrBy.mockResolvedValue(1000);
-      redis.ttl.mockResolvedValue(-2); // key does not exist
+      redis.ttl.mockResolvedValue(-2);
       redis.expire.mockResolvedValue(true);
 
       await service.consume('user1', 1000);
@@ -141,15 +128,13 @@ describe('TokenBudgetService', () => {
 
     it('does not call expire when TTL is already positive', async () => {
       redis.incrBy.mockResolvedValue(2000);
-      redis.ttl.mockResolvedValue(43200); // 12h remaining
+      redis.ttl.mockResolvedValue(43200);
 
       await service.consume('user1', 2000);
 
       expect(redis.expire).not.toHaveBeenCalled();
     });
   });
-
-  // ── getRemaining ──────────────────────────────────────────────────
 
   describe('getRemaining', () => {
     it('returns full budget when user has no usage', async () => {
@@ -185,8 +170,6 @@ describe('TokenBudgetService', () => {
     });
   });
 
-  // ── getUsage ──────────────────────────────────────────────────────
-
   describe('getUsage', () => {
     it('returns 0 when no usage recorded yet', async () => {
       redis.get.mockResolvedValue(null);
@@ -204,8 +187,6 @@ describe('TokenBudgetService', () => {
       expect(usage).toBe(7500);
     });
   });
-
-  // ── default budget ────────────────────────────────────────────────
 
   describe('default daily budget', () => {
     it('uses 1_000_000 when config does not specify budget', async () => {

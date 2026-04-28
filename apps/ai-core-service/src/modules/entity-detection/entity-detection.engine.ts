@@ -59,8 +59,6 @@ export class EntityDetectionEngine {
       let totalLatencyMs = result.latencyMs;
       let parseFailedAfterRetry = false;
 
-      // Retry once if first response was malformed (parse returned null).
-      // Empty array → LLM legitimately said "no entities found", do NOT retry.
       if (parsed === null) {
         this.logger.warn(
           `Entity detection retry for message ${event.message_id} — initial parse failed for ${result.content.length}-char response`,
@@ -90,7 +88,6 @@ export class EntityDetectionEngine {
         }
       }
 
-      // After retry, treat any remaining null as empty for downstream.
       const entities = parsed ?? [];
 
       try {
@@ -228,11 +225,6 @@ export class EntityDetectionEngine {
     }
   }
 
-  /**
-   * Parse entities from raw LLM response.
-   * Returns `null` if JSON parsing fails OR the response lacks an `entities` array
-   * (signal to retry); returns `[]` only when the LLM legitimately said "no entities".
-   */
   private parseEntities(
     content: string,
     body: string,
@@ -262,7 +254,7 @@ export class EntityDetectionEngine {
 
     const text = typeof r.text === 'string' ? r.text.trim() : '';
     if (!text) return null;
-    // Sanity check: text must actually appear in the message body
+
     if (!body.toLowerCase().includes(text.toLowerCase())) return null;
 
     const type =

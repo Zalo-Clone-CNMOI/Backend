@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 import { Injectable, Logger } from '@nestjs/common';
 import { RedisService } from '@libs/redis';
 import { AiGatewayService } from '../ai-gateway/services/ai-gateway.service';
@@ -14,16 +13,10 @@ import type {
 } from '@libs/contracts';
 import { toAiProviderType } from '@libs/contracts';
 
-/**
- * TranslationEngine — translates messages with 24h Redis cache.
- *
- * Cache key: ai:translate:{md5(body)}:{targetLanguage}
- * Cache TTL: 24 hours
- */
 @Injectable()
 export class TranslationEngine {
   private readonly logger = new Logger(TranslationEngine.name);
-  private readonly CACHE_TTL = 86400; // 24 hours
+  private readonly CACHE_TTL = 86400;
 
   constructor(
     private readonly gateway: AiGatewayService,
@@ -32,9 +25,6 @@ export class TranslationEngine {
     private readonly redis: RedisService,
   ) {}
 
-  /**
-   * Translate a message, checking cache first.
-   */
   async translate(
     event: AiTranslateRequestEvent,
   ): Promise<AiTranslateResultEvent> {
@@ -44,7 +34,11 @@ export class TranslationEngine {
     if (cached) {
       this.logger.debug('Translation cache hit');
       try {
-        const parsed = JSON.parse(cached);
+        const parsed = JSON.parse(cached) as {
+          translated_text: string;
+          source_language: string;
+          provider: string;
+        };
         return {
           message_id: event.message_id,
           conversation_id: event.conversation_id,
@@ -53,7 +47,7 @@ export class TranslationEngine {
           translated_body: parsed.translated_text,
           source_language: parsed.source_language,
           target_language: event.target_language,
-          provider: parsed.provider,
+          provider: toAiProviderType(parsed.provider),
           tokens_used: 0,
           cached: true,
           processed_at: Date.now(),
@@ -158,7 +152,7 @@ export class TranslationEngine {
     source_language: string;
   } {
     try {
-      const json = parseJsonResponse(content);
+      const json = parseJsonResponse(content) as Record<string, unknown>;
       return {
         translated_text:
           typeof json.translated_text === 'string'

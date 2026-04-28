@@ -67,25 +67,19 @@ export class ModerationEngine {
 
       const parsed = this.parseResponse(result.content);
 
-      try {
-        const log = this.moderationRepo.create({
-          messageId: event.message_id,
-          conversationId: event.conversation_id,
-          senderId: event.sender_id,
-          isFlagged: parsed.is_flagged,
-          labels: parsed.labels,
-          confidence: parsed.confidence,
-          provider: result.provider,
-          ensemble: false,
-          tokensUsed: result.tokensIn + result.tokensOut,
-          traceId: event.trace_id ?? null,
-        });
-        await this.moderationRepo.save(log);
-      } catch (dbError) {
-        this.logger.warn(
-          `Failed to persist moderation log for ${event.message_id}: ${dbError instanceof Error ? dbError.message : String(dbError)}`,
-        );
-      }
+      const log = this.moderationRepo.create({
+        messageId: event.message_id,
+        conversationId: event.conversation_id,
+        senderId: event.sender_id,
+        isFlagged: parsed.is_flagged,
+        labels: parsed.labels,
+        confidence: parsed.confidence,
+        provider: result.provider,
+        ensemble: false,
+        tokensUsed: result.tokensIn + result.tokensOut,
+        traceId: event.trace_id ?? null,
+      });
+      await this.moderationRepo.save(log);
 
       this.aiMetrics.recordRequest(
         'moderation',
@@ -237,7 +231,7 @@ export class ModerationEngine {
         isFlagged: fallback.is_flagged,
         labels: fallback.labels,
         confidence: fallback.confidence,
-        provider: ensemble ? 'ensemble' : 'openai',
+        provider: ensemble ? 'ensemble' : 'unknown',
         ensemble,
         tokensUsed: 0,
         traceId: event.trace_id ?? null,

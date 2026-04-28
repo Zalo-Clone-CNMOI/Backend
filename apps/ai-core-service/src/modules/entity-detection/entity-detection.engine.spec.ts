@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Logger } from '@nestjs/common';
@@ -20,8 +19,7 @@ function makeMetrics(): jest.Mocked<AiMetricsService> {
 
 function makeRepo() {
   return {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-    create: jest.fn((data) => data),
+    create: jest.fn((data: object) => data),
     save: jest.fn().mockResolvedValue(undefined),
   };
 }
@@ -66,8 +64,6 @@ describe('EntityDetectionEngine', () => {
   afterEach(() => {
     jest.restoreAllMocks();
   });
-
-  // ── detect() ──────────────────────────────────────────────────────
 
   describe('detect()', () => {
     const baseEvent = {
@@ -182,8 +178,6 @@ describe('EntityDetectionEngine', () => {
       expect(result.entities).toHaveLength(1);
     });
 
-    // ── Retry on malformed parse ────────────────────────────────────
-
     it('retries once when first response is malformed and recovers entities', async () => {
       gateway.complete
         .mockResolvedValueOnce(
@@ -204,12 +198,11 @@ describe('EntityDetectionEngine', () => {
       expect(gateway.complete).toHaveBeenCalledTimes(2);
       expect(result.entities).toHaveLength(1);
       expect(result.entities[0].text).toBe('Telegram');
-      // Tokens from BOTH calls should be summed
-      expect(result.tokens_used).toBe(160); // 2 × (50+30)
+
+      expect(result.tokens_used).toBe(160);
     });
 
     it('does NOT retry when first response is legitimately empty', async () => {
-      // Valid JSON with empty array — LLM said "no entities found"
       gateway.complete.mockResolvedValueOnce(
         llmResult(JSON.stringify({ entities: [] })),
       );
@@ -221,7 +214,6 @@ describe('EntityDetectionEngine', () => {
     });
 
     it('does NOT retry when JSON has entities key but array is empty', async () => {
-      // Different shape of legitimate empty: extra metadata around empty list
       gateway.complete.mockResolvedValueOnce(
         llmResult(JSON.stringify({ entities: [], notes: 'no entities found' })),
       );
@@ -253,7 +245,7 @@ describe('EntityDetectionEngine', () => {
 
       expect(gateway.complete).toHaveBeenCalledTimes(2);
       const retryMessages = gateway.complete.mock.calls[1][1].messages;
-      // Retry must include the original conversation + bad assistant + corrective user
+
       const assistantMsg = retryMessages.find(
         (m: { role: string }) => m.role === 'assistant',
       );
@@ -277,7 +269,7 @@ describe('EntityDetectionEngine', () => {
         expect.any(Number),
         expect.any(Number),
         expect.any(Number),
-        false, // success flag
+        false,
       );
     });
 
@@ -301,13 +293,11 @@ describe('EntityDetectionEngine', () => {
         expect.any(String),
         expect.any(Number),
         expect.any(Number),
-        250, // 100 + 150
+        250,
         true,
       );
     });
   });
-
-  // ── generateInfo() ────────────────────────────────────────────────
 
   describe('generateInfo()', () => {
     const baseEvent = {

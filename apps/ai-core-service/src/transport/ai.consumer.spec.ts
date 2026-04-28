@@ -1,17 +1,3 @@
-/**
- * @file ai.consumer.spec.ts
- *
- * Unit tests for AiConsumer — Kafka event consumer for all AI features.
- *
- * Each handler should:
- *  1. Delegate to the appropriate engine
- *  2. Emit the result to the correct Kafka topic via AiPublisher
- *
- * Covers: moderation, smart-reply, summary, translation,
- * document-upload, document-query handlers.
- */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-
 import { Test, TestingModule } from '@nestjs/testing';
 import { AiConsumer } from './ai.consumer';
 import { AiPublisher } from './ai.publisher';
@@ -34,8 +20,6 @@ import type {
   AiEntityDetectionRequestEvent,
   AiEntityInfoRequestEvent,
 } from '@libs/contracts';
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function makePublisher() {
   return { emit: jest.fn().mockResolvedValue(undefined) };
@@ -80,8 +64,6 @@ function makeTextExtractor() {
 function makeEntityDetection() {
   return { detect: jest.fn(), generateInfo: jest.fn() };
 }
-
-// ── Tests ────────────────────────────────────────────────────────────────────
 
 describe('AiConsumer', () => {
   let consumer: AiConsumer;
@@ -128,8 +110,6 @@ describe('AiConsumer', () => {
     jest.restoreAllMocks();
   });
 
-  // ── onModerationRequest ───────────────────────────────────────────
-
   describe('onModerationRequest()', () => {
     it('delegates to moderationEngine and emits result', async () => {
       const event: AiModerationRequestEvent = {
@@ -152,8 +132,6 @@ describe('AiConsumer', () => {
       );
     });
   });
-
-  // ── onSmartReplyRequest ───────────────────────────────────────────
 
   describe('onSmartReplyRequest()', () => {
     it('delegates to smartReplyEngine with context_messages and emits result', async () => {
@@ -181,8 +159,6 @@ describe('AiConsumer', () => {
     });
   });
 
-  // ── onSummaryRequest ──────────────────────────────────────────────
-
   describe('onSummaryRequest()', () => {
     it('delegates to summaryEngine with event.messages and emits result', async () => {
       const event: AiSummaryRequestEvent = {
@@ -208,8 +184,6 @@ describe('AiConsumer', () => {
     });
   });
 
-  // ── onTranslateRequest ────────────────────────────────────────────
-
   describe('onTranslateRequest()', () => {
     it('delegates to translationEngine and emits result', async () => {
       const event: AiTranslateRequestEvent = {
@@ -232,8 +206,6 @@ describe('AiConsumer', () => {
       );
     });
   });
-
-  // ── onDocumentUpload ──────────────────────────────────────────────
 
   describe('onDocumentUpload()', () => {
     const makeUploadEvent = (): AiDocumentUploadEvent => ({
@@ -289,7 +261,9 @@ describe('AiConsumer', () => {
 
       await consumer.onDocumentUpload(makeUploadEvent());
 
-      expect(documentEngine.processDocument.mock.calls[0][1]).toBe(content);
+      expect(
+        (documentEngine.processDocument.mock.calls[0] as [unknown, string])[1],
+      ).toBe(content);
     });
 
     it('delegates PDF extraction to TextExtractorService', async () => {
@@ -309,9 +283,9 @@ describe('AiConsumer', () => {
         'application/pdf',
         'report.pdf',
       );
-      expect(documentEngine.processDocument.mock.calls[0][1]).toBe(
-        'Extracted PDF body text',
-      );
+      expect(
+        (documentEngine.processDocument.mock.calls[0] as [unknown, string])[1],
+      ).toBe('Extracted PDF body text');
     });
 
     it('records failure when extractor throws', async () => {
@@ -333,8 +307,6 @@ describe('AiConsumer', () => {
       expect(documentEngine.recordDocumentFailure).toHaveBeenCalled();
     });
   });
-
-  // ── onDocumentQuery ───────────────────────────────────────────────
 
   describe('onDocumentQuery()', () => {
     it('delegates to documentEngine.queryDocument and emits result', async () => {
@@ -361,8 +333,6 @@ describe('AiConsumer', () => {
     });
   });
 
-  // ── onEntityDetectionRequest ──────────────────────────────────────
-
   describe('onEntityDetectionRequest()', () => {
     it('delegates to entityDetectionEngine.detect and emits result', async () => {
       const event: AiEntityDetectionRequestEvent = {
@@ -387,8 +357,6 @@ describe('AiConsumer', () => {
       );
     });
   });
-
-  // ── onEntityInfoRequest ───────────────────────────────────────────
 
   describe('onEntityInfoRequest()', () => {
     it('delegates to entityDetectionEngine.generateInfo and emits result', async () => {

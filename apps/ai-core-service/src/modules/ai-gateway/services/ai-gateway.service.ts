@@ -10,13 +10,6 @@ import {
 import { DataSanitizer } from './data-sanitizer.service';
 import { TokenBudgetService } from './token-budget.service';
 
-/**
- * AiGatewayService — central router with circuit breaker,
- * fallback ordering, and PII sanitization middleware.
- *
- * Provider ordering: OpenAI (primary) → Gemini → Anthropic
- * Circuit breaker: 5 failures → open for 30s → half-open test
- */
 interface CircuitState {
   failures: number;
   lastFailure: number;
@@ -36,7 +29,6 @@ export class AiGatewayService {
     private readonly sanitizer: DataSanitizer,
     private readonly tokenBudget: TokenBudgetService,
   ) {
-    // Initialize circuit breakers for each provider
     for (const provider of providers) {
       this.circuits.set(provider.name, {
         failures: 0,
@@ -49,9 +41,6 @@ export class AiGatewayService {
     );
   }
 
-  /**
-   * Execute a completion with circuit breaker and fallback.
-   */
   async complete(
     userId: string,
     options: LlmCompletionOptions,
@@ -103,9 +92,6 @@ export class AiGatewayService {
     throw new Error(`All LLM providers failed: ${errors.join('; ')}`);
   }
 
-  /**
-   * Execute a streaming completion with circuit breaker and fallback.
-   */
   async completeStream(
     userId: string,
     options: LlmCompletionOptions,
@@ -152,9 +138,6 @@ export class AiGatewayService {
     throw new Error(`All LLM stream providers failed: ${errors.join('; ')}`);
   }
 
-  /**
-   * Generate embeddings — only OpenAI supports this.
-   */
   async embed(text: string, model?: string): Promise<LlmEmbeddingResult> {
     const sanitizedText = this.sanitizer.sanitize(text);
     const provider = this.providers.find(
@@ -168,25 +151,10 @@ export class AiGatewayService {
     return provider.embed(sanitizedText, model);
   }
 
-  /**
-   * Get provider by name.
-   */
   getProvider(name: string): ILlmProvider | undefined {
     return this.providers.find((p) => p.name === name);
   }
 
-  /**
-   * Run the same prompt against multiple providers in parallel and return all
-   * successful results. Used for ensemble voting (e.g. moderation).
-   *
-   * Differences from `complete`:
-   *  - No fallback chain — providers are queried in PARALLEL, not sequentially
-   *  - Returns array of successes (skipped/failed providers are dropped)
-   *  - Each successful provider's tokens are consumed against the user's budget
-   *  - Circuit breaker state is updated per result, just like `complete`
-   *
-   * Caller is responsible for deciding what to do with an empty result.
-   */
   async completeEnsemble(
     userId: string,
     options: LlmCompletionOptions,
@@ -213,7 +181,6 @@ export class AiGatewayService {
     if (eligible.length === 0) return [];
 
     if (!opts?.skipBudgetCheck) {
-      // Budget estimate scales with provider count.
       const canConsume = await this.tokenBudget.canConsume(
         userId,
         2000 * eligible.length,
@@ -227,9 +194,6 @@ export class AiGatewayService {
       eligible.map((p) => p.complete(options)),
     );
 
-    // Token consumption is sequential (not concurrent) so each consume() call
-    // sees the result of the previous one. If TokenBudgetService.consume()
-    // ever becomes async-fire-and-forget, batch the sum here instead.
     const successes: LlmCompletionResult[] = [];
     for (let i = 0; i < settled.length; i++) {
       const provider = eligible[i];

@@ -1,16 +1,3 @@
-/**
- * @file moderation.engine.spec.ts
- *
- * Unit tests for ModerationEngine — LLM-based content moderation.
- *
- * Covers:
- *  - moderate() success path (LLM returns valid JSON)
- *  - moderate() saves result to DB and records metrics
- *  - moderate() returns safe default on LLM failure
- *  - moderate() returns safe default when JSON is malformed
- *  - moderate() ensemble flag reflected in result
- */
-/* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ModerationEngine } from './moderation.engine';
@@ -20,8 +7,6 @@ import { AiMetricsService } from '../ai-gateway/services/ai-metrics.service';
 import { APP_CONFIG } from '@libs/config';
 import { AiModerationLog } from '@libs/database/entities';
 import type { AiModerationRequestEvent } from '@libs/contracts';
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function makeRequest(
   overrides: Partial<AiModerationRequestEvent> = {},
@@ -64,8 +49,6 @@ function makeRepo() {
   };
 }
 
-// ── Tests ────────────────────────────────────────────────────────────────────
-
 describe('ModerationEngine', () => {
   let engine: ModerationEngine;
   let gateway: jest.Mocked<AiGatewayService>;
@@ -93,8 +76,6 @@ describe('ModerationEngine', () => {
 
     engine = module.get(ModerationEngine);
   });
-
-  // ── Success path ──────────────────────────────────────────────────
 
   describe('moderate() — success', () => {
     it('returns moderation result with LLM parsed values', async () => {
@@ -249,8 +230,6 @@ describe('ModerationEngine', () => {
     });
   });
 
-  // ── Failure / fallback path ───────────────────────────────────────
-
   describe('moderate() — failure fallback', () => {
     it('returns safe default when LLM throws', async () => {
       gateway.complete.mockRejectedValue(new Error('LLM timeout'));
@@ -346,8 +325,6 @@ describe('ModerationEngine', () => {
     });
   });
 
-  // ── Ensemble flag (single-mode behavior) ──────────────────────────
-
   describe('ensemble flag in single mode', () => {
     it('reflects ensemble=false in result when config is false', async () => {
       gateway.complete.mockResolvedValue({
@@ -370,8 +347,6 @@ describe('ModerationEngine', () => {
       expect(result.ensemble).toBe(false);
     });
   });
-
-  // ── Ensemble mode ─────────────────────────────────────────────────
 
   describe('ensemble mode (aiModerationEnsemble=true)', () => {
     let ensembleEngine: ModerationEngine;
@@ -437,7 +412,7 @@ describe('ModerationEngine', () => {
       const result = await ensembleEngine.moderate(makeRequest());
 
       expect(result.is_flagged).toBe(true);
-      // Labels = union of majority providers' labels
+
       expect(result.labels.sort()).toEqual(['harassment', 'toxic'].sort());
     });
 
@@ -474,7 +449,7 @@ describe('ModerationEngine', () => {
       const result = await ensembleEngine.moderate(makeRequest());
 
       expect(result.is_flagged).toBe(true);
-      // Average of 0.8 and 0.6 (only majority voters)
+
       expect(result.confidence).toBeCloseTo(0.7, 1);
     });
 
@@ -486,7 +461,6 @@ describe('ModerationEngine', () => {
 
       const result = await ensembleEngine.moderate(makeRequest());
 
-      // Each vote: tokensIn=50, tokensOut=20 → 70 per provider × 2 = 140
       expect(result.tokens_used).toBe(140);
     });
 
@@ -533,7 +507,6 @@ describe('ModerationEngine', () => {
 
       await ensembleEngine.moderate(makeRequest());
 
-      // 3 providers → 3 metric calls
       expect(metrics.recordRequest).toHaveBeenCalledTimes(3);
     });
 
@@ -561,10 +534,9 @@ describe('ModerationEngine', () => {
 
       await ensembleEngine.moderate(makeRequest());
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      const created = moderationRepo.create.mock.calls[0][0] as {
-        provider: string;
-      };
+      const created = (
+        moderationRepo.create.mock.calls[0] as [{ provider: string }]
+      )[0];
       expect(created.provider).toBe('ensemble');
     });
   });

@@ -140,8 +140,7 @@ export class LocDoRouterProvider implements ILlmProvider {
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  embed(_text: string, _model?: string): Promise<LlmEmbeddingResult> {
+  embed(): Promise<LlmEmbeddingResult> {
     return Promise.reject(
       new Error(
         'LocDo Router does not support embeddings. Use OpenAiProvider for embeddings.',

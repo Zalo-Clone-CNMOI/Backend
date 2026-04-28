@@ -9,7 +9,7 @@ import {
 import { plainToInstance } from 'class-transformer';
 import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '@app/decorator';
-import type { AuthenticatedUser } from '@app/types';
+import { BusinessException, type AuthenticatedUser } from '@app/types';
 import { JwtAuthGuard } from '@libs/auth';
 import { EntityInfoService } from './entity-info.service';
 import type { EntityType } from '@libs/contracts';
@@ -58,10 +58,25 @@ export class EntityInfoController {
     @CurrentUser() user: AuthenticatedUser,
     @Query() query: EntityInfoQueryDto,
   ) {
+    const text = query.text?.trim();
+    if (!text) {
+      throw BusinessException.badRequest('text query parameter is required');
+    }
+    if (text.length > 200) {
+      throw BusinessException.badRequest('text exceeds 200 characters');
+    }
+    if (
+      !query.type ||
+      !(VALID_TYPES as readonly string[]).includes(query.type)
+    ) {
+      throw BusinessException.badRequest(
+        `type must be one of: ${VALID_TYPES.join(', ')}`,
+      );
+    }
     const language = query.lang === 'en' ? 'en' : 'vi';
 
     const result = await this.service.getEntityInfo({
-      text: query.text.trim(),
+      text,
       type: query.type as EntityType,
       lang: language,
       userId: user.id,

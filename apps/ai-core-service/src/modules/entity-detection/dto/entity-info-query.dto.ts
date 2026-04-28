@@ -44,10 +44,10 @@ export class EntityInfoQueryDto {
   @IsIn(['vi', 'en'])
   lang?: string;
 
-  @ApiProperty({
-    description:
-      'Requesting user ID (required; callers must pass authenticated user)',
+  @ApiPropertyOptional({
+    description: 'Requesting user ID',
   })
+  @IsOptional()
   @IsUUID()
-  user_id!: string;
+  user_id?: string;
 }

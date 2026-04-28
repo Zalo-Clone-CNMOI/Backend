@@ -1,10 +1,3 @@
-/**
- * @file data-sanitizer.service.spec.ts
- *
- * Unit tests for DataSanitizer — PII stripping before LLM calls.
- * Tests all 5 pattern types (email, phone, CC, SSN, IP),
- * enabled/disabled config flag, and batch sanitize.
- */
 import { Test, TestingModule } from '@nestjs/testing';
 import { DataSanitizer } from './data-sanitizer.service';
 import { APP_CONFIG } from '@libs/config';
@@ -28,8 +21,6 @@ describe('DataSanitizer', () => {
       sanitizer = module.get(DataSanitizer);
     });
 
-    // ── Email ─────────────────────────────────────────────────────────
-
     it('replaces a plain email address', () => {
       expect(
         sanitizer.sanitize('Contact me at user@example.com for help'),
@@ -48,8 +39,6 @@ describe('DataSanitizer', () => {
       expect(result).toBe('[EMAIL] and [EMAIL]');
     });
 
-    // ── Phone ─────────────────────────────────────────────────────────
-
     it('replaces a US phone number', () => {
       const result = sanitizer.sanitize('Call me at +1 555 123 4567');
       expect(result).toContain('[PHONE]');
@@ -59,8 +48,6 @@ describe('DataSanitizer', () => {
       const result = sanitizer.sanitize('My number is 555-123-4567');
       expect(result).toContain('[PHONE]');
     });
-
-    // ── Credit card ───────────────────────────────────────────────────
 
     it('replaces a 16-digit credit card number (spaced)', () => {
       const result = sanitizer.sanitize('Card: 4111 1111 1111 1111');
@@ -72,8 +59,6 @@ describe('DataSanitizer', () => {
       expect(result).toContain('[CREDIT_CARD]');
     });
 
-    // ── SSN ───────────────────────────────────────────────────────────
-
     it('replaces a SSN with dashes', () => {
       const result = sanitizer.sanitize('My SSN is 123-45-6789');
       expect(result).toContain('[SSN]');
@@ -84,8 +69,6 @@ describe('DataSanitizer', () => {
       expect(result).toContain('[SSN]');
     });
 
-    // ── IP address ────────────────────────────────────────────────────
-
     it('replaces an IPv4 address', () => {
       const result = sanitizer.sanitize('Server IP is 192.168.1.100');
       expect(result).toContain('[IP_ADDRESS]');
@@ -95,8 +78,6 @@ describe('DataSanitizer', () => {
       const result = sanitizer.sanitize('From 10.0.0.1 to 172.16.0.5');
       expect(result.match(/\[IP_ADDRESS\]/g)?.length).toBe(2);
     });
-
-    // ── Mixed content ─────────────────────────────────────────────────
 
     it('sanitizes multiple PII types in one message', () => {
       const raw =
@@ -109,8 +90,6 @@ describe('DataSanitizer', () => {
       expect(result).not.toContain('10.0.0.1');
     });
 
-    // ── Edge cases ────────────────────────────────────────────────────
-
     it('returns empty string unchanged', () => {
       expect(sanitizer.sanitize('')).toBe('');
     });
@@ -119,8 +98,6 @@ describe('DataSanitizer', () => {
       const text = 'Hello, how are you today?';
       expect(sanitizer.sanitize(text)).toBe(text);
     });
-
-    // ── Batch ─────────────────────────────────────────────────────────
 
     it('sanitizeAll processes each text in an array', () => {
       const results = sanitizer.sanitizeAll([
@@ -137,8 +114,6 @@ describe('DataSanitizer', () => {
       expect(sanitizer.sanitizeAll([])).toEqual([]);
     });
   });
-
-  // ── Disabled mode ─────────────────────────────────────────────────
 
   describe('when PII sanitization is disabled', () => {
     beforeEach(async () => {

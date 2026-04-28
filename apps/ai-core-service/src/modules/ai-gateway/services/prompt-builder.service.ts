@@ -6,16 +6,12 @@ export interface SmartReplyContextMessage {
   body: string;
 }
 
-// Static prefix — placed first in system prompts so OpenAI/LocDo prefix caching
-// can cache this block across requests. Dynamic context (app context) goes last.
 const LANGUAGE_RULE =
   'Respond in the same language as the user. If the user writes in Vietnamese, reply in Vietnamese.';
 
 const APP_CONTEXT =
   'You are an AI assistant embedded in a Vietnamese chat application (similar to Zalo). Users send casual messages in Vietnamese or English.';
 
-// Vietnamese diacritics regex — used to pick label language for context blocks
-// so labels match the conversation language (avoid Vietnamese labels around English content)
 const VI_DIACRITICS_RE =
   /[àáảãạăắằẳẵặâấầẩẫậèéẻẽẹêếềểễệìíỉĩịòóỏõọôốồổỗộơớờởỡợùúủũụưứừửữựỳýỷỹỵđ]/i;
 

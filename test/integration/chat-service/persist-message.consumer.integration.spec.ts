@@ -8,7 +8,7 @@
  * Tests the full consumer pipeline:
  *   Kafka payload → membership check → idempotency → persist → emit event
  */
-/* eslint-disable @typescript-eslint/unbound-method, @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { PersistMessageConsumer } from '../../../apps/chat-service/src/consumers/persist-message.consumer';

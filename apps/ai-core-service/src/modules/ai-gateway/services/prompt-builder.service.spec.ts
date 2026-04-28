@@ -1,10 +1,3 @@
-/**
- * @file prompt-builder.service.spec.ts
- *
- * Unit tests for PromptBuilderService — validates that each builder
- * returns correctly structured LlmChatMessage arrays with the
- * expected roles and content shape.
- */
 import { Test, TestingModule } from '@nestjs/testing';
 import { PromptBuilderService } from './prompt-builder.service';
 
@@ -18,8 +11,6 @@ describe('PromptBuilderService', () => {
 
     builder = module.get(PromptBuilderService);
   });
-
-  // ── buildModerationPrompt ─────────────────────────────────────────
 
   describe('buildModerationPrompt', () => {
     it('returns exactly 2 messages: system + user', () => {
@@ -43,8 +34,6 @@ describe('PromptBuilderService', () => {
       expect(result[0].content).toContain('confidence');
     });
   });
-
-  // ── buildSmartReplyPrompt ─────────────────────────────────────────
 
   describe('buildSmartReplyPrompt', () => {
     it('returns exactly 2 messages', () => {
@@ -106,8 +95,6 @@ describe('PromptBuilderService', () => {
     });
   });
 
-  // ── buildSummaryPrompt ────────────────────────────────────────────
-
   describe('buildSummaryPrompt', () => {
     it('returns exactly 2 messages', () => {
       const result = builder.buildSummaryPrompt(['msg1', 'msg2']);
@@ -127,8 +114,6 @@ describe('PromptBuilderService', () => {
       expect(result[0].content).toContain('summary');
     });
   });
-
-  // ── buildTranslationPrompt ────────────────────────────────────────
 
   describe('buildTranslationPrompt', () => {
     it('returns exactly 2 messages', () => {
@@ -163,7 +148,7 @@ describe('PromptBuilderService', () => {
 
     it('works without source language (auto-detect)', () => {
       const result = builder.buildTranslationPrompt('Text', undefined, 'en');
-      // Should not throw and should still have 2 messages
+
       expect(result).toHaveLength(2);
     });
 
@@ -173,8 +158,6 @@ describe('PromptBuilderService', () => {
       expect(result[0].content).toContain('source_language');
     });
   });
-
-  // ── buildDocumentQueryPrompt ──────────────────────────────────────
 
   describe('buildDocumentQueryPrompt', () => {
     it('returns exactly 2 messages', () => {
@@ -219,8 +202,6 @@ describe('PromptBuilderService', () => {
     });
   });
 
-  // ── buildEntityDetectionPrompt ────────────────────────────────────
-
   describe('buildEntityDetectionPrompt', () => {
     it('returns exactly 2 messages: system + user', () => {
       const result = builder.buildEntityDetectionPrompt(
@@ -261,8 +242,6 @@ describe('PromptBuilderService', () => {
       expect(result[0].content).toContain('0.75');
     });
   });
-
-  // ── buildEntityInfoPrompt ─────────────────────────────────────────
 
   describe('buildEntityInfoPrompt', () => {
     it('returns exactly 2 messages: system + user', () => {

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/unbound-method */
 /**
  * @file presence.consumer.spec.ts
  * @covers PresenceConsumer – Kafka event handlers for presence connect/heartbeat/disconnect

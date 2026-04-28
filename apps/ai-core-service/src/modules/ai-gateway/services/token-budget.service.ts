@@ -2,14 +2,6 @@ import { Injectable, Logger, Inject } from '@nestjs/common';
 import { APP_CONFIG, AppConfig } from '@libs/config';
 import { RedisService } from '@libs/redis';
 
-/**
- * TokenBudgetService — enforces a global daily token budget per user.
- *
- * Budget tracking uses Redis with daily expiry keys:
- *   ai:budget:{userId}:{YYYYMMDD} -> total tokens consumed
- *
- * Per-feature quotas deferred to v2.
- */
 @Injectable()
 export class TokenBudgetService {
   private readonly logger = new Logger(TokenBudgetService.name);
@@ -28,9 +20,6 @@ export class TokenBudgetService {
     return `ai:budget:${userId}:${today}`;
   }
 
-  /**
-   * Check if user has enough budget for estimated token usage.
-   */
   async canConsume(userId: string, estimatedTokens: number): Promise<boolean> {
     const key = this.getKey(userId);
     const used = await this.redis.get(key);
@@ -38,9 +27,6 @@ export class TokenBudgetService {
     return currentUsage + estimatedTokens <= this.dailyBudget;
   }
 
-  /**
-   * Record token consumption after LLM call.
-   */
   async consume(userId: string, tokensUsed: number): Promise<number> {
     const key = this.getKey(userId);
     const newTotal = await this.redis.incrBy(key, tokensUsed);
@@ -53,9 +39,6 @@ export class TokenBudgetService {
     return newTotal;
   }
 
-  /**
-   * Get remaining tokens for user today.
-   */
   async getRemaining(userId: string): Promise<number> {
     const key = this.getKey(userId);
     const used = await this.redis.get(key);
@@ -63,9 +46,6 @@ export class TokenBudgetService {
     return Math.max(0, this.dailyBudget - currentUsage);
   }
 
-  /**
-   * Get current usage for user today.
-   */
   async getUsage(userId: string): Promise<number> {
     const key = this.getKey(userId);
     const used = await this.redis.get(key);

@@ -1,17 +1,3 @@
-/**
- * @file smart-reply.engine.spec.ts
- *
- * Unit tests for SmartReplyEngine — 3 suggestion generation via LLM.
- *
- * Covers:
- *  - generateReplies() success path (3 suggestions returned)
- *  - generateReplies() trims to max 3 when LLM returns more
- *  - generateReplies() records metrics on success
- *  - generateReplies() returns empty array on LLM failure
- *  - generateReplies() returns empty array when JSON is malformed
- *  - generateReplies() passes typed conversation context to prompt builder
- */
-/* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
 import { SmartReplyEngine } from './smart-reply.engine';
 import { AiGatewayService } from '../ai-gateway/services/ai-gateway.service';
@@ -21,8 +7,6 @@ import type {
   AiSmartReplyRequestEvent,
   AiSmartReplyContextMessage,
 } from '@libs/contracts';
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function makeEvent(
   overrides: Partial<AiSmartReplyRequestEvent> = {},
@@ -65,8 +49,6 @@ const CTX: AiSmartReplyContextMessage[] = [
   { role: 'me', body: 'Tớ ổn' },
 ];
 
-// ── Tests ────────────────────────────────────────────────────────────────────
-
 describe('SmartReplyEngine', () => {
   let engine: SmartReplyEngine;
   let gateway: jest.Mocked<AiGatewayService>;
@@ -87,8 +69,6 @@ describe('SmartReplyEngine', () => {
 
     engine = module.get(SmartReplyEngine);
   });
-
-  // ── Success ───────────────────────────────────────────────────────
 
   describe('generateReplies() — success', () => {
     it('returns 3 suggestions from LLM response', async () => {
@@ -152,7 +132,7 @@ describe('SmartReplyEngine', () => {
 
       const result = await engine.generateReplies(makeEvent());
 
-      expect(result.tokens_used).toBe(120); // tokensIn=80 + tokensOut=40
+      expect(result.tokens_used).toBe(120);
     });
 
     it('passes typed context messages to prompt builder with correct role labels', async () => {
@@ -168,8 +148,6 @@ describe('SmartReplyEngine', () => {
       expect(userContent).toContain('Bạn: Tớ ổn');
     });
   });
-
-  // ── Failure / fallback ────────────────────────────────────────────
 
   describe('generateReplies() — failure fallback', () => {
     it('returns empty suggestions when LLM throws', async () => {

@@ -243,6 +243,31 @@ describe('PromptBuilderService', () => {
     });
   });
 
+  describe('buildSummaryUpdatePrompt', () => {
+    it('returns 2 messages: system + user', () => {
+      const result = builder.buildSummaryUpdatePrompt('Old summary.', ['New msg']);
+      expect(result).toHaveLength(2);
+      expect(result[0].role).toBe('system');
+      expect(result[1].role).toBe('user');
+    });
+
+    it('includes previous summary in user message', () => {
+      const result = builder.buildSummaryUpdatePrompt('Old summary.', ['New msg']);
+      expect(result[1].content).toContain('Old summary.');
+      expect(result[1].content).toContain('New msg');
+    });
+
+    it('system prompt mentions updating existing summary', () => {
+      const result = builder.buildSummaryUpdatePrompt('Old.', ['New.']);
+      expect(result[0].content.toLowerCase()).toContain('updating');
+    });
+
+    it('joins multiple new messages with newline', () => {
+      const result = builder.buildSummaryUpdatePrompt('Old.', ['Msg A', 'Msg B']);
+      expect(result[1].content).toContain('Msg A\nMsg B');
+    });
+  });
+
   describe('buildEntityInfoPrompt', () => {
     it('returns exactly 2 messages: system + user', () => {
       const result = builder.buildEntityInfoPrompt('Telegram', 'tool', 'vi');

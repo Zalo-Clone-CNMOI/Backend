@@ -121,6 +121,32 @@ Respond ONLY with the JSON object.`,
     ];
   }
 
+  buildSummaryUpdatePrompt(
+    previousSummary: string,
+    newMessages: string[],
+  ): LlmChatMessage[] {
+    return [
+      {
+        role: 'system',
+        content: `${APP_CONTEXT}
+You are updating an existing conversation summary with newly added messages.
+${LANGUAGE_RULE}
+
+Integrate the new messages into the existing summary. Keep the result under 200 words.
+Preserve any action items or decisions from the previous summary.
+
+Return a JSON object with:
+- "summary": string (the updated summary)
+
+Respond ONLY with the JSON object.`,
+      },
+      {
+        role: 'user',
+        content: `Previous summary:\n${previousSummary}\n\nNew messages:\n${newMessages.join('\n')}`,
+      },
+    ];
+  }
+
   buildTranslationPrompt(
     text: string,
     sourceLanguage: string | undefined,

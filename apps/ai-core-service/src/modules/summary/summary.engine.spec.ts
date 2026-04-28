@@ -239,7 +239,9 @@ describe('SummaryEngine', () => {
     it('handles plain-text LLM response (non-JSON)', async () => {
       mockRedis.get.mockResolvedValue(null);
       mockRedis.setEx.mockResolvedValue(undefined);
-      mockGateway.complete.mockResolvedValue(llmResult('A plain text summary.'));
+      mockGateway.complete.mockResolvedValue(
+        llmResult('A plain text summary.'),
+      );
 
       const ev = makeEvent();
       const result = await engine.summarize(ev, ev.messages);
@@ -352,7 +354,11 @@ describe('SummaryEngine', () => {
       mockRedis.get.mockResolvedValue(null);
       mockGateway.complete.mockResolvedValue({
         content: '{"summary":"Team discussed project."}',
-        tokensIn: 200, tokensOut: 50, model: 'gpt-4o-mini', provider: 'openai', latencyMs: 300,
+        tokensIn: 200,
+        tokensOut: 50,
+        model: 'gpt-4o-mini',
+        provider: 'openai',
+        latencyMs: 300,
       });
     });
 
@@ -365,14 +371,25 @@ describe('SummaryEngine', () => {
 
       const result = await engine.summarize(event, []);
 
-      expect(mockMessageRepo.getAllMessages).toHaveBeenCalledWith('conv-1', 100);
+      expect(mockMessageRepo.getAllMessages).toHaveBeenCalledWith(
+        'conv-1',
+        100,
+      );
       // reversed from DESC → oldest first
-      expect(mockPromptBuilder.buildSummaryPrompt).toHaveBeenCalledWith(['First', 'Second', 'Third']);
+      expect(mockPromptBuilder.buildSummaryPrompt).toHaveBeenCalledWith([
+        'First',
+        'Second',
+        'Third',
+      ]);
       expect(result.summary).toBe('Team discussed project.');
     });
 
     it('uses event.messages directly when non-empty (no ScyllaDB call)', async () => {
-      const eventWithMessages = { ...event, messages: ['Hello', 'World'], message_ids: ['m1', 'm2'] };
+      const eventWithMessages = {
+        ...event,
+        messages: ['Hello', 'World'],
+        message_ids: ['m1', 'm2'],
+      };
 
       await engine.summarize(eventWithMessages, eventWithMessages.messages);
 
@@ -389,7 +406,9 @@ describe('SummaryEngine', () => {
     });
 
     it('returns errorSummaryResult when ScyllaDB throws and no cache exists', async () => {
-      mockMessageRepo.getAllMessages.mockRejectedValue(new Error('ScyllaDB unavailable'));
+      mockMessageRepo.getAllMessages.mockRejectedValue(
+        new Error('ScyllaDB unavailable'),
+      );
 
       const result = await engine.summarize(event, []);
 
@@ -403,12 +422,18 @@ describe('SummaryEngine', () => {
       const cachedPayload = JSON.stringify({
         conversation_id: 'conv-1',
         summary: 'Prior summary.',
-        message_range: { from_message_id: 'msg-1', to_message_id: 'msg-3', count: 3 },
+        message_range: {
+          from_message_id: 'msg-1',
+          to_message_id: 'msg-3',
+          count: 3,
+        },
         provider: 'openai',
         tokens_used: 100,
       });
       mockRedis.get.mockResolvedValue(cachedPayload);
-      mockMessageRepo.getAllMessages.mockRejectedValue(new Error('ScyllaDB unavailable'));
+      mockMessageRepo.getAllMessages.mockRejectedValue(
+        new Error('ScyllaDB unavailable'),
+      );
 
       const result = await engine.summarize(event, []);
 
@@ -422,7 +447,11 @@ describe('SummaryEngine', () => {
     const cachedPayload = JSON.stringify({
       conversation_id: 'conv-1',
       summary: 'Team discussed deadline.',
-      message_range: { from_message_id: 'msg-1', to_message_id: 'msg-5', count: 5 },
+      message_range: {
+        from_message_id: 'msg-1',
+        to_message_id: 'msg-5',
+        count: 5,
+      },
       provider: 'openai',
       tokens_used: 150,
     });
@@ -438,7 +467,11 @@ describe('SummaryEngine', () => {
     beforeEach(() => {
       mockGateway.complete.mockResolvedValue({
         content: '{"summary":"Updated summary."}',
-        tokensIn: 180, tokensOut: 40, model: 'gpt-4o-mini', provider: 'openai', latencyMs: 250,
+        tokensIn: 180,
+        tokensOut: 40,
+        model: 'gpt-4o-mini',
+        provider: 'openai',
+        latencyMs: 250,
       });
     });
 
@@ -479,7 +512,12 @@ describe('SummaryEngine', () => {
     it('skips deleted messages in incremental new messages', async () => {
       mockRedis.get.mockResolvedValue(cachedPayload);
       mockMessageRepo.getAllMessages.mockResolvedValue([
-        { message_id: 'msg-9', body: 'Deleted', deleted_at: 999, created_at: 900 },
+        {
+          message_id: 'msg-9',
+          body: 'Deleted',
+          deleted_at: 999,
+          created_at: 900,
+        },
         { message_id: 'msg-8', body: 'Real msg', created_at: 800 },
         { message_id: 'msg-7', body: 'Another', created_at: 700 },
         { message_id: 'msg-6', body: 'Third new', created_at: 600 },
@@ -489,7 +527,8 @@ describe('SummaryEngine', () => {
 
       await engine.summarize(event, []);
 
-      const [, newMsgs] = mockPromptBuilder.buildSummaryUpdatePrompt.mock.calls[0] as [string, string[]];
+      const [, newMsgs] = mockPromptBuilder.buildSummaryUpdatePrompt.mock
+        .calls[0] as [string, string[]];
       expect(newMsgs).toHaveLength(3); // 3 non-deleted messages above anchor
       expect(newMsgs).toContain('Real msg');
       expect(newMsgs).not.toContain('Deleted');
@@ -540,7 +579,10 @@ describe('SummaryEngine', () => {
       mockPromptBuilder.buildSummaryUpdatePrompt.mockReturnValue([]);
       mockRedis.setEx.mockResolvedValue(undefined);
 
-      const result = await engine.summarize({ ...event, trace_id: 'trace-xyz' }, []);
+      const result = await engine.summarize(
+        { ...event, trace_id: 'trace-xyz' },
+        [],
+      );
 
       expect(result.trace_id).toBe('trace-xyz');
     });
@@ -556,7 +598,10 @@ describe('SummaryEngine', () => {
       mockPromptBuilder.buildSummaryUpdatePrompt.mockReturnValue([]);
       mockGateway.complete.mockRejectedValue(new Error('timeout'));
 
-      const result = await engine.summarize({ ...event, trace_id: 'trace-abc' }, []);
+      const result = await engine.summarize(
+        { ...event, trace_id: 'trace-abc' },
+        [],
+      );
 
       expect(result.trace_id).toBe('trace-abc');
       expect(result.cached).toBe(true);

@@ -256,10 +256,16 @@ describe('SmartReplyEngine', () => {
       });
 
       await engine.generateReplies(
-        makeEvent({ conversation_id: 'conv-1', user_id: 'user-1', context_messages: [] }),
+        makeEvent({
+          conversation_id: 'conv-1',
+          user_id: 'user-1',
+          context_messages: [],
+        }),
       );
 
-      expect(mockMessageRepo.getMessages).toHaveBeenCalledWith('conv-1', { limit: 10 });
+      expect(mockMessageRepo.getMessages).toHaveBeenCalledWith('conv-1', {
+        limit: 10,
+      });
       expect(gateway.complete).toHaveBeenCalled();
     });
 
@@ -302,7 +308,11 @@ describe('SmartReplyEngine', () => {
       );
 
       await engine.generateReplies(
-        makeEvent({ conversation_id: 'conv-1', user_id: 'user-1', context_messages: [] }),
+        makeEvent({
+          conversation_id: 'conv-1',
+          user_id: 'user-1',
+          context_messages: [],
+        }),
       );
 
       expect(promptBuilderSpy).toHaveBeenCalled();
@@ -348,7 +358,11 @@ describe('SmartReplyEngine', () => {
       );
 
       await engine.generateReplies(
-        makeEvent({ conversation_id: 'conv-1', user_id: 'user-1', context_messages: [] }),
+        makeEvent({
+          conversation_id: 'conv-1',
+          user_id: 'user-1',
+          context_messages: [],
+        }),
       );
 
       const contextArg: AiSmartReplyContextMessage[] =
@@ -372,11 +386,17 @@ describe('SmartReplyEngine', () => {
     });
 
     it('falls back to empty context when ScyllaDB throws', async () => {
-      gateway.complete.mockResolvedValue(llmResult(['Try again', 'Sure', 'OK']));
+      gateway.complete.mockResolvedValue(
+        llmResult(['Try again', 'Sure', 'OK']),
+      );
       mockMessageRepo.getMessages.mockRejectedValue(new Error('timeout'));
 
       const result = await engine.generateReplies(
-        makeEvent({ conversation_id: 'conv-1', user_id: 'user-1', context_messages: [] }),
+        makeEvent({
+          conversation_id: 'conv-1',
+          user_id: 'user-1',
+          context_messages: [],
+        }),
       );
 
       // LLM must still be called (with empty context as fallback), result has suggestions

@@ -92,7 +92,10 @@ describe('OpenAiProvider.embedBatch', () => {
       });
       injectMockClient(provider, mockCreate);
 
-      const results = await provider.embedBatch(['x'], 'text-embedding-3-large');
+      const results = await provider.embedBatch(
+        ['x'],
+        'text-embedding-3-large',
+      );
 
       expect(results[0].model).toBe('text-embedding-3-large');
     });
@@ -202,7 +205,9 @@ describe('OpenAiProvider.embedBatch', () => {
   describe('error handling', () => {
     it('throws a wrapped error when the OpenAI API fails', async () => {
       const provider = await buildProvider();
-      const mockCreate = jest.fn().mockRejectedValue(new Error('rate limit exceeded'));
+      const mockCreate = jest
+        .fn()
+        .mockRejectedValue(new Error('rate limit exceeded'));
       injectMockClient(provider, mockCreate);
 
       await expect(provider.embedBatch(['text'])).rejects.toThrow(

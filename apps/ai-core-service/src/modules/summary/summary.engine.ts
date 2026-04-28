@@ -79,9 +79,39 @@ export class SummaryEngine {
       const toId = cached.message_range.to_message_id;
       const cutIdx = allDbMessages.findIndex((m) => m.message_id === toId);
 
+      if (cutIdx === -1) {
+        const summaryLines = allDbMessages
+          .filter((m) => !m.deleted_at && m.body)
+          .reverse()
+          .map((m) => m.body);
+
+        if (summaryLines.length === 0) {
+          // DB returned nothing new → treat as no new messages, return cached
+          return {
+            ...cached,
+            provider: toAiProviderType(cached.provider),
+            user_id: event.user_id,
+            cached: true,
+            processed_at: Date.now(),
+            trace_id: event.trace_id,
+          };
+        }
+
+        // Anchor not in last MESSAGES_FETCH_LIMIT messages → conversation outpaced the window;
+        // fall back to full re-summarization to avoid silently returning stale content.
+        this.logger.warn(
+          `Cache anchor ${toId} not found in last ${MESSAGES_FETCH_LIMIT} messages for ${event.conversation_id} — falling back to full summarization`,
+        );
+        const dbMsgIds = allDbMessages
+          .filter((m) => !m.deleted_at && m.body)
+          .map((m) => m.message_id);
+        const fromId = dbMsgIds[dbMsgIds.length - 1] ?? 'unknown';
+        const newToId = dbMsgIds[0] ?? 'unknown';
+        return this.runFullSummary(event, summaryLines, fromId, newToId, cacheKey);
+      }
+
       // Messages at indices 0..cutIdx-1 are newer than the cached summary (DESC order)
-      const newRawMessages =
-        cutIdx === -1 ? [] : allDbMessages.slice(0, cutIdx);
+      const newRawMessages = allDbMessages.slice(0, cutIdx);
 
       const newMessages = newRawMessages
         .filter((m) => !m.deleted_at && m.body)

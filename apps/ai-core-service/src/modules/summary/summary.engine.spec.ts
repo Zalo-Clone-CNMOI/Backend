@@ -465,6 +465,24 @@ describe('SummaryEngine', () => {
       expect(newMsgs).toContain('Real msg');
     });
 
+    it('falls back to full summarization when cache anchor is not found in DB window', async () => {
+      mockRedis.get.mockResolvedValue(cachedPayload);
+      // anchor msg-5 is NOT in this batch (conversation outpaced the window)
+      mockMessageRepo.getAllMessages.mockResolvedValue([
+        { message_id: 'msg-103', body: 'Very new C', created_at: 1030, deleted_at: null },
+        { message_id: 'msg-102', body: 'Very new B', created_at: 1020, deleted_at: null },
+        { message_id: 'msg-101', body: 'Very new A', created_at: 1010, deleted_at: null },
+      ]);
+      mockRedis.setEx.mockResolvedValue(undefined);
+
+      const result = await engine.summarize(event, []);
+
+      // Should have called full summary prompt, not incremental
+      expect(mockPromptBuilder.buildSummaryPrompt).toHaveBeenCalled();
+      expect(mockPromptBuilder.buildSummaryUpdatePrompt).not.toHaveBeenCalled();
+      expect(result.cached).toBe(false);
+    });
+
     it('falls back to cached result when incremental LLM call fails', async () => {
       mockRedis.get.mockResolvedValue(cachedPayload);
       mockMessageRepo.getAllMessages.mockResolvedValue([

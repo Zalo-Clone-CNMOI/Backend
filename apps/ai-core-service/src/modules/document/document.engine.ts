@@ -94,14 +94,12 @@ export class DocumentEngine {
         model: this.embeddingModel,
       });
 
-      let totalTokens = 0;
-
       const embeddingResults = await this.openaiProvider.embedBatch(
         chunks,
         this.embeddingModel,
       );
 
-      totalTokens = embeddingResults.reduce((sum, r) => sum + r.tokensUsed, 0);
+      const totalTokens = embeddingResults.reduce((sum, r) => sum + r.tokensUsed, 0);
 
       const chunkEntities: DocumentChunk[] = embeddingResults.map(
         (result, i) =>

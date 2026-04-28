@@ -3,6 +3,7 @@ import { SmartReplyEngine } from './smart-reply.engine';
 import { AiGatewayService } from '../ai-gateway/services/ai-gateway.service';
 import { PromptBuilderService } from '../ai-gateway/services/prompt-builder.service';
 import { AiMetricsService } from '../ai-gateway/services/ai-metrics.service';
+import { MessageRepository } from '@libs/scylla';
 import type {
   AiSmartReplyRequestEvent,
   AiSmartReplyContextMessage,
@@ -49,6 +50,8 @@ const CTX: AiSmartReplyContextMessage[] = [
   { role: 'me', body: 'Tớ ổn' },
 ];
 
+const mockMessageRepo = { getMessages: jest.fn() };
+
 describe('SmartReplyEngine', () => {
   let engine: SmartReplyEngine;
   let gateway: jest.Mocked<AiGatewayService>;
@@ -58,12 +61,23 @@ describe('SmartReplyEngine', () => {
     gateway = makeGateway();
     metrics = makeMetrics();
 
+    // Clear call history and set a default stub: return empty context so existing
+    // tests that don't care about context still pass (ScyllaDB returns nothing →
+    // empty context). Must clear BEFORE setting the resolved value.
+    mockMessageRepo.getMessages.mockClear();
+    mockMessageRepo.getMessages.mockResolvedValue({
+      items: [],
+      next_cursor: null,
+      has_more: false,
+    });
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SmartReplyEngine,
         { provide: AiGatewayService, useValue: gateway },
         { provide: PromptBuilderService, useClass: PromptBuilderService },
         { provide: AiMetricsService, useValue: metrics },
+        { provide: MessageRepository, useValue: mockMessageRepo },
       ],
     }).compile();
 
@@ -214,6 +228,160 @@ describe('SmartReplyEngine', () => {
 
       expect(result.conversation_id).toBe('c-abc');
       expect(result.user_id).toBe('u-abc');
+    });
+  });
+
+  describe('context fetching', () => {
+    it('fetches context from ScyllaDB when context_messages is empty', async () => {
+      gateway.complete.mockResolvedValue(llmResult(['ok']));
+      mockMessageRepo.getMessages.mockResolvedValue({
+        items: [
+          {
+            message_id: 'msg-2',
+            conversation_id: 'conv-1',
+            sender_id: 'other-user',
+            body: 'Hey there',
+            created_at: 2000,
+          },
+          {
+            message_id: 'msg-1',
+            conversation_id: 'conv-1',
+            sender_id: 'user-1',
+            body: 'Hello',
+            created_at: 1000,
+          },
+        ],
+        next_cursor: null,
+        has_more: false,
+      });
+
+      await engine.generateReplies(
+        makeEvent({ conversation_id: 'conv-1', user_id: 'user-1', context_messages: [] }),
+      );
+
+      expect(mockMessageRepo.getMessages).toHaveBeenCalledWith('conv-1', { limit: 10 });
+      expect(gateway.complete).toHaveBeenCalled();
+    });
+
+    it('maps sender_id === user_id to role "me" and others to "them"', async () => {
+      gateway.complete.mockResolvedValue(llmResult(['ok']));
+
+      // DESC order from ScyllaDB: newest first
+      mockMessageRepo.getMessages.mockResolvedValue({
+        items: [
+          {
+            message_id: 'msg-3',
+            conversation_id: 'conv-1',
+            sender_id: 'other-user',
+            body: 'See you!',
+            created_at: 3000,
+          },
+          {
+            message_id: 'msg-2',
+            conversation_id: 'conv-1',
+            sender_id: 'user-1',
+            body: 'Goodbye',
+            created_at: 2000,
+          },
+          {
+            message_id: 'msg-1',
+            conversation_id: 'conv-1',
+            sender_id: 'other-user',
+            body: 'Hi',
+            created_at: 1000,
+          },
+        ],
+        next_cursor: null,
+        has_more: false,
+      });
+
+      // Spy on promptBuilder to capture what context arg was passed
+      const promptBuilderSpy = jest.spyOn(
+        engine['promptBuilder'],
+        'buildSmartReplyPrompt',
+      );
+
+      await engine.generateReplies(
+        makeEvent({ conversation_id: 'conv-1', user_id: 'user-1', context_messages: [] }),
+      );
+
+      expect(promptBuilderSpy).toHaveBeenCalled();
+      const contextArg: AiSmartReplyContextMessage[] =
+        promptBuilderSpy.mock.calls[0][1];
+
+      // After reversing DESC results: oldest first → msg-1, msg-2, msg-3
+      expect(contextArg).toEqual([
+        { role: 'them', body: 'Hi' },
+        { role: 'me', body: 'Goodbye' },
+        { role: 'them', body: 'See you!' },
+      ]);
+    });
+
+    it('skips soft-deleted messages', async () => {
+      gateway.complete.mockResolvedValue(llmResult(['ok']));
+
+      mockMessageRepo.getMessages.mockResolvedValue({
+        items: [
+          {
+            message_id: 'msg-2',
+            conversation_id: 'conv-1',
+            sender_id: 'other-user',
+            body: '',
+            created_at: 2000,
+            deleted_at: 12345,
+          },
+          {
+            message_id: 'msg-1',
+            conversation_id: 'conv-1',
+            sender_id: 'user-1',
+            body: 'Hello',
+            created_at: 1000,
+          },
+        ],
+        next_cursor: null,
+        has_more: false,
+      });
+
+      const promptBuilderSpy = jest.spyOn(
+        engine['promptBuilder'],
+        'buildSmartReplyPrompt',
+      );
+
+      await engine.generateReplies(
+        makeEvent({ conversation_id: 'conv-1', user_id: 'user-1', context_messages: [] }),
+      );
+
+      const contextArg: AiSmartReplyContextMessage[] =
+        promptBuilderSpy.mock.calls[0][1];
+
+      // Only msg-1 survives (msg-2 was deleted)
+      expect(contextArg).toHaveLength(1);
+      expect(contextArg[0]).toEqual({ role: 'me', body: 'Hello' });
+    });
+
+    it('uses provided context_messages without hitting ScyllaDB', async () => {
+      gateway.complete.mockResolvedValue(llmResult(['ok']));
+
+      await engine.generateReplies(
+        makeEvent({
+          context_messages: [{ role: 'them', body: 'Pre-fetched' }],
+        }),
+      );
+
+      expect(mockMessageRepo.getMessages).not.toHaveBeenCalled();
+    });
+
+    it('falls back to empty context when ScyllaDB throws', async () => {
+      gateway.complete.mockResolvedValue(llmResult(['Try again', 'Sure', 'OK']));
+      mockMessageRepo.getMessages.mockRejectedValue(new Error('timeout'));
+
+      const result = await engine.generateReplies(
+        makeEvent({ conversation_id: 'conv-1', user_id: 'user-1', context_messages: [] }),
+      );
+
+      // LLM must still be called (with empty context as fallback), result has suggestions
+      expect(gateway.complete).toHaveBeenCalled();
+      expect(result.suggestions).toEqual(['Try again', 'Sure', 'OK']);
     });
   });
 });

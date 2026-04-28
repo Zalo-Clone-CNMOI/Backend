@@ -40,16 +40,18 @@ function makeEmbeddingResult(
   };
 }
 
-function buildEngine(overrides: {
-  gateway?: Partial<AiGatewayService>;
-  promptBuilder?: Partial<PromptBuilderService>;
-  aiMetrics?: Partial<AiMetricsService>;
-  openaiProvider?: Partial<OpenAiProvider>;
-  chunker?: Partial<TextChunkerService>;
-  docMetaRepo?: Partial<Repository<DocumentMetadata>>;
-  chunkRepo?: Partial<Repository<DocumentChunk>>;
-  config?: Record<string, unknown>;
-} = {}) {
+function buildEngine(
+  overrides: {
+    gateway?: Partial<AiGatewayService>;
+    promptBuilder?: Partial<PromptBuilderService>;
+    aiMetrics?: Partial<AiMetricsService>;
+    openaiProvider?: Partial<OpenAiProvider>;
+    chunker?: Partial<TextChunkerService>;
+    docMetaRepo?: Partial<Repository<DocumentMetadata>>;
+    chunkRepo?: Partial<Repository<DocumentChunk>>;
+    config?: Record<string, unknown>;
+  } = {},
+) {
   const config = {
     aiMaxDocumentSizeMb: 10,
     aiMaxDocumentPages: 200,
@@ -84,14 +86,14 @@ function buildEngine(overrides: {
   } as unknown as TextChunkerService;
 
   const docMetaRepo = {
-    create: jest.fn().mockImplementation((data) => data),
+    create: jest.fn().mockImplementation((data: unknown) => data),
     save: jest.fn().mockResolvedValue(undefined),
     update: jest.fn().mockResolvedValue({ affected: 1 }),
     ...overrides.docMetaRepo,
   } as unknown as Repository<DocumentMetadata>;
 
   const chunkRepo = {
-    create: jest.fn().mockImplementation((data) => data),
+    create: jest.fn().mockImplementation((data: unknown) => data),
     save: jest.fn().mockResolvedValue(undefined),
     createQueryBuilder: jest.fn(),
     ...overrides.chunkRepo,
@@ -114,10 +116,12 @@ function buildEngine(overrides: {
 describe('DocumentEngine.processDocument', () => {
   describe('batch embedding (happy path)', () => {
     it('calls embedBatch exactly once (not embed per chunk)', async () => {
-      const embedBatch = jest.fn().mockResolvedValue([
-        makeEmbeddingResult([0.1, 0.2], 10),
-        makeEmbeddingResult([0.3, 0.4], 12),
-      ]);
+      const embedBatch = jest
+        .fn()
+        .mockResolvedValue([
+          makeEmbeddingResult([0.1, 0.2], 10),
+          makeEmbeddingResult([0.3, 0.4], 12),
+        ]);
       const embed = jest.fn();
 
       const engine = buildEngine({ openaiProvider: { embedBatch, embed } });
@@ -143,10 +147,7 @@ describe('DocumentEngine.processDocument', () => {
 
       await engine.processDocument(makeUploadEvent(), 'text');
 
-      expect(embedBatch).toHaveBeenCalledWith(
-        chunks,
-        'text-embedding-3-small',
-      );
+      expect(embedBatch).toHaveBeenCalledWith(chunks, 'text-embedding-3-small');
     });
 
     it('maps embedBatch results to chunkEntities preserving order and content', async () => {
@@ -158,7 +159,7 @@ describe('DocumentEngine.processDocument', () => {
       const embedBatch = jest.fn().mockResolvedValue(embeddingResults);
       const chunkRepoCreate = jest
         .fn()
-        .mockImplementation((data) => ({ ...data }));
+        .mockImplementation((data: Record<string, unknown>) => ({ ...data }));
       const chunkRepoSave = jest.fn().mockResolvedValue(undefined);
 
       const engine = buildEngine({
@@ -172,19 +173,24 @@ describe('DocumentEngine.processDocument', () => {
       // Two chunk entities should be created, one per chunk
       expect(chunkRepoCreate).toHaveBeenCalledTimes(2);
 
-      const [call0, call1] = chunkRepoCreate.mock.calls;
-      expect(call0[0]).toMatchObject({
-        chunkIndex: 0,
-        content: 'first chunk',
-        embedding: JSON.stringify([1, 2]),
-        tokenCount: 15,
-      });
-      expect(call1[0]).toMatchObject({
-        chunkIndex: 1,
-        content: 'second chunk',
-        embedding: JSON.stringify([3, 4]),
-        tokenCount: 20,
-      });
+      expect(chunkRepoCreate).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          chunkIndex: 0,
+          content: 'first chunk',
+          embedding: JSON.stringify([1, 2]),
+          tokenCount: 15,
+        }),
+      );
+      expect(chunkRepoCreate).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          chunkIndex: 1,
+          content: 'second chunk',
+          embedding: JSON.stringify([3, 4]),
+          tokenCount: 20,
+        }),
+      );
     });
 
     it('sums tokensUsed from all embedBatch results as totalTokens', async () => {
@@ -201,7 +207,7 @@ describe('DocumentEngine.processDocument', () => {
         chunker: { chunk: jest.fn().mockResolvedValue(chunks) },
         openaiProvider: { embedBatch, embed: jest.fn() },
         docMetaRepo: {
-          create: jest.fn().mockImplementation((d) => d),
+          create: jest.fn().mockImplementation((d: unknown) => d),
           save: jest.fn().mockResolvedValue(undefined),
           update: docMetaRepoUpdate,
         },
@@ -217,10 +223,12 @@ describe('DocumentEngine.processDocument', () => {
     });
 
     it('returns a completed AiDocumentProcessedEvent with correct metadata', async () => {
-      const embedBatch = jest.fn().mockResolvedValue([
-        makeEmbeddingResult([0.5], 5),
-        makeEmbeddingResult([0.6], 5),
-      ]);
+      const embedBatch = jest
+        .fn()
+        .mockResolvedValue([
+          makeEmbeddingResult([0.5], 5),
+          makeEmbeddingResult([0.6], 5),
+        ]);
       const engine = buildEngine({
         openaiProvider: { embedBatch, embed: jest.fn() },
       });
@@ -244,7 +252,7 @@ describe('DocumentEngine.processDocument', () => {
         openaiProvider: { embedBatch, embed: jest.fn() },
         aiMetrics: { recordRequest: aiMetricsRecordRequest },
         docMetaRepo: {
-          create: jest.fn().mockImplementation((d) => d),
+          create: jest.fn().mockImplementation((d: unknown) => d),
           save: jest.fn().mockResolvedValue(undefined),
           update: docMetaRepoUpdate,
         },

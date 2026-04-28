@@ -80,13 +80,8 @@ export class SummaryEngine {
       const cutIdx = allDbMessages.findIndex((m) => m.message_id === toId);
 
       if (cutIdx === -1) {
-        const summaryLines = allDbMessages
-          .filter((m) => !m.deleted_at && m.body)
-          .reverse()
-          .map((m) => m.body);
-
-        if (summaryLines.length === 0) {
-          // DB returned nothing new → treat as no new messages, return cached
+        if (allDbMessages.length === 0) {
+          // DB returned nothing → no new content; return cached unchanged
           return {
             ...cached,
             provider: toAiProviderType(cached.provider),
@@ -95,6 +90,16 @@ export class SummaryEngine {
             processed_at: Date.now(),
             trace_id: event.trace_id,
           };
+        }
+
+        const summaryLines = allDbMessages
+          .filter((m) => !m.deleted_at && m.body)
+          .reverse()
+          .map((m) => m.body);
+
+        if (summaryLines.length === 0) {
+          // All messages in the DB window are soft-deleted → nothing summarizable
+          return this.emptySummaryResult(event);
         }
 
         // Anchor not in last MESSAGES_FETCH_LIMIT messages → conversation outpaced the window;
@@ -151,6 +156,12 @@ export class SummaryEngine {
       allDbMessages
         ?.filter((m) => !m.deleted_at && m.body)
         .map((m) => m.message_id) ?? [];
+
+    if (messages.length > 0 && (!event.message_ids || event.message_ids.length === 0)) {
+      this.logger.warn(
+        `summarize called with messages but no message_ids for ${event.conversation_id} — message_range will use 'unknown' IDs`,
+      );
+    }
 
     // allDbMessages is DESC, so after filter+reverse: index 0=oldest, last=newest
     const fromId = event.message_ids?.[0] ?? dbMsgIds[dbMsgIds.length - 1] ?? 'unknown';

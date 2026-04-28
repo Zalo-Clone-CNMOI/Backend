@@ -358,9 +358,9 @@ describe('SummaryEngine', () => {
 
     it('fetches messages from ScyllaDB when event.messages is empty', async () => {
       mockMessageRepo.getAllMessages.mockResolvedValue([
-        { message_id: 'msg-3', body: 'Third', created_at: 300, deleted_at: null },
-        { message_id: 'msg-2', body: 'Second', created_at: 200, deleted_at: null },
-        { message_id: 'msg-1', body: 'First', created_at: 100, deleted_at: null },
+        { message_id: 'msg-3', body: 'Third', created_at: 300 },
+        { message_id: 'msg-2', body: 'Second', created_at: 200 },
+        { message_id: 'msg-1', body: 'First', created_at: 100 },
       ]);
 
       const result = await engine.summarize(event, []);
@@ -416,8 +416,8 @@ describe('SummaryEngine', () => {
     it('returns cached summary when no new messages (< 3 new)', async () => {
       mockRedis.get.mockResolvedValue(cachedPayload);
       mockMessageRepo.getAllMessages.mockResolvedValue([
-        { message_id: 'msg-6', body: 'One new', created_at: 600, deleted_at: null },
-        { message_id: 'msg-5', body: 'Cached last', created_at: 500, deleted_at: null },
+        { message_id: 'msg-6', body: 'One new', created_at: 600 },
+        { message_id: 'msg-5', body: 'Cached last', created_at: 500 },
       ]);
 
       const result = await engine.summarize(event, []);
@@ -430,10 +430,10 @@ describe('SummaryEngine', () => {
     it('runs incremental update when >= 3 new messages', async () => {
       mockRedis.get.mockResolvedValue(cachedPayload);
       mockMessageRepo.getAllMessages.mockResolvedValue([
-        { message_id: 'msg-8', body: 'Newest', created_at: 800, deleted_at: null },
-        { message_id: 'msg-7', body: 'Seventh', created_at: 700, deleted_at: null },
-        { message_id: 'msg-6', body: 'Sixth', created_at: 600, deleted_at: null },
-        { message_id: 'msg-5', body: 'Cached last', created_at: 500, deleted_at: null },
+        { message_id: 'msg-8', body: 'Newest', created_at: 800 },
+        { message_id: 'msg-7', body: 'Seventh', created_at: 700 },
+        { message_id: 'msg-6', body: 'Sixth', created_at: 600 },
+        { message_id: 'msg-5', body: 'Cached last', created_at: 500 },
       ]);
       mockPromptBuilder.buildSummaryUpdatePrompt.mockReturnValue([]);
 
@@ -450,28 +450,29 @@ describe('SummaryEngine', () => {
     it('skips deleted messages in incremental new messages', async () => {
       mockRedis.get.mockResolvedValue(cachedPayload);
       mockMessageRepo.getAllMessages.mockResolvedValue([
-        { message_id: 'msg-9', body: '', deleted_at: 999, created_at: 900 },
-        { message_id: 'msg-8', body: 'Real msg', created_at: 800, deleted_at: null },
-        { message_id: 'msg-7', body: 'Another', created_at: 700, deleted_at: null },
-        { message_id: 'msg-6', body: 'Third new', created_at: 600, deleted_at: null },
-        { message_id: 'msg-5', body: 'Cached last', created_at: 500, deleted_at: null },
+        { message_id: 'msg-9', body: 'Deleted', deleted_at: 999, created_at: 900 },
+        { message_id: 'msg-8', body: 'Real msg', created_at: 800 },
+        { message_id: 'msg-7', body: 'Another', created_at: 700 },
+        { message_id: 'msg-6', body: 'Third new', created_at: 600 },
+        { message_id: 'msg-5', body: 'Cached last', created_at: 500 },
       ]);
       mockPromptBuilder.buildSummaryUpdatePrompt.mockReturnValue([]);
 
       await engine.summarize(event, []);
 
       const [, newMsgs] = mockPromptBuilder.buildSummaryUpdatePrompt.mock.calls[0] as [string, string[]];
-      expect(newMsgs).not.toContain(''); // deleted msg body excluded
+      expect(newMsgs).toHaveLength(3); // 3 non-deleted messages above anchor
       expect(newMsgs).toContain('Real msg');
+      expect(newMsgs).not.toContain('Deleted');
     });
 
     it('falls back to full summarization when cache anchor is not found in DB window', async () => {
       mockRedis.get.mockResolvedValue(cachedPayload);
       // anchor msg-5 is NOT in this batch (conversation outpaced the window)
       mockMessageRepo.getAllMessages.mockResolvedValue([
-        { message_id: 'msg-103', body: 'Very new C', created_at: 1030, deleted_at: null },
-        { message_id: 'msg-102', body: 'Very new B', created_at: 1020, deleted_at: null },
-        { message_id: 'msg-101', body: 'Very new A', created_at: 1010, deleted_at: null },
+        { message_id: 'msg-103', body: 'Very new C', created_at: 1030 },
+        { message_id: 'msg-102', body: 'Very new B', created_at: 1020 },
+        { message_id: 'msg-101', body: 'Very new A', created_at: 1010 },
       ]);
       mockRedis.setEx.mockResolvedValue(undefined);
 
@@ -483,13 +484,61 @@ describe('SummaryEngine', () => {
       expect(result.cached).toBe(false);
     });
 
+    it('returns emptySummaryResult when all messages in DB window are deleted and anchor is missing', async () => {
+      mockRedis.get.mockResolvedValue(cachedPayload);
+      // anchor msg-5 not found; all visible messages are soft-deleted
+      mockMessageRepo.getAllMessages.mockResolvedValue([
+        { message_id: 'msg-8', body: 'Gone', deleted_at: 888, created_at: 800 },
+        { message_id: 'msg-7', body: 'Gone', deleted_at: 777, created_at: 700 },
+      ]);
+
+      const result = await engine.summarize(event, []);
+
+      expect(result.summary).toBe('No messages to summarize.');
+      expect(result.cached).toBe(false);
+      expect(mockGateway.complete).not.toHaveBeenCalled();
+    });
+
+    it('propagates trace_id in incremental success result', async () => {
+      mockRedis.get.mockResolvedValue(cachedPayload);
+      mockMessageRepo.getAllMessages.mockResolvedValue([
+        { message_id: 'msg-8', body: 'C', created_at: 800 },
+        { message_id: 'msg-7', body: 'B', created_at: 700 },
+        { message_id: 'msg-6', body: 'A', created_at: 600 },
+        { message_id: 'msg-5', body: 'Cached last', created_at: 500 },
+      ]);
+      mockPromptBuilder.buildSummaryUpdatePrompt.mockReturnValue([]);
+      mockRedis.setEx.mockResolvedValue(undefined);
+
+      const result = await engine.summarize({ ...event, trace_id: 'trace-xyz' }, []);
+
+      expect(result.trace_id).toBe('trace-xyz');
+    });
+
+    it('propagates trace_id when incremental LLM call fails and stale cache is returned', async () => {
+      mockRedis.get.mockResolvedValue(cachedPayload);
+      mockMessageRepo.getAllMessages.mockResolvedValue([
+        { message_id: 'msg-8', body: 'C', created_at: 800 },
+        { message_id: 'msg-7', body: 'B', created_at: 700 },
+        { message_id: 'msg-6', body: 'A', created_at: 600 },
+        { message_id: 'msg-5', body: 'Cached last', created_at: 500 },
+      ]);
+      mockPromptBuilder.buildSummaryUpdatePrompt.mockReturnValue([]);
+      mockGateway.complete.mockRejectedValue(new Error('timeout'));
+
+      const result = await engine.summarize({ ...event, trace_id: 'trace-abc' }, []);
+
+      expect(result.trace_id).toBe('trace-abc');
+      expect(result.cached).toBe(true);
+    });
+
     it('falls back to cached result when incremental LLM call fails', async () => {
       mockRedis.get.mockResolvedValue(cachedPayload);
       mockMessageRepo.getAllMessages.mockResolvedValue([
-        { message_id: 'msg-8', body: 'C', created_at: 800, deleted_at: null },
-        { message_id: 'msg-7', body: 'B', created_at: 700, deleted_at: null },
-        { message_id: 'msg-6', body: 'A', created_at: 600, deleted_at: null },
-        { message_id: 'msg-5', body: 'Cached last', created_at: 500, deleted_at: null },
+        { message_id: 'msg-8', body: 'C', created_at: 800 },
+        { message_id: 'msg-7', body: 'B', created_at: 700 },
+        { message_id: 'msg-6', body: 'A', created_at: 600 },
+        { message_id: 'msg-5', body: 'Cached last', created_at: 500 },
       ]);
       mockPromptBuilder.buildSummaryUpdatePrompt.mockReturnValue([]);
       mockGateway.complete.mockRejectedValue(new Error('LLM timeout'));

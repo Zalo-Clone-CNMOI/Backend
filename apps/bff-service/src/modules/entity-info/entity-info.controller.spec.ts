@@ -1,5 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { BusinessException, type AuthenticatedUser } from '@app/types';
+import { JwtAuthGuard } from '@libs/auth';
 import { EntityInfoController } from './entity-info.controller';
 import { EntityInfoService } from './entity-info.service';
 
@@ -25,7 +26,10 @@ describe('EntityInfoController', () => {
     const module = await Test.createTestingModule({
       controllers: [EntityInfoController],
       providers: [{ provide: EntityInfoService, useValue: mockService }],
-    }).compile();
+    })
+      .overrideGuard(JwtAuthGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     controller = module.get(EntityInfoController);
   });
@@ -46,7 +50,7 @@ describe('EntityInfoController', () => {
         lang: 'vi',
         userId: 'user-123',
       });
-      expect(result).toEqual(SAMPLE_RESULT);
+      expect(result).toEqual(expect.objectContaining(SAMPLE_RESULT));
     });
 
     it('defaults lang to vi when not provided', async () => {

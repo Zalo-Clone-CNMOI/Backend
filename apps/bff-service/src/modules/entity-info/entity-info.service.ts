@@ -4,7 +4,7 @@ import { CacheService } from '@libs/redis';
 import { AiCoreClientService } from '@app/clients';
 import type { AiEntityInfoResultEvent, EntityType } from '@libs/contracts';
 
-const CACHE_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
+const CACHE_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 @Injectable()
 export class EntityInfoService {

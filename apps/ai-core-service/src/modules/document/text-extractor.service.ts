@@ -1,4 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { DocumentExtractionError } from './document-extraction.error';
+import { UnsupportedDocumentFormatError } from './unsupported-document-format.error';
 
 const TEXT_MIME_TYPES = new Set([
   'text/plain',
@@ -8,9 +10,6 @@ const TEXT_MIME_TYPES = new Set([
 ]);
 
 const PDF_MIME = 'application/pdf';
-
-// Only DOCX (Office Open XML) — legacy `.doc` (application/msword) is not
-// supported by mammoth and would silently produce garbage.
 const DOCX_MIMES = new Set([
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ]);
@@ -20,35 +19,6 @@ const XLSX_MIMES = new Set([
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 ]);
 
-export class UnsupportedDocumentFormatError extends Error {
-  constructor(contentType: string) {
-    super(`Unsupported document format: ${contentType}`);
-    this.name = 'UnsupportedDocumentFormatError';
-  }
-}
-
-export class DocumentExtractionError extends Error {
-  constructor(format: string, cause: unknown) {
-    const message = cause instanceof Error ? cause.message : String(cause);
-    super(`Failed to extract ${format}: ${message}`, {
-      cause: cause instanceof Error ? cause : undefined,
-    });
-    this.name = 'DocumentExtractionError';
-  }
-}
-
-/**
- * Extracts plain text from uploaded document buffers.
- *
- * Supported formats:
- *   - text/plain, text/csv, text/markdown, application/json (utf-8 decode)
- *   - application/pdf (via pdf-parse)
- *   - DOCX only (via mammoth — legacy .doc binary is rejected as unsupported)
- *   - XLS/XLSX (via xlsx — converted to per-sheet CSV)
- *
- * Parser libraries are loaded via dynamic import so service startup is not
- * delayed for callers that never process binary documents.
- */
 @Injectable()
 export class TextExtractorService {
   private readonly logger = new Logger(TextExtractorService.name);
@@ -85,8 +55,10 @@ export class TextExtractorService {
         : null;
 
     if (pdfParseDefault) {
-      // pdf-parse v2.x default export function: pdfParse(buffer)
-      const result = await pdfParseDefault(buffer);
+      const parseFn = pdfParseDefault as unknown as (
+        b: Buffer,
+      ) => Promise<{ text?: string }>;
+      const result = await parseFn(buffer as unknown as Buffer);
       return (result?.text ?? '').trim();
     }
 
@@ -97,7 +69,6 @@ export class TextExtractorService {
           destroy: () => Promise<void>;
         };
       };
-      // Buffer extends Uint8Array in Node — pass directly, no copy.
       const parser = new PDFParse({ data: buffer });
       try {
         const result = await parser.getText();
@@ -116,24 +87,43 @@ export class TextExtractorService {
     return (typeof value === 'string' ? value : '').trim();
   }
 
-  /**
-   * Extract XLSX/XLS content as per-sheet CSV.
-   *
-   * Security note: xlsx@0.18.5 has CVE-2023-30533 (prototype pollution from
-   * crafted spreadsheets). Mitigations layered in this service:
-   *  - DocumentEngine enforces aiMaxDocumentSizeMb (default 10MB) before this runs
-   *  - File MIME type pre-check by caller
-   *  - Output is plain CSV string, not deserialised back into JS objects
-   * Long-term fix: switch to a maintained alternative (e.g. exceljs) — tracked.
-   */
   private async extractXlsx(buffer: Buffer): Promise<string> {
-    const XLSX = await import('xlsx');
-    const wb = XLSX.read(buffer, { type: 'buffer' });
-    const sheets = wb.SheetNames.map((name) => {
-      const sheet = wb.Sheets[name];
-      const csv = XLSX.utils.sheet_to_csv(sheet);
-      return `## Sheet: ${name}\n${csv}`;
+    const ExcelJS = await import('exceljs');
+    const workbook = new ExcelJS.Workbook();
+    // @ts-expect-error -- ExcelJS type expects pre-Node22 Buffer; runtime-compatible
+    await workbook.xlsx.load(buffer);
+
+    const sheets = workbook.worksheets.map((sheet) => {
+      const rows = sheet.getSheetValues().slice(1) as Array<
+        unknown[] | undefined
+      >;
+      const csv = rows
+        .map((row) => {
+          if (!row) return '';
+          const cells = row.slice(1).map((value) => this.formatCsvValue(value));
+          return cells.join(',');
+        })
+        .join('\n');
+      return `## Sheet: ${sheet.name}\n${csv}`.trim();
     });
+
     return sheets.join('\n\n').trim();
+  }
+
+  private formatCsvValue(value: unknown): string {
+    const text =
+      value == null
+        ? ''
+        : value instanceof Date
+          ? value.toISOString()
+          : typeof value === 'string' ||
+              typeof value === 'number' ||
+              typeof value === 'boolean'
+            ? String(value)
+            : '';
+    if (/[",\n]/.test(text)) {
+      return `"${text.replace(/"/g, '""')}"`;
+    }
+    return text;
   }
 }

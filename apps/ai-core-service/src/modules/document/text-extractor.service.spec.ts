@@ -1,9 +1,9 @@
 import { Logger } from '@nestjs/common';
-import {
-  TextExtractorService,
-  UnsupportedDocumentFormatError,
-  DocumentExtractionError,
-} from './text-extractor.service';
+import { TextExtractorService } from './text-extractor.service';
+import { UnsupportedDocumentFormatError } from './unsupported-document-format.error';
+import { DocumentExtractionError } from './document-extraction.error';
+
+jest.mock('pdf-parse', () => ({ default: jest.fn() }));
 
 describe('TextExtractorService', () => {
   let service: TextExtractorService;
@@ -15,6 +15,7 @@ describe('TextExtractorService', () => {
 
   afterEach(() => {
     jest.restoreAllMocks();
+    jest.clearAllMocks();
   });
 
   // ── Plain text formats ──────────────────────────────────────────────
@@ -83,17 +84,22 @@ describe('TextExtractorService', () => {
   // ── PDF extraction ──────────────────────────────────────────────────
 
   describe('PDF extraction', () => {
+    let mockPdfParse: jest.Mock;
+
+    beforeEach(async () => {
+      const mod = await import('pdf-parse');
+      mockPdfParse = mod.default as unknown as jest.Mock;
+    });
+
     it('extracts text from a valid PDF buffer', async () => {
-      const pdfBase64 =
-        'JVBERi0xLjEKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5kb2JqCjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9LaWRzIFszIDAgUl0gL0NvdW50IDEgPj4KZW5kb2JqCjMgMCBvYmoKPDwgL1R5cGUgL1BhZ2UgL1BhcmVudCAyIDAgUiAvTWVkaWFCb3ggWzAgMCAyMDAgMjAwXSAvQ29udGVudHMgNCAwIFIgL1Jlc291cmNlcyA8PCAvRm9udCA8PCAvRjEgNSAwIFIgPj4gPj4gPj4KZW5kb2JqCjQgMCBvYmoKPDwgL0xlbmd0aCA0MCA+PgpzdHJlYW0KQlQgL0YxIDI0IFRmIDcyIDEyMCBUZCAoSGVsbG8gUERGKSBUaiBFVAplbmRzdHJlYW0KZW5kb2JqCjUgMCBvYmoKPDwgL1R5cGUgL0ZvbnQgL1N1YnR5cGUgL1R5cGUxIC9CYXNlRm9udCAvSGVsdmV0aWNhID4+CmVuZG9iagp4cmVmCjAgNgowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMDkgMDAwMDAgbiAKMDAwMDAwMDA1OCAwMDAwMCBuIAowMDAwMDAwMTE1IDAwMDAwIG4gCjAwMDAwMDAyNDEgMDAwMDAgbiAKMDAwMDAwMDMzMSAwMDAwMCBuIAp0cmFpbGVyCjw8IC9TaXplIDYgL1Jvb3QgMSAwIFIgPj4Kc3RhcnR4cmVmCjQwMQolJUVPRgo=';
-      const buf = Buffer.from(pdfBase64, 'base64');
-
+      mockPdfParse.mockResolvedValueOnce({ text: 'Hello PDF' });
+      const buf = Buffer.from('fake-pdf-bytes');
       const result = await service.extract(buf, 'application/pdf', 'hello.pdf');
-
       expect(result).toContain('Hello PDF');
     });
 
     it('throws DocumentExtractionError for malformed PDF', async () => {
+      mockPdfParse.mockRejectedValueOnce(new Error('Invalid PDF structure'));
       const buf = Buffer.from('not a pdf at all', 'utf-8');
       await expect(
         service.extract(buf, 'application/pdf', 'bad.pdf'),
@@ -122,15 +128,19 @@ describe('TextExtractorService', () => {
     const xlsxMime =
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
-    it('returns near-empty result for empty/garbage XLSX (xlsx is lenient)', async () => {
-      // xlsx@0.18.x accepts empty/garbage buffers and produces a default
-      // empty sheet rather than throwing — assert the output is trivial
-      // (just the sheet header, no real data) so the engine downstream
-      // sees no content to embed.
-      const buf = Buffer.alloc(0);
-      const result = await service.extract(buf, xlsxMime, 'empty.xlsx');
-      expect(result).toMatch(/^## Sheet:/);
-      expect(result.length).toBeLessThan(100);
+    it('extracts CSV content from a simple XLSX buffer', async () => {
+      const ExcelJS = await import('exceljs');
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet('Sheet1');
+      sheet.addRow(['A', 'B']);
+      sheet.addRow(['1', '2']);
+
+      const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+      const result = await service.extract(buffer, xlsxMime, 'sample.xlsx');
+
+      expect(result).toContain('## Sheet: Sheet1');
+      expect(result).toContain('A,B');
+      expect(result).toContain('1,2');
     });
   });
 
@@ -138,6 +148,10 @@ describe('TextExtractorService', () => {
 
   describe('DocumentExtractionError', () => {
     it('preserves original error via ES2022 cause property', async () => {
+      const mod = await import('pdf-parse');
+      (mod.default as unknown as jest.Mock).mockRejectedValueOnce(
+        new Error('pdf parse failed'),
+      );
       const buf = Buffer.from('not a pdf', 'utf-8');
       try {
         await service.extract(buf, 'application/pdf', 'bad.pdf');

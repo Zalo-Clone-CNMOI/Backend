@@ -6,6 +6,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { plainToInstance } from 'class-transformer';
 import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '@app/decorator';
 import { BusinessException, type AuthenticatedUser } from '@app/types';
@@ -13,6 +14,7 @@ import { JwtAuthGuard } from '@libs/auth';
 import { EntityInfoService } from './entity-info.service';
 import type { EntityType } from '@libs/contracts';
 import { EntityInfoQueryDto } from './dto/entity-info-query.dto';
+import { EntityInfoResponseDto } from './dto/entity-info-response.dto';
 
 const VALID_TYPES: readonly EntityType[] = [
   'tool',
@@ -46,7 +48,11 @@ export class EntityInfoController {
     enum: ['vi', 'en'],
     description: 'Output language (default: vi)',
   })
-  @ApiResponse({ status: 200, description: 'Entity info panel content' })
+  @ApiResponse({
+    status: 200,
+    description: 'Entity info panel content',
+    type: EntityInfoResponseDto,
+  })
   @ApiResponse({ status: 400, description: 'Invalid query parameters' })
   async getEntityInfo(
     @CurrentUser() user: AuthenticatedUser,
@@ -69,11 +75,15 @@ export class EntityInfoController {
     }
     const language = query.lang === 'en' ? 'en' : 'vi';
 
-    return this.service.getEntityInfo({
+    const result = await this.service.getEntityInfo({
       text,
       type: query.type as EntityType,
       lang: language,
       userId: user.id,
+    });
+
+    return plainToInstance(EntityInfoResponseDto, result, {
+      excludeExtraneousValues: true,
     });
   }
 }

@@ -18,11 +18,9 @@ import { SmartReplyEngine } from '../modules/smart-reply/smart-reply.engine';
 import { SummaryEngine } from '../modules/summary/summary.engine';
 import { TranslationEngine } from '../modules/translation/translation.engine';
 import { DocumentEngine } from '../modules/document/document.engine';
-import {
-  TextExtractorService,
-  UnsupportedDocumentFormatError,
-  DocumentExtractionError,
-} from '../modules/document/text-extractor.service';
+import { TextExtractorService } from '../modules/document/text-extractor.service';
+import { DocumentExtractionError } from '../modules/document/document-extraction.error';
+import { UnsupportedDocumentFormatError } from '../modules/document/unsupported-document-format.error';
 import { EntityDetectionEngine } from '../modules/entity-detection/entity-detection.engine';
 
 @Controller()

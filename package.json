@@ -95,6 +95,7 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.3",
     "dotenv": "^17.2.3",
+    "exceljs": "^4.4.0",
     "firebase-admin": "^13.8.0",
     "ioredis": "^5.9.2",
     "js-tiktoken": "^1.0.21",
@@ -113,8 +114,7 @@
     "sharp": "^0.34.5",
     "socket.io": "^4.8.1",
     "typeorm": "^0.3.28",
-    "uuid": "^11.0.3",
-    "xlsx": "^0.18.5"
+    "uuid": "^11.0.3"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",

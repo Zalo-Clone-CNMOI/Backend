@@ -48,7 +48,6 @@ export class TextChunkerService {
     return chunks;
   }
 
-  /** Count tokens for a piece of text. Useful for budget pre-checks. */
   async countTokens(
     text: string,
     model: TiktokenModel = DEFAULT_MODEL,
@@ -69,8 +68,6 @@ export class TextChunkerService {
     }
 
     const initPromise = (async () => {
-      // js-tiktoken encoders are pure JS — no .free() needed when discarded.
-      // If migrating to the WASM `tiktoken` package, add explicit free() here.
       const { encodingForModel } = await import('js-tiktoken');
       try {
         const encoder = encodingForModel(model);

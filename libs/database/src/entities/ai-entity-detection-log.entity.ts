@@ -15,8 +15,8 @@ export interface DetectedEntityRecord {
   confidence: number;
 }
 
-@Entity('ai_entity_detection_logs')
-@Index('idx_ai_entity_conversation', ['conversationId', 'createdAt'])
+@Entity('m_ai_entity_detection_logs')
+@Index('idx_m_ai_entity_conversation', ['conversationId', 'createdAt'])
 export class AiEntityDetectionLog extends BaseEntity {
   @Column({ type: 'uuid', name: 'message_id' })
   @Index()
@@ -26,6 +26,7 @@ export class AiEntityDetectionLog extends BaseEntity {
   conversationId: string;
 
   @Column({ type: 'uuid', name: 'sender_id' })
+  @Index()
   senderId: string;
 
   @Column({ type: 'jsonb' })

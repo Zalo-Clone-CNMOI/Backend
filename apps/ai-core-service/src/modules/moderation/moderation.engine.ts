@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -40,22 +39,11 @@ export class ModerationEngine {
     );
   }
 
-  /** Providers polled when ensemble mode is enabled. */
   private static readonly ENSEMBLE_PROVIDERS = [
     'locdo_router',
     'openai',
     'gemini',
   ];
-
-  /**
-   * Moderate a chat message. Returns moderation result for Kafka emission.
-   *
-   * Two modes:
-   *  - Single: one LLM call via fallback chain (default)
-   *  - Ensemble: parallel calls to N providers, majority-vote on is_flagged
-   *    (enabled via aiModerationEnsemble config; biased toward fail-closed
-   *    on ties to maximize recall on harmful content)
-   */
   async moderate(
     event: AiModerationRequestEvent,
   ): Promise<AiModerationResultEvent> {
@@ -136,12 +124,10 @@ export class ModerationEngine {
         ModerationEngine.ENSEMBLE_PROVIDERS,
       );
 
-      // No provider succeeded → fail-closed, mark as ensemble failure.
       if (results.length === 0) {
         return this.providerFailureFallback(event, null, true);
       }
 
-      // Parse each result; track parses that themselves failed (returned fallback).
       const decisions = results.map((r) => ({
         provider: r.provider,
         parsed: this.parseResponse(r.content),
@@ -151,13 +137,9 @@ export class ModerationEngine {
         model: r.model,
       }));
 
-      // Majority vote: ties bias toward `is_flagged=true` (fail-closed).
-      // 2/3 flagged → flagged; 1/2 flagged → flagged (tie); 1/3 flagged → not flagged.
       const flaggedVotes = decisions.filter((d) => d.parsed.is_flagged).length;
       const isFlagged = flaggedVotes * 2 >= decisions.length;
 
-      // Aggregate labels: union of labels from providers that voted with majority.
-      // Confidence: average of providers that voted with majority.
       const majorityDecisions = decisions.filter(
         (d) => d.parsed.is_flagged === isFlagged,
       );
@@ -176,9 +158,6 @@ export class ModerationEngine {
       const totalTokensIn = decisions.reduce((s, d) => s + d.tokensIn, 0);
       const totalTokensOut = decisions.reduce((s, d) => s + d.tokensOut, 0);
 
-      // Provider column is varchar(20). For ensemble rows we store the sentinel
-      // "ensemble" (the `ensemble` boolean column already conveys participation;
-      // per-provider details are in the ai_usage_logs metric stream).
       const log = this.moderationRepo.create({
         messageId: event.message_id,
         conversationId: event.conversation_id,
@@ -193,7 +172,6 @@ export class ModerationEngine {
       });
       await this.moderationRepo.save(log);
 
-      // Record metrics once per provider that participated.
       for (const d of decisions) {
         this.aiMetrics.recordRequest(
           'moderation',
@@ -299,11 +277,13 @@ export class ModerationEngine {
     failure_reason?: string;
   } {
     try {
-      const json = parseJsonResponse(content);
+      const json = parseJsonResponse(content) as Record<string, unknown>;
       return {
-        is_flagged: !!json.is_flagged,
+        is_flagged: json.is_flagged === true,
         labels: Array.isArray(json.labels)
-          ? (json.labels as ModerationLabelType[])
+          ? json.labels.filter(
+              (l): l is ModerationLabelType => typeof l === 'string',
+            )
           : ['clean' as ModerationLabelType],
         confidence: typeof json.confidence === 'number' ? json.confidence : 0,
         decision_source: 'model',

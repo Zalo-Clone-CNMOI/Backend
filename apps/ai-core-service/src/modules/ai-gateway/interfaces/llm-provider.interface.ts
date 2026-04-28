@@ -45,6 +45,8 @@ export interface ILlmProvider {
   ): Promise<LlmCompletionResult>;
 
   embed(text: string, model?: string): Promise<LlmEmbeddingResult>;
+
+  embedBatch(texts: string[], model?: string): Promise<LlmEmbeddingResult[]>;
 }
 
 export const LLM_PROVIDERS = Symbol('LLM_PROVIDERS');

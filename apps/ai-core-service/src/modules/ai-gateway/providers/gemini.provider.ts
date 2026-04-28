@@ -152,4 +152,10 @@ export class GeminiProvider implements ILlmProvider {
       'Gemini embedding not implemented. Use OpenAI provider for embeddings.',
     );
   }
+
+  embedBatch(): Promise<LlmEmbeddingResult[]> {
+    throw new Error(
+      'Gemini batch embedding not implemented. Use OpenAI provider for embeddings.',
+    );
+  }
 }

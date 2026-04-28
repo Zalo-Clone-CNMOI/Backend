@@ -134,4 +134,10 @@ export class AnthropicProvider implements ILlmProvider {
       'Anthropic does not support embeddings. Use OpenAI provider.',
     );
   }
+
+  embedBatch(): Promise<LlmEmbeddingResult[]> {
+    throw new Error(
+      'Anthropic does not support batch embeddings. Use OpenAI provider.',
+    );
+  }
 }

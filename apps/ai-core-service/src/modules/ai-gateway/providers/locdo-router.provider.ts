@@ -147,4 +147,12 @@ export class LocDoRouterProvider implements ILlmProvider {
       ),
     );
   }
+
+  embedBatch(): Promise<LlmEmbeddingResult[]> {
+    return Promise.reject(
+      new Error(
+        'LocDo Router does not support batch embeddings. Use OpenAiProvider for embeddings.',
+      ),
+    );
+  }
 }

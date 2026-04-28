@@ -7,7 +7,7 @@ export interface GetEntityInfoParams {
   text: string;
   type: EntityType;
   lang: string;
-  user_id?: string;
+  user_id: string;
 }
 
 export class EntityInfoApi {

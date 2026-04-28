@@ -67,19 +67,25 @@ export class ModerationEngine {
 
       const parsed = this.parseResponse(result.content);
 
-      const log = this.moderationRepo.create({
-        messageId: event.message_id,
-        conversationId: event.conversation_id,
-        senderId: event.sender_id,
-        isFlagged: parsed.is_flagged,
-        labels: parsed.labels,
-        confidence: parsed.confidence,
-        provider: result.provider,
-        ensemble: false,
-        tokensUsed: result.tokensIn + result.tokensOut,
-        traceId: event.trace_id ?? null,
-      });
-      await this.moderationRepo.save(log);
+      try {
+        const log = this.moderationRepo.create({
+          messageId: event.message_id,
+          conversationId: event.conversation_id,
+          senderId: event.sender_id,
+          isFlagged: parsed.is_flagged,
+          labels: parsed.labels,
+          confidence: parsed.confidence,
+          provider: result.provider,
+          ensemble: false,
+          tokensUsed: result.tokensIn + result.tokensOut,
+          traceId: event.trace_id ?? null,
+        });
+        await this.moderationRepo.save(log);
+      } catch (dbError) {
+        this.logger.warn(
+          `Failed to persist moderation log for ${event.message_id}: ${dbError instanceof Error ? dbError.message : String(dbError)}`,
+        );
+      }
 
       this.aiMetrics.recordRequest(
         'moderation',

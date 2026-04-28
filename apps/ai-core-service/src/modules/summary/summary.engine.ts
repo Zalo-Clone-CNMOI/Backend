@@ -59,7 +59,9 @@ export class SummaryEngine {
         try {
           cached = JSON.parse(raw) as CachedSummaryPayload;
         } catch {
-          this.logger.warn(`Invalid cached summary for ${event.conversation_id}`);
+          this.logger.warn(
+            `Invalid cached summary for ${event.conversation_id}`,
+          );
         }
       }
     }
@@ -137,7 +139,13 @@ export class SummaryEngine {
           .map((m) => m.message_id);
         const fromId = dbMsgIds[dbMsgIds.length - 1] ?? 'unknown';
         const newToId = dbMsgIds[0] ?? 'unknown';
-        return this.runFullSummary(event, summaryLines, fromId, newToId, cacheKey);
+        return this.runFullSummary(
+          event,
+          summaryLines,
+          fromId,
+          newToId,
+          cacheKey,
+        );
       }
 
       // Messages at indices 0..cutIdx-1 are newer than the cached summary (DESC order)
@@ -161,7 +169,13 @@ export class SummaryEngine {
       }
 
       // Enough new messages → incremental update
-      return this.runIncremental(event, cached, newMessages, allDbMessages, cacheKey);
+      return this.runIncremental(
+        event,
+        cached,
+        newMessages,
+        allDbMessages,
+        cacheKey,
+      );
     }
 
     // --- Full summarization path ---
@@ -182,15 +196,22 @@ export class SummaryEngine {
         ?.filter((m) => !m.deleted_at && m.body)
         .map((m) => m.message_id) ?? [];
 
-    if (messages.length > 0 && (!event.message_ids || event.message_ids.length === 0)) {
+    if (
+      messages.length > 0 &&
+      (!event.message_ids || event.message_ids.length === 0)
+    ) {
       this.logger.warn(
         `summarize called with messages but no message_ids for ${event.conversation_id} — message_range will use 'unknown' IDs`,
       );
     }
 
     // allDbMessages is DESC, so after filter+reverse: index 0=oldest, last=newest
-    const fromId = event.message_ids?.[0] ?? dbMsgIds[dbMsgIds.length - 1] ?? 'unknown';
-    const toId = event.message_ids?.[event.message_ids.length - 1] ?? dbMsgIds[0] ?? 'unknown';
+    const fromId =
+      event.message_ids?.[0] ?? dbMsgIds[dbMsgIds.length - 1] ?? 'unknown';
+    const toId =
+      event.message_ids?.[event.message_ids.length - 1] ??
+      dbMsgIds[0] ??
+      'unknown';
 
     return this.runFullSummary(event, summaryLines, fromId, toId, cacheKey);
   }
@@ -227,7 +248,11 @@ export class SummaryEngine {
         conversation_id: event.conversation_id,
         user_id: event.user_id,
         summary,
-        message_range: { from_message_id: fromId, to_message_id: toId, count: summaryLines.length },
+        message_range: {
+          from_message_id: fromId,
+          to_message_id: toId,
+          count: summaryLines.length,
+        },
         provider: toAiProviderType(result.provider),
         tokens_used: result.tokensIn + result.tokensOut,
         cached: false,
@@ -254,7 +279,15 @@ export class SummaryEngine {
       this.logger.error(
         `Summary failed: ${error instanceof Error ? error.message : String(error)}`,
       );
-      this.aiMetrics.recordRequest('summary', 'unknown', 'unknown', 0, 0, 0, false);
+      this.aiMetrics.recordRequest(
+        'summary',
+        'unknown',
+        'unknown',
+        0,
+        0,
+        0,
+        false,
+      );
       return this.errorSummaryResult(event);
     }
   }
@@ -330,7 +363,15 @@ export class SummaryEngine {
       this.logger.error(
         `Incremental summary failed: ${error instanceof Error ? error.message : String(error)}`,
       );
-      this.aiMetrics.recordRequest('summary', 'unknown', 'unknown', 0, 0, 0, false);
+      this.aiMetrics.recordRequest(
+        'summary',
+        'unknown',
+        'unknown',
+        0,
+        0,
+        0,
+        false,
+      );
       return {
         ...cached,
         provider: toAiProviderType(cached.provider),
@@ -342,7 +383,9 @@ export class SummaryEngine {
     }
   }
 
-  private emptySummaryResult(event: AiSummaryRequestEvent): AiSummaryResultEvent {
+  private emptySummaryResult(
+    event: AiSummaryRequestEvent,
+  ): AiSummaryResultEvent {
     return {
       conversation_id: event.conversation_id,
       user_id: event.user_id,
@@ -356,7 +399,9 @@ export class SummaryEngine {
     };
   }
 
-  private errorSummaryResult(event: AiSummaryRequestEvent): AiSummaryResultEvent {
+  private errorSummaryResult(
+    event: AiSummaryRequestEvent,
+  ): AiSummaryResultEvent {
     return {
       conversation_id: event.conversation_id,
       user_id: event.user_id,

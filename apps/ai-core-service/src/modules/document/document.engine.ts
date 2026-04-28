@@ -99,19 +99,21 @@ export class DocumentEngine {
         this.embeddingModel,
       );
 
-      const totalTokens = embeddingResults.reduce((sum, r) => sum + r.tokensUsed, 0);
+      const totalTokens = embeddingResults.reduce(
+        (sum, r) => sum + r.tokensUsed,
+        0,
+      );
 
-      const chunkEntities: DocumentChunk[] = embeddingResults.map(
-        (result, i) =>
-          this.chunkRepo.create({
-            documentId: event.document_id,
-            chunkIndex: i,
-            content: chunks[i],
-            tokenCount: result.tokensUsed,
-            embedding: JSON.stringify(result.embedding),
-            embeddingModel: this.embeddingModel,
-            embeddingVersion: 1,
-          }),
+      const chunkEntities: DocumentChunk[] = embeddingResults.map((result, i) =>
+        this.chunkRepo.create({
+          documentId: event.document_id,
+          chunkIndex: i,
+          content: chunks[i],
+          tokenCount: result.tokensUsed,
+          embedding: JSON.stringify(result.embedding),
+          embeddingModel: this.embeddingModel,
+          embeddingVersion: 1,
+        }),
       );
 
       await this.chunkRepo.save(chunkEntities);

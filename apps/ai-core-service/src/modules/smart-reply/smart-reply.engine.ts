@@ -113,7 +113,7 @@ export class SmartReplyEngine {
           // ScyllaDB returns DESC (newest first); reverse to chronological for context
           .reverse()
           .map((m) => ({
-            role: (m.sender_id === userId ? 'me' : 'them') as 'me' | 'them',
+            role: m.sender_id === userId ? ('me' as const) : ('them' as const),
             body: m.body,
           }))
       );

@@ -387,6 +387,35 @@ describe('SummaryEngine', () => {
       expect(result.summary).toBe('No messages to summarize.');
       expect(mockGateway.complete).not.toHaveBeenCalled();
     });
+
+    it('returns errorSummaryResult when ScyllaDB throws and no cache exists', async () => {
+      mockMessageRepo.getAllMessages.mockRejectedValue(new Error('ScyllaDB unavailable'));
+
+      const result = await engine.summarize(event, []);
+
+      expect(result.summary).toContain('failed');
+      expect(result.cached).toBe(false);
+      expect(result.tokens_used).toBe(0);
+      expect(mockGateway.complete).not.toHaveBeenCalled();
+    });
+
+    it('returns cached result when ScyllaDB throws and cache exists', async () => {
+      const cachedPayload = JSON.stringify({
+        conversation_id: 'conv-1',
+        summary: 'Prior summary.',
+        message_range: { from_message_id: 'msg-1', to_message_id: 'msg-3', count: 3 },
+        provider: 'openai',
+        tokens_used: 100,
+      });
+      mockRedis.get.mockResolvedValue(cachedPayload);
+      mockMessageRepo.getAllMessages.mockRejectedValue(new Error('ScyllaDB unavailable'));
+
+      const result = await engine.summarize(event, []);
+
+      expect(result.summary).toBe('Prior summary.');
+      expect(result.cached).toBe(true);
+      expect(mockGateway.complete).not.toHaveBeenCalled();
+    });
   });
 
   describe('incremental summarization', () => {

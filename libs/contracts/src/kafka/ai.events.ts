@@ -7,7 +7,9 @@ export type AiFeatureType =
   | 'smart_reply'
   | 'summary'
   | 'translation'
-  | 'document_analysis';
+  | 'document_analysis'
+  | 'entity_detection'
+  | 'entity_info';
 
 export type ModerationLabelType =
   | 'clean'

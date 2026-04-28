@@ -290,7 +290,7 @@ describe('LocDoRouterProvider', () => {
     it('throws because LocDo Router does not support embeddings', async () => {
       const provider = await buildProvider();
 
-      await expect(provider.embed('some text')).rejects.toThrow(
+      await expect(provider.embed()).rejects.toThrow(
         'LocDo Router does not support embeddings',
       );
     });

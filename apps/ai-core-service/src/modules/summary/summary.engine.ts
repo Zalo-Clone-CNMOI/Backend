@@ -66,13 +66,30 @@ export class SummaryEngine {
 
     // --- Fetch messages from ScyllaDB if caller didn't provide them ---
     // getAllMessages returns DESC (newest first)
-    const allDbMessages: PersistedMessage[] | null =
-      messages.length === 0
-        ? await this.messageRepo.getAllMessages(
-            event.conversation_id,
-            MESSAGES_FETCH_LIMIT,
-          )
-        : null;
+    let allDbMessages: PersistedMessage[] | null = null;
+    if (messages.length === 0) {
+      try {
+        allDbMessages = await this.messageRepo.getAllMessages(
+          event.conversation_id,
+          MESSAGES_FETCH_LIMIT,
+        );
+      } catch (err) {
+        this.logger.error(
+          `ScyllaDB fetch failed for summary ${event.conversation_id}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        if (cached) {
+          return {
+            ...cached,
+            provider: toAiProviderType(cached.provider),
+            user_id: event.user_id,
+            cached: true,
+            processed_at: Date.now(),
+            trace_id: event.trace_id,
+          };
+        }
+        return this.errorSummaryResult(event);
+      }
+    }
 
     // --- Incremental path: cache exists + we have DB messages ---
     if (cached && allDbMessages) {

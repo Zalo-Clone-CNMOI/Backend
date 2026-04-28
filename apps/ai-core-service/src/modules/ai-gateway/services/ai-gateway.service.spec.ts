@@ -19,6 +19,7 @@ function makeProvider(
     complete: jest.fn(),
     completeStream: jest.fn(),
     embed: jest.fn(),
+    embedBatch: jest.fn(),
   } as jest.Mocked<ILlmProvider>;
 }
 

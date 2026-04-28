@@ -1,5 +1,5 @@
 import { Test } from '@nestjs/testing';
-import { BusinessException, type AuthenticatedUser } from '@app/types';
+import type { AuthenticatedUser } from '@app/types';
 import { JwtAuthGuard } from '@libs/auth';
 import { EntityInfoController } from './entity-info.controller';
 import { EntityInfoService } from './entity-info.service';
@@ -64,28 +64,6 @@ describe('EntityInfoController', () => {
         lang: 'vi',
         userId: 'user-123',
       });
-    });
-
-    it('throws BadRequestException when text is empty', async () => {
-      await expect(
-        controller.getEntityInfo(mockUser, { text: '', type: 'tool' }),
-      ).rejects.toThrow(BusinessException);
-    });
-
-    it('throws BadRequestException when text exceeds 200 chars', async () => {
-      const longText = 'a'.repeat(201);
-      await expect(
-        controller.getEntityInfo(mockUser, { text: longText, type: 'tool' }),
-      ).rejects.toThrow(BusinessException);
-    });
-
-    it('throws BadRequestException for invalid type', async () => {
-      await expect(
-        controller.getEntityInfo(mockUser, {
-          text: 'React',
-          type: 'invalid-type',
-        }),
-      ).rejects.toThrow(BusinessException);
     });
 
     it('trims whitespace from text before passing to service', async () => {

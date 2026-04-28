@@ -42,7 +42,6 @@ export class TextChunkerService {
       const slice = tokens.slice(i, i + opts.size);
       const decoded = enc.decode(slice).trim();
       if (decoded) chunks.push(decoded);
-      if (i + opts.size >= tokens.length) break;
     }
 
     return chunks;

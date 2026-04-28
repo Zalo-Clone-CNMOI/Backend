@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -94,16 +93,22 @@ export class EntityDetectionEngine {
       // After retry, treat any remaining null as empty for downstream.
       const entities = parsed ?? [];
 
-      const log = this.logRepo.create({
-        messageId: event.message_id,
-        conversationId: event.conversation_id,
-        senderId: event.sender_id,
-        entities,
-        provider: result.provider,
-        tokensUsed: totalTokensIn + totalTokensOut,
-        traceId: event.trace_id ?? null,
-      });
-      await this.logRepo.save(log);
+      try {
+        const log = this.logRepo.create({
+          messageId: event.message_id,
+          conversationId: event.conversation_id,
+          senderId: event.sender_id,
+          entities,
+          provider: result.provider,
+          tokensUsed: totalTokensIn + totalTokensOut,
+          traceId: event.trace_id ?? null,
+        });
+        await this.logRepo.save(log);
+      } catch (dbError) {
+        this.logger.warn(
+          `Failed to persist entity detection log for ${event.message_id}: ${dbError instanceof Error ? dbError.message : String(dbError)}`,
+        );
+      }
 
       this.aiMetrics.recordRequest(
         'entity_detection',
@@ -285,7 +290,7 @@ export class EntityDetectionEngine {
     related_entities: string[];
   } {
     try {
-      const json = parseJsonResponse(content);
+      const json = parseJsonResponse(content) as Record<string, unknown>;
       return {
         title: typeof json.title === 'string' ? json.title : fallbackTitle,
         summary: typeof json.summary === 'string' ? json.summary : '',

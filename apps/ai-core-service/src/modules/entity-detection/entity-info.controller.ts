@@ -69,7 +69,7 @@ export class EntityInfoController {
     return this.engine.generateInfo({
       entity_text: text,
       entity_type: query.type as EntityType,
-      user_id: query.user_id ?? 'system',
+      user_id: query.user_id,
       language: query.lang === 'en' ? 'en' : 'vi',
     });
   }

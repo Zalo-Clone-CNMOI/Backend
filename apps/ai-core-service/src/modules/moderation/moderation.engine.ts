@@ -231,7 +231,7 @@ export class ModerationEngine {
         isFlagged: fallback.is_flagged,
         labels: fallback.labels,
         confidence: fallback.confidence,
-        provider: ensemble ? 'ensemble' : 'unknown',
+        provider: ensemble ? 'ensemble' : 'openai',
         ensemble,
         tokensUsed: 0,
         traceId: event.trace_id ?? null,

@@ -174,11 +174,13 @@ export class OpenAiProvider implements ILlmProvider {
 
       // response.data is ordered to match the input array
       const totalTokens = response.usage?.total_tokens ?? 0;
-      const tokensPerChunk = Math.round(totalTokens / texts.length);
+      const base = Math.floor(totalTokens / texts.length);
+      const remainder = totalTokens % texts.length;
+      const last = response.data.length - 1;
 
-      return response.data.map((item) => ({
+      return response.data.map((item, i) => ({
         embedding: item.embedding,
-        tokensUsed: tokensPerChunk,
+        tokensUsed: i === last ? base + remainder : base,
         model: embeddingModel,
         provider: this.name,
       }));

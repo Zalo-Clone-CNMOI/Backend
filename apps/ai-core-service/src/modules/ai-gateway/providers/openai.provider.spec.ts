@@ -117,6 +117,25 @@ describe('OpenAiProvider.embedBatch', () => {
       expect(totalTokens).toBe(30);
     });
 
+    it('assigns remainder tokens to the last chunk for non-divisible totals', async () => {
+      const provider = await buildProvider();
+      const mockCreate = jest.fn().mockResolvedValue({
+        data: [
+          { embedding: [1], index: 0 },
+          { embedding: [2], index: 1 },
+          { embedding: [3], index: 2 },
+        ],
+        usage: { total_tokens: 10 }, // 10 / 3 = 3 remainder 1
+      });
+      injectMockClient(provider, mockCreate);
+
+      const results = await provider.embedBatch(['a', 'b', 'c']);
+
+      const sum = results.reduce((s, r) => s + r.tokensUsed, 0);
+      expect(sum).toBe(10); // no tokens lost
+      expect(results[2].tokensUsed).toBe(results[0].tokensUsed + 1); // remainder on last
+    });
+
     it('handles missing usage gracefully (defaults to 0 total tokens)', async () => {
       const provider = await buildProvider();
       const mockCreate = jest.fn().mockResolvedValue({

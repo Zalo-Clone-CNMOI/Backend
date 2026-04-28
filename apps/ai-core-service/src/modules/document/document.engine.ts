@@ -95,28 +95,26 @@ export class DocumentEngine {
       });
 
       let totalTokens = 0;
-      const chunkEntities: DocumentChunk[] = [];
 
-      for (let i = 0; i < chunks.length; i++) {
-        const embeddingResult = await this.openaiProvider.embed(
-          chunks[i],
-          this.embeddingModel,
-        );
+      const embeddingResults = await this.openaiProvider.embedBatch(
+        chunks,
+        this.embeddingModel,
+      );
 
-        totalTokens += embeddingResult.tokensUsed;
+      totalTokens = embeddingResults.reduce((sum, r) => sum + r.tokensUsed, 0);
 
-        const chunkEntity = this.chunkRepo.create({
-          documentId: event.document_id,
-          chunkIndex: i,
-          content: chunks[i],
-          tokenCount: embeddingResult.tokensUsed,
-          embedding: JSON.stringify(embeddingResult.embedding),
-          embeddingModel: this.embeddingModel,
-          embeddingVersion: 1,
-        });
-
-        chunkEntities.push(chunkEntity);
-      }
+      const chunkEntities: DocumentChunk[] = embeddingResults.map(
+        (result, i) =>
+          this.chunkRepo.create({
+            documentId: event.document_id,
+            chunkIndex: i,
+            content: chunks[i],
+            tokenCount: result.tokensUsed,
+            embedding: JSON.stringify(result.embedding),
+            embeddingModel: this.embeddingModel,
+            embeddingVersion: 1,
+          }),
+      );
 
       await this.chunkRepo.save(chunkEntities);
 

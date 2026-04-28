@@ -154,4 +154,42 @@ export class OpenAiProvider implements ILlmProvider {
       );
     }
   }
+
+  async embedBatch(
+    texts: string[],
+    model?: string,
+  ): Promise<LlmEmbeddingResult[]> {
+    if (texts.length === 0) return [];
+
+    const embeddingModel =
+      model ?? this.config.aiEmbeddingModel ?? 'text-embedding-3-small';
+
+    try {
+      const client = await this.getClient();
+
+      const response = await client.embeddings.create({
+        model: embeddingModel,
+        input: texts,
+      });
+
+      // response.data is ordered to match the input array
+      const totalTokens = response.usage?.total_tokens ?? 0;
+      const tokensPerChunk = Math.round(totalTokens / texts.length);
+
+      return response.data.map((item) => ({
+        embedding: item.embedding,
+        tokensUsed: tokensPerChunk,
+        model: embeddingModel,
+        provider: this.name,
+      }));
+    } catch (error) {
+      this.logger.error(
+        `OpenAI embedBatch() failed - Model: ${embeddingModel}, Count: ${texts.length}, Error: ${error instanceof Error ? error.message : String(error)}`,
+        error instanceof Error ? error.stack : undefined,
+      );
+      throw new Error(
+        `OpenAI batch embedding API call failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+    }
+  }
 }

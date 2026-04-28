@@ -484,7 +484,7 @@ describe('SummaryEngine', () => {
       expect(result.cached).toBe(false);
     });
 
-    it('returns emptySummaryResult when all messages in DB window are deleted and anchor is missing', async () => {
+    it('returns cached summary when all messages in DB window are deleted and anchor is missing', async () => {
       mockRedis.get.mockResolvedValue(cachedPayload);
       // anchor msg-5 not found; all visible messages are soft-deleted
       mockMessageRepo.getAllMessages.mockResolvedValue([
@@ -494,8 +494,9 @@ describe('SummaryEngine', () => {
 
       const result = await engine.summarize(event, []);
 
-      expect(result.summary).toBe('No messages to summarize.');
-      expect(result.cached).toBe(false);
+      // Valid cached summary exists — return it rather than discarding it
+      expect(result.summary).toBe('Team discussed deadline.');
+      expect(result.cached).toBe(true);
       expect(mockGateway.complete).not.toHaveBeenCalled();
     });
 

@@ -98,8 +98,16 @@ export class SummaryEngine {
           .map((m) => m.body);
 
         if (summaryLines.length === 0) {
-          // All messages in the DB window are soft-deleted → nothing summarizable
-          return this.emptySummaryResult(event);
+          // All messages in the DB window are soft-deleted; return the existing cache rather than
+          // discarding a valid prior summary.
+          return {
+            ...cached,
+            provider: toAiProviderType(cached.provider),
+            user_id: event.user_id,
+            cached: true,
+            processed_at: Date.now(),
+            trace_id: event.trace_id,
+          };
         }
 
         // Anchor not in last MESSAGES_FETCH_LIMIT messages → conversation outpaced the window;

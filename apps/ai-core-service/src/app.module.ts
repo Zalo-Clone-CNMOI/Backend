@@ -6,6 +6,7 @@ import { KafkaModule } from '@libs/kafka';
 import { RedisModule } from '@libs/redis';
 import { DatabaseModule } from '@libs/database';
 import { MetricsModule } from '@libs/metrics';
+import { ScyllaModule } from '@libs/scylla';
 import { S3Module } from '@libs/s3';
 import {
   AiModerationLog,
@@ -39,6 +40,7 @@ import { AiPublisher } from './transport/ai.publisher';
     KafkaModule,
     RedisModule.forRootAsync(),
     MetricsModule,
+    ScyllaModule,
     S3Module.forRootAsync({
       isGlobal: true,
       useFactory: () => ({

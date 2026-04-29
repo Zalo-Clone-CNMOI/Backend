@@ -1,4 +1,4 @@
-import { Controller, Logger } from '@nestjs/common';
+import { Controller, Inject, Logger } from '@nestjs/common';
 import { EventPattern, Payload } from '@nestjs/microservices';
 import { KafkaTopics } from '@libs/contracts';
 import type {
@@ -11,6 +11,7 @@ import type {
   AiEntityDetectionRequestEvent,
   AiEntityInfoRequestEvent,
 } from '@libs/contracts';
+import { APP_CONFIG, AppConfig } from '@libs/config';
 import { S3Service } from '@libs/s3';
 import { AiPublisher } from './ai.publisher';
 import { ModerationEngine } from '../modules/moderation/moderation.engine';
@@ -28,6 +29,7 @@ export class AiConsumer {
   private readonly logger = new Logger(AiConsumer.name);
 
   constructor(
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly publisher: AiPublisher,
     private readonly moderationEngine: ModerationEngine,
     private readonly smartReplyEngine: SmartReplyEngine,
@@ -122,6 +124,19 @@ export class AiConsumer {
     this.logger.log(
       `Document upload: ${event.document_id} (${event.file_name})`,
     );
+
+    const maxSizeBytes = (this.config.aiMaxDocumentSizeMb ?? 10) * 1024 * 1024;
+    if (event.file_size > maxSizeBytes) {
+      this.logger.warn(
+        `Document ${event.document_id} rejected before download: ${event.file_size} bytes exceeds ${this.config.aiMaxDocumentSizeMb ?? 10} MB limit`,
+      );
+      const result = await this.documentEngine.recordDocumentFailure(
+        event,
+        `File exceeds maximum size of ${this.config.aiMaxDocumentSizeMb ?? 10} MB`,
+      );
+      await this.publisher.emit(KafkaTopics.AiDocumentProcessed, result);
+      return;
+    }
 
     try {
       const buffer = await this.s3Service.download(event.file_key);

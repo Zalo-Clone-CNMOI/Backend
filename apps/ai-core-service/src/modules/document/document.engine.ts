@@ -6,7 +6,6 @@ import { DocumentMetadata, DocumentChunk } from '@libs/database/entities';
 import { AiGatewayService } from '../ai-gateway/services/ai-gateway.service';
 import { PromptBuilderService } from '../ai-gateway/services/prompt-builder.service';
 import { AiMetricsService } from '../ai-gateway/services/ai-metrics.service';
-import { OpenAiProvider } from '../ai-gateway/providers/openai.provider';
 import type { TiktokenModel } from 'js-tiktoken';
 import { TextChunkerService } from './text-chunker.service';
 import {
@@ -55,7 +54,6 @@ export class DocumentEngine {
     private readonly gateway: AiGatewayService,
     private readonly promptBuilder: PromptBuilderService,
     private readonly aiMetrics: AiMetricsService,
-    private readonly openaiProvider: OpenAiProvider,
     private readonly chunker: TextChunkerService,
     @InjectRepository(DocumentMetadata)
     private readonly docMetaRepo: Repository<DocumentMetadata>,
@@ -94,7 +92,8 @@ export class DocumentEngine {
         model: this.embeddingModel,
       });
 
-      const embeddingResults = await this.openaiProvider.embedBatch(
+      const embeddingResults = await this.gateway.embedBatch(
+        event.user_id,
         chunks,
         this.embeddingModel,
       );
@@ -221,7 +220,8 @@ export class DocumentEngine {
   }> {
     const topK = event.top_k ?? 5;
 
-    const queryEmbedding = await this.openaiProvider.embed(
+    const queryEmbedding = await this.gateway.embed(
+      event.user_id,
       event.query,
       this.embeddingModel,
     );

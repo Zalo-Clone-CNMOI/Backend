@@ -94,8 +94,8 @@ const SERVICE_REQUIREMENTS: Record<string, ServiceConfigRequirements> = {
     requiresKafka: true,
     requiresKafkaGroupId: true,
     requiresRedis: true,
-    requiresScylla: false,
-    requiresPostgres: false,
+    requiresScylla: true,
+    requiresPostgres: true,
   },
   'bff-service': {
     requiresCors: true,

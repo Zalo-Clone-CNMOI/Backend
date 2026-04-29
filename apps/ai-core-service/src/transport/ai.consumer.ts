@@ -44,10 +44,14 @@ export class AiConsumer {
   @EventPattern(KafkaTopics.AiModerationRequest)
   async onModerationRequest(@Payload() event: AiModerationRequestEvent) {
     this.logger.log(`Moderation request for message: ${event.message_id}`);
-
-    const result = await this.moderationEngine.moderate(event);
-
-    await this.publisher.emit(KafkaTopics.AiModerationResult, result);
+    try {
+      const result = await this.moderationEngine.moderate(event);
+      await this.publisher.emit(KafkaTopics.AiModerationResult, result);
+    } catch (error) {
+      this.logger.error(
+        `Moderation handler fatal: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   // ── Smart Reply ────────────────────────────────────────────────────
@@ -57,10 +61,14 @@ export class AiConsumer {
     this.logger.log(
       `Smart reply request for conversation: ${event.conversation_id} (${event.context_messages.length} context msgs)`,
     );
-
-    const result = await this.smartReplyEngine.generateReplies(event);
-
-    await this.publisher.emit(KafkaTopics.AiSmartReplyResult, result);
+    try {
+      const result = await this.smartReplyEngine.generateReplies(event);
+      await this.publisher.emit(KafkaTopics.AiSmartReplyResult, result);
+    } catch (error) {
+      this.logger.error(
+        `Smart reply handler fatal: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   // ── Summary ────────────────────────────────────────────────────────
@@ -70,10 +78,19 @@ export class AiConsumer {
     this.logger.log(
       `Summary request for conversation: ${event.conversation_id} (${event.messages.length} msgs)`,
     );
-
-    const result = await this.summaryEngine.summarize(event, event.messages);
-
-    await this.publisher.emit(KafkaTopics.AiSummaryResult, result);
+    try {
+      const MAX_MESSAGES = 200;
+      const safeMessages =
+        event.messages.length > MAX_MESSAGES
+          ? event.messages.slice(0, MAX_MESSAGES)
+          : event.messages;
+      const result = await this.summaryEngine.summarize(event, safeMessages);
+      await this.publisher.emit(KafkaTopics.AiSummaryResult, result);
+    } catch (error) {
+      this.logger.error(
+        `Summary handler fatal: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   // ── Translation ────────────────────────────────────────────────────
@@ -83,10 +100,14 @@ export class AiConsumer {
     this.logger.log(
       `Translate request: ${event.message_id} → ${event.target_language}`,
     );
-
-    const result = await this.translationEngine.translate(event);
-
-    await this.publisher.emit(KafkaTopics.AiTranslateResult, result);
+    try {
+      const result = await this.translationEngine.translate(event);
+      await this.publisher.emit(KafkaTopics.AiTranslateResult, result);
+    } catch (error) {
+      this.logger.error(
+        `Translation handler fatal: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   // ── Document Upload ────────────────────────────────────────────────
@@ -143,10 +164,14 @@ export class AiConsumer {
   @EventPattern(KafkaTopics.AiDocumentQuery)
   async onDocumentQuery(@Payload() event: AiDocumentQueryEvent) {
     this.logger.log(`Document query: ${event.document_id} — "${event.query}"`);
-
-    const result = await this.documentEngine.queryDocument(event);
-
-    await this.publisher.emit(KafkaTopics.AiDocumentQueryResult, result);
+    try {
+      const result = await this.documentEngine.queryDocument(event);
+      await this.publisher.emit(KafkaTopics.AiDocumentQueryResult, result);
+    } catch (error) {
+      this.logger.error(
+        `Document query handler fatal: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   // ── Entity Detection ───────────────────────────────────────────────
@@ -158,10 +183,14 @@ export class AiConsumer {
     this.logger.log(
       `Entity detection request for message: ${event.message_id}`,
     );
-
-    const result = await this.entityDetectionEngine.detect(event);
-
-    await this.publisher.emit(KafkaTopics.AiEntityDetectionResult, result);
+    try {
+      const result = await this.entityDetectionEngine.detect(event);
+      await this.publisher.emit(KafkaTopics.AiEntityDetectionResult, result);
+    } catch (error) {
+      this.logger.error(
+        `Entity detection handler fatal: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   @EventPattern(KafkaTopics.AiEntityInfoRequest)
@@ -169,9 +198,13 @@ export class AiConsumer {
     this.logger.log(
       `Entity info request: "${event.entity_text}" (${event.entity_type})`,
     );
-
-    const result = await this.entityDetectionEngine.generateInfo(event);
-
-    await this.publisher.emit(KafkaTopics.AiEntityInfoResult, result);
+    try {
+      const result = await this.entityDetectionEngine.generateInfo(event);
+      await this.publisher.emit(KafkaTopics.AiEntityInfoResult, result);
+    } catch (error) {
+      this.logger.error(
+        `Entity info handler fatal: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 }

@@ -9,6 +9,7 @@ import {
 } from '../interfaces';
 import { DataSanitizer } from './data-sanitizer.service';
 import { TokenBudgetService } from './token-budget.service';
+import { AiMetricsService } from './ai-metrics.service';
 
 interface CircuitState {
   failures: number;
@@ -28,6 +29,7 @@ export class AiGatewayService {
     @Inject(LLM_PROVIDERS) private readonly providers: ILlmProvider[],
     private readonly sanitizer: DataSanitizer,
     private readonly tokenBudget: TokenBudgetService,
+    private readonly aiMetrics: AiMetricsService,
   ) {
     for (const provider of providers) {
       this.circuits.set(provider.name, {
@@ -138,17 +140,51 @@ export class AiGatewayService {
     throw new Error(`All LLM stream providers failed: ${errors.join('; ')}`);
   }
 
-  async embed(text: string, model?: string): Promise<LlmEmbeddingResult> {
-    const sanitizedText = this.sanitizer.sanitize(text);
+  async embed(
+    userId: string,
+    text: string,
+    model?: string,
+  ): Promise<LlmEmbeddingResult> {
+    const sanitized = this.sanitizer.sanitize(text);
+    const canConsume = await this.tokenBudget.canConsume(userId, 100);
+    if (!canConsume) {
+      throw new Error('Daily token budget exceeded');
+    }
     const provider = this.providers.find(
       (p) => p.name === 'openai' && p.isAvailable,
     );
-
     if (!provider) {
       throw new Error('OpenAI provider not available for embeddings');
     }
+    const result = await provider.embed(sanitized, model);
+    await this.tokenBudget.consume(userId, result.tokensUsed);
+    return result;
+  }
 
-    return provider.embed(sanitizedText, model);
+  async embedBatch(
+    userId: string,
+    texts: string[],
+    model?: string,
+  ): Promise<LlmEmbeddingResult[]> {
+    if (texts.length === 0) return [];
+    const sanitized = texts.map((t) => this.sanitizer.sanitize(t));
+    const canConsume = await this.tokenBudget.canConsume(
+      userId,
+      sanitized.length * 100,
+    );
+    if (!canConsume) {
+      throw new Error('Daily token budget exceeded');
+    }
+    const provider = this.providers.find(
+      (p) => p.name === 'openai' && p.isAvailable,
+    );
+    if (!provider) {
+      throw new Error('OpenAI provider not available for batch embeddings');
+    }
+    const results = await provider.embedBatch(sanitized, model);
+    const totalTokens = results.reduce((sum, r) => sum + r.tokensUsed, 0);
+    await this.tokenBudget.consume(userId, totalTokens);
+    return results;
   }
 
   getProvider(name: string): ILlmProvider | undefined {
@@ -243,6 +279,7 @@ export class AiGatewayService {
     if (circuit) {
       circuit.failures = 0;
       circuit.state = 'closed';
+      this.aiMetrics.setCircuitState(providerName, 'closed');
     }
   }
 
@@ -257,6 +294,7 @@ export class AiGatewayService {
           `Circuit OPEN for provider ${providerName} after ${circuit.failures} failures`,
         );
       }
+      this.aiMetrics.setCircuitState(providerName, circuit.state);
     }
   }
 }

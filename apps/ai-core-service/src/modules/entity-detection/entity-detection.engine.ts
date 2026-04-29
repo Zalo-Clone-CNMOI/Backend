@@ -1,7 +1,9 @@
+import { createHash } from 'crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AiEntityDetectionLog } from '@libs/database/entities';
+import { RedisService } from '@libs/redis';
 import { AiGatewayService } from '../ai-gateway/services/ai-gateway.service';
 import { PromptBuilderService } from '../ai-gateway/services/prompt-builder.service';
 import { AiMetricsService } from '../ai-gateway/services/ai-metrics.service';
@@ -35,6 +37,7 @@ export class EntityDetectionEngine {
     private readonly gateway: AiGatewayService,
     private readonly promptBuilder: PromptBuilderService,
     private readonly aiMetrics: AiMetricsService,
+    private readonly redis: RedisService,
     @InjectRepository(AiEntityDetectionLog)
     private readonly logRepo: Repository<AiEntityDetectionLog>,
   ) {}
@@ -157,6 +160,12 @@ export class EntityDetectionEngine {
     event: AiEntityInfoRequestEvent,
   ): Promise<AiEntityInfoResultEvent> {
     const language = event.language ?? 'vi';
+    const cacheKey = `ai:entity-info:${event.entity_type}:${createHash('sha256').update(event.entity_text).digest('hex').slice(0, 20)}:${language}`;
+
+    const cached = await this.redis.get(cacheKey);
+    if (cached) {
+      return JSON.parse(cached) as AiEntityInfoResultEvent;
+    }
 
     try {
       const messages = this.promptBuilder.buildEntityInfoPrompt(
@@ -183,7 +192,7 @@ export class EntityDetectionEngine {
         true,
       );
 
-      return {
+      const infoResult: AiEntityInfoResultEvent = {
         entity_text: event.entity_text,
         entity_type: event.entity_type,
         title: parsed.title,
@@ -195,6 +204,14 @@ export class EntityDetectionEngine {
         processed_at: Date.now(),
         trace_id: event.trace_id,
       };
+
+      await this.redis.setEx(
+        cacheKey,
+        7 * 24 * 3600,
+        JSON.stringify(infoResult),
+      );
+
+      return infoResult;
     } catch (error) {
       this.logger.error(
         `Entity info generation failed for "${event.entity_text}": ${error instanceof Error ? error.message : String(error)}`,

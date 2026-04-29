@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { RedisService } from '@libs/redis';
 import { AiGatewayService } from '../ai-gateway/services/ai-gateway.service';
@@ -143,7 +144,7 @@ export class TranslationEngine {
   }
 
   private getCacheKey(body: string, targetLang: string): string {
-    const hash = Buffer.from(body).toString('base64url').slice(0, 32);
+    const hash = createHash('sha256').update(body).digest('hex').slice(0, 40);
     return `ai:translate:${hash}:${targetLang}`;
   }
 

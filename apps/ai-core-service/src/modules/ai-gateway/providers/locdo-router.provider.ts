@@ -104,7 +104,11 @@ export class LocDoRouterProvider implements ILlmProvider {
 
       for await (const chunk of stream) {
         const delta = chunk.choices?.[0]?.delta?.content ?? '';
-        const isFinished = chunk.choices?.[0]?.finish_reason !== null;
+        const finishReason = chunk.choices?.[0]?.finish_reason;
+        const isFinished =
+          finishReason === 'stop' ||
+          finishReason === 'length' ||
+          finishReason === 'content_filter';
 
         if (delta) {
           fullContent += delta;

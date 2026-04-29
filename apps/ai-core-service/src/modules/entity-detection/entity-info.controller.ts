@@ -15,6 +15,8 @@ const VALID_TYPES: readonly EntityType[] = [
   'other',
 ];
 
+// Internal-only endpoint — port 5005 must be firewalled from public internet.
+// user_id is caller-supplied (BFF passes authenticated userId).
 @ApiTags('Entity Info')
 @Controller('entity-info')
 export class EntityInfoController {
@@ -42,8 +44,8 @@ export class EntityInfoController {
   })
   @ApiQuery({
     name: 'user_id',
-    required: false,
-    description: 'Requesting user ID',
+    required: true,
+    description: 'Authenticated user ID (supplied by BFF)',
   })
   @ApiResponse({ status: 200, description: 'Entity info panel content' })
   @ApiResponse({ status: 400, description: 'Invalid query parameters' })
@@ -66,10 +68,14 @@ export class EntityInfoController {
       );
     }
 
+    if (!query.user_id?.trim()) {
+      throw BusinessException.badRequest('user_id query parameter is required');
+    }
+
     return this.engine.generateInfo({
       entity_text: text,
       entity_type: query.type as EntityType,
-      user_id: query.user_id || 'anonymous',
+      user_id: query.user_id,
       language: query.lang === 'en' ? 'en' : 'vi',
     });
   }

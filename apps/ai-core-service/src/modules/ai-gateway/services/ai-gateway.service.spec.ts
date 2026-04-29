@@ -3,6 +3,7 @@ import { Logger } from '@nestjs/common';
 import { AiGatewayService } from './ai-gateway.service';
 import { DataSanitizer } from './data-sanitizer.service';
 import { TokenBudgetService } from './token-budget.service';
+import { AiMetricsService } from './ai-metrics.service';
 import {
   LLM_PROVIDERS,
   ILlmProvider,
@@ -55,12 +56,20 @@ function makeBudget(canConsume = true): jest.Mocked<TokenBudgetService> {
   } as unknown as jest.Mocked<TokenBudgetService>;
 }
 
+function makeMetrics(): jest.Mocked<AiMetricsService> {
+  return {
+    recordRequest: jest.fn(),
+    setCircuitState: jest.fn(),
+  } as unknown as jest.Mocked<AiMetricsService>;
+}
+
 describe('AiGatewayService', () => {
   let gateway: AiGatewayService;
   let primaryProvider: jest.Mocked<ILlmProvider>;
   let secondaryProvider: jest.Mocked<ILlmProvider>;
   let sanitizer: jest.Mocked<DataSanitizer>;
   let budget: jest.Mocked<TokenBudgetService>;
+  let metrics: jest.Mocked<AiMetricsService>;
 
   const BASE_OPTIONS = {
     messages: [{ role: 'user' as const, content: 'Hello' }],
@@ -71,6 +80,7 @@ describe('AiGatewayService', () => {
     secondaryProvider = makeProvider('gemini');
     sanitizer = makeSanitizer();
     budget = makeBudget();
+    metrics = makeMetrics();
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -81,6 +91,7 @@ describe('AiGatewayService', () => {
         },
         { provide: DataSanitizer, useValue: sanitizer },
         { provide: TokenBudgetService, useValue: budget },
+        { provide: AiMetricsService, useValue: metrics },
       ],
     }).compile();
 
@@ -199,6 +210,7 @@ describe('AiGatewayService', () => {
           },
           { provide: DataSanitizer, useValue: sanitizer },
           { provide: TokenBudgetService, useValue: budget },
+          { provide: AiMetricsService, useValue: metrics },
         ],
       }).compile();
 
@@ -261,7 +273,7 @@ describe('AiGatewayService', () => {
       };
       primaryProvider.embed.mockResolvedValue(mockEmbedding);
 
-      const result = await gateway.embed('Hello world');
+      const result = await gateway.embed('user-001', 'Hello world');
 
       expect(result).toBe(mockEmbedding);
       expect(primaryProvider.embed).toHaveBeenCalledWith(
@@ -279,7 +291,7 @@ describe('AiGatewayService', () => {
         provider: 'openai',
       });
 
-      await gateway.embed('user@example.com info');
+      await gateway.embed('user-001', 'user@example.com info');
 
       expect(sanitizer.sanitize).toHaveBeenCalledWith('user@example.com info');
       expect(primaryProvider.embed).toHaveBeenCalledWith(
@@ -295,12 +307,13 @@ describe('AiGatewayService', () => {
           { provide: LLM_PROVIDERS, useValue: [makeProvider('openai', false)] },
           { provide: DataSanitizer, useValue: sanitizer },
           { provide: TokenBudgetService, useValue: budget },
+          { provide: AiMetricsService, useValue: metrics },
         ],
       }).compile();
 
       const gw = m.get(AiGatewayService);
 
-      await expect(gw.embed('test')).rejects.toThrow(
+      await expect(gw.embed('user-001', 'test')).rejects.toThrow(
         'OpenAI provider not available for embeddings',
       );
     });
@@ -360,6 +373,7 @@ describe('AiGatewayService', () => {
           { provide: LLM_PROVIDERS, useValue: [unavailable, available] },
           { provide: DataSanitizer, useValue: sanitizer },
           { provide: TokenBudgetService, useValue: budget },
+          { provide: AiMetricsService, useValue: metrics },
         ],
       }).compile();
       const gw = m.get(AiGatewayService);
@@ -493,6 +507,7 @@ describe('AiGatewayService', () => {
           },
           { provide: DataSanitizer, useValue: sanitizer },
           { provide: TokenBudgetService, useValue: budget },
+          { provide: AiMetricsService, useValue: metrics },
         ],
       }).compile();
 
@@ -548,6 +563,7 @@ describe('AiGatewayService', () => {
           },
           { provide: DataSanitizer, useValue: sanitizer },
           { provide: TokenBudgetService, useValue: budget },
+          { provide: AiMetricsService, useValue: metrics },
         ],
       }).compile();
 

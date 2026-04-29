@@ -8,6 +8,7 @@ import { TranslationEngine } from '../modules/translation/translation.engine';
 import { DocumentEngine } from '../modules/document/document.engine';
 import { TextExtractorService } from '../modules/document/text-extractor.service';
 import { EntityDetectionEngine } from '../modules/entity-detection/entity-detection.engine';
+import { APP_CONFIG } from '@libs/config';
 import { S3Service } from '@libs/s3';
 import { KafkaTopics } from '@libs/contracts';
 import type {
@@ -100,6 +101,7 @@ describe('AiConsumer', () => {
         { provide: TextExtractorService, useValue: textExtractor },
         { provide: EntityDetectionEngine, useValue: entityDetectionEngine },
         { provide: S3Service, useValue: s3Service },
+        { provide: APP_CONFIG, useValue: { aiMaxDocumentSizeMb: 10 } },
       ],
     }).compile();
 
@@ -305,6 +307,27 @@ describe('AiConsumer', () => {
 
       expect(documentEngine.processDocument).not.toHaveBeenCalled();
       expect(documentEngine.recordDocumentFailure).toHaveBeenCalled();
+    });
+
+    it('rejects oversized file before downloading from S3', async () => {
+      const event = {
+        ...makeUploadEvent(),
+        file_size: 20 * 1024 * 1024, // 20 MB > 10 MB limit
+      };
+      const mockResult = { document_id: 'doc-1', status: 'failed' };
+      documentEngine.recordDocumentFailure.mockResolvedValue(mockResult);
+
+      await consumer.onDocumentUpload(event);
+
+      expect(s3Service.download).not.toHaveBeenCalled();
+      expect(documentEngine.recordDocumentFailure).toHaveBeenCalledWith(
+        event,
+        expect.stringContaining('10 MB'),
+      );
+      expect(publisher.emit).toHaveBeenCalledWith(
+        KafkaTopics.AiDocumentProcessed,
+        mockResult,
+      );
     });
   });
 

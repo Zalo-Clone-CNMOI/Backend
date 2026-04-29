@@ -125,16 +125,23 @@ export class AiConsumer {
       `Document upload: ${event.document_id} (${event.file_name})`,
     );
 
-    const maxSizeBytes = (this.config.aiMaxDocumentSizeMb ?? 10) * 1024 * 1024;
+    const limitMb = this.config.aiMaxDocumentSizeMb ?? 10;
+    const maxSizeBytes = limitMb * 1024 * 1024;
     if (event.file_size > maxSizeBytes) {
       this.logger.warn(
-        `Document ${event.document_id} rejected before download: ${event.file_size} bytes exceeds ${this.config.aiMaxDocumentSizeMb ?? 10} MB limit`,
+        `Document ${event.document_id} rejected before download: ${event.file_size} bytes exceeds ${limitMb} MB limit`,
       );
-      const result = await this.documentEngine.recordDocumentFailure(
-        event,
-        `File exceeds maximum size of ${this.config.aiMaxDocumentSizeMb ?? 10} MB`,
-      );
-      await this.publisher.emit(KafkaTopics.AiDocumentProcessed, result);
+      try {
+        const result = await this.documentEngine.recordDocumentFailure(
+          event,
+          `File exceeds maximum size of ${limitMb} MB`,
+        );
+        await this.publisher.emit(KafkaTopics.AiDocumentProcessed, result);
+      } catch (guardError) {
+        this.logger.error(
+          `Failed to record oversized-file rejection for ${event.document_id}: ${guardError instanceof Error ? guardError.message : String(guardError)}`,
+        );
+      }
       return;
     }
 

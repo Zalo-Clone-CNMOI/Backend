@@ -1,36 +1,23 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
+import { createHash } from 'crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { RedisService } from '@libs/redis';
 import { AiGatewayService } from '../ai-gateway/services/ai-gateway.service';
 import { PromptBuilderService } from '../ai-gateway/services/prompt-builder.service';
 import { AiMetricsService } from '../ai-gateway/services/ai-metrics.service';
+import {
+  parseJsonResponse,
+  validateLanguageCode,
+} from '../ai-gateway/services/parse-json.util';
 import type {
   AiTranslateRequestEvent,
   AiTranslateResultEvent,
-  AiProviderType,
 } from '@libs/contracts';
+import { toAiProviderType } from '@libs/contracts';
 
-const toAiProviderType = (provider: string): AiProviderType => {
-  if (
-    provider === 'openai' ||
-    provider === 'gemini' ||
-    provider === 'anthropic'
-  ) {
-    return provider;
-  }
-  return 'openai';
-};
-
-/**
- * TranslationEngine — translates messages with 24h Redis cache.
- *
- * Cache key: ai:translate:{md5(body)}:{targetLanguage}
- * Cache TTL: 24 hours
- */
 @Injectable()
 export class TranslationEngine {
   private readonly logger = new Logger(TranslationEngine.name);
-  private readonly CACHE_TTL = 86400; // 24 hours
+  private readonly CACHE_TTL = 86400;
 
   constructor(
     private readonly gateway: AiGatewayService,
@@ -39,9 +26,6 @@ export class TranslationEngine {
     private readonly redis: RedisService,
   ) {}
 
-  /**
-   * Translate a message, checking cache first.
-   */
   async translate(
     event: AiTranslateRequestEvent,
   ): Promise<AiTranslateResultEvent> {
@@ -51,7 +35,11 @@ export class TranslationEngine {
     if (cached) {
       this.logger.debug('Translation cache hit');
       try {
-        const parsed = JSON.parse(cached);
+        const parsed = JSON.parse(cached) as {
+          translated_text: string;
+          source_language: string;
+          provider: string;
+        };
         return {
           message_id: event.message_id,
           conversation_id: event.conversation_id,
@@ -60,7 +48,7 @@ export class TranslationEngine {
           translated_body: parsed.translated_text,
           source_language: parsed.source_language,
           target_language: event.target_language,
-          provider: parsed.provider,
+          provider: toAiProviderType(parsed.provider),
           tokens_used: 0,
           cached: true,
           processed_at: Date.now(),
@@ -156,7 +144,7 @@ export class TranslationEngine {
   }
 
   private getCacheKey(body: string, targetLang: string): string {
-    const hash = Buffer.from(body).toString('base64url').slice(0, 32);
+    const hash = createHash('sha256').update(body).digest('hex').slice(0, 40);
     return `ai:translate:${hash}:${targetLang}`;
   }
 
@@ -165,10 +153,13 @@ export class TranslationEngine {
     source_language: string;
   } {
     try {
-      const json = JSON.parse(content);
+      const json = parseJsonResponse(content) as Record<string, unknown>;
       return {
-        translated_text: json.translated_text ?? content,
-        source_language: json.source_language ?? 'auto',
+        translated_text:
+          typeof json.translated_text === 'string'
+            ? json.translated_text
+            : content,
+        source_language: validateLanguageCode(json.source_language, 'auto'),
       };
     } catch {
       return { translated_text: content, source_language: 'auto' };

@@ -90,7 +90,11 @@ export class OpenAiProvider implements ILlmProvider {
 
       for await (const chunk of stream) {
         const delta = chunk.choices?.[0]?.delta?.content ?? '';
-        const isFinished = chunk.choices?.[0]?.finish_reason !== null;
+        const finishReason = chunk.choices?.[0]?.finish_reason;
+        const isFinished =
+          finishReason === 'stop' ||
+          finishReason === 'length' ||
+          finishReason === 'content_filter';
 
         if (delta) {
           fullContent += delta;
@@ -151,6 +155,47 @@ export class OpenAiProvider implements ILlmProvider {
       );
       throw new Error(
         `OpenAI embedding API call failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+    }
+  }
+
+  async embedBatch(
+    texts: string[],
+    model?: string,
+  ): Promise<LlmEmbeddingResult[]> {
+    if (texts.length === 0) return [];
+
+    const embeddingModel =
+      model ?? this.config.aiEmbeddingModel ?? 'text-embedding-3-small';
+
+    try {
+      const client = await this.getClient();
+
+      const response = await client.embeddings.create({
+        model: embeddingModel,
+        input: texts,
+      });
+
+      // response.data is ordered to match the input array
+      const totalTokens = response.usage?.total_tokens ?? 0;
+      const count = response.data.length;
+      const base = count > 0 ? Math.floor(totalTokens / count) : 0;
+      const remainder = count > 0 ? totalTokens % count : 0;
+      const last = count - 1;
+
+      return response.data.map((item, i) => ({
+        embedding: item.embedding,
+        tokensUsed: i === last ? base + remainder : base,
+        model: embeddingModel,
+        provider: this.name,
+      }));
+    } catch (error) {
+      this.logger.error(
+        `OpenAI embedBatch() failed - Model: ${embeddingModel}, Count: ${texts.length}, Error: ${error instanceof Error ? error.message : String(error)}`,
+        error instanceof Error ? error.stack : undefined,
+      );
+      throw new Error(
+        `OpenAI batch embedding API call failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     }
   }

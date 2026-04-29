@@ -34,4 +34,10 @@ export default tseslint.config(
       'no-debugger': 'error',
     },
   },
+  {
+    files: ['**/*.spec.ts', '**/*.e2e-spec.ts', '**/*.test.ts'],
+    rules: {
+      '@typescript-eslint/unbound-method': 'off',
+    },
+  },
 );

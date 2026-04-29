@@ -1,13 +1,20 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
 import { Injectable, Logger } from '@nestjs/common';
+import { MessageRepository } from '@libs/scylla';
 import { AiGatewayService } from '../ai-gateway/services/ai-gateway.service';
 import { PromptBuilderService } from '../ai-gateway/services/prompt-builder.service';
 import { AiMetricsService } from '../ai-gateway/services/ai-metrics.service';
+import {
+  parseJsonResponse,
+  validateSuggestions,
+} from '../ai-gateway/services/parse-json.util';
 import type {
+  AiSmartReplyContextMessage,
   AiSmartReplyRequestEvent,
   AiSmartReplyResultEvent,
-  AiProviderType,
 } from '@libs/contracts';
+import { toAiProviderType } from '@libs/contracts';
+
+const CONTEXT_FETCH_LIMIT = 10;
 
 @Injectable()
 export class SmartReplyEngine {
@@ -17,19 +24,24 @@ export class SmartReplyEngine {
     private readonly gateway: AiGatewayService,
     private readonly promptBuilder: PromptBuilderService,
     private readonly aiMetrics: AiMetricsService,
+    private readonly messageRepo: MessageRepository,
   ) {}
 
-  /**
-   * Generate smart reply suggestions for a conversation.
-   */
   async generateReplies(
     event: AiSmartReplyRequestEvent,
-    conversationContext: string[] = [],
   ): Promise<AiSmartReplyResultEvent> {
     try {
+      const contextMessages =
+        event.context_messages.length > 0
+          ? event.context_messages
+          : await this.fetchContextMessages(
+              event.conversation_id,
+              event.user_id,
+            );
+
       const messages = this.promptBuilder.buildSmartReplyPrompt(
         event.last_message_body,
-        conversationContext,
+        contextMessages,
       );
 
       const result = await this.gateway.complete(event.user_id, {
@@ -86,28 +98,40 @@ export class SmartReplyEngine {
     }
   }
 
+  private async fetchContextMessages(
+    conversationId: string,
+    userId: string,
+  ): Promise<AiSmartReplyContextMessage[]> {
+    try {
+      const { items } = await this.messageRepo.getMessages(conversationId, {
+        limit: CONTEXT_FETCH_LIMIT,
+      });
+
+      return (
+        items
+          .filter((m) => !m.deleted_at && m.body)
+          // ScyllaDB returns DESC (newest first); reverse to chronological for context
+          .reverse()
+          .map((m) => ({
+            role: m.sender_id === userId ? ('me' as const) : ('them' as const),
+            body: m.body,
+          }))
+      );
+    } catch (err) {
+      this.logger.warn(
+        `ScyllaDB context fetch failed for ${conversationId}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return [];
+    }
+  }
+
   private parseResponse(content: string): { suggestions: string[] } {
     try {
-      const json = JSON.parse(content);
-      return {
-        suggestions: Array.isArray(json.suggestions)
-          ? json.suggestions.slice(0, 3)
-          : [],
-      };
+      const json = parseJsonResponse(content) as Record<string, unknown>;
+      return { suggestions: validateSuggestions(json.suggestions) };
     } catch {
       this.logger.warn('Failed to parse smart reply response');
       return { suggestions: [] };
     }
   }
 }
-
-const toAiProviderType = (provider: string): AiProviderType => {
-  if (
-    provider === 'openai' ||
-    provider === 'gemini' ||
-    provider === 'anthropic'
-  ) {
-    return provider;
-  }
-  return 'openai';
-};

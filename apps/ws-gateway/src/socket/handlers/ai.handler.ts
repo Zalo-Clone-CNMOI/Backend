@@ -9,6 +9,7 @@ import {
   type WsAiSummaryRequestPayload,
   type WsAiTranslateRequestPayload,
   type WsAiDocumentQueryRequestPayload,
+  type AiSmartReplyContextMessage,
 } from '@libs/contracts';
 import type { Socket } from 'socket.io';
 import type { DefaultEventsMap } from 'socket.io/dist/typed-events';
@@ -41,8 +42,9 @@ export class AiHandler {
     const userId = String(socket.data.userId);
     const limit = body.context_count ?? DEFAULT_CONTEXT_COUNT;
 
-    const contextMessages = await this.fetchMessageBodies(
+    const contextMessages = await this.fetchContextMessages(
       body.conversation_id,
+      userId,
       limit,
     );
 
@@ -111,33 +113,46 @@ export class AiHandler {
   // ── Private Helpers ──────────────────────────────────────────────────
 
   /**
-   * Fetch recent message bodies for a conversation.
+   * Fetch recent messages as typed context for smart reply.
+   * Maps sender_id to role: 'me' (current user) or 'them' (others).
    * Tries Redis cache first, falls back to ScyllaDB.
    */
-  private async fetchMessageBodies(
+  private async fetchContextMessages(
     conversationId: string,
+    userId: string,
     limit: number,
-  ): Promise<string[]> {
+  ): Promise<AiSmartReplyContextMessage[]> {
     try {
-      // Try cache first
       const cached =
-        await this.cacheService.getRecentMessages<Array<{ body: string }>>(
-          conversationId,
-        );
+        await this.cacheService.getRecentMessages<
+          Array<{ sender_id: string; body: string }>
+        >(conversationId);
 
       if (cached && cached.length > 0) {
         return cached
           .slice(0, limit)
-          .map((m) => m.body)
-          .filter(Boolean);
+          .filter((m) => m.body)
+          .map(
+            (m) =>
+              ({
+                role: m.sender_id === userId ? 'me' : 'them',
+                body: m.body,
+              }) as AiSmartReplyContextMessage,
+          );
       }
 
-      // Fallback to ScyllaDB
       const result = await this.messageRepo.getMessages(conversationId, {
         limit,
       });
-
-      return result.items.map((m) => m.body).filter(Boolean);
+      return result.items
+        .filter((m) => m.body)
+        .map(
+          (m) =>
+            ({
+              role: m.sender_id === userId ? 'me' : 'them',
+              body: m.body,
+            }) as AiSmartReplyContextMessage,
+        );
     } catch (error) {
       this.logger.error(
         `Failed to fetch messages for conversation ${conversationId}`,

@@ -1,10 +1,3 @@
-/**
- * @file prompt-builder.service.spec.ts
- *
- * Unit tests for PromptBuilderService — validates that each builder
- * returns correctly structured LlmChatMessage arrays with the
- * expected roles and content shape.
- */
 import { Test, TestingModule } from '@nestjs/testing';
 import { PromptBuilderService } from './prompt-builder.service';
 
@@ -18,8 +11,6 @@ describe('PromptBuilderService', () => {
 
     builder = module.get(PromptBuilderService);
   });
-
-  // ── buildModerationPrompt ─────────────────────────────────────────
 
   describe('buildModerationPrompt', () => {
     it('returns exactly 2 messages: system + user', () => {
@@ -44,8 +35,6 @@ describe('PromptBuilderService', () => {
     });
   });
 
-  // ── buildSmartReplyPrompt ─────────────────────────────────────────
-
   describe('buildSmartReplyPrompt', () => {
     it('returns exactly 2 messages', () => {
       const result = builder.buildSmartReplyPrompt('Hi!', []);
@@ -59,11 +48,39 @@ describe('PromptBuilderService', () => {
       expect(result[1].content).toContain('Are you free tonight?');
     });
 
-    it('includes context messages when provided', () => {
-      const ctx = ['User A: Hello', 'User B: How are you?'];
-      const result = builder.buildSmartReplyPrompt('I am fine', ctx);
-      expect(result[1].content).toContain('User A: Hello');
-      expect(result[1].content).toContain('User B: How are you?');
+    it('uses Vietnamese labels (Họ/Bạn) when conversation is in Vietnamese', () => {
+      const ctx = [
+        { role: 'them' as const, body: 'Bạn khỏe không?' },
+        { role: 'me' as const, body: 'Tớ ổn' },
+      ];
+      const result = builder.buildSmartReplyPrompt('Đi cà phê đi', ctx);
+      expect(result[1].content).toContain('Lịch sử cuộc trò chuyện');
+      expect(result[1].content).toContain('Họ: Bạn khỏe không?');
+      expect(result[1].content).toContain('Bạn: Tớ ổn');
+      expect(result[1].content).toContain('Tin nhắn cuối');
+    });
+
+    it('uses English labels (Them/You) when conversation is in English', () => {
+      const ctx = [
+        { role: 'them' as const, body: 'Hello, how are you?' },
+        { role: 'me' as const, body: 'I am good' },
+      ];
+      const result = builder.buildSmartReplyPrompt('Want to grab coffee?', ctx);
+      expect(result[1].content).toContain('Recent conversation');
+      expect(result[1].content).toContain('Them: Hello, how are you?');
+      expect(result[1].content).toContain('You: I am good');
+      expect(result[1].content).toContain('Last message');
+      expect(result[1].content).not.toContain('Họ:');
+      expect(result[1].content).not.toContain('Bạn:');
+    });
+
+    it('detects Vietnamese from any message in context (not just last)', () => {
+      const ctx = [
+        { role: 'them' as const, body: 'Chào bạn' },
+        { role: 'me' as const, body: 'Hi' },
+      ];
+      const result = builder.buildSmartReplyPrompt('Yes', ctx);
+      expect(result[1].content).toContain('Họ:');
     });
 
     it('system prompt requests suggestions array', () => {
@@ -73,12 +90,10 @@ describe('PromptBuilderService', () => {
 
     it('omits context block when context is empty', () => {
       const result = builder.buildSmartReplyPrompt('Hi', []);
-      // user content should only contain the last message phrase
+      expect(result[1].content).not.toContain('Lịch sử cuộc trò chuyện');
       expect(result[1].content).not.toContain('Recent conversation');
     });
   });
-
-  // ── buildSummaryPrompt ────────────────────────────────────────────
 
   describe('buildSummaryPrompt', () => {
     it('returns exactly 2 messages', () => {
@@ -99,8 +114,6 @@ describe('PromptBuilderService', () => {
       expect(result[0].content).toContain('summary');
     });
   });
-
-  // ── buildTranslationPrompt ────────────────────────────────────────
 
   describe('buildTranslationPrompt', () => {
     it('returns exactly 2 messages', () => {
@@ -135,7 +148,7 @@ describe('PromptBuilderService', () => {
 
     it('works without source language (auto-detect)', () => {
       const result = builder.buildTranslationPrompt('Text', undefined, 'en');
-      // Should not throw and should still have 2 messages
+
       expect(result).toHaveLength(2);
     });
 
@@ -145,8 +158,6 @@ describe('PromptBuilderService', () => {
       expect(result[0].content).toContain('source_language');
     });
   });
-
-  // ── buildDocumentQueryPrompt ──────────────────────────────────────
 
   describe('buildDocumentQueryPrompt', () => {
     it('returns exactly 2 messages', () => {
@@ -180,14 +191,134 @@ describe('PromptBuilderService', () => {
       expect(result[0].content).toContain('source_indices');
     });
 
-    it('labels chunks as [Source N] in user content', () => {
+    it('labels chunks as [Nguồn N] in user content', () => {
       const chunks = [
         { content: 'Alpha', chunkIndex: 0 },
         { content: 'Beta', chunkIndex: 1 },
       ];
       const result = builder.buildDocumentQueryPrompt('?', chunks);
-      expect(result[1].content).toContain('[Source 1]');
-      expect(result[1].content).toContain('[Source 2]');
+      expect(result[1].content).toContain('[Nguồn 1]');
+      expect(result[1].content).toContain('[Nguồn 2]');
+    });
+  });
+
+  describe('buildEntityDetectionPrompt', () => {
+    it('returns exactly 2 messages: system + user', () => {
+      const result = builder.buildEntityDetectionPrompt(
+        'Tôi dùng Telegram mỗi ngày',
+      );
+      expect(result).toHaveLength(2);
+      expect(result[0].role).toBe('system');
+      expect(result[1].role).toBe('user');
+    });
+
+    it('puts the message body as user content', () => {
+      const body = 'Figma là tool thiết kế tốt nhất';
+      const result = builder.buildEntityDetectionPrompt(body);
+      expect(result[1].content).toBe(body);
+    });
+
+    it('system prompt requests entities array with text, type, confidence', () => {
+      const result = builder.buildEntityDetectionPrompt('test');
+      expect(result[0].content).toContain('entities');
+      expect(result[0].content).toContain('text');
+      expect(result[0].content).toContain('type');
+      expect(result[0].content).toContain('confidence');
+    });
+
+    it('system prompt lists all entity types', () => {
+      const result = builder.buildEntityDetectionPrompt('test');
+      const content = result[0].content;
+      expect(content).toContain('tool');
+      expect(content).toContain('company');
+      expect(content).toContain('person');
+      expect(content).toContain('concept');
+      expect(content).toContain('location');
+      expect(content).toContain('product');
+    });
+
+    it('system prompt mentions confidence threshold 0.75', () => {
+      const result = builder.buildEntityDetectionPrompt('test');
+      expect(result[0].content).toContain('0.75');
+    });
+  });
+
+  describe('buildSummaryUpdatePrompt', () => {
+    it('returns 2 messages: system + user', () => {
+      const result = builder.buildSummaryUpdatePrompt('Old summary.', [
+        'New msg',
+      ]);
+      expect(result).toHaveLength(2);
+      expect(result[0].role).toBe('system');
+      expect(result[1].role).toBe('user');
+    });
+
+    it('includes previous summary in user message', () => {
+      const result = builder.buildSummaryUpdatePrompt('Old summary.', [
+        'New msg',
+      ]);
+      expect(result[1].content).toContain('Old summary.');
+      expect(result[1].content).toContain('New msg');
+    });
+
+    it('system prompt mentions updating existing summary', () => {
+      const result = builder.buildSummaryUpdatePrompt('Old.', ['New.']);
+      expect(result[0].content.toLowerCase()).toContain('updating');
+    });
+
+    it('joins multiple new messages with newline', () => {
+      const result = builder.buildSummaryUpdatePrompt('Old.', [
+        'Msg A',
+        'Msg B',
+      ]);
+      expect(result[1].content).toContain('Msg A\nMsg B');
+    });
+  });
+
+  describe('buildEntityInfoPrompt', () => {
+    it('returns exactly 2 messages: system + user', () => {
+      const result = builder.buildEntityInfoPrompt('Telegram', 'tool', 'vi');
+      expect(result).toHaveLength(2);
+      expect(result[0].role).toBe('system');
+      expect(result[1].role).toBe('user');
+    });
+
+    it('puts entity name in user content', () => {
+      const result = builder.buildEntityInfoPrompt('Elon Musk', 'person', 'en');
+      expect(result[1].content).toContain('Elon Musk');
+    });
+
+    it('puts entity type in user content', () => {
+      const result = builder.buildEntityInfoPrompt('Docker', 'tool', 'en');
+      expect(result[1].content).toContain('tool');
+    });
+
+    it('uses Vietnamese in system prompt when language is vi', () => {
+      const result = builder.buildEntityInfoPrompt('Hà Nội', 'location', 'vi');
+      expect(result[0].content).toContain('Vietnamese');
+    });
+
+    it('uses English in system prompt when language is en', () => {
+      const result = builder.buildEntityInfoPrompt(
+        'Silicon Valley',
+        'location',
+        'en',
+      );
+      expect(result[0].content).toContain('English');
+    });
+
+    it('system prompt requests title, summary, details, related_entities', () => {
+      const result = builder.buildEntityInfoPrompt('ChatGPT', 'product', 'vi');
+      const content = result[0].content;
+      expect(content).toContain('title');
+      expect(content).toContain('summary');
+      expect(content).toContain('details');
+      expect(content).toContain('related_entities');
+    });
+
+    it('system prompt includes uncertainty guard', () => {
+      const result = builder.buildEntityInfoPrompt('ChatGPT', 'product', 'vi');
+      expect(result[0].content).toContain('omit');
     });
   });
 });

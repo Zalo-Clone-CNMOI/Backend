@@ -7,7 +7,9 @@ export type AiFeatureType =
   | 'smart_reply'
   | 'summary'
   | 'translation'
-  | 'document_analysis';
+  | 'document_analysis'
+  | 'entity_detection'
+  | 'entity_info';
 
 export type ModerationLabelType =
   | 'clean'
@@ -19,7 +21,26 @@ export type ModerationLabelType =
   | 'violence'
   | 'self_harm';
 
-export type AiProviderType = 'openai' | 'gemini' | 'anthropic';
+export type AiProviderType =
+  | 'openai'
+  | 'gemini'
+  | 'anthropic'
+  | 'locdo_router'
+  | 'ensemble';
+
+const AI_PROVIDER_VALUES: readonly AiProviderType[] = [
+  'openai',
+  'gemini',
+  'anthropic',
+  'locdo_router',
+  'ensemble',
+];
+
+export function toAiProviderType(provider: string): AiProviderType {
+  return (AI_PROVIDER_VALUES as readonly string[]).includes(provider)
+    ? (provider as AiProviderType)
+    : 'openai';
+}
 
 export type ModerationDecisionSourceType =
   | 'model'
@@ -101,13 +122,18 @@ export interface AiModerationEnforcementEvent {
 
 // ── Smart Reply ────────────────────────────────────────────────────────────
 
+export interface AiSmartReplyContextMessage {
+  role: 'me' | 'them';
+  body: string;
+}
+
 export interface AiSmartReplyRequestEvent {
   conversation_id: string;
   user_id: string;
   last_message_id: string;
   last_message_body: string;
   context_count?: number;
-  context_messages: string[];
+  context_messages: AiSmartReplyContextMessage[];
   requested_at: number;
   trace_id?: string;
 }
@@ -225,6 +251,63 @@ export interface AiDocumentQueryResultEvent {
     content_preview: string;
     similarity_score: number;
   }>;
+  provider: AiProviderType;
+  tokens_used: number;
+  processed_at: number;
+  trace_id?: string;
+}
+
+// ── Entity Detection ───────────────────────────────────────────────────────
+
+export type EntityType =
+  | 'tool'
+  | 'company'
+  | 'person'
+  | 'concept'
+  | 'location'
+  | 'product'
+  | 'other';
+
+export interface DetectedEntity {
+  text: string;
+  type: EntityType;
+  confidence: number;
+}
+
+export interface AiEntityDetectionRequestEvent {
+  message_id: string;
+  conversation_id: string;
+  sender_id: string;
+  body: string;
+  created_at: number;
+  trace_id?: string;
+}
+
+export interface AiEntityDetectionResultEvent {
+  message_id: string;
+  conversation_id: string;
+  entities: DetectedEntity[];
+  provider: AiProviderType;
+  tokens_used: number;
+  processed_at: number;
+  trace_id?: string;
+}
+
+export interface AiEntityInfoRequestEvent {
+  entity_text: string;
+  entity_type: EntityType;
+  user_id: string;
+  language?: string;
+  trace_id?: string;
+}
+
+export interface AiEntityInfoResultEvent {
+  entity_text: string;
+  entity_type: EntityType;
+  title: string;
+  summary: string;
+  details: string;
+  related_entities?: string[];
   provider: AiProviderType;
   tokens_used: number;
   processed_at: number;

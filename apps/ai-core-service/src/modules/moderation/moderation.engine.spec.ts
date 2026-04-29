@@ -1,16 +1,3 @@
-/**
- * @file moderation.engine.spec.ts
- *
- * Unit tests for ModerationEngine — LLM-based content moderation.
- *
- * Covers:
- *  - moderate() success path (LLM returns valid JSON)
- *  - moderate() saves result to DB and records metrics
- *  - moderate() returns safe default on LLM failure
- *  - moderate() returns safe default when JSON is malformed
- *  - moderate() ensemble flag reflected in result
- */
-/* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ModerationEngine } from './moderation.engine';
@@ -20,8 +7,6 @@ import { AiMetricsService } from '../ai-gateway/services/ai-metrics.service';
 import { APP_CONFIG } from '@libs/config';
 import { AiModerationLog } from '@libs/database/entities';
 import type { AiModerationRequestEvent } from '@libs/contracts';
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function makeRequest(
   overrides: Partial<AiModerationRequestEvent> = {},
@@ -41,6 +26,7 @@ function makeRequest(
 function makeGateway() {
   return {
     complete: jest.fn(),
+    completeEnsemble: jest.fn(),
     completeStream: jest.fn(),
     embed: jest.fn(),
     getProvider: jest.fn(),
@@ -62,8 +48,6 @@ function makeRepo() {
     update: jest.fn(),
   };
 }
-
-// ── Tests ────────────────────────────────────────────────────────────────────
 
 describe('ModerationEngine', () => {
   let engine: ModerationEngine;
@@ -92,8 +76,6 @@ describe('ModerationEngine', () => {
 
     engine = module.get(ModerationEngine);
   });
-
-  // ── Success path ──────────────────────────────────────────────────
 
   describe('moderate() — success', () => {
     it('returns moderation result with LLM parsed values', async () => {
@@ -248,8 +230,6 @@ describe('ModerationEngine', () => {
     });
   });
 
-  // ── Failure / fallback path ───────────────────────────────────────
-
   describe('moderate() — failure fallback', () => {
     it('returns safe default when LLM throws', async () => {
       gateway.complete.mockRejectedValue(new Error('LLM timeout'));
@@ -345,9 +325,7 @@ describe('ModerationEngine', () => {
     });
   });
 
-  // ── Ensemble flag ─────────────────────────────────────────────────
-
-  describe('ensemble flag', () => {
+  describe('ensemble flag in single mode', () => {
     it('reflects ensemble=false in result when config is false', async () => {
       gateway.complete.mockResolvedValue({
         content: JSON.stringify({
@@ -368,9 +346,12 @@ describe('ModerationEngine', () => {
 
       expect(result.ensemble).toBe(false);
     });
+  });
 
-    it('reflects ensemble=true in result when config enables it', async () => {
-      // Re-create engine with ensemble=true
+  describe('ensemble mode (aiModerationEnsemble=true)', () => {
+    let ensembleEngine: ModerationEngine;
+
+    beforeEach(async () => {
       const m = await Test.createTestingModule({
         providers: [
           ModerationEngine,
@@ -384,27 +365,179 @@ describe('ModerationEngine', () => {
           },
         ],
       }).compile();
-
-      const ensembleEngine = m.get(ModerationEngine);
-
-      gateway.complete.mockResolvedValue({
-        content: JSON.stringify({
-          is_flagged: false,
-          labels: ['clean'],
-          confidence: 1,
-        }),
-        tokensIn: 30,
-        tokensOut: 10,
-        model: 'gpt-4o',
-        provider: 'openai',
-        latencyMs: 80,
-      });
+      ensembleEngine = m.get(ModerationEngine);
       moderationRepo.create.mockReturnValue({});
       moderationRepo.save.mockResolvedValue({});
+    });
+
+    function vote(
+      provider: string,
+      isFlagged: boolean,
+      label: string,
+      confidence: number,
+    ) {
+      return {
+        content: JSON.stringify({
+          is_flagged: isFlagged,
+          labels: [label],
+          confidence,
+        }),
+        tokensIn: 50,
+        tokensOut: 20,
+        model: 'gpt-4o',
+        provider,
+        latencyMs: 100,
+      };
+    }
+
+    it('uses completeEnsemble (not complete) when ensemble enabled', async () => {
+      gateway.completeEnsemble.mockResolvedValue([
+        vote('locdo_router', false, 'clean', 0.9),
+        vote('openai', false, 'clean', 0.85),
+      ]);
+
+      await ensembleEngine.moderate(makeRequest());
+
+      expect(gateway.completeEnsemble).toHaveBeenCalledTimes(1);
+      expect(gateway.complete).not.toHaveBeenCalled();
+    });
+
+    it('majority vote — 2/3 flagged → flagged', async () => {
+      gateway.completeEnsemble.mockResolvedValue([
+        vote('locdo_router', true, 'toxic', 0.9),
+        vote('openai', true, 'harassment', 0.85),
+        vote('gemini', false, 'clean', 0.7),
+      ]);
+
+      const result = await ensembleEngine.moderate(makeRequest());
+
+      expect(result.is_flagged).toBe(true);
+
+      expect(result.labels.sort()).toEqual(['harassment', 'toxic'].sort());
+    });
+
+    it('majority vote — 1/3 flagged → not flagged', async () => {
+      gateway.completeEnsemble.mockResolvedValue([
+        vote('locdo_router', true, 'spam', 0.6),
+        vote('openai', false, 'clean', 0.9),
+        vote('gemini', false, 'clean', 0.95),
+      ]);
+
+      const result = await ensembleEngine.moderate(makeRequest());
+
+      expect(result.is_flagged).toBe(false);
+    });
+
+    it('tied vote (1/2) → flagged (fail-closed bias)', async () => {
+      gateway.completeEnsemble.mockResolvedValue([
+        vote('locdo_router', true, 'toxic', 0.7),
+        vote('openai', false, 'clean', 0.6),
+      ]);
+
+      const result = await ensembleEngine.moderate(makeRequest());
+
+      expect(result.is_flagged).toBe(true);
+    });
+
+    it('confidence is averaged across majority voters', async () => {
+      gateway.completeEnsemble.mockResolvedValue([
+        vote('locdo_router', true, 'toxic', 0.8),
+        vote('openai', true, 'toxic', 0.6),
+        vote('gemini', false, 'clean', 0.9),
+      ]);
+
+      const result = await ensembleEngine.moderate(makeRequest());
+
+      expect(result.is_flagged).toBe(true);
+
+      expect(result.confidence).toBeCloseTo(0.7, 1);
+    });
+
+    it('total tokens summed across all participating providers', async () => {
+      gateway.completeEnsemble.mockResolvedValue([
+        vote('locdo_router', false, 'clean', 0.9),
+        vote('openai', false, 'clean', 0.85),
+      ]);
+
+      const result = await ensembleEngine.moderate(makeRequest());
+
+      expect(result.tokens_used).toBe(140);
+    });
+
+    it('result marked ensemble=true and decision_source=model on success', async () => {
+      gateway.completeEnsemble.mockResolvedValue([
+        vote('locdo_router', false, 'clean', 0.95),
+        vote('openai', false, 'clean', 0.9),
+      ]);
 
       const result = await ensembleEngine.moderate(makeRequest());
 
       expect(result.ensemble).toBe(true);
+      expect(result.provider).toBe('ensemble');
+      expect(result.decision_source).toBe('model');
+    });
+
+    it('falls back fail-closed when no provider succeeds', async () => {
+      gateway.completeEnsemble.mockResolvedValue([]);
+
+      const result = await ensembleEngine.moderate(makeRequest());
+
+      expect(result.is_flagged).toBe(true);
+      expect(result.ensemble).toBe(true);
+      expect(result.decision_source).toBe('fallback_provider_failure');
+    });
+
+    it('falls back fail-closed when completeEnsemble throws', async () => {
+      gateway.completeEnsemble.mockRejectedValue(new Error('budget exceeded'));
+
+      const result = await ensembleEngine.moderate(makeRequest());
+
+      expect(result.is_flagged).toBe(true);
+      expect(result.ensemble).toBe(true);
+      expect(result.decision_source).toBe('fallback_provider_failure');
+      expect(result.failure_reason).toContain('budget exceeded');
+    });
+
+    it('records metrics for each participating provider', async () => {
+      gateway.completeEnsemble.mockResolvedValue([
+        vote('locdo_router', false, 'clean', 0.9),
+        vote('openai', false, 'clean', 0.85),
+        vote('gemini', false, 'clean', 0.8),
+      ]);
+
+      await ensembleEngine.moderate(makeRequest());
+
+      expect(metrics.recordRequest).toHaveBeenCalledTimes(3);
+    });
+
+    it('unanimous 3/3 flagged → all labels unioned', async () => {
+      gateway.completeEnsemble.mockResolvedValue([
+        vote('locdo_router', true, 'toxic', 0.9),
+        vote('openai', true, 'harassment', 0.85),
+        vote('gemini', true, 'hate_speech', 0.95),
+      ]);
+
+      const result = await ensembleEngine.moderate(makeRequest());
+
+      expect(result.is_flagged).toBe(true);
+      expect(result.labels.sort()).toEqual(
+        ['harassment', 'hate_speech', 'toxic'].sort(),
+      );
+    });
+
+    it('persists log row with provider="ensemble" sentinel (not truncated comma list)', async () => {
+      gateway.completeEnsemble.mockResolvedValue([
+        vote('locdo_router', false, 'clean', 0.9),
+        vote('openai', false, 'clean', 0.85),
+        vote('gemini', false, 'clean', 0.8),
+      ]);
+
+      await ensembleEngine.moderate(makeRequest());
+
+      const created = (
+        moderationRepo.create.mock.calls[0] as [{ provider: string }]
+      )[0];
+      expect(created.provider).toBe('ensemble');
     });
   });
 });

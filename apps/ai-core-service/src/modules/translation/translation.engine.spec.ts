@@ -1,17 +1,3 @@
-/**
- * @file translation.engine.spec.ts
- *
- * Unit tests for TranslationEngine — LLM-based translation with 24h Redis cache.
- *
- * Covers:
- *  - Cache hit: returns cached translation with cached=true
- *  - Cache miss: calls LLM, returns translated text, stores to cache
- *  - Correct cache key derivation (base64url of body + target language)
- *  - Failure fallback: returns original body when LLM throws
- *  - Metrics recorded on success and failure
- *  - Corrupted cache: regenerates on JSON parse error
- */
-/* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
 import { Logger } from '@nestjs/common';
 import { TranslationEngine } from './translation.engine';
@@ -20,8 +6,6 @@ import { PromptBuilderService } from '../ai-gateway/services/prompt-builder.serv
 import { AiMetricsService } from '../ai-gateway/services/ai-metrics.service';
 import { RedisService } from '@libs/redis';
 import type { AiTranslateRequestEvent } from '@libs/contracts';
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function makeEvent(
   overrides: Partial<AiTranslateRequestEvent> = {},
@@ -74,8 +58,6 @@ function llmResult(translatedText: string, sourceLang = 'en') {
   };
 }
 
-// ── Tests ────────────────────────────────────────────────────────────────────
-
 describe('TranslationEngine', () => {
   let engine: TranslationEngine;
   let gateway: jest.Mocked<AiGatewayService>;
@@ -101,8 +83,6 @@ describe('TranslationEngine', () => {
 
     jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
   });
-
-  // ── Cache hit ─────────────────────────────────────────────────────
 
   describe('translate() — cache hit', () => {
     it('returns cached translation with cached=true', async () => {
@@ -133,7 +113,6 @@ describe('TranslationEngine', () => {
       const event = makeEvent({ body: 'Hello', target_language: 'it' });
       await engine.translate(event);
 
-      // The key should contain both a body-derived hash and the target language
       const calledKey = redis.get.mock.calls[0][0];
       expect(calledKey).toMatch(/^ai:translate:.+:it$/);
     });
@@ -155,8 +134,6 @@ describe('TranslationEngine', () => {
       expect(result.target_language).toBe('es');
     });
   });
-
-  // ── Cache miss → generate ─────────────────────────────────────────
 
   describe('translate() — cache miss', () => {
     it('calls LLM and returns translated text', async () => {
@@ -217,11 +194,11 @@ describe('TranslationEngine', () => {
     it('calculates tokens_used as tokensIn + tokensOut', async () => {
       redis.get.mockResolvedValue(null);
       redis.setEx.mockResolvedValue(undefined);
-      gateway.complete.mockResolvedValue(llmResult('Done')); // tokensIn=60, tokensOut=40
+      gateway.complete.mockResolvedValue(llmResult('Done'));
 
       const result = await engine.translate(makeEvent());
 
-      expect(result.tokens_used).toBe(100); // 60 + 40
+      expect(result.tokens_used).toBe(100);
     });
 
     it('handles non-JSON LLM response (plain text fallback)', async () => {
@@ -241,8 +218,6 @@ describe('TranslationEngine', () => {
       expect(result.translated_body).toBe('Plain translated text');
     });
   });
-
-  // ── Failure / fallback ────────────────────────────────────────────
 
   describe('translate() — failure fallback', () => {
     it('returns original body as translated_body when LLM throws', async () => {
@@ -291,8 +266,6 @@ describe('TranslationEngine', () => {
     });
   });
 
-  // ── Corrupted cache ───────────────────────────────────────────────
-
   describe('translate() — corrupted cache', () => {
     it('regenerates when cached value is invalid JSON', async () => {
       redis.get.mockResolvedValue('{bad json}');
@@ -305,8 +278,6 @@ describe('TranslationEngine', () => {
       expect(result.translated_body).toBe('Regenerated');
     });
   });
-
-  // ── Same body, different target language ─────────────────────────
 
   describe('cache key isolation', () => {
     it('uses different cache keys for different target languages', async () => {

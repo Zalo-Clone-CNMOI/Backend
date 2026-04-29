@@ -97,6 +97,10 @@ export const KafkaTopics = {
   AiDocumentQueryResult: 'ai.document.query.result',
   AiStreamChunk: 'ai.stream.chunk',
   AiStreamComplete: 'ai.stream.complete',
+  AiEntityDetectionRequest: 'ai.entity.detection.request',
+  AiEntityDetectionResult: 'ai.entity.detection.result',
+  AiEntityInfoRequest: 'ai.entity.info.request',
+  AiEntityInfoResult: 'ai.entity.info.result',
 } as const;
 
 export type KafkaTopic = (typeof KafkaTopics)[keyof typeof KafkaTopics];

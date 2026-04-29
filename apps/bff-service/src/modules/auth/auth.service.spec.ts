@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/unbound-method */
 /**
  * @file auth.service.spec.ts (BFF)
  * @covers BFF AuthService – proxy to SSO client SDK

@@ -1,13 +1,6 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { APP_CONFIG, AppConfig } from '@libs/config';
 
-/**
- * PII Data Sanitizer — strips personally identifiable information
- * from text before sending to LLM providers.
- *
- * Configurable via `aiEnablePiiSanitization` flag.
- * English-only patterns for MVP.
- */
 @Injectable()
 export class DataSanitizer {
   private readonly logger = new Logger(DataSanitizer.name);
@@ -44,9 +37,6 @@ export class DataSanitizer {
     }
   }
 
-  /**
-   * Sanitize text by replacing PII patterns with placeholders.
-   */
   sanitize(text: string): string {
     if (!this.enabled || !text) return text;
 
@@ -57,9 +47,6 @@ export class DataSanitizer {
     return sanitized;
   }
 
-  /**
-   * Batch sanitize multiple texts.
-   */
   sanitizeAll(texts: string[]): string[] {
     return texts.map((t) => this.sanitize(t));
   }

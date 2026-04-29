@@ -7,7 +7,7 @@
  *
  * Tests the full moderation pipeline: prompt building → LLM call → DB persist → result.
  */
-/* eslint-disable @typescript-eslint/unbound-method */
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ModerationEngine } from '../../../apps/ai-core-service/src/modules/moderation/moderation.engine';

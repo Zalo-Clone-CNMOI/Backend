@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -7,24 +6,14 @@ import { AiModerationLog } from '@libs/database/entities';
 import { AiGatewayService } from '../ai-gateway/services/ai-gateway.service';
 import { PromptBuilderService } from '../ai-gateway/services/prompt-builder.service';
 import { AiMetricsService } from '../ai-gateway/services/ai-metrics.service';
+import { parseJsonResponse } from '../ai-gateway/services/parse-json.util';
 import type {
   AiModerationRequestEvent,
   AiModerationResultEvent,
   ModerationLabelType,
-  AiProviderType,
   ModerationDecisionSourceType,
 } from '@libs/contracts';
-
-const toAiProviderType = (provider: string): AiProviderType => {
-  if (
-    provider === 'openai' ||
-    provider === 'gemini' ||
-    provider === 'anthropic'
-  ) {
-    return provider;
-  }
-  return 'openai';
-};
+import { toAiProviderType } from '@libs/contracts';
 
 @Injectable()
 export class ModerationEngine {
@@ -50,10 +39,21 @@ export class ModerationEngine {
     );
   }
 
-  /**
-   * Moderate a chat message. Returns moderation result for Kafka emission.
-   */
+  private static readonly ENSEMBLE_PROVIDERS = [
+    'locdo_router',
+    'openai',
+    'gemini',
+  ];
   async moderate(
+    event: AiModerationRequestEvent,
+  ): Promise<AiModerationResultEvent> {
+    if (this.ensembleEnabled) {
+      return this.ensembleModerate(event);
+    }
+    return this.singleModerate(event);
+  }
+
+  private async singleModerate(
     event: AiModerationRequestEvent,
   ): Promise<AiModerationResultEvent> {
     const messages = this.promptBuilder.buildModerationPrompt(event.body);
@@ -75,7 +75,7 @@ export class ModerationEngine {
         labels: parsed.labels,
         confidence: parsed.confidence,
         provider: result.provider,
-        ensemble: this.ensembleEnabled,
+        ensemble: false,
         tokensUsed: result.tokensIn + result.tokensOut,
         traceId: event.trace_id ?? null,
       });
@@ -100,7 +100,7 @@ export class ModerationEngine {
         labels: parsed.labels,
         confidence: parsed.confidence,
         provider: toAiProviderType(result.provider),
-        ensemble: this.ensembleEnabled,
+        ensemble: false,
         decision_source: parsed.decision_source,
         failure_reason: parsed.failure_reason,
         processed_at: Date.now(),
@@ -108,36 +108,165 @@ export class ModerationEngine {
         trace_id: event.trace_id,
       };
     } catch (error) {
-      this.logger.error(
-        `Moderation failed for message ${event.message_id}: ${error instanceof Error ? error.message : String(error)}`,
+      return this.providerFailureFallback(event, error, false);
+    }
+  }
+
+  private async ensembleModerate(
+    event: AiModerationRequestEvent,
+  ): Promise<AiModerationResultEvent> {
+    const messages = this.promptBuilder.buildModerationPrompt(event.body);
+
+    try {
+      const results = await this.gateway.completeEnsemble(
+        event.sender_id,
+        { messages, maxTokens: 256, temperature: 0 },
+        ModerationEngine.ENSEMBLE_PROVIDERS,
       );
 
-      this.aiMetrics.recordRequest(
-        'moderation',
-        'unknown',
-        'unknown',
-        0,
-        0,
-        0,
-        false,
+      if (results.length === 0) {
+        return this.providerFailureFallback(event, null, true);
+      }
+
+      const decisions = results.map((r) => ({
+        provider: r.provider,
+        parsed: this.parseResponse(r.content),
+        tokensIn: r.tokensIn,
+        tokensOut: r.tokensOut,
+        latencyMs: r.latencyMs,
+        model: r.model,
+      }));
+
+      const flaggedVotes = decisions.filter((d) => d.parsed.is_flagged).length;
+      const isFlagged = flaggedVotes * 2 >= decisions.length;
+
+      const majorityDecisions = decisions.filter(
+        (d) => d.parsed.is_flagged === isFlagged,
       );
+      const labelSet = new Set<ModerationLabelType>();
+      for (const d of majorityDecisions) {
+        for (const l of d.parsed.labels) labelSet.add(l);
+      }
+      const labels =
+        labelSet.size > 0
+          ? [...labelSet]
+          : (['clean'] as ModerationLabelType[]);
+      const confidence =
+        majorityDecisions.reduce((sum, d) => sum + d.parsed.confidence, 0) /
+        majorityDecisions.length;
+
+      const totalTokensIn = decisions.reduce((s, d) => s + d.tokensIn, 0);
+      const totalTokensOut = decisions.reduce((s, d) => s + d.tokensOut, 0);
+
+      const log = this.moderationRepo.create({
+        messageId: event.message_id,
+        conversationId: event.conversation_id,
+        senderId: event.sender_id,
+        isFlagged,
+        labels,
+        confidence,
+        provider: 'ensemble',
+        ensemble: true,
+        tokensUsed: totalTokensIn + totalTokensOut,
+        traceId: event.trace_id ?? null,
+      });
+      await this.moderationRepo.save(log);
+
+      for (const d of decisions) {
+        this.aiMetrics.recordRequest(
+          'moderation',
+          d.provider,
+          d.model,
+          d.tokensIn,
+          d.tokensOut,
+          d.latencyMs,
+          true,
+        );
+      }
 
       return {
         message_id: event.message_id,
         conversation_id: event.conversation_id,
         sender_id: event.sender_id,
         created_at: event.created_at,
-        ...this.fallbackModeration('fallback_provider_failure'),
-        provider: 'openai' as const,
-        ensemble: false,
-        decision_source: 'fallback_provider_failure',
-        failure_reason:
-          error instanceof Error ? error.message : 'provider_request_failed',
+        is_flagged: isFlagged,
+        labels,
+        confidence,
+        provider: 'ensemble',
+        ensemble: true,
+        decision_source: 'model',
         processed_at: Date.now(),
-        tokens_used: 0,
+        tokens_used: totalTokensIn + totalTokensOut,
         trace_id: event.trace_id,
       };
+    } catch (error) {
+      return this.providerFailureFallback(event, error, true);
     }
+  }
+
+  private async providerFailureFallback(
+    event: AiModerationRequestEvent,
+    error: unknown,
+    ensemble: boolean,
+  ): Promise<AiModerationResultEvent> {
+    const message =
+      error instanceof Error
+        ? error.message
+        : error == null
+          ? 'no providers available'
+          : typeof error === 'string'
+            ? error
+            : '[unknown error]';
+    this.logger.error(
+      `Moderation failed for message ${event.message_id} (ensemble=${ensemble}): ${message}`,
+    );
+
+    const fallback = this.fallbackModeration('fallback_provider_failure');
+
+    try {
+      const log = this.moderationRepo.create({
+        messageId: event.message_id,
+        conversationId: event.conversation_id,
+        senderId: event.sender_id,
+        isFlagged: fallback.is_flagged,
+        labels: fallback.labels,
+        confidence: fallback.confidence,
+        provider: ensemble ? 'ensemble' : 'unknown',
+        ensemble,
+        tokensUsed: 0,
+        traceId: event.trace_id ?? null,
+      });
+      await this.moderationRepo.save(log);
+    } catch (logError) {
+      this.logger.error(
+        `Failed to persist moderation fallback log for ${event.message_id}: ${logError instanceof Error ? logError.message : String(logError)}`,
+      );
+    }
+
+    this.aiMetrics.recordRequest(
+      'moderation',
+      'unknown',
+      'unknown',
+      0,
+      0,
+      0,
+      false,
+    );
+
+    return {
+      message_id: event.message_id,
+      conversation_id: event.conversation_id,
+      sender_id: event.sender_id,
+      created_at: event.created_at,
+      ...fallback,
+      provider: ensemble ? 'ensemble' : 'openai',
+      ensemble,
+      decision_source: 'fallback_provider_failure',
+      failure_reason: message,
+      processed_at: Date.now(),
+      tokens_used: 0,
+      trace_id: event.trace_id,
+    };
   }
 
   private parseResponse(content: string): {
@@ -148,12 +277,13 @@ export class ModerationEngine {
     failure_reason?: string;
   } {
     try {
-      const candidate = this.extractJsonCandidate(content);
-      const json = JSON.parse(candidate);
+      const json = parseJsonResponse(content) as Record<string, unknown>;
       return {
-        is_flagged: !!json.is_flagged,
+        is_flagged: json.is_flagged === true,
         labels: Array.isArray(json.labels)
-          ? (json.labels as ModerationLabelType[])
+          ? json.labels.filter(
+              (l): l is ModerationLabelType => typeof l === 'string',
+            )
           : ['clean' as ModerationLabelType],
         confidence: typeof json.confidence === 'number' ? json.confidence : 0,
         decision_source: 'model',
@@ -164,26 +294,6 @@ export class ModerationEngine {
       );
       return this.fallbackModeration('fallback_parse_failure');
     }
-  }
-
-  private extractJsonCandidate(content: string): string {
-    const trimmed = content.trim();
-    if (!trimmed) {
-      return trimmed;
-    }
-
-    const fencedMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-    if (fencedMatch?.[1]) {
-      return fencedMatch[1].trim();
-    }
-
-    const firstBrace = trimmed.indexOf('{');
-    const lastBrace = trimmed.lastIndexOf('}');
-    if (firstBrace >= 0 && lastBrace > firstBrace) {
-      return trimmed.slice(firstBrace, lastBrace + 1);
-    }
-
-    return trimmed;
   }
 
   private fallbackModeration(

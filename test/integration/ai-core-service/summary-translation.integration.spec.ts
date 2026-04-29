@@ -7,7 +7,7 @@
  *
  * Covers full pipeline: prompt building → cache check → LLM call → cache store → result.
  */
-/* eslint-disable @typescript-eslint/unbound-method */
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { SummaryEngine } from '../../../apps/ai-core-service/src/modules/summary/summary.engine';
 import { TranslationEngine } from '../../../apps/ai-core-service/src/modules/translation/translation.engine';

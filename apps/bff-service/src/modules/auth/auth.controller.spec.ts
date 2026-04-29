@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/unbound-method */
 /**
  * @file auth.controller.spec.ts
  * @covers BFF AuthController – REST API proxy to SSO service

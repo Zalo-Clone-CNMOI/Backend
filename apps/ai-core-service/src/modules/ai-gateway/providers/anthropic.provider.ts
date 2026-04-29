@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars, @typescript-eslint/require-await */
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { APP_CONFIG, AppConfig } from '@libs/config';
 import type Anthropic from '@anthropic-ai/sdk';
@@ -130,9 +129,15 @@ export class AnthropicProvider implements ILlmProvider {
     }
   }
 
-  async embed(_text: string, _model?: string): Promise<LlmEmbeddingResult> {
+  embed(): Promise<LlmEmbeddingResult> {
     throw new Error(
       'Anthropic does not support embeddings. Use OpenAI provider.',
+    );
+  }
+
+  embedBatch(): Promise<LlmEmbeddingResult[]> {
+    throw new Error(
+      'Anthropic does not support batch embeddings. Use OpenAI provider.',
     );
   }
 }

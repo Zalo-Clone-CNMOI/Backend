@@ -4,6 +4,7 @@ import {
   type ChatMessageSendCommand,
   type ChatMessageCreatedEvent,
   AiModerationRequestEvent,
+  AiEntityDetectionRequestEvent,
 } from '@libs/contracts';
 import { MessageRepository } from '@libs/scylla';
 import { CacheService } from '@libs/redis';
@@ -349,6 +350,34 @@ export class SendMessageHandler {
         );
       }
     })();
+
+    // ── AI Entity Detection: detect named entities in text messages ─
+    if (params.body?.trim()) {
+      void (async () => {
+        try {
+          const entityEvent: AiEntityDetectionRequestEvent = {
+            message_id: params.messageId,
+            conversation_id: params.conversationId,
+            sender_id: params.senderId,
+            body: params.body,
+            created_at: params.createdAt,
+            trace_id: params.traceId,
+          };
+          await this.publisher.emit(
+            KafkaTopics.AiEntityDetectionRequest,
+            entityEvent,
+          );
+          this.shared.logger.debug(
+            `[${params.traceId}] AiEntityDetectionRequest emitted for message: ${params.messageId}`,
+          );
+        } catch (err) {
+          this.shared.logger.error(
+            `[${params.traceId}] AiEntityDetectionRequest emit failed`,
+            err,
+          );
+        }
+      })();
+    }
 
     // ── Cache invalidation (fire-and-forget: non-blocking by design so the
     //    message-send critical path is not delayed by a Redis round-trip) ──────

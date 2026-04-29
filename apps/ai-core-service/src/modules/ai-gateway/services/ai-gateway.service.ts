@@ -9,14 +9,8 @@ import {
 } from '../interfaces';
 import { DataSanitizer } from './data-sanitizer.service';
 import { TokenBudgetService } from './token-budget.service';
+import { AiMetricsService } from './ai-metrics.service';
 
-/**
- * AiGatewayService — central router with circuit breaker,
- * fallback ordering, and PII sanitization middleware.
- *
- * Provider ordering: OpenAI (primary) → Gemini → Anthropic
- * Circuit breaker: 5 failures → open for 30s → half-open test
- */
 interface CircuitState {
   failures: number;
   lastFailure: number;
@@ -35,8 +29,8 @@ export class AiGatewayService {
     @Inject(LLM_PROVIDERS) private readonly providers: ILlmProvider[],
     private readonly sanitizer: DataSanitizer,
     private readonly tokenBudget: TokenBudgetService,
+    private readonly aiMetrics: AiMetricsService,
   ) {
-    // Initialize circuit breakers for each provider
     for (const provider of providers) {
       this.circuits.set(provider.name, {
         failures: 0,
@@ -49,9 +43,6 @@ export class AiGatewayService {
     );
   }
 
-  /**
-   * Execute a completion with circuit breaker and fallback.
-   */
   async complete(
     userId: string,
     options: LlmCompletionOptions,
@@ -103,9 +94,6 @@ export class AiGatewayService {
     throw new Error(`All LLM providers failed: ${errors.join('; ')}`);
   }
 
-  /**
-   * Execute a streaming completion with circuit breaker and fallback.
-   */
   async completeStream(
     userId: string,
     options: LlmCompletionOptions,
@@ -152,27 +140,117 @@ export class AiGatewayService {
     throw new Error(`All LLM stream providers failed: ${errors.join('; ')}`);
   }
 
-  /**
-   * Generate embeddings — only OpenAI supports this.
-   */
-  async embed(text: string, model?: string): Promise<LlmEmbeddingResult> {
-    const sanitizedText = this.sanitizer.sanitize(text);
+  async embed(
+    userId: string,
+    text: string,
+    model?: string,
+  ): Promise<LlmEmbeddingResult> {
+    const sanitized = this.sanitizer.sanitize(text);
+    const canConsume = await this.tokenBudget.canConsume(userId, 100);
+    if (!canConsume) {
+      throw new Error('Daily token budget exceeded');
+    }
     const provider = this.providers.find(
       (p) => p.name === 'openai' && p.isAvailable,
     );
-
     if (!provider) {
       throw new Error('OpenAI provider not available for embeddings');
     }
-
-    return provider.embed(sanitizedText, model);
+    const result = await provider.embed(sanitized, model);
+    await this.tokenBudget.consume(userId, result.tokensUsed);
+    return result;
   }
 
-  /**
-   * Get provider by name.
-   */
+  async embedBatch(
+    userId: string,
+    texts: string[],
+    model?: string,
+  ): Promise<LlmEmbeddingResult[]> {
+    if (texts.length === 0) return [];
+    const sanitized = texts.map((t) => this.sanitizer.sanitize(t));
+    // 100 tokens per text is a conservative estimate; actual usage is consumed post-call
+    const canConsume = await this.tokenBudget.canConsume(
+      userId,
+      sanitized.length * 100,
+    );
+    if (!canConsume) {
+      throw new Error('Daily token budget exceeded');
+    }
+    const provider = this.providers.find(
+      (p) => p.name === 'openai' && p.isAvailable,
+    );
+    if (!provider) {
+      throw new Error('OpenAI provider not available for batch embeddings');
+    }
+    const results = await provider.embedBatch(sanitized, model);
+    const totalTokens = results.reduce((sum, r) => sum + r.tokensUsed, 0);
+    await this.tokenBudget.consume(userId, totalTokens);
+    return results;
+  }
+
   getProvider(name: string): ILlmProvider | undefined {
     return this.providers.find((p) => p.name === name);
+  }
+
+  async completeEnsemble(
+    userId: string,
+    options: LlmCompletionOptions,
+    providerNames: string[],
+    opts?: { skipBudgetCheck?: boolean; skipSanitize?: boolean },
+  ): Promise<LlmCompletionResult[]> {
+    if (!opts?.skipSanitize) {
+      options = {
+        ...options,
+        messages: options.messages.map((m) => ({
+          ...m,
+          content: this.sanitizer.sanitize(m.content),
+        })),
+      };
+    }
+
+    const eligible = providerNames
+      .map((n) => this.getProvider(n))
+      .filter(
+        (p): p is ILlmProvider =>
+          !!p && p.isAvailable && this.isCircuitAllowed(p.name),
+      );
+
+    if (eligible.length === 0) return [];
+
+    if (!opts?.skipBudgetCheck) {
+      const canConsume = await this.tokenBudget.canConsume(
+        userId,
+        2000 * eligible.length,
+      );
+      if (!canConsume) {
+        throw new Error('Daily token budget exceeded');
+      }
+    }
+
+    const settled = await Promise.allSettled(
+      eligible.map((p) => p.complete(options)),
+    );
+
+    const successes: LlmCompletionResult[] = [];
+    for (let i = 0; i < settled.length; i++) {
+      const provider = eligible[i];
+      const r = settled[i];
+      if (r.status === 'fulfilled') {
+        this.onSuccess(provider.name);
+        await this.tokenBudget.consume(
+          userId,
+          r.value.tokensIn + r.value.tokensOut,
+        );
+        successes.push(r.value);
+      } else {
+        const msg =
+          r.reason instanceof Error ? r.reason.message : String(r.reason);
+        this.logger.error(`Ensemble provider ${provider.name} failed: ${msg}`);
+        this.onFailure(provider.name);
+      }
+    }
+
+    return successes;
   }
 
   private getAvailableProviders(): ILlmProvider[] {
@@ -202,6 +280,7 @@ export class AiGatewayService {
     if (circuit) {
       circuit.failures = 0;
       circuit.state = 'closed';
+      this.aiMetrics.setCircuitState(providerName, 'closed');
     }
   }
 
@@ -216,6 +295,7 @@ export class AiGatewayService {
           `Circuit OPEN for provider ${providerName} after ${circuit.failures} failures`,
         );
       }
+      this.aiMetrics.setCircuitState(providerName, circuit.state);
     }
   }
 }

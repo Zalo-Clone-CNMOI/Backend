@@ -1,17 +1,3 @@
-/**
- * @file ai.consumer.spec.ts
- *
- * Unit tests for AiConsumer — Kafka event consumer for all AI features.
- *
- * Each handler should:
- *  1. Delegate to the appropriate engine
- *  2. Emit the result to the correct Kafka topic via AiPublisher
- *
- * Covers: moderation, smart-reply, summary, translation,
- * document-upload, document-query handlers.
- */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-
 import { Test, TestingModule } from '@nestjs/testing';
 import { AiConsumer } from './ai.consumer';
 import { AiPublisher } from './ai.publisher';
@@ -20,6 +6,9 @@ import { SmartReplyEngine } from '../modules/smart-reply/smart-reply.engine';
 import { SummaryEngine } from '../modules/summary/summary.engine';
 import { TranslationEngine } from '../modules/translation/translation.engine';
 import { DocumentEngine } from '../modules/document/document.engine';
+import { TextExtractorService } from '../modules/document/text-extractor.service';
+import { EntityDetectionEngine } from '../modules/entity-detection/entity-detection.engine';
+import { APP_CONFIG } from '@libs/config';
 import { S3Service } from '@libs/s3';
 import { KafkaTopics } from '@libs/contracts';
 import type {
@@ -29,9 +18,9 @@ import type {
   AiTranslateRequestEvent,
   AiDocumentUploadEvent,
   AiDocumentQueryEvent,
+  AiEntityDetectionRequestEvent,
+  AiEntityInfoRequestEvent,
 } from '@libs/contracts';
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function makePublisher() {
   return { emit: jest.fn().mockResolvedValue(undefined) };
@@ -57,6 +46,7 @@ function makeDocument() {
   return {
     processDocument: jest.fn(),
     queryDocument: jest.fn(),
+    recordDocumentFailure: jest.fn(),
   };
 }
 
@@ -64,7 +54,17 @@ function makeS3() {
   return { download: jest.fn() };
 }
 
-// ── Tests ────────────────────────────────────────────────────────────────────
+function makeTextExtractor() {
+  return {
+    extract: jest.fn((buffer: Buffer) =>
+      Promise.resolve(buffer.toString('utf-8')),
+    ),
+  };
+}
+
+function makeEntityDetection() {
+  return { detect: jest.fn(), generateInfo: jest.fn() };
+}
 
 describe('AiConsumer', () => {
   let consumer: AiConsumer;
@@ -74,6 +74,8 @@ describe('AiConsumer', () => {
   let summaryEngine: ReturnType<typeof makeSummary>;
   let translationEngine: ReturnType<typeof makeTranslation>;
   let documentEngine: ReturnType<typeof makeDocument>;
+  let textExtractor: ReturnType<typeof makeTextExtractor>;
+  let entityDetectionEngine: ReturnType<typeof makeEntityDetection>;
   let s3Service: ReturnType<typeof makeS3>;
 
   beforeEach(async () => {
@@ -83,6 +85,8 @@ describe('AiConsumer', () => {
     summaryEngine = makeSummary();
     translationEngine = makeTranslation();
     documentEngine = makeDocument();
+    textExtractor = makeTextExtractor();
+    entityDetectionEngine = makeEntityDetection();
     s3Service = makeS3();
 
     const module: TestingModule = await Test.createTestingModule({
@@ -94,14 +98,19 @@ describe('AiConsumer', () => {
         { provide: SummaryEngine, useValue: summaryEngine },
         { provide: TranslationEngine, useValue: translationEngine },
         { provide: DocumentEngine, useValue: documentEngine },
+        { provide: TextExtractorService, useValue: textExtractor },
+        { provide: EntityDetectionEngine, useValue: entityDetectionEngine },
         { provide: S3Service, useValue: s3Service },
+        { provide: APP_CONFIG, useValue: { aiMaxDocumentSizeMb: 10 } },
       ],
     }).compile();
 
     consumer = module.get(AiConsumer);
   });
 
-  // ── onModerationRequest ───────────────────────────────────────────
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
 
   describe('onModerationRequest()', () => {
     it('delegates to moderationEngine and emits result', async () => {
@@ -126,8 +135,6 @@ describe('AiConsumer', () => {
     });
   });
 
-  // ── onSmartReplyRequest ───────────────────────────────────────────
-
   describe('onSmartReplyRequest()', () => {
     it('delegates to smartReplyEngine with context_messages and emits result', async () => {
       const event: AiSmartReplyRequestEvent = {
@@ -135,7 +142,10 @@ describe('AiConsumer', () => {
         user_id: 'user-1',
         last_message_id: 'msg-1',
         last_message_body: 'How are you?',
-        context_messages: ['Hey', 'Hi'],
+        context_messages: [
+          { role: 'them', body: 'Hey' },
+          { role: 'me', body: 'Hi' },
+        ],
         requested_at: Date.now(),
       };
       const mockResult = { conversation_id: 'conv-1', suggestions: ['Fine!'] };
@@ -143,18 +153,13 @@ describe('AiConsumer', () => {
 
       await consumer.onSmartReplyRequest(event);
 
-      expect(smartReplyEngine.generateReplies).toHaveBeenCalledWith(
-        event,
-        event.context_messages,
-      );
+      expect(smartReplyEngine.generateReplies).toHaveBeenCalledWith(event);
       expect(publisher.emit).toHaveBeenCalledWith(
         KafkaTopics.AiSmartReplyResult,
         mockResult,
       );
     });
   });
-
-  // ── onSummaryRequest ──────────────────────────────────────────────
 
   describe('onSummaryRequest()', () => {
     it('delegates to summaryEngine with event.messages and emits result', async () => {
@@ -181,8 +186,6 @@ describe('AiConsumer', () => {
     });
   });
 
-  // ── onTranslateRequest ────────────────────────────────────────────
-
   describe('onTranslateRequest()', () => {
     it('delegates to translationEngine and emits result', async () => {
       const event: AiTranslateRequestEvent = {
@@ -205,8 +208,6 @@ describe('AiConsumer', () => {
       );
     });
   });
-
-  // ── onDocumentUpload ──────────────────────────────────────────────
 
   describe('onDocumentUpload()', () => {
     const makeUploadEvent = (): AiDocumentUploadEvent => ({
@@ -240,17 +241,15 @@ describe('AiConsumer', () => {
       );
     });
 
-    it('processes document with error text when S3 download fails', async () => {
+    it('records failure when S3 download fails', async () => {
       s3Service.download.mockRejectedValue(new Error('S3 unavailable'));
       const mockResult = { document_id: 'doc-1', status: 'failed' };
-      documentEngine.processDocument.mockResolvedValue(mockResult);
+      documentEngine.recordDocumentFailure.mockResolvedValue(mockResult);
 
       await consumer.onDocumentUpload(makeUploadEvent());
 
-      // processDocument should still be called with error placeholder text
-      const calledText = documentEngine.processDocument.mock
-        .calls[0][1] as string;
-      expect(calledText).toContain('[Error:');
+      expect(documentEngine.processDocument).not.toHaveBeenCalled();
+      expect(documentEngine.recordDocumentFailure).toHaveBeenCalled();
       expect(publisher.emit).toHaveBeenCalledWith(
         KafkaTopics.AiDocumentProcessed,
         mockResult,
@@ -264,12 +263,16 @@ describe('AiConsumer', () => {
 
       await consumer.onDocumentUpload(makeUploadEvent());
 
-      expect(documentEngine.processDocument.mock.calls[0][1]).toBe(content);
+      expect(
+        (documentEngine.processDocument.mock.calls[0] as [unknown, string])[1],
+      ).toBe(content);
     });
 
-    it('returns unsupported format stub for PDF content type', async () => {
-      s3Service.download.mockResolvedValue(Buffer.from('%PDF-1.4...')); // binary stub
-      documentEngine.processDocument.mockResolvedValue({ status: 'failed' });
+    it('delegates PDF extraction to TextExtractorService', async () => {
+      const buffer = Buffer.from('%PDF-1.4...');
+      s3Service.download.mockResolvedValue(buffer);
+      textExtractor.extract.mockResolvedValue('Extracted PDF body text');
+      documentEngine.processDocument.mockResolvedValue({ status: 'completed' });
 
       await consumer.onDocumentUpload({
         ...makeUploadEvent(),
@@ -277,13 +280,56 @@ describe('AiConsumer', () => {
         file_name: 'report.pdf',
       });
 
-      const calledText = documentEngine.processDocument.mock
-        .calls[0][1] as string;
-      expect(calledText).toContain('[Unsupported binary format');
+      expect(textExtractor.extract).toHaveBeenCalledWith(
+        buffer,
+        'application/pdf',
+        'report.pdf',
+      );
+      expect(
+        (documentEngine.processDocument.mock.calls[0] as [unknown, string])[1],
+      ).toBe('Extracted PDF body text');
+    });
+
+    it('records failure when extractor throws', async () => {
+      s3Service.download.mockResolvedValue(Buffer.from('garbage'));
+      textExtractor.extract.mockRejectedValue(
+        new Error('Failed to extract pdf'),
+      );
+      documentEngine.recordDocumentFailure.mockResolvedValue({
+        status: 'failed',
+      });
+
+      await consumer.onDocumentUpload({
+        ...makeUploadEvent(),
+        content_type: 'application/pdf',
+        file_name: 'corrupt.pdf',
+      });
+
+      expect(documentEngine.processDocument).not.toHaveBeenCalled();
+      expect(documentEngine.recordDocumentFailure).toHaveBeenCalled();
+    });
+
+    it('rejects oversized file before downloading from S3', async () => {
+      const event = {
+        ...makeUploadEvent(),
+        file_size: 20 * 1024 * 1024, // 20 MB > 10 MB limit
+      };
+      const mockResult = { document_id: 'doc-1', status: 'failed' };
+      documentEngine.recordDocumentFailure.mockResolvedValue(mockResult);
+
+      await consumer.onDocumentUpload(event);
+
+      expect(s3Service.download).not.toHaveBeenCalled();
+      expect(documentEngine.recordDocumentFailure).toHaveBeenCalledWith(
+        event,
+        expect.stringContaining('10 MB'),
+      );
+      expect(publisher.emit).toHaveBeenCalledWith(
+        KafkaTopics.AiDocumentProcessed,
+        mockResult,
+      );
     });
   });
-
-  // ── onDocumentQuery ───────────────────────────────────────────────
 
   describe('onDocumentQuery()', () => {
     it('delegates to documentEngine.queryDocument and emits result', async () => {
@@ -305,6 +351,57 @@ describe('AiConsumer', () => {
       expect(documentEngine.queryDocument).toHaveBeenCalledWith(event);
       expect(publisher.emit).toHaveBeenCalledWith(
         KafkaTopics.AiDocumentQueryResult,
+        mockResult,
+      );
+    });
+  });
+
+  describe('onEntityDetectionRequest()', () => {
+    it('delegates to entityDetectionEngine.detect and emits result', async () => {
+      const event: AiEntityDetectionRequestEvent = {
+        message_id: 'msg-1',
+        conversation_id: 'conv-1',
+        sender_id: 'user-1',
+        body: 'Tôi dùng Telegram mỗi ngày',
+        created_at: Date.now(),
+      };
+      const mockResult = {
+        message_id: 'msg-1',
+        entities: [{ text: 'Telegram', type: 'tool', confidence: 0.95 }],
+      };
+      entityDetectionEngine.detect.mockResolvedValue(mockResult);
+
+      await consumer.onEntityDetectionRequest(event);
+
+      expect(entityDetectionEngine.detect).toHaveBeenCalledWith(event);
+      expect(publisher.emit).toHaveBeenCalledWith(
+        KafkaTopics.AiEntityDetectionResult,
+        mockResult,
+      );
+    });
+  });
+
+  describe('onEntityInfoRequest()', () => {
+    it('delegates to entityDetectionEngine.generateInfo and emits result', async () => {
+      const event: AiEntityInfoRequestEvent = {
+        entity_text: 'Telegram',
+        entity_type: 'tool',
+        user_id: 'user-1',
+        language: 'vi',
+      };
+      const mockResult = {
+        entity_text: 'Telegram',
+        title: 'Telegram',
+        summary: 'Ứng dụng nhắn tin...',
+        details: '...',
+      };
+      entityDetectionEngine.generateInfo.mockResolvedValue(mockResult);
+
+      await consumer.onEntityInfoRequest(event);
+
+      expect(entityDetectionEngine.generateInfo).toHaveBeenCalledWith(event);
+      expect(publisher.emit).toHaveBeenCalledWith(
+        KafkaTopics.AiEntityInfoResult,
         mockResult,
       );
     });

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -7,58 +6,55 @@ import { DocumentMetadata, DocumentChunk } from '@libs/database/entities';
 import { AiGatewayService } from '../ai-gateway/services/ai-gateway.service';
 import { PromptBuilderService } from '../ai-gateway/services/prompt-builder.service';
 import { AiMetricsService } from '../ai-gateway/services/ai-metrics.service';
-import { OpenAiProvider } from '../ai-gateway/providers/openai.provider';
+import type { TiktokenModel } from 'js-tiktoken';
+import { TextChunkerService } from './text-chunker.service';
+import {
+  parseJsonResponse,
+  validateSourceIndices,
+} from '../ai-gateway/services/parse-json.util';
 import type {
   AiDocumentUploadEvent,
   AiDocumentProcessedEvent,
   AiDocumentQueryEvent,
   AiDocumentQueryResultEvent,
-  AiProviderType,
 } from '@libs/contracts';
+import { toAiProviderType } from '@libs/contracts';
 
 interface SimilarityRow {
   similarity?: string;
 }
 
-const toAiProviderType = (provider: string): AiProviderType => {
-  if (
-    provider === 'openai' ||
-    provider === 'gemini' ||
-    provider === 'anthropic'
-  ) {
-    return provider;
-  }
-  return 'openai';
-};
+const SUPPORTED_EMBEDDING_MODELS: readonly TiktokenModel[] = [
+  'text-embedding-3-small',
+  'text-embedding-3-large',
+  'text-embedding-ada-002',
+];
 
-/**
- * DocumentEngine — document processing + pgvector RAG pipeline.
- *
- * Processing flow:
- *   1. Parse document (PDF/DOCX/CSV/TXT)
- *   2. Chunk text with overlap
- *   3. Generate embeddings via OpenAI text-embedding-3-small
- *   4. Store chunks + embeddings in PostgreSQL with pgvector
- *
- * Query flow:
- *   1. Embed query text
- *   2. Similarity search using pgvector cosine distance
- *   3. Build RAG prompt with top-k chunks
- *   4. Generate answer via LLM
- */
+function resolveEmbeddingModel(configured: string | undefined): TiktokenModel {
+  const fallback: TiktokenModel = 'text-embedding-3-small';
+  if (!configured) return fallback;
+  if (!(SUPPORTED_EMBEDDING_MODELS as readonly string[]).includes(configured)) {
+    throw new Error(
+      `Unsupported embedding model "${configured}". ` +
+        `Supported models: ${SUPPORTED_EMBEDDING_MODELS.join(', ')}`,
+    );
+  }
+  return configured as TiktokenModel;
+}
+
 @Injectable()
 export class DocumentEngine {
   private readonly logger = new Logger(DocumentEngine.name);
   private readonly maxDocSizeMb: number;
   private readonly maxPages: number;
-  private readonly embeddingModel: string;
+  private readonly embeddingModel: TiktokenModel;
 
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly gateway: AiGatewayService,
     private readonly promptBuilder: PromptBuilderService,
     private readonly aiMetrics: AiMetricsService,
-    private readonly openaiProvider: OpenAiProvider,
+    private readonly chunker: TextChunkerService,
     @InjectRepository(DocumentMetadata)
     private readonly docMetaRepo: Repository<DocumentMetadata>,
     @InjectRepository(DocumentChunk)
@@ -66,24 +62,18 @@ export class DocumentEngine {
   ) {
     this.maxDocSizeMb = this.config.aiMaxDocumentSizeMb ?? 10;
     this.maxPages = this.config.aiMaxDocumentPages ?? 200;
-    this.embeddingModel =
-      this.config.aiEmbeddingModel ?? 'text-embedding-3-small';
+    this.embeddingModel = resolveEmbeddingModel(this.config.aiEmbeddingModel);
   }
 
-  /**
-   * Process an uploaded document: parse, chunk, embed, store.
-   */
   async processDocument(
     event: AiDocumentUploadEvent,
     textContent: string,
   ): Promise<AiDocumentProcessedEvent> {
     try {
-      // Validate size
       if (event.file_size > this.maxDocSizeMb * 1024 * 1024) {
         throw new Error(`Document exceeds ${this.maxDocSizeMb}MB limit`);
       }
 
-      // Upsert metadata row and set status to processing
       const processingMetadata = this.docMetaRepo.create({
         id: event.document_id,
         conversationId: event.conversation_id,
@@ -96,38 +86,37 @@ export class DocumentEngine {
       });
       await this.docMetaRepo.save(processingMetadata);
 
-      // Chunk the text
-      const chunks = this.chunkText(textContent, 500, 50);
+      const chunks = await this.chunker.chunk(textContent, {
+        size: 400,
+        overlap: 50,
+        model: this.embeddingModel,
+      });
 
-      // Generate embeddings and store chunks
-      let totalTokens = 0;
-      const chunkEntities: DocumentChunk[] = [];
+      const embeddingResults = await this.gateway.embedBatch(
+        event.user_id,
+        chunks,
+        this.embeddingModel,
+      );
 
-      for (let i = 0; i < chunks.length; i++) {
-        const embeddingResult = await this.openaiProvider.embed(
-          chunks[i],
-          this.embeddingModel,
-        );
+      const totalTokens = embeddingResults.reduce(
+        (sum, r) => sum + r.tokensUsed,
+        0,
+      );
 
-        totalTokens += embeddingResult.tokensUsed;
-
-        const chunkEntity = this.chunkRepo.create({
+      const chunkEntities: DocumentChunk[] = embeddingResults.map((result, i) =>
+        this.chunkRepo.create({
           documentId: event.document_id,
           chunkIndex: i,
           content: chunks[i],
-          tokenCount: embeddingResult.tokensUsed,
-          embedding: JSON.stringify(embeddingResult.embedding),
+          tokenCount: result.tokensUsed,
+          embedding: JSON.stringify(result.embedding),
           embeddingModel: this.embeddingModel,
           embeddingVersion: 1,
-        });
+        }),
+      );
 
-        chunkEntities.push(chunkEntity);
-      }
-
-      // Batch save chunks
       await this.chunkRepo.save(chunkEntities);
 
-      // Update document metadata
       await this.docMetaRepo.update(
         { id: event.document_id },
         {
@@ -161,78 +150,113 @@ export class DocumentEngine {
       };
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      this.logger.error(`Document processing failed: ${errorMsg}`);
-
-      await this.docMetaRepo.update(
-        { id: event.document_id },
-        { status: 'failed', errorMessage: errorMsg },
-      );
-
-      this.aiMetrics.recordRequest(
-        'document_analysis',
-        'openai',
-        this.embeddingModel,
-        0,
-        0,
-        0,
-        false,
-      );
-
-      return {
-        document_id: event.document_id,
-        conversation_id: event.conversation_id,
-        user_id: event.user_id,
-        status: 'failed',
-        chunk_count: 0,
-        total_tokens: 0,
-        error_message: errorMsg,
-        processed_at: Date.now(),
-        trace_id: event.trace_id,
-      };
+      return this.recordDocumentFailure(event, errorMsg);
     }
   }
 
-  /**
-   * Query a document using vector similarity search + RAG.
-   */
+  async recordDocumentFailure(
+    event: AiDocumentUploadEvent,
+    errorMessage: string,
+  ): Promise<AiDocumentProcessedEvent> {
+    this.logger.error(`Document processing failed: ${errorMessage}`);
+
+    const updateResult = await this.docMetaRepo.update(
+      { id: event.document_id },
+      {
+        status: 'failed',
+        errorMessage,
+        chunkCount: 0,
+        totalTokens: 0,
+      },
+    );
+
+    if (!updateResult.affected) {
+      const failedMetadata = this.docMetaRepo.create({
+        id: event.document_id,
+        conversationId: event.conversation_id,
+        userId: event.user_id,
+        fileKey: event.file_key,
+        fileName: event.file_name,
+        fileSize: event.file_size,
+        contentType: event.content_type,
+        status: 'failed',
+        chunkCount: 0,
+        totalTokens: 0,
+        errorMessage,
+      });
+      await this.docMetaRepo.save(failedMetadata);
+    }
+
+    this.aiMetrics.recordRequest(
+      'document_analysis',
+      'openai',
+      this.embeddingModel,
+      0,
+      0,
+      0,
+      false,
+    );
+
+    return {
+      document_id: event.document_id,
+      conversation_id: event.conversation_id,
+      user_id: event.user_id,
+      status: 'failed',
+      chunk_count: 0,
+      total_tokens: 0,
+      error_message: errorMessage,
+      processed_at: Date.now(),
+      trace_id: event.trace_id,
+    };
+  }
+
+  private async searchRelevantChunks(event: AiDocumentQueryEvent): Promise<{
+    chunks: Array<{
+      content: string;
+      chunkIndex: number;
+      similarity: number;
+    }>;
+    embeddingTokens: number;
+  }> {
+    const topK = event.top_k ?? 5;
+
+    const queryEmbedding = await this.gateway.embed(
+      event.user_id,
+      event.query,
+      this.embeddingModel,
+    );
+
+    const result = await this.chunkRepo
+      .createQueryBuilder('chunk')
+      .select(['chunk.id', 'chunk.chunkIndex', 'chunk.content'])
+      .addSelect(
+        `1 - (chunk.embedding::vector <=> :queryVector::vector)`,
+        'similarity',
+      )
+      .where('chunk.document_id = :documentId', {
+        documentId: event.document_id,
+      })
+      .setParameter('queryVector', JSON.stringify(queryEmbedding.embedding))
+      .orderBy('similarity', 'DESC')
+      .limit(topK)
+      .getRawAndEntities();
+
+    const chunks = result.raw.map((row: SimilarityRow, i: number) => ({
+      content: result.entities[i]?.content ?? '',
+      chunkIndex: result.entities[i]?.chunkIndex ?? 0,
+      similarity: parseFloat(row.similarity ?? '0'),
+    }));
+
+    return { chunks, embeddingTokens: queryEmbedding.tokensUsed };
+  }
+
   async queryDocument(
     event: AiDocumentQueryEvent,
   ): Promise<AiDocumentQueryResultEvent> {
     try {
-      const topK = event.top_k ?? 5;
+      const { chunks: relevantChunks, embeddingTokens } =
+        await this.searchRelevantChunks(event);
 
-      // Embed the query
-      const queryEmbedding = await this.openaiProvider.embed(
-        event.query,
-        this.embeddingModel,
-      );
-
-      // Vector similarity search using pgvector
-      // NOTE: Requires pgvector extension and proper column type via migration
-      const chunks = await this.chunkRepo
-        .createQueryBuilder('chunk')
-        .select(['chunk.id', 'chunk.chunkIndex', 'chunk.content'])
-        .addSelect(
-          `1 - (chunk.embedding::vector <=> :queryVector::vector)`,
-          'similarity',
-        )
-        .where('chunk.document_id = :documentId', {
-          documentId: event.document_id,
-        })
-        .setParameter('queryVector', JSON.stringify(queryEmbedding.embedding))
-        .orderBy('similarity', 'DESC')
-        .limit(topK)
-        .getRawAndEntities();
-
-      const relevantChunks = chunks.raw.map(
-        (row: SimilarityRow, i: number) => ({
-          content: chunks.entities[i]?.content ?? '',
-          chunkIndex: chunks.entities[i]?.chunkIndex ?? 0,
-          similarity: parseFloat(row.similarity ?? '0'),
-        }),
-      );
-
-      // Build RAG prompt and generate answer
       const messages = this.promptBuilder.buildDocumentQueryPrompt(
         event.query,
         relevantChunks.map((c) => ({
@@ -247,13 +271,16 @@ export class DocumentEngine {
         temperature: 0.3,
       });
 
-      const parsed = this.parseQueryResponse(result.content);
+      const parsed = this.parseQueryResponse(
+        result.content,
+        relevantChunks.length,
+      );
 
       this.aiMetrics.recordRequest(
         'document_analysis',
         result.provider,
         result.model,
-        result.tokensIn + queryEmbedding.tokensUsed,
+        result.tokensIn + embeddingTokens,
         result.tokensOut,
         result.latencyMs,
         true,
@@ -271,8 +298,7 @@ export class DocumentEngine {
           similarity_score: c.similarity,
         })),
         provider: toAiProviderType(result.provider),
-        tokens_used:
-          result.tokensIn + result.tokensOut + queryEmbedding.tokensUsed,
+        tokens_used: result.tokensIn + result.tokensOut + embeddingTokens,
         processed_at: Date.now(),
         trace_id: event.trace_id,
       };
@@ -296,38 +322,18 @@ export class DocumentEngine {
     }
   }
 
-  /**
-   * Chunk text into overlapping segments.
-   */
-  private chunkText(
-    text: string,
-    chunkSize: number,
-    overlap: number,
-  ): string[] {
-    const words = text.split(/\s+/);
-    const chunks: string[] = [];
-
-    for (let i = 0; i < words.length; i += chunkSize - overlap) {
-      const chunk = words.slice(i, i + chunkSize).join(' ');
-      if (chunk.trim()) {
-        chunks.push(chunk.trim());
-      }
-    }
-
-    return chunks;
-  }
-
-  private parseQueryResponse(content: string): {
+  private parseQueryResponse(
+    content: string,
+    chunkCount: number,
+  ): {
     answer: string;
     source_indices: number[];
   } {
     try {
-      const json = JSON.parse(content);
+      const json = parseJsonResponse(content) as Record<string, unknown>;
       return {
-        answer: json.answer ?? content,
-        source_indices: Array.isArray(json.source_indices)
-          ? json.source_indices
-          : [],
+        answer: typeof json.answer === 'string' ? json.answer : content,
+        source_indices: validateSourceIndices(json.source_indices, chunkCount),
       };
     } catch {
       return { answer: content, source_indices: [] };

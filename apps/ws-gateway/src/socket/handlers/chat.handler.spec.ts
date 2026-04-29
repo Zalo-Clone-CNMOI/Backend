@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/unbound-method */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /**
  * @file chat.handler.spec.ts
  * @covers ChatHandler – WS Gateway chat event handler with membership checks

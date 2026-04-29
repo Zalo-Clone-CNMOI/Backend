@@ -14,9 +14,13 @@ import { ConversationsModule } from './modules/conversations';
 import { MessagesModule } from './modules/messages';
 import { DeviceTokensModule } from './modules/device-tokens/device-tokens.module';
 import { MediaModule } from './modules/media';
+import { EntityInfoModule } from './modules/entity-info';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import { ThrottlerModule, seconds } from '@nestjs/throttler';
 import { LoggerModule } from '@libs/logger';
+import { DatabaseModule } from '@libs/database';
+import { RedisModule } from '@libs/redis';
+import { AuthModule as SharedAuthModule } from '@libs/auth';
 
 @Module({
   imports: [
@@ -26,6 +30,9 @@ import { LoggerModule } from '@libs/logger';
     }),
     AppConfigModule,
     LoggerModule,
+    DatabaseModule,
+    RedisModule.forRootAsync(),
+    SharedAuthModule,
     ThrottlerModule.forRootAsync({
       inject: [APP_CONFIG],
       useFactory: (config: AppConfig) => ({
@@ -40,6 +47,7 @@ import { LoggerModule } from '@libs/logger';
     MessagesModule,
     DeviceTokensModule,
     MediaModule,
+    EntityInfoModule,
   ],
   controllers: [BffServiceController],
   providers: [BffServiceService],

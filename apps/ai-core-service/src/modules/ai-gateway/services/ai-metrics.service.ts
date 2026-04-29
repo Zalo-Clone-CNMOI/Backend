@@ -2,9 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { MetricsService } from '@libs/metrics';
 import { Counter, Histogram, Gauge } from 'prom-client';
 
-/**
- * AiMetricsService — 6 Prometheus metrics for AI Core Service.
- */
 @Injectable()
 export class AiMetricsService {
   private readonly logger = new Logger(AiMetricsService.name);

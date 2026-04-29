@@ -205,11 +205,17 @@ export class EntityDetectionEngine {
         trace_id: event.trace_id,
       };
 
-      await this.redis.setEx(
-        cacheKey,
-        7 * 24 * 3600,
-        JSON.stringify(infoResult),
-      );
+      try {
+        await this.redis.setEx(
+          cacheKey,
+          7 * 24 * 3600,
+          JSON.stringify(infoResult),
+        );
+      } catch (cacheErr) {
+        this.logger.warn(
+          `Entity info cache write failed (Redis unavailable): ${cacheErr instanceof Error ? cacheErr.message : String(cacheErr)}`,
+        );
+      }
 
       return infoResult;
     } catch (error) {

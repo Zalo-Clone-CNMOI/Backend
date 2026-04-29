@@ -168,6 +168,7 @@ export class AiGatewayService {
   ): Promise<LlmEmbeddingResult[]> {
     if (texts.length === 0) return [];
     const sanitized = texts.map((t) => this.sanitizer.sanitize(t));
+    // 100 tokens per text is a conservative estimate; actual usage is consumed post-call
     const canConsume = await this.tokenBudget.canConsume(
       userId,
       sanitized.length * 100,

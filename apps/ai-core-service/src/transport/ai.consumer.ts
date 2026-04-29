@@ -84,6 +84,11 @@ export class AiConsumer {
         event.messages.length > MAX_MESSAGES
           ? event.messages.slice(0, MAX_MESSAGES)
           : event.messages;
+      if (event.messages.length > MAX_MESSAGES) {
+        this.logger.warn(
+          `Summary request for ${event.conversation_id} truncated from ${event.messages.length} to ${MAX_MESSAGES} messages`,
+        );
+      }
       const result = await this.summaryEngine.summarize(event, safeMessages);
       await this.publisher.emit(KafkaTopics.AiSummaryResult, result);
     } catch (error) {

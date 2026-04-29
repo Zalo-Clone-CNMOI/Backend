@@ -319,6 +319,96 @@ describe('AiGatewayService', () => {
     });
   });
 
+  describe('embedBatch()', () => {
+    it('returns empty array without calling provider for empty input', async () => {
+      const result = await gateway.embedBatch('user-001', []);
+      expect(result).toEqual([]);
+      expect(primaryProvider.embedBatch).not.toHaveBeenCalled();
+    });
+
+    it('delegates to the openai provider with sanitized texts', async () => {
+      const batchResult = [
+        {
+          embedding: [0.1],
+          tokensUsed: 5,
+          model: 'text-embedding-3-small',
+          provider: 'openai',
+        },
+        {
+          embedding: [0.2],
+          tokensUsed: 5,
+          model: 'text-embedding-3-small',
+          provider: 'openai',
+        },
+      ];
+      primaryProvider.embedBatch.mockResolvedValue(batchResult);
+
+      const result = await gateway.embedBatch('user-001', ['hello', 'world']);
+
+      expect(result).toBe(batchResult);
+      expect(primaryProvider.embedBatch).toHaveBeenCalledWith(
+        ['hello', 'world'],
+        undefined,
+      );
+    });
+
+    it('sanitizes each text before batch embedding', async () => {
+      sanitizer.sanitize.mockReturnValue('[SANITIZED]');
+      primaryProvider.embedBatch.mockResolvedValue([
+        {
+          embedding: [0.1],
+          tokensUsed: 5,
+          model: 'text-embedding-3-small',
+          provider: 'openai',
+        },
+      ]);
+
+      await gateway.embedBatch('user-001', ['user@example.com info']);
+
+      expect(sanitizer.sanitize).toHaveBeenCalledWith('user@example.com info');
+      expect(primaryProvider.embedBatch).toHaveBeenCalledWith(
+        ['[SANITIZED]'],
+        undefined,
+      );
+    });
+
+    it('throws when daily token budget is exceeded', async () => {
+      const noBudget = makeBudget(false);
+      const m = await Test.createTestingModule({
+        providers: [
+          AiGatewayService,
+          { provide: LLM_PROVIDERS, useValue: [primaryProvider] },
+          { provide: DataSanitizer, useValue: sanitizer },
+          { provide: TokenBudgetService, useValue: noBudget },
+          { provide: AiMetricsService, useValue: metrics },
+        ],
+      }).compile();
+      const gw = m.get(AiGatewayService);
+
+      await expect(gw.embedBatch('user-001', ['text'])).rejects.toThrow(
+        'Daily token budget exceeded',
+      );
+      expect(primaryProvider.embedBatch).not.toHaveBeenCalled();
+    });
+
+    it('throws when OpenAI provider is unavailable', async () => {
+      const m = await Test.createTestingModule({
+        providers: [
+          AiGatewayService,
+          { provide: LLM_PROVIDERS, useValue: [makeProvider('openai', false)] },
+          { provide: DataSanitizer, useValue: sanitizer },
+          { provide: TokenBudgetService, useValue: budget },
+          { provide: AiMetricsService, useValue: metrics },
+        ],
+      }).compile();
+      const gw = m.get(AiGatewayService);
+
+      await expect(gw.embedBatch('user-001', ['text'])).rejects.toThrow(
+        'OpenAI provider not available for batch embeddings',
+      );
+    });
+  });
+
   describe('getProvider()', () => {
     it('returns provider by name', () => {
       const provider = gateway.getProvider('openai');

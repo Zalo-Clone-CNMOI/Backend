@@ -5,7 +5,10 @@ import { AiMetricsService } from '../ai-gateway/services/ai-metrics.service';
 import { TextChunkerService } from './text-chunker.service';
 import { Repository } from 'typeorm';
 import { DocumentMetadata, DocumentChunk } from '@libs/database/entities';
-import type { AiDocumentUploadEvent } from '@libs/contracts';
+import type {
+  AiDocumentUploadEvent,
+  AiDocumentQueryEvent,
+} from '@libs/contracts';
 import type { LlmEmbeddingResult } from '../ai-gateway/interfaces';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -286,5 +289,93 @@ describe('DocumentEngine.processDocument', () => {
       expect(result.status).toBe('failed');
       expect(embedBatch).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('DocumentEngine.queryDocument', () => {
+  function makeQueryEvent(
+    overrides: Partial<AiDocumentQueryEvent> = {},
+  ): AiDocumentQueryEvent {
+    return {
+      document_id: 'doc-001',
+      conversation_id: 'conv-001',
+      user_id: 'user-001',
+      query: 'What is the main topic?',
+      requested_at: Date.now(),
+      ...overrides,
+    };
+  }
+
+  function makeQueryBuilder(
+    rawSimilarity = '0.9',
+    chunkContent = 'Chunk text',
+  ) {
+    const qb = {
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      setParameter: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      getRawAndEntities: jest.fn().mockResolvedValue({
+        raw: [{ similarity: rawSimilarity }],
+        entities: [{ content: chunkContent, chunkIndex: 0 }],
+      }),
+    };
+    return qb;
+  }
+
+  it('passes embeddingModel predicate to query builder to prevent dimension mismatch', async () => {
+    const qb = makeQueryBuilder();
+    const embed = jest.fn().mockResolvedValue({
+      embedding: [0.1, 0.2],
+      tokensUsed: 5,
+      model: 'text-embedding-3-small',
+      provider: 'openai',
+    });
+    const complete = jest.fn().mockResolvedValue({
+      content: JSON.stringify({ answer: 'The answer', source_indices: [0] }),
+      tokensIn: 20,
+      tokensOut: 10,
+      model: 'gpt-4o',
+      provider: 'openai',
+      latencyMs: 150,
+    });
+
+    const engine = buildEngine({
+      gateway: { embed, complete, embedBatch: jest.fn() },
+      chunkRepo: {
+        createQueryBuilder: jest.fn().mockReturnValue(qb),
+        create: jest.fn(),
+        save: jest.fn(),
+      },
+    });
+
+    await engine.queryDocument(makeQueryEvent());
+
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      'chunk.embeddingModel = :embeddingModel',
+      { embeddingModel: 'text-embedding-3-small' },
+    );
+  });
+
+  it('returns fallback answer when gateway.embed throws', async () => {
+    const embed = jest.fn().mockRejectedValue(new Error('Embed API down'));
+
+    const engine = buildEngine({
+      gateway: { embed, complete: jest.fn(), embedBatch: jest.fn() },
+      chunkRepo: {
+        createQueryBuilder: jest.fn(),
+        create: jest.fn(),
+        save: jest.fn(),
+      },
+    });
+
+    const result = await engine.queryDocument(makeQueryEvent());
+
+    expect(result.answer).toContain('Failed to query document');
+    expect(result.sources).toEqual([]);
+    expect(result.tokens_used).toBe(0);
   });
 });

@@ -236,6 +236,9 @@ export class DocumentEngine {
       .where('chunk.document_id = :documentId', {
         documentId: event.document_id,
       })
+      .andWhere('chunk.embeddingModel = :embeddingModel', {
+        embeddingModel: this.embeddingModel,
+      })
       .setParameter('queryVector', JSON.stringify(queryEmbedding.embedding))
       .orderBy('similarity', 'DESC')
       .limit(topK)

@@ -5,6 +5,7 @@ import { EntityDetectionEngine } from './entity-detection.engine';
 import { AiGatewayService } from '../ai-gateway/services/ai-gateway.service';
 import { PromptBuilderService } from '../ai-gateway/services/prompt-builder.service';
 import { AiMetricsService } from '../ai-gateway/services/ai-metrics.service';
+import { RedisService } from '@libs/redis';
 import { AiEntityDetectionLog } from '@libs/database/entities';
 
 function makeGateway(): jest.Mocked<AiGatewayService> {
@@ -15,6 +16,13 @@ function makeMetrics(): jest.Mocked<AiMetricsService> {
   return {
     recordRequest: jest.fn(),
   } as unknown as jest.Mocked<AiMetricsService>;
+}
+
+function makeRedis() {
+  return {
+    get: jest.fn().mockResolvedValue(null),
+    setEx: jest.fn().mockResolvedValue(undefined),
+  };
 }
 
 function makeRepo() {
@@ -39,11 +47,13 @@ describe('EntityDetectionEngine', () => {
   let engine: EntityDetectionEngine;
   let gateway: jest.Mocked<AiGatewayService>;
   let metrics: jest.Mocked<AiMetricsService>;
+  let redis: ReturnType<typeof makeRedis>;
   let repo: ReturnType<typeof makeRepo>;
 
   beforeEach(async () => {
     gateway = makeGateway();
     metrics = makeMetrics();
+    redis = makeRedis();
     repo = makeRepo();
 
     const module: TestingModule = await Test.createTestingModule({
@@ -52,6 +62,7 @@ describe('EntityDetectionEngine', () => {
         { provide: AiGatewayService, useValue: gateway },
         { provide: PromptBuilderService, useClass: PromptBuilderService },
         { provide: AiMetricsService, useValue: metrics },
+        { provide: RedisService, useValue: redis },
         { provide: getRepositoryToken(AiEntityDetectionLog), useValue: repo },
       ],
     }).compile();
@@ -377,6 +388,47 @@ describe('EntityDetectionEngine', () => {
       const calledMessages = gateway.complete.mock.calls[0][1].messages;
       const systemMsg = calledMessages.find((m) => m.role === 'system');
       expect(systemMsg?.content).toContain('Vietnamese');
+    });
+
+    it('returns cached result without calling LLM when Redis cache hits', async () => {
+      const cachedResult = {
+        entity_text: 'Telegram',
+        entity_type: 'tool',
+        title: 'Telegram (cached)',
+        summary: 'Cached summary',
+        details: '',
+        related_entities: [],
+        provider: 'openai',
+        tokens_used: 0,
+        processed_at: 12345,
+      };
+      redis.get.mockResolvedValue(JSON.stringify(cachedResult));
+
+      const result = await engine.generateInfo(baseEvent);
+
+      expect(gateway.complete).not.toHaveBeenCalled();
+      expect(result.title).toBe('Telegram (cached)');
+    });
+
+    it('stores result in Redis after a successful LLM call', async () => {
+      gateway.complete.mockResolvedValue(
+        llmResult(
+          JSON.stringify({
+            title: 'Telegram',
+            summary: 'Summary',
+            details: 'Details',
+            related_entities: [],
+          }),
+        ),
+      );
+
+      await engine.generateInfo(baseEvent);
+
+      expect(redis.setEx).toHaveBeenCalledWith(
+        expect.stringContaining('ai:entity-info:tool:'),
+        7 * 24 * 3600,
+        expect.stringContaining('"title":"Telegram"'),
+      );
     });
   });
 });

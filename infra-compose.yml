@@ -94,7 +94,7 @@ services:
       - ./infra/coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "nc -z localhost 3478 || exit 1"]
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/3478' 2>/dev/null || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5

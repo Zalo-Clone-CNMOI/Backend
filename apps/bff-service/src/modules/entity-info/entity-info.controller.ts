@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -8,9 +8,9 @@ import {
 } from '@nestjs/swagger';
 import { plainToInstance } from 'class-transformer';
 import { Throttle } from '@nestjs/throttler';
-import { CurrentUser } from '@app/decorator';
-import { BusinessException, type AuthenticatedUser } from '@app/types';
-import { JwtAuthGuard } from '@libs/auth';
+import { AccessToken } from '@app/decorator';
+import { BusinessException } from '@app/types';
+import { JwtService } from '@libs/auth';
 import { EntityInfoService } from './entity-info.service';
 import type { EntityType } from '@libs/contracts';
 import { EntityInfoQueryDto } from './dto/entity-info-query.dto';
@@ -28,10 +28,12 @@ const VALID_TYPES: readonly EntityType[] = [
 
 @ApiTags('Entity Info')
 @ApiBearerAuth('BearerAuth')
-@UseGuards(JwtAuthGuard)
 @Controller('entity-info')
 export class EntityInfoController {
-  constructor(private readonly service: EntityInfoService) {}
+  constructor(
+    private readonly service: EntityInfoService,
+    private readonly jwtService: JwtService,
+  ) {}
 
   @Get()
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
@@ -55,9 +57,11 @@ export class EntityInfoController {
   })
   @ApiResponse({ status: 400, description: 'Invalid query parameters' })
   async getEntityInfo(
-    @CurrentUser() user: AuthenticatedUser,
+    @AccessToken() token: string,
     @Query() query: EntityInfoQueryDto,
   ) {
+    const { userId } = this.jwtService.verifyToken(token);
+
     const text = query.text?.trim();
     if (!text) {
       throw BusinessException.badRequest('text query parameter is required');
@@ -79,7 +83,7 @@ export class EntityInfoController {
       text,
       type: query.type as EntityType,
       lang: language,
-      userId: user.id,
+      userId,
     });
 
     return plainToInstance(EntityInfoResponseDto, result, {

@@ -1,15 +1,12 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { AiCoreClientModule } from '@app/clients';
-import { JwtService, JwtAuthGuard } from '@libs/auth';
-import { User } from '@libs/database';
+import { JwtService } from '@libs/auth';
 import { EntityInfoController } from './entity-info.controller';
 import { EntityInfoService } from './entity-info.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User]),
     AiCoreClientModule.registerAsync({
       useFactory: (configService: ConfigService) => ({
         baseUrl:
@@ -20,6 +17,6 @@ import { EntityInfoService } from './entity-info.service';
     }),
   ],
   controllers: [EntityInfoController],
-  providers: [EntityInfoService, JwtService, JwtAuthGuard],
+  providers: [EntityInfoService, JwtService],
 })
 export class EntityInfoModule {}

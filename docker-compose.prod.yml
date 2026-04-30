@@ -533,11 +533,23 @@ services:
       S3_PRESIGN_EXPIRES_SECONDS: ${S3_PRESIGN_EXPIRES_SECONDS:-60}
       # Omit CDN_BASE_URL to auto-build from S3_BUCKET + AWS_REGION; set for CloudFront
       # CDN_BASE_URL: ${CDN_BASE_URL}
+      PORT: 5005
       # Kafka
       KAFKA_BROKERS: kafka:29092
       KAFKA_CLIENT_ID: ai-core-service
+      KAFKA_GROUP_ID: ai-core-service
       # Redis
       REDIS_URL: redis://redis:6379
+      # ScyllaDB
+      SCYLLA_CONTACT_POINTS: scylla
+      SCYLLA_LOCAL_DATACENTER: datacenter1
+      SCYLLA_KEYSPACE: chat
+      # PostgreSQL
+      DB_HOST: zalodb.cv600uwoag41.ap-southeast-1.rds.amazonaws.com
+      DB_PORT: 5432
+      DB_USERNAME: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      DB_NAME: ${POSTGRES_DB:-postgres}
     networks:
       - zalo_network
     depends_on:
@@ -554,7 +566,7 @@ services:
           "--no-verbose",
           "--tries=1",
           "--spider",
-          "http://localhost:3000/api/health",
+          "http://localhost:5005/api/health",
         ]
       interval: 30s
       timeout: 10s

@@ -1,11 +1,13 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AiCoreClientModule } from '@app/clients';
+import { AuthModule } from '@libs/auth';
 import { EntityInfoController } from './entity-info.controller';
 import { EntityInfoService } from './entity-info.service';
 
 @Module({
   imports: [
+    AuthModule,
     AiCoreClientModule.registerAsync({
       useFactory: (configService: ConfigService) => ({
         baseUrl:

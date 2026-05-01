@@ -4,3 +4,4 @@ export * from './http-status';
 export * from './enum';
 export * from './role';
 export * from './poll';
+export * from './group-settings';

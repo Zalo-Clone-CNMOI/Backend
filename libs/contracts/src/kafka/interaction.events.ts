@@ -78,6 +78,14 @@ export interface ConversationUpdatedEvent {
   trace_id?: string;
 }
 
+export interface ConversationSettingsUpdatedEvent {
+  conversation_id: string;
+  updated_by: string;
+  settings: Record<string, unknown>;
+  updated_at: number;
+  trace_id?: string;
+}
+
 export interface ConversationDisbandedEvent {
   conversation_id: string;
   disbanded_by: string;

@@ -1,10 +1,19 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull, In } from 'typeorm';
-import { ConversationMember } from '@libs/database/entities';
+import { Conversation, ConversationMember } from '@libs/database/entities';
+import {
+  ConversationType,
+  UpdateMemberRoleDtoRoleEnum,
+} from '@app/constant';
 
 interface MembershipCacheEntry {
   allowed: boolean;
+  expiresAt: number;
+}
+
+interface SettingsCacheEntry {
+  sendMessage: boolean;
   expiresAt: number;
 }
 
@@ -23,20 +32,25 @@ interface PendingMembershipBatch {
 @Injectable()
 export class ConversationMembershipService {
   private readonly ACCESS_CACHE_TTL_MS = 2000;
+  private readonly SETTINGS_CACHE_TTL_MS = 30_000;
   private readonly logger = new Logger(ConversationMembershipService.name);
   private readonly accessCache = new Map<string, MembershipCacheEntry>();
+  private readonly settingsCache = new Map<string, SettingsCacheEntry>();
   private readonly pendingBatches = new Map<string, PendingMembershipBatch>();
 
   constructor(
     @InjectRepository(ConversationMember)
     private readonly memberRepository: Repository<ConversationMember>,
+    @InjectRepository(Conversation)
+    private readonly conversationRepository: Repository<Conversation>,
   ) {
     setInterval(() => {
       const now = Date.now();
       for (const [key, entry] of this.accessCache) {
-        if (entry.expiresAt <= now) {
-          this.accessCache.delete(key);
-        }
+        if (entry.expiresAt <= now) this.accessCache.delete(key);
+      }
+      for (const [key, entry] of this.settingsCache) {
+        if (entry.expiresAt <= now) this.settingsCache.delete(key);
       }
     }, 10_000).unref();
   }
@@ -83,6 +97,56 @@ export class ConversationMembershipService {
     });
 
     return memberships.map((m) => m.userId);
+  }
+
+  async canUserSendMessage(
+    userId: string,
+    conversationId: string,
+  ): Promise<{ allowed: boolean; reason?: string }> {
+    const isMember = await this.canUserAccessConversation(userId, conversationId);
+    if (!isMember) {
+      return { allowed: false, reason: 'not_member' };
+    }
+
+    const cached = this.settingsCache.get(conversationId);
+    let sendMessage: boolean;
+
+    if (cached && cached.expiresAt > Date.now()) {
+      sendMessage = cached.sendMessage;
+    } else {
+      const conversation = await this.conversationRepository.findOne({
+        where: { id: conversationId },
+        select: ['type', 'settings'],
+      });
+
+      if (!conversation || conversation.type !== ConversationType.GROUP) {
+        return { allowed: true };
+      }
+
+      sendMessage = conversation.settings?.permissions?.send_message ?? true;
+      this.settingsCache.set(conversationId, {
+        sendMessage,
+        expiresAt: Date.now() + this.SETTINGS_CACHE_TTL_MS,
+      });
+    }
+
+    if (sendMessage) {
+      return { allowed: true };
+    }
+
+    // send_message disabled — only ADMIN/OWNER may send
+    const membership = await this.memberRepository.findOne({
+      where: { conversationId, userId, leftAt: IsNull() },
+      select: ['role'],
+    });
+
+    const isPrivileged =
+      membership?.role === UpdateMemberRoleDtoRoleEnum.OWNER ||
+      membership?.role === UpdateMemberRoleDtoRoleEnum.ADMIN;
+
+    return isPrivileged
+      ? { allowed: true }
+      : { allowed: false, reason: 'send_permission_denied' };
   }
 
   /**

@@ -111,6 +111,7 @@ describe('ChatHandler', () => {
           provide: ConversationMembershipService,
           useValue: {
             canUserAccessConversation: jest.fn(),
+            canUserSendMessage: jest.fn(),
           },
         },
         { provide: getRepositoryToken(MediaFile), useValue: mediaFileRepo },
@@ -170,7 +171,7 @@ describe('ChatHandler', () => {
     it('should emit Kafka command and success ack for authorized user', async () => {
       const socket = createMockSocket();
       const body = makeSendPayload();
-      membership.canUserAccessConversation.mockResolvedValue(true);
+      membership.canUserSendMessage.mockResolvedValue({ allowed: true });
 
       await handler.handleSend(socket, body);
 
@@ -195,7 +196,7 @@ describe('ChatHandler', () => {
     it('should reject with not_member when user has no access', async () => {
       const socket = createMockSocket();
       const body = makeSendPayload();
-      membership.canUserAccessConversation.mockResolvedValue(false);
+      membership.canUserSendMessage.mockResolvedValue({ allowed: false, reason: 'not_member' });
 
       await handler.handleSend(socket, body);
 
@@ -207,10 +208,25 @@ describe('ChatHandler', () => {
       });
     });
 
+    it('should reject with send_permission_denied when group blocks member sends', async () => {
+      const socket = createMockSocket();
+      const body = makeSendPayload();
+      membership.canUserSendMessage.mockResolvedValue({ allowed: false, reason: 'send_permission_denied' });
+
+      await handler.handleSend(socket, body);
+
+      expect(kafka.emit).not.toHaveBeenCalled();
+      expect(socket.emit).toHaveBeenCalledWith(WsEvents.ChatAck, {
+        message_id: body.message_id,
+        status: 'rejected',
+        reason: 'send_permission_denied',
+      });
+    });
+
     it('should include reply_to_message_id when present', async () => {
       const socket = createMockSocket();
       const body = makeSendPayload({ reply_to_message_id: 'original-msg-id' });
-      membership.canUserAccessConversation.mockResolvedValue(true);
+      membership.canUserSendMessage.mockResolvedValue({ allowed: true });
 
       await handler.handleSend(socket, body);
 
@@ -242,7 +258,7 @@ describe('ChatHandler', () => {
       ]);
 
       const body = makeSendPayload({ attachments });
-      membership.canUserAccessConversation.mockResolvedValue(true);
+      membership.canUserSendMessage.mockResolvedValue({ allowed: true });
 
       await handler.handleSend(socket, body);
 
@@ -273,7 +289,7 @@ describe('ChatHandler', () => {
       ]);
 
       const body = makeSendPayload({ attachments });
-      membership.canUserAccessConversation.mockResolvedValue(true);
+      membership.canUserSendMessage.mockResolvedValue({ allowed: true });
 
       await handler.handleSend(socket, body);
 
@@ -306,7 +322,7 @@ describe('ChatHandler', () => {
       ]);
 
       const body = makeSendPayload({ attachments });
-      membership.canUserAccessConversation.mockResolvedValue(true);
+      membership.canUserSendMessage.mockResolvedValue({ allowed: true });
 
       await handler.handleSend(socket, body);
 
@@ -470,11 +486,11 @@ describe('ChatHandler', () => {
       const socket = createMockSocket('real-user-id');
       // Even if conversation_id is someone else's, check uses real user
       const body = makeSendPayload({ conversation_id: 'private-conv' });
-      membership.canUserAccessConversation.mockResolvedValue(false);
+      membership.canUserSendMessage.mockResolvedValue({ allowed: false, reason: 'not_member' });
 
       await handler.handleSend(socket, body);
 
-      expect(membership.canUserAccessConversation).toHaveBeenCalledWith(
+      expect(membership.canUserSendMessage).toHaveBeenCalledWith(
         'real-user-id',
         'private-conv',
       );
@@ -483,7 +499,7 @@ describe('ChatHandler', () => {
     it('should set sender_id from socket, not from payload', async () => {
       const socket = createMockSocket('server-verified-user');
       const body = makeSendPayload();
-      membership.canUserAccessConversation.mockResolvedValue(true);
+      membership.canUserSendMessage.mockResolvedValue({ allowed: true });
 
       await handler.handleSend(socket, body);
 
@@ -496,6 +512,7 @@ describe('ChatHandler', () => {
     it('should check membership for EVERY operation type', async () => {
       const socket = createMockSocket();
       membership.canUserAccessConversation.mockResolvedValue(true);
+      membership.canUserSendMessage.mockResolvedValue({ allowed: true });
 
       await handler.handleJoin(socket, 'conv-001');
       await handler.handleSend(socket, makeSendPayload());
@@ -504,8 +521,9 @@ describe('ChatHandler', () => {
       await handler.handleReact(socket, makeReactPayload());
       await handler.handleUnreact(socket, makeUnreactPayload());
 
-      // 6 operations = 6 membership checks (join uses conversationId directly)
-      expect(membership.canUserAccessConversation).toHaveBeenCalledTimes(6);
+      // handleSend now uses canUserSendMessage; all other operations use canUserAccessConversation
+      expect(membership.canUserAccessConversation).toHaveBeenCalledTimes(5);
+      expect(membership.canUserSendMessage).toHaveBeenCalledTimes(1);
     });
   });
 });

@@ -37,6 +37,7 @@ export const KafkaTopics = {
 
   ConversationCreated: 'conversation.created',
   ConversationUpdated: 'conversation.updated',
+  ConversationSettingsUpdated: 'conversation.settings.updated',
   ConversationDisbanded: 'conversation.disbanded',
   ConversationMemberAdded: 'conversation.member.added',
   ConversationMemberRemoved: 'conversation.member.removed',

@@ -14,13 +14,14 @@ import {
   listConversationsForUser,
 } from './membership';
 import { Logger } from '@nestjs/common';
-import { ConversationMember } from '@libs/database/entities';
+import { Conversation, ConversationMember } from '@libs/database/entities';
 
 // ────── Mock Repository ──────────────────────────────────────────────────
 
 function createMockRepository() {
   return {
     find: jest.fn(),
+    findOne: jest.fn(),
   };
 }
 
@@ -39,6 +40,10 @@ describe('ConversationMembershipService', () => {
         {
           provide: getRepositoryToken(ConversationMember),
           useValue: repo,
+        },
+        {
+          provide: getRepositoryToken(Conversation),
+          useValue: { findOne: jest.fn() },
         },
       ],
     }).compile();

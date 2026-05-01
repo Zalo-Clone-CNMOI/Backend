@@ -12,8 +12,8 @@ import {
   type ConversationPinnedEvent,
   type ConversationUnpinnedEvent,
 } from '@libs/contracts';
-import { ConversationMember } from '@libs/database/entities';
-import { ErrorCode } from '@app/constant';
+import { Conversation, ConversationMember } from '@libs/database/entities';
+import { ConversationType, ErrorCode } from '@app/constant';
 import {
   BusinessException,
   PaginatedResponse,
@@ -23,6 +23,7 @@ import {
   CreateGroupConversationDto,
   CreateDirectConversationDto,
   UpdateConversationDto,
+  UpdateGroupSettingsDto,
   AddMembersDto,
   GetGroupInvitesQueryDto,
   GroupInviteItemDto,
@@ -65,6 +66,8 @@ export class ConversationsService {
   constructor(
     @InjectRepository(ConversationMember)
     private readonly memberRepository: Repository<ConversationMember>,
+    @InjectRepository(Conversation)
+    private readonly conversationRepository: Repository<Conversation>,
     private readonly cacheService: CacheService,
     @Inject(KAFKA_CLIENT) private readonly kafkaClient: ClientKafka,
     @Inject(REDIS_CLIENT) private readonly redis: RedisClientType,
@@ -149,12 +152,43 @@ export class ConversationsService {
     return this.memberService.transferOwnership(userId, conversationId, dto);
   }
 
-  sendGroupInvites(
+  async sendGroupInvites(
     userId: string,
     conversationId: string,
     dto: SendGroupInvitesDto,
   ): Promise<SendGroupInvitesResponseDto> {
+    const conv = await this.conversationRepository.findOne({
+      where: { id: conversationId },
+      select: ['id', 'settings', 'type'],
+    });
+
+    if (!conv) {
+      throw BusinessException.notFound(ErrorCode.CONVERSATION_NOT_FOUND);
+    }
+
+    if (
+      conv.type === ConversationType.GROUP &&
+      conv.settings?.policies?.join_approval === true
+    ) {
+      await this.memberService.addMembers(userId, conversationId, {
+        memberIds: dto.userIds,
+      });
+      return {
+        acceptedCount: dto.userIds.length,
+        skippedCount: 0,
+        inviteIds: [],
+      };
+    }
+
     return this.inviteService.sendGroupInvites(userId, conversationId, dto);
+  }
+
+  updateGroupSettings(
+    userId: string,
+    conversationId: string,
+    dto: UpdateGroupSettingsDto,
+  ): Promise<ConversationDetailDto> {
+    return this.coreService.updateGroupSettings(userId, conversationId, dto);
   }
 
   getPendingGroupInvites(

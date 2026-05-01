@@ -15,6 +15,7 @@ import {
 } from './membership';
 import { Logger } from '@nestjs/common';
 import { Conversation, ConversationMember } from '@libs/database/entities';
+import { ConversationType, UpdateMemberRoleDtoRoleEnum } from '@app/constant';
 
 // ────── Mock Repository ──────────────────────────────────────────────────
 
@@ -30,9 +31,11 @@ function createMockRepository() {
 describe('ConversationMembershipService', () => {
   let service: ConversationMembershipService;
   let repo: ReturnType<typeof createMockRepository>;
+  let convRepo: { findOne: jest.Mock };
 
   beforeEach(async () => {
     repo = createMockRepository();
+    convRepo = { findOne: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -43,7 +46,7 @@ describe('ConversationMembershipService', () => {
         },
         {
           provide: getRepositoryToken(Conversation),
-          useValue: { findOne: jest.fn() },
+          useValue: convRepo,
         },
       ],
     }).compile();
@@ -254,6 +257,149 @@ describe('ConversationMembershipService', () => {
       ]);
 
       expect(result.get('conv-only')).toBe(true);
+    });
+  });
+
+  // ── canUserSendMessage ────────────────────────────────────────────────
+
+  describe('canUserSendMessage', () => {
+    it('should return not_member when user is not an active member', async () => {
+      repo.find.mockResolvedValue([]);
+
+      const result = await service.canUserSendMessage('user-1', 'conv-1');
+
+      expect(result).toEqual({ allowed: false, reason: 'not_member' });
+      expect(convRepo.findOne).not.toHaveBeenCalled();
+    });
+
+    it('should return allowed for non-GROUP conversation', async () => {
+      repo.find.mockResolvedValue([{ conversationId: 'conv-1' }]);
+      convRepo.findOne.mockResolvedValue({ type: 'direct', settings: null });
+
+      const result = await service.canUserSendMessage('user-1', 'conv-1');
+
+      expect(result).toEqual({ allowed: true });
+    });
+
+    it('should return allowed when GROUP has null settings (default permissive)', async () => {
+      repo.find.mockResolvedValue([{ conversationId: 'conv-1' }]);
+      convRepo.findOne.mockResolvedValue({
+        type: ConversationType.GROUP,
+        settings: null,
+      });
+
+      const result = await service.canUserSendMessage('user-1', 'conv-1');
+
+      expect(result).toEqual({ allowed: true });
+    });
+
+    it('should return allowed when GROUP has send_message=true', async () => {
+      repo.find.mockResolvedValue([{ conversationId: 'conv-1' }]);
+      convRepo.findOne.mockResolvedValue({
+        type: ConversationType.GROUP,
+        settings: { permissions: { send_message: true } },
+      });
+
+      const result = await service.canUserSendMessage('user-1', 'conv-1');
+
+      expect(result).toEqual({ allowed: true });
+    });
+
+    it('should return allowed for OWNER when send_message=false', async () => {
+      repo.find.mockResolvedValue([{ conversationId: 'conv-1' }]);
+      convRepo.findOne.mockResolvedValue({
+        type: ConversationType.GROUP,
+        settings: { permissions: { send_message: false } },
+      });
+      repo.findOne.mockResolvedValue({
+        role: UpdateMemberRoleDtoRoleEnum.OWNER,
+      });
+
+      const result = await service.canUserSendMessage('user-1', 'conv-1');
+
+      expect(result).toEqual({ allowed: true });
+    });
+
+    it('should return allowed for ADMIN when send_message=false', async () => {
+      repo.find.mockResolvedValue([{ conversationId: 'conv-1' }]);
+      convRepo.findOne.mockResolvedValue({
+        type: ConversationType.GROUP,
+        settings: { permissions: { send_message: false } },
+      });
+      repo.findOne.mockResolvedValue({
+        role: UpdateMemberRoleDtoRoleEnum.ADMIN,
+      });
+
+      const result = await service.canUserSendMessage('user-1', 'conv-1');
+
+      expect(result).toEqual({ allowed: true });
+    });
+
+    it('should return send_permission_denied for MEMBER when send_message=false', async () => {
+      repo.find.mockResolvedValue([{ conversationId: 'conv-1' }]);
+      convRepo.findOne.mockResolvedValue({
+        type: ConversationType.GROUP,
+        settings: { permissions: { send_message: false } },
+      });
+      repo.findOne.mockResolvedValue({
+        role: UpdateMemberRoleDtoRoleEnum.MEMBER,
+      });
+
+      const result = await service.canUserSendMessage('user-1', 'conv-1');
+
+      expect(result).toEqual({
+        allowed: false,
+        reason: 'send_permission_denied',
+      });
+    });
+
+    it('should use settings cache and skip convRepo on second call', async () => {
+      repo.find.mockResolvedValue([{ conversationId: 'conv-1' }]);
+      convRepo.findOne.mockResolvedValue({
+        type: ConversationType.GROUP,
+        settings: { permissions: { send_message: true } },
+      });
+
+      await service.canUserSendMessage('user-1', 'conv-1');
+      await service.canUserSendMessage('user-1', 'conv-1');
+
+      expect(convRepo.findOne).toHaveBeenCalledTimes(1);
+    });
+
+    it('should use role cache and skip memberRepo.findOne on second call when send_message=false', async () => {
+      repo.find.mockResolvedValue([{ conversationId: 'conv-1' }]);
+      convRepo.findOne.mockResolvedValue({
+        type: ConversationType.GROUP,
+        settings: { permissions: { send_message: false } },
+      });
+      repo.findOne.mockResolvedValue({
+        role: UpdateMemberRoleDtoRoleEnum.ADMIN,
+      });
+
+      await service.canUserSendMessage('user-1', 'conv-1');
+      await service.canUserSendMessage('user-1', 'conv-1');
+
+      expect(repo.findOne).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // ── invalidateSettingsCache ───────────────────────────────────────────
+
+  describe('invalidateSettingsCache', () => {
+    it('should force re-query on the next canUserSendMessage call', async () => {
+      repo.find.mockResolvedValue([{ conversationId: 'conv-1' }]);
+      convRepo.findOne.mockResolvedValue({
+        type: ConversationType.GROUP,
+        settings: { permissions: { send_message: true } },
+      });
+
+      await service.canUserSendMessage('user-1', 'conv-1');
+      expect(convRepo.findOne).toHaveBeenCalledTimes(1);
+
+      service.invalidateSettingsCache('conv-1');
+
+      await service.canUserSendMessage('user-1', 'conv-1');
+      expect(convRepo.findOne).toHaveBeenCalledTimes(2);
     });
   });
 

@@ -584,8 +584,9 @@ describe('ConversationsService', () => {
       ).rejects.toThrow();
     });
 
-    it('should reject updates from MEMBER role (not admin/owner)', async () => {
+    it('should reject MEMBER update when change_info=false', async () => {
       const conv = createMockConversation({
+        settings: { permissions: { change_info: false } },
         members: [
           createMockMember({
             userId: uuid(2),

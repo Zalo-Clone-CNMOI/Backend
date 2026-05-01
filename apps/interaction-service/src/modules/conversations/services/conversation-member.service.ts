@@ -72,7 +72,7 @@ export class ConversationMemberService {
     userId: string,
     conversationId: string,
     dto: AddMembersDto,
-  ): Promise<ConversationDetailDto> {
+  ): Promise<{ detail: ConversationDetailDto; addedCount: number }> {
     const conversation = await this.conversationRepository.findOne({
       where: { id: conversationId },
       relations: ['members'],
@@ -282,7 +282,11 @@ export class ConversationMemberService {
       allMemberIds,
     );
 
-    return this.coreService.getConversationById(userId, conversationId);
+    const detail = await this.coreService.getConversationById(
+      userId,
+      conversationId,
+    );
+    return { detail, addedCount: addedUserIds.length };
   }
 
   async removeMember(

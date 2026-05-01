@@ -114,12 +114,17 @@ export class ConversationsService {
     return this.coreService.updateConversation(userId, conversationId, dto);
   }
 
-  addMembers(
+  async addMembers(
     userId: string,
     conversationId: string,
     dto: AddMembersDto,
   ): Promise<ConversationDetailDto> {
-    return this.memberService.addMembers(userId, conversationId, dto);
+    const { detail } = await this.memberService.addMembers(
+      userId,
+      conversationId,
+      dto,
+    );
+    return detail;
   }
 
   removeMember(
@@ -170,12 +175,14 @@ export class ConversationsService {
       conv.type === ConversationType.GROUP &&
       conv.settings?.policies?.join_approval === true
     ) {
-      await this.memberService.addMembers(userId, conversationId, {
-        memberIds: dto.userIds,
-      });
+      const { addedCount } = await this.memberService.addMembers(
+        userId,
+        conversationId,
+        { memberIds: dto.userIds },
+      );
       return {
-        acceptedCount: dto.userIds.length,
-        skippedCount: 0,
+        acceptedCount: addedCount,
+        skippedCount: dto.userIds.length - addedCount,
         inviteIds: [],
       };
     }

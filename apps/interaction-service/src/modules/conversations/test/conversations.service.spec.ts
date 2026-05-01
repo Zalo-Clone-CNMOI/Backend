@@ -1332,6 +1332,71 @@ describe('ConversationsService', () => {
 
   // ─── Polls (passthrough delegation) ──────────────────────
 
+  // ─── sendGroupInvites ─────────────────────────────────
+
+  describe('sendGroupInvites', () => {
+    it('should return accurate acceptedCount when join_approval=true', async () => {
+      // uuid(2) is already a member in createMockConversation → will be skipped
+      // uuid(4) is new → will be added
+      const conv = createMockConversation({
+        settings: { policies: { join_approval: true } },
+      });
+      conversationRepository.findOne.mockResolvedValue(conv);
+      userRepository.find.mockResolvedValue([
+        { id: uuid(4), fullName: 'User 4', avatarUrl: null },
+      ]);
+
+      const result = await service.sendGroupInvites(uuid(2), uuid(1), {
+        userIds: [uuid(2), uuid(4)],
+      });
+
+      expect(result).toEqual({
+        acceptedCount: 1,
+        skippedCount: 1,
+        inviteIds: [],
+      });
+    });
+
+    it('should return acceptedCount=0 skippedCount=N when all userIds are existing members', async () => {
+      // uuid(2) is OWNER in createMockConversation → already an active member
+      const conv = createMockConversation({
+        settings: { policies: { join_approval: true } },
+      });
+      conversationRepository.findOne.mockResolvedValue(conv);
+
+      const result = await service.sendGroupInvites(uuid(2), uuid(1), {
+        userIds: [uuid(2)],
+      });
+
+      expect(result).toEqual({
+        acceptedCount: 0,
+        skippedCount: 1,
+        inviteIds: [],
+      });
+    });
+
+    it('should deduplicate userIds before computing skippedCount when join_approval=true', async () => {
+      // uuid(4) appears twice → dedup → 2 unique IDs → both added → skippedCount=0
+      const conv = createMockConversation({
+        settings: { policies: { join_approval: true } },
+      });
+      conversationRepository.findOne.mockResolvedValue(conv);
+      userRepository.find.mockResolvedValue([
+        { id: uuid(4), fullName: 'User 4', avatarUrl: null },
+        { id: uuid(5), fullName: 'User 5', avatarUrl: null },
+      ]);
+
+      const result = await service.sendGroupInvites(uuid(2), uuid(1), {
+        userIds: [uuid(4), uuid(4), uuid(5)],
+      });
+
+      // Without dedup: skippedCount would be 3-2=1; with dedup it is 2-2=0
+      expect(result.skippedCount).toBe(0);
+      expect(result.acceptedCount).toBe(2);
+      expect(result.inviteIds).toEqual([]);
+    });
+  });
+
   describe('poll passthroughs', () => {
     const userId = uuid(2);
     const convId = uuid(1);

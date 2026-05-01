@@ -229,27 +229,42 @@ export class GetGroupInvitesQueryDto {
  * Partial update for group member permissions
  */
 export class UpdatePermissionsDto {
-  @ApiPropertyOptional({ description: 'Members can change group name/avatar', example: true })
+  @ApiPropertyOptional({
+    description: 'Members can change group name/avatar',
+    example: true,
+  })
   @IsOptional()
   @IsBoolean()
   change_info?: boolean;
 
-  @ApiPropertyOptional({ description: 'Members can pin messages', example: true })
+  @ApiPropertyOptional({
+    description: 'Members can pin messages',
+    example: true,
+  })
   @IsOptional()
   @IsBoolean()
   pin_message?: boolean;
 
-  @ApiPropertyOptional({ description: 'Members can create notes', example: true })
+  @ApiPropertyOptional({
+    description: 'Members can create notes',
+    example: true,
+  })
   @IsOptional()
   @IsBoolean()
   create_note?: boolean;
 
-  @ApiPropertyOptional({ description: 'Members can create polls', example: true })
+  @ApiPropertyOptional({
+    description: 'Members can create polls',
+    example: true,
+  })
   @IsOptional()
   @IsBoolean()
   create_poll?: boolean;
 
-  @ApiPropertyOptional({ description: 'Members can send messages', example: true })
+  @ApiPropertyOptional({
+    description: 'Members can send messages',
+    example: true,
+  })
   @IsOptional()
   @IsBoolean()
   send_message?: boolean;
@@ -260,19 +275,26 @@ export class UpdatePermissionsDto {
  */
 export class UpdatePoliciesDto {
   @ApiPropertyOptional({
-    description: 'Admin invite bypasses user consent (true) or creates pending invite (false)',
+    description:
+      'Admin invite bypasses user consent (true) or creates pending invite (false)',
     example: false,
   })
   @IsOptional()
   @IsBoolean()
   join_approval?: boolean;
 
-  @ApiPropertyOptional({ description: 'New members can read message history', example: true })
+  @ApiPropertyOptional({
+    description: 'New members can read message history',
+    example: true,
+  })
   @IsOptional()
   @IsBoolean()
   allow_read_history?: boolean;
 
-  @ApiPropertyOptional({ description: 'Allow joining via invite link', example: true })
+  @ApiPropertyOptional({
+    description: 'Allow joining via invite link',
+    example: true,
+  })
   @IsOptional()
   @IsBoolean()
   allow_join_link?: boolean;
@@ -282,7 +304,10 @@ export class UpdatePoliciesDto {
  * Partial update for group UI features
  */
 export class UpdateFeaturesDto {
-  @ApiPropertyOptional({ description: 'Show admin/owner badge on messages', example: true })
+  @ApiPropertyOptional({
+    description: 'Show admin/owner badge on messages',
+    example: true,
+  })
   @IsOptional()
   @IsBoolean()
   admin_tagging?: boolean;

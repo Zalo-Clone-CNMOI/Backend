@@ -167,6 +167,7 @@ export class ConversationDetailDto {
     description: 'Group configuration settings (null for direct conversations)',
     nullable: true,
     type: 'object',
+    additionalProperties: true,
     example: {
       permissions: {
         change_info: true,

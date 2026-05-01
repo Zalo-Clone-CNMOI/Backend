@@ -175,16 +175,29 @@ export class ConversationsService {
       conv.type === ConversationType.GROUP &&
       conv.settings?.policies?.join_approval === true
     ) {
-      const { addedCount } = await this.memberService.addMembers(
-        userId,
-        conversationId,
-        { memberIds: dto.userIds },
-      );
-      return {
-        acceptedCount: addedCount,
-        skippedCount: dto.userIds.length - addedCount,
-        inviteIds: [],
-      };
+      const deduped = Array.from(new Set(dto.userIds));
+      try {
+        const { addedCount } = await this.memberService.addMembers(
+          userId,
+          conversationId,
+          { memberIds: deduped },
+        );
+        return {
+          acceptedCount: addedCount,
+          skippedCount: deduped.length - addedCount,
+          inviteIds: [],
+        };
+      } catch (e) {
+        // addMembers throws CONFLICT when all requested users are already active
+        // members — treat this as 0 added rather than surfacing a 409.
+        if (
+          e instanceof BusinessException &&
+          e.errorCode === ErrorCode.CONFLICT
+        ) {
+          return { acceptedCount: 0, skippedCount: deduped.length, inviteIds: [] };
+        }
+        throw e;
+      }
     }
 
     return this.inviteService.sendGroupInvites(userId, conversationId, dto);

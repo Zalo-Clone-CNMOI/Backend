@@ -33,6 +33,10 @@ interface PendingMembershipBatch {
 
 @Injectable()
 export class ConversationMembershipService {
+  // Access TTL is short (2 s) because membership changes are infrequent but
+  // membership checks are on the hot path and there is no Kafka invalidation event.
+  // Settings TTL (30 s) and role TTL (5 s) are fallbacks for missed Kafka events;
+  // both caches are proactively invalidated by the ws-gateway Kafka consumer.
   private readonly ACCESS_CACHE_TTL_MS = 2000;
   private readonly SETTINGS_CACHE_TTL_MS = 30_000;
   private readonly ROLE_CACHE_TTL_MS = 5_000;
@@ -176,6 +180,14 @@ export class ConversationMembershipService {
 
   invalidateSettingsCache(conversationId: string): void {
     this.settingsCache.delete(conversationId);
+    const suffix = `:${conversationId}`;
+    for (const key of Array.from(this.roleCache.keys())) {
+      if (key.endsWith(suffix)) this.roleCache.delete(key);
+    }
+  }
+
+  invalidateRoleCache(userId: string, conversationId: string): void {
+    this.roleCache.delete(`${userId}:${conversationId}`);
   }
 
   /**

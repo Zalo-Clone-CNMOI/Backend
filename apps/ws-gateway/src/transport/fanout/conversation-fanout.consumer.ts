@@ -6,6 +6,7 @@ import {
   type ConversationPinnedEvent,
   type ConversationUnpinnedEvent,
   type ConversationSettingsUpdatedEvent,
+  type ConversationMemberRoleUpdatedEvent,
 } from '@libs/contracts';
 import { ChatGateway } from '../../socket/chat.gateway';
 import { ConversationMembershipService } from '@libs/mvp-access';
@@ -44,5 +45,15 @@ export class ConversationFanoutConsumer {
     @Payload() payload: ConversationSettingsUpdatedEvent,
   ): void {
     this.membershipService.invalidateSettingsCache(payload.conversation_id);
+  }
+
+  @EventPattern(KafkaTopics.ConversationMemberRoleUpdated)
+  onConversationMemberRoleUpdated(
+    @Payload() payload: ConversationMemberRoleUpdatedEvent,
+  ): void {
+    this.membershipService.invalidateRoleCache(
+      payload.user_id,
+      payload.conversation_id,
+    );
   }
 }

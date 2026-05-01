@@ -196,7 +196,10 @@ describe('ChatHandler', () => {
     it('should reject with not_member when user has no access', async () => {
       const socket = createMockSocket();
       const body = makeSendPayload();
-      membership.canUserSendMessage.mockResolvedValue({ allowed: false, reason: 'not_member' });
+      membership.canUserSendMessage.mockResolvedValue({
+        allowed: false,
+        reason: 'not_member',
+      });
 
       await handler.handleSend(socket, body);
 
@@ -211,7 +214,10 @@ describe('ChatHandler', () => {
     it('should reject with send_permission_denied when group blocks member sends', async () => {
       const socket = createMockSocket();
       const body = makeSendPayload();
-      membership.canUserSendMessage.mockResolvedValue({ allowed: false, reason: 'send_permission_denied' });
+      membership.canUserSendMessage.mockResolvedValue({
+        allowed: false,
+        reason: 'send_permission_denied',
+      });
 
       await handler.handleSend(socket, body);
 
@@ -486,7 +492,10 @@ describe('ChatHandler', () => {
       const socket = createMockSocket('real-user-id');
       // Even if conversation_id is someone else's, check uses real user
       const body = makeSendPayload({ conversation_id: 'private-conv' });
-      membership.canUserSendMessage.mockResolvedValue({ allowed: false, reason: 'not_member' });
+      membership.canUserSendMessage.mockResolvedValue({
+        allowed: false,
+        reason: 'not_member',
+      });
 
       await handler.handleSend(socket, body);
 

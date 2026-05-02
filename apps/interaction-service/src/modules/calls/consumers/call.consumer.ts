@@ -104,6 +104,12 @@ export class CallConsumer {
       version: 1,
     };
 
+    await this.stateStore.set(cmd.conversation_id, state);
+    await this.callTimeoutService.scheduleTimeout(
+      cmd.call_id,
+      cmd.conversation_id,
+    );
+
     try {
       await this.callHistoryService.createSession({
         id: cmd.call_id,
@@ -119,6 +125,11 @@ export class CallConsumer {
         `createSession failed call=${cmd.call_id}: ${err instanceof Error ? err.message : String(err)}`,
         err instanceof Error ? err.stack : undefined,
       );
+      await this.stateStore.clear(cmd.conversation_id);
+      await this.callTimeoutService.cancelTimeout(
+        cmd.call_id,
+        cmd.conversation_id,
+      );
       this.eventsPublisher.publishStateUpdate(cmd.conversation_id, null, {
         requestedBy: cmd.initiator_id,
         reason: 'history_failed',
@@ -126,12 +137,6 @@ export class CallConsumer {
       });
       return;
     }
-
-    await this.stateStore.set(cmd.conversation_id, state);
-    await this.callTimeoutService.scheduleTimeout(
-      cmd.call_id,
-      cmd.conversation_id,
-    );
 
     const startedEvent: CallStartedEvent = {
       call_id: cmd.call_id,

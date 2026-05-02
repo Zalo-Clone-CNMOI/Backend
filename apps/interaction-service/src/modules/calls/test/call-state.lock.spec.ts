@@ -24,7 +24,7 @@ describe('CallStateLock', () => {
     expect(redis.set).toHaveBeenCalledWith(
       'call:lock:conv-1',
       expect.any(String),
-      expect.objectContaining({ NX: true, EX: 5 }),
+      expect.objectContaining({ NX: true, EX: 15 }),
     );
   });
 

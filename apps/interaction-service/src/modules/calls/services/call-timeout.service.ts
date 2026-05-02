@@ -52,7 +52,7 @@ export class CallTimeoutService {
     const now = Date.now();
     const result = (await this.redis.eval(
       `local entries = redis.call('ZRANGEBYSCORE', KEYS[1], 0, ARGV[1])
-       if #entries > 0 then redis.call('ZREM', KEYS[1], unpack(entries)) end
+       redis.call('ZREMRANGEBYSCORE', KEYS[1], 0, ARGV[1])
        return entries`,
       {
         keys: [CallTimeoutService.TIMEOUT_KEY],

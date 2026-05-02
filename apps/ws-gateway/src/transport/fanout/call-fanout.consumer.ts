@@ -46,6 +46,7 @@ export class CallFanoutConsumer {
       sdp_mid: payload.sdp_mid,
       sdp_mline_index: payload.sdp_mline_index,
       sent_at: payload.sent_at,
+      state_version: payload.state_version,
     };
 
     if (payload.target_user_id) {
@@ -74,6 +75,9 @@ export class CallFanoutConsumer {
         conversation_id: payload.conversation_id,
         user_id: payload.user_id,
         accepted_at: payload.accepted_at,
+        participants: payload.participants,
+        status: payload.status,
+        state_version: payload.state_version,
       },
     );
   }

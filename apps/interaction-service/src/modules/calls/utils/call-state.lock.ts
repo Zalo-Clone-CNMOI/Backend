@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import { REDIS_CLIENT } from '@libs/redis/redis.tokens';
 import type { RedisClientType } from 'redis';
 
-const LOCK_TTL_SECONDS = 5;
+const LOCK_TTL_SECONDS = 15;
 const RETRY_ATTEMPTS = 5;
 const RETRY_DELAY_MS = 50;
 

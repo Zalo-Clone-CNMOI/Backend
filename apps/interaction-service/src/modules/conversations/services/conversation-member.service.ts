@@ -703,7 +703,7 @@ export class ConversationMemberService {
     dto: UpdateMemberRoleDto,
   ): Promise<{ message: string }> {
     if (dto.role === UpdateMemberRoleDtoRoleEnum.OWNER) {
-      throw BusinessException.badRequest(ErrorCode.OWNER_TRANSFER_REQUIRED);
+      throw new BusinessException(ErrorCode.OWNER_TRANSFER_REQUIRED);
     }
 
     if (memberId === userId) {
@@ -731,18 +731,24 @@ export class ConversationMemberService {
           );
         }
 
-        const activeMembers = await memberRepo.find({
-          where: { conversationId, leftAt: IsNull() },
-        });
+        // Note: inside a transaction callback all queries share one DB connection
+        // and are serialized by the pg driver, so Promise.all here expresses intent
+        // rather than providing true DB-level parallelism.
+        const [caller, target] = await Promise.all([
+          memberRepo.findOne({
+            where: { conversationId, userId, leftAt: IsNull() },
+          }),
+          memberRepo.findOne({
+            where: { conversationId, userId: memberId, leftAt: IsNull() },
+          }),
+        ]);
 
-        const caller = activeMembers.find((m) => m.userId === userId);
         if (!caller || caller.role !== UpdateMemberRoleDtoRoleEnum.OWNER) {
           throw BusinessException.forbidden(
             ErrorCode.CONVERSATION_PERMISSION_DENIED,
           );
         }
 
-        const target = activeMembers.find((m) => m.userId === memberId);
         if (!target) {
           throw BusinessException.notFound(
             ErrorCode.CONVERSATION_MEMBER_NOT_FOUND,
@@ -762,7 +768,7 @@ export class ConversationMemberService {
         );
         if ((update.affected ?? 0) !== 1) {
           throw BusinessException.conflict(
-            ErrorCode.CONVERSATION_PERMISSION_DENIED,
+            'Role was modified by a concurrent request',
           );
         }
 
@@ -784,12 +790,16 @@ export class ConversationMemberService {
       roleUpdatedEvent,
     );
 
-    const updaterUser = await this.userRepository.findOne({
-      where: { id: userId },
-    });
-    const targetUser = await this.userRepository.findOne({
-      where: { id: memberId },
-    });
+    const [updaterUser, targetUser] = await Promise.all([
+      this.userRepository.findOne({
+        where: { id: userId },
+        select: ['fullName'],
+      }),
+      this.userRepository.findOne({
+        where: { id: memberId },
+        select: ['fullName'],
+      }),
+    ]);
     const systemMsg = SystemMessageFactory.create({
       conversationId,
       systemEventType: SystemEventType.ROLE_CHANGED,
@@ -805,6 +815,8 @@ export class ConversationMemberService {
       bodyFallback: `${updaterUser?.fullName ?? 'Someone'} changed the role of ${targetUser?.fullName ?? 'a member'}.`,
     });
     this.kafkaClient.emit(KafkaTopics.ChatSystemMessageCreated, systemMsg);
+
+    await this.cacheService.invalidateConversation(conversationId);
 
     this.logger.log(
       `Member ${memberId} role updated to ${dto.role} in conversation ${conversationId}`,

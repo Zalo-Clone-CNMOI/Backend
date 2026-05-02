@@ -24,6 +24,7 @@ import { GroupInviteService } from '../services/group-invite.service';
 import { ConversationPollService } from '../services/conversation-poll.service';
 import { ConversationVoteService } from '../services/conversation-vote.service';
 import { IsNull } from 'typeorm';
+import { BusinessException } from '@app/types';
 
 // ─── Mock Enums ──────────────────────────────────────────
 const ConversationType = { DIRECT: 'direct', GROUP: 'group' };
@@ -912,7 +913,18 @@ describe('ConversationsService', () => {
           }
           if (entityName === 'ConversationMember') {
             return {
-              find: jest.fn().mockResolvedValue(activeMembers),
+              findOne: jest
+                .fn()
+                .mockImplementation(
+                  ({
+                    where: { userId: uid },
+                  }: {
+                    where: { userId: string };
+                  }) =>
+                    Promise.resolve(
+                      activeMembers.find((m) => m.userId === uid) ?? null,
+                    ),
+                ),
               update: memberUpdate,
             };
           }
@@ -948,6 +960,7 @@ describe('ConversationsService', () => {
         }),
         { role: UpdateMemberRoleDtoRoleEnum.ADMIN },
       );
+      expect(cacheService.invalidateConversation).toHaveBeenCalledWith(uuid(1));
     });
 
     it('should reject when non-owner tries to change role', async () => {
@@ -1010,10 +1023,23 @@ describe('ConversationsService', () => {
       ).rejects.toThrow();
     });
 
-    it('should reject promote-to-OWNER and require transferOwnership flow', async () => {
-      const conv = createMockConversation();
-      conversationRepository.findOne.mockResolvedValue(conv);
+    it('should throw not-found when target member is not in the conversation', async () => {
+      const conv = createMockConversation({
+        members: [
+          createMockMember({ userId: uuid(2), role: UpdateMemberRoleDtoRoleEnum.OWNER }),
+          // uuid(3) intentionally absent
+        ],
+      });
+      installUpdateRoleTxMock(conv);
 
+      await expect(
+        service.updateMemberRole(uuid(2), uuid(1), uuid(3), {
+          role: UpdateMemberRoleDtoRoleEnum.ADMIN,
+        }),
+      ).rejects.toThrow(BusinessException);
+    });
+
+    it('should reject promote-to-OWNER and require transferOwnership flow', async () => {
       try {
         await service.updateMemberRole(uuid(2), uuid(1), uuid(3), {
           role: UpdateMemberRoleDtoRoleEnum.OWNER,
@@ -1024,7 +1050,7 @@ describe('ConversationsService', () => {
           err as { getResponse?: () => unknown }
         ).getResponse?.();
         expect(response).toMatchObject({
-          error: { message: 'OWNER_TRANSFER_REQUIRED' },
+          error: { code: 'OWNER_TRANSFER_REQUIRED' },
         });
       }
       expect(memberRepository.save).not.toHaveBeenCalledWith(

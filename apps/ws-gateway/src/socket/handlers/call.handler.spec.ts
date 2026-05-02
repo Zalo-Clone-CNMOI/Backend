@@ -56,6 +56,7 @@ describe('CallHandler', () => {
       KafkaTopics.CallStart,
       expect.objectContaining({
         key: 'conv-1',
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         value: expect.objectContaining({
           call_id: 'call-1',
           initiator_id: 'user-1',

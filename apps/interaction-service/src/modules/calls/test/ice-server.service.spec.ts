@@ -13,10 +13,7 @@ describe('IceServerService', () => {
 
   const buildService = async (config: Record<string, unknown>) => {
     const m = await Test.createTestingModule({
-      providers: [
-        IceServerService,
-        { provide: APP_CONFIG, useValue: config },
-      ],
+      providers: [IceServerService, { provide: APP_CONFIG, useValue: config }],
     }).compile();
     return m.get<IceServerService>(IceServerService);
   };
@@ -74,7 +71,10 @@ describe('IceServerService', () => {
     });
 
     it('returns empty ice_servers when coturnSecret is not configured', async () => {
-      const svc = await buildService({ ...mockConfig, coturnSecret: undefined });
+      const svc = await buildService({
+        ...mockConfig,
+        coturnSecret: undefined,
+      });
       const r = svc.getIceServers('u1');
       expect(r.ice_servers).toEqual([]);
       expect(r.expires_at).toBe(0);
@@ -87,7 +87,10 @@ describe('IceServerService', () => {
     });
 
     it('returns empty ice_servers when coturnHost is "localhost"', async () => {
-      const svc = await buildService({ ...mockConfig, coturnHost: 'localhost' });
+      const svc = await buildService({
+        ...mockConfig,
+        coturnHost: 'localhost',
+      });
       const r = svc.getIceServers('u1');
       expect(r.ice_servers).toEqual([]);
     });
@@ -99,7 +102,10 @@ describe('IceServerService', () => {
     });
 
     it('throws when coturnSecret is missing', async () => {
-      const svc = await buildService({ ...mockConfig, coturnSecret: undefined });
+      const svc = await buildService({
+        ...mockConfig,
+        coturnSecret: undefined,
+      });
       expect(() => svc.getIceServers('u1')).toThrow(
         InternalServerErrorException,
       );
@@ -113,7 +119,10 @@ describe('IceServerService', () => {
     });
 
     it('throws when coturnHost is "localhost"', async () => {
-      const svc = await buildService({ ...mockConfig, coturnHost: 'localhost' });
+      const svc = await buildService({
+        ...mockConfig,
+        coturnHost: 'localhost',
+      });
       expect(() => svc.getIceServers('u1')).toThrow(
         InternalServerErrorException,
       );

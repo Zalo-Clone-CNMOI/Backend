@@ -12,10 +12,7 @@ describe('CallStateLock', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     const module = await Test.createTestingModule({
-      providers: [
-        CallStateLock,
-        { provide: REDIS_CLIENT, useValue: redis },
-      ],
+      providers: [CallStateLock, { provide: REDIS_CLIENT, useValue: redis }],
     }).compile();
     lock = module.get(CallStateLock);
   });

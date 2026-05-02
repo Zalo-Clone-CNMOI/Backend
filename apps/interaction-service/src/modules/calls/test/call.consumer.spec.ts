@@ -215,6 +215,7 @@ describe('CallConsumer', () => {
       KafkaTopics.CallSignalForwarded,
       expect.objectContaining({
         key: 'conv-1',
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         value: expect.objectContaining({
           sender_id: 'user-1',
           target_user_id: 'user-2',
@@ -260,6 +261,7 @@ describe('CallConsumer', () => {
       KafkaTopics.CallEnded,
       expect.objectContaining({
         key: 'conv-1',
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         value: expect.objectContaining({
           call_id: 'call-1',
           conversation_id: 'conv-1',
@@ -290,6 +292,7 @@ describe('CallConsumer', () => {
       KafkaTopics.CallEnded,
       expect.objectContaining({
         key: 'conv-1',
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         value: expect.objectContaining({ call_id: 'call-1' }),
       }),
     );
@@ -310,6 +313,7 @@ describe('CallConsumer', () => {
       KafkaTopics.CallLeft,
       expect.objectContaining({
         key: 'conv-1',
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         value: expect.objectContaining({ user_id: 'user-2' }),
       }),
     );
@@ -347,6 +351,7 @@ describe('CallConsumer', () => {
       KafkaTopics.CallLeft,
       expect.objectContaining({
         key: 'conv-1',
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         value: expect.objectContaining({
           user_id: 'user-3',
           call_id: 'call-1',
@@ -388,6 +393,7 @@ describe('CallConsumer', () => {
       KafkaTopics.CallEnded,
       expect.objectContaining({
         key: 'conv-1',
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         value: expect.objectContaining({ reason: 'all_left' }),
       }),
     );
@@ -420,6 +426,7 @@ describe('CallConsumer', () => {
       KafkaTopics.CallRejected,
       expect.objectContaining({
         key: 'conv-1',
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         value: expect.objectContaining({ user_id: 'user-2' }),
       }),
     );
@@ -427,6 +434,7 @@ describe('CallConsumer', () => {
       KafkaTopics.CallEnded,
       expect.objectContaining({
         key: 'conv-1',
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         value: expect.objectContaining({ reason: 'rejected' }),
       }),
     );
@@ -456,6 +464,7 @@ describe('CallConsumer', () => {
       KafkaTopics.CallRejected,
       expect.objectContaining({
         key: 'conv-1',
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         value: expect.objectContaining({ user_id: 'user-2' }),
       }),
     );

@@ -22,6 +22,7 @@ import type {
   PaginatedResponseFriendRequestResponseDto,
   PaginatedResponseSentFriendRequestResponseDto,
   PaginatedResponseConversationListItemDto,
+  UpdateGroupSettingsDto,
 } from './client/generated';
 
 export interface CreatePollPayload {
@@ -488,6 +489,22 @@ export class InteractionClientService extends BaseHttpClient {
       return response.data as { message: string };
     } catch (error) {
       this.handleError('updateMemberRole', error);
+    }
+  }
+
+  async updateGroupSettings(
+    accessToken: string,
+    conversationId: string,
+    dto: UpdateGroupSettingsDto,
+  ): Promise<ConversationDetailDto> {
+    try {
+      const response = await this.conversationsApi.updateGroupSettings(
+        { conversationId, updateGroupSettingsDto: dto },
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      return response.data;
+    } catch (error) {
+      this.handleError('updateGroupSettings', error);
     }
   }
 

@@ -1403,11 +1403,17 @@ describe('ConversationsService', () => {
       conversationRepository.findOne.mockResolvedValue(conv);
       const spy = jest
         .spyOn(GroupInviteService.prototype, 'sendGroupInvites')
-        .mockResolvedValue({ inviteIds: ['invite-1'], acceptedCount: 0, skippedCount: 1 });
+        .mockResolvedValue({
+          inviteIds: ['invite-1'],
+          acceptedCount: 0,
+          skippedCount: 1,
+        });
 
       await service.sendGroupInvites(uuid(2), uuid(1), { userIds: [uuid(4)] });
 
-      expect(spy).toHaveBeenCalledWith(uuid(2), uuid(1), { userIds: [uuid(4)] });
+      expect(spy).toHaveBeenCalledWith(uuid(2), uuid(1), {
+        userIds: [uuid(4)],
+      });
     });
 
     it('should direct-add when GROUP has settings=null (null fallback = no approval required)', async () => {

@@ -261,6 +261,7 @@ export class ConversationCoreService {
       name: dto.name,
       avatarUrl: dto.avatarUrl ?? null,
       createdById: userId,
+      settings: DEFAULT_GROUP_SETTINGS,
     });
 
     const savedConversation =

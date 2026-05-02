@@ -29,7 +29,8 @@ export class AddConversationSettings1782000000000 implements MigrationInterface 
     );
     // Backfill only group conversations — direct conversations remain null by design.
     await queryRunner.query(
-      `UPDATE "conversations" SET "settings" = '${DEFAULT_SETTINGS}' WHERE "type" = 'group'`,
+      `UPDATE "conversations" SET "settings" = $1 WHERE "type" = 'group'`,
+      [DEFAULT_SETTINGS],
     );
   }
 

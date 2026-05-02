@@ -19,6 +19,7 @@ import {
   Min,
   Max,
   Matches,
+  ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -226,4 +227,105 @@ export class GetGroupInvitesQueryDto {
   @IsOptional()
   @IsEnum(GroupInviteStatus)
   status?: GroupInviteStatus;
+}
+
+export class UpdatePermissionsDto {
+  @ApiPropertyOptional({
+    description: 'Permission to change conversation info',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  change_info?: boolean;
+  @ApiPropertyOptional({
+    description: 'Permission to pin messages',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  pin_message?: boolean;
+  @ApiPropertyOptional({
+    description: 'Permission to create notes',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  create_note?: boolean;
+  @ApiPropertyOptional({
+    description: 'Permission to create polls',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  create_poll?: boolean;
+  @ApiPropertyOptional({
+    description: 'Permission to send messages',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  send_message?: boolean;
+}
+
+export class UpdatePoliciesDto {
+  @ApiPropertyOptional({
+    description: 'Whether join approval is required',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  join_approval?: boolean;
+  @ApiPropertyOptional({
+    description: 'Whether to allow reading chat history',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  allow_read_history?: boolean;
+  @ApiPropertyOptional({
+    description: 'Whether to allow joining via link',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  allow_join_link?: boolean;
+}
+
+export class UpdateFeaturesDto {
+  @ApiPropertyOptional({
+    description: 'Whether admin tagging is enabled',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  admin_tagging?: boolean;
+}
+
+export class UpdateGroupSettingsDto {
+  @ApiPropertyOptional({
+    description: 'Updated permissions',
+    type: () => UpdatePermissionsDto,
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => UpdatePermissionsDto)
+  permissions?: UpdatePermissionsDto;
+
+  @ApiPropertyOptional({
+    description: 'Updated policies',
+    type: () => UpdatePoliciesDto,
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => UpdatePoliciesDto)
+  policies?: UpdatePoliciesDto;
+
+  @ApiPropertyOptional({
+    description: 'Updated features',
+    type: () => UpdateFeaturesDto,
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => UpdateFeaturesDto)
+  features?: UpdateFeaturesDto;
 }

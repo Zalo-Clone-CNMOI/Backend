@@ -27,6 +27,7 @@ export interface CallStateSnapshot {
   started_at: number;
   ended_at?: number;
   trace_id?: string;
+  version?: number;
 }
 
 export interface CallStartCommand {
@@ -77,6 +78,7 @@ export interface CallSignalForwardedEvent {
   sdp_mline_index?: number;
   sent_at: number;
   trace_id?: string;
+  state_version?: number;
 }
 
 export interface CallAcceptCommand {
@@ -93,6 +95,9 @@ export interface CallAcceptedEvent {
   user_id: string;
   accepted_at: number;
   trace_id?: string;
+  participants?: Record<string, CallParticipantStatus>;
+  status?: CallStatus;
+  state_version?: number;
 }
 
 export interface CallRejectCommand {
@@ -163,6 +168,8 @@ export interface CallStateUpdatedEvent {
   updated_at: number;
   reason?: string;
   trace_id?: string;
+  /** Extra context for reasons like 'not_member', 'target_not_in_call'. */
+  details?: Record<string, unknown>;
 }
 
 export interface CallTimeoutCommand {

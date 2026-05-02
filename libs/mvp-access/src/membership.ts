@@ -22,7 +22,9 @@ interface PendingMembershipBatch {
 
 @Injectable()
 export class ConversationMembershipService {
-  private readonly ACCESS_CACHE_TTL_MS = 2000;
+  // RC#15: short TTL minimizes window where a removed member retains access.
+  // Combined with explicit invalidate() called from member-removal consumers.
+  private readonly ACCESS_CACHE_TTL_MS = 500;
   private readonly logger = new Logger(ConversationMembershipService.name);
   private readonly accessCache = new Map<string, MembershipCacheEntry>();
   private readonly pendingBatches = new Map<string, PendingMembershipBatch>();
@@ -221,6 +223,15 @@ export class ConversationMembershipService {
 
   private getAccessCacheKey(userId: string, conversationId: string): string {
     return `${userId}:${conversationId}`;
+  }
+
+  /**
+   * Force-evict cached access for (user, conversation). Call from
+   * ConversationMemberRemoved consumer to immediately revoke access without
+   * waiting for ACCESS_CACHE_TTL_MS to expire.
+   */
+  invalidate(userId: string, conversationId: string): void {
+    this.accessCache.delete(this.getAccessCacheKey(userId, conversationId));
   }
 }
 

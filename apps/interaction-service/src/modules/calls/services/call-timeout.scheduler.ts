@@ -10,6 +10,7 @@ import {
 import { KAFKA_CLIENT } from '@libs/kafka';
 import { CallTimeoutService, type DueTimeout } from './call-timeout.service';
 import { CallStateStore } from '../utils/call-state.store';
+import { CallStateLock } from '../utils/call-state.lock';
 import { CallHistoryService } from './call-history.service';
 
 @Injectable()
@@ -19,6 +20,7 @@ export class CallTimeoutScheduler {
   constructor(
     private readonly timeoutService: CallTimeoutService,
     private readonly stateStore: CallStateStore,
+    private readonly stateLock: CallStateLock,
     @Inject(KAFKA_CLIENT) private readonly kafkaClient: ClientKafka,
     private readonly callHistoryService: CallHistoryService,
   ) {}
@@ -27,10 +29,10 @@ export class CallTimeoutScheduler {
   async checkTimeouts(): Promise<void> {
     let due: DueTimeout[] = [];
     try {
-      due = await this.timeoutService.pollDueTimeouts();
+      due = await this.timeoutService.popDueTimeouts();
     } catch (err) {
       this.logger.error(
-        `Failed to poll due timeouts: ${err instanceof Error ? err.message : String(err)}`,
+        `Failed to pop due timeouts: ${err instanceof Error ? err.message : String(err)}`,
         err instanceof Error ? err.stack : undefined,
       );
       return;
@@ -52,8 +54,15 @@ export class CallTimeoutScheduler {
     callId: string,
     conversationId: string,
   ): Promise<void> {
-    await this.timeoutService.cancelTimeout(callId, conversationId);
+    await this.stateLock.withLock(conversationId, async () => {
+      await this.timeoutInternal(callId, conversationId);
+    });
+  }
 
+  private async timeoutInternal(
+    callId: string,
+    conversationId: string,
+  ): Promise<void> {
     const state = await this.stateStore.get(conversationId);
     if (!state || state.call_id !== callId || state.status !== 'ringing') {
       return;
@@ -66,21 +75,29 @@ export class CallTimeoutScheduler {
     const now = Date.now();
     const traceId = randomUUID();
 
-    this.kafkaClient.emit(KafkaTopics.CallTimedOut, {
+    const timedOutEvent: CallTimedOutEvent = {
       call_id: callId,
       conversation_id: conversationId,
       timed_out_at: now,
       trace_id: traceId,
-    } satisfies CallTimedOutEvent);
+    };
+    this.kafkaClient.emit(KafkaTopics.CallTimedOut, {
+      key: conversationId,
+      value: timedOutEvent,
+    });
 
-    this.kafkaClient.emit(KafkaTopics.CallEnded, {
+    const endedEvent: CallEndedEvent = {
       call_id: callId,
       conversation_id: conversationId,
       user_id: state.initiator_id,
       reason: 'timeout',
       ended_at: now,
       trace_id: traceId,
-    } satisfies CallEndedEvent);
+    };
+    this.kafkaClient.emit(KafkaTopics.CallEnded, {
+      key: conversationId,
+      value: endedEvent,
+    });
 
     this.logger.log(`Clearing call state for timed-out call=${callId}`);
     await this.stateStore.clear(conversationId);

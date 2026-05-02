@@ -48,7 +48,12 @@ export class CallSession {
   })
   endedAt: number | null;
 
-  @Column({ type: 'int', name: 'duration_ms', nullable: true })
+  @Column({
+    type: 'bigint',
+    name: 'duration_ms',
+    nullable: true,
+    transformer: bigintTransformer,
+  })
   durationMs: number | null;
 
   @Column({ type: 'jsonb', name: 'participant_ids' })

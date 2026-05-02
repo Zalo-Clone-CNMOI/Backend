@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 import { Test } from '@nestjs/testing';
 import { CallStateStore } from '../utils/call-state.store';
+import { CallStateLock } from '../utils/call-state.lock';
 import { CallEventsPublisher } from '../services/call-events.publisher';
 import { CallMembershipAccessService } from '../services/call-membership-access.service';
 import { CallTimeoutService } from '../services/call-timeout.service';
@@ -42,6 +43,14 @@ describe('CallConsumer — VoIP push outbox', () => {
         CallConsumer,
         { provide: KAFKA_CLIENT, useValue: kafkaClient },
         { provide: CallStateStore, useValue: stateStore },
+        {
+          provide: CallStateLock,
+          useValue: {
+            withLock: jest.fn((_scope: string, fn: () => Promise<unknown>) =>
+              fn(),
+            ),
+          },
+        },
         {
           provide: CallEventsPublisher,
           useValue: {

@@ -142,6 +142,9 @@ services:
       DB_USERNAME: ${POSTGRES_USER:-postgres}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       DB_NAME: ${POSTGRES_DB:-postgres}
+      COTURN_SECRET: ${COTURN_SECRET}
+      COTURN_HOST: ${COTURN_HOST}
+      COTURN_PORT: ${COTURN_PORT}
     networks:
       - zalo_network
     restart: unless-stopped

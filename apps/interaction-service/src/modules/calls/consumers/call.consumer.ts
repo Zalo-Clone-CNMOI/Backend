@@ -29,6 +29,7 @@ import { CallMembershipAccessService } from '../services/call-membership-access.
 import { CallTimeoutService } from '../services/call-timeout.service';
 import { uniqueParticipants } from '../utils/call-participants.util';
 import { CallStateStore } from '../utils/call-state.store';
+import { CallStateLock } from '../utils/call-state.lock';
 
 @Controller()
 @Public()
@@ -39,6 +40,7 @@ export class CallConsumer {
     @Inject(KAFKA_CLIENT) private readonly kafkaClient: ClientKafka,
     private readonly membershipAccess: CallMembershipAccessService,
     private readonly stateStore: CallStateStore,
+    private readonly stateLock: CallStateLock,
     private readonly eventsPublisher: CallEventsPublisher,
     private readonly callTimeoutService: CallTimeoutService,
     private readonly callHistoryService: CallHistoryService,
@@ -60,6 +62,14 @@ export class CallConsumer {
       return;
     }
 
+    // Lock per-conversation to prevent CallStart TOCTOU (RC#16) and serialize
+    // state mutations against concurrent Accept/Reject/End/Leave handlers (RC#7).
+    await this.stateLock.withLock(cmd.conversation_id, () =>
+      this.callStartInternal(cmd),
+    );
+  }
+
+  private async callStartInternal(cmd: CallStartCommand): Promise<void> {
     const existing = await this.stateStore.get(cmd.conversation_id);
     if (existing && existing.status !== 'ended') {
       this.eventsPublisher.publishStateUpdate(cmd.conversation_id, existing, {
@@ -91,15 +101,11 @@ export class CallConsumer {
       participants,
       started_at: cmd.started_at,
       trace_id: cmd.trace_id,
+      version: 1,
     };
 
-    await this.stateStore.set(cmd.conversation_id, state);
-    await this.callTimeoutService.scheduleTimeout(
-      cmd.call_id,
-      cmd.conversation_id,
-    );
-    this.callHistoryService
-      .createSession({
+    try {
+      await this.callHistoryService.createSession({
         id: cmd.call_id,
         conversationId: cmd.conversation_id,
         initiatorId: cmd.initiator_id,
@@ -107,13 +113,25 @@ export class CallConsumer {
         conversationType: cmd.conversation_type as ConversationType,
         startedAt: cmd.started_at,
         participantIds,
-      })
-      .catch((err: Error) =>
-        this.logger.error(
-          `createSession failed call=${cmd.call_id}: ${err.message}`,
-          err.stack,
-        ),
+      });
+    } catch (err) {
+      this.logger.error(
+        `createSession failed call=${cmd.call_id}: ${err instanceof Error ? err.message : String(err)}`,
+        err instanceof Error ? err.stack : undefined,
       );
+      this.eventsPublisher.publishStateUpdate(cmd.conversation_id, null, {
+        requestedBy: cmd.initiator_id,
+        reason: 'history_failed',
+        traceId: cmd.trace_id,
+      });
+      return;
+    }
+
+    await this.stateStore.set(cmd.conversation_id, state);
+    await this.callTimeoutService.scheduleTimeout(
+      cmd.call_id,
+      cmd.conversation_id,
+    );
 
     const startedEvent: CallStartedEvent = {
       call_id: cmd.call_id,
@@ -186,9 +204,25 @@ export class CallConsumer {
       sdp_mline_index: cmd.sdp_mline_index,
       sent_at: cmd.sent_at,
       trace_id: cmd.trace_id,
+      state_version: state.version,
     };
 
-    this.kafkaClient.emit(KafkaTopics.CallSignalForwarded, event);
+    try {
+      this.kafkaClient.emit(KafkaTopics.CallSignalForwarded, {
+        key: event.conversation_id,
+        value: event,
+      });
+    } catch (err) {
+      this.logger.error(
+        `Signal relay failed call=${cmd.call_id} sender=${cmd.sender_id}: ${err instanceof Error ? err.message : String(err)}`,
+        err instanceof Error ? err.stack : undefined,
+      );
+      this.eventsPublisher.publishStateUpdate(cmd.conversation_id, state, {
+        requestedBy: cmd.sender_id,
+        reason: 'signal_relay_failed',
+        traceId: cmd.trace_id,
+      });
+    }
   }
 
   @EventPattern(KafkaTopics.CallAccept)
@@ -206,6 +240,12 @@ export class CallConsumer {
       return;
     }
 
+    await this.stateLock.withLock(cmd.conversation_id, () =>
+      this.callAcceptInternal(cmd),
+    );
+  }
+
+  private async callAcceptInternal(cmd: CallAcceptCommand): Promise<void> {
     const state = await this.stateStore.get(cmd.conversation_id);
     if (!state || state.call_id !== cmd.call_id || state.status === 'ended') {
       this.eventsPublisher.publishCallNotFoundUpdate(
@@ -217,14 +257,16 @@ export class CallConsumer {
       return;
     }
 
-    state.participants[cmd.user_id] = 'accepted';
-    state.status = 'ongoing';
-    state.trace_id = cmd.trace_id;
-
     await this.callTimeoutService.cancelTimeout(
       cmd.call_id,
       cmd.conversation_id,
     );
+
+    state.participants[cmd.user_id] = 'accepted';
+    state.status = 'ongoing';
+    state.trace_id = cmd.trace_id;
+    state.version = (state.version ?? 0) + 1;
+
     await this.stateStore.set(cmd.conversation_id, state);
 
     const acceptedEvent: CallAcceptedEvent = {
@@ -233,9 +275,15 @@ export class CallConsumer {
       user_id: cmd.user_id,
       accepted_at: cmd.accepted_at,
       trace_id: cmd.trace_id,
+      participants: { ...state.participants },
+      status: state.status,
+      state_version: state.version,
     };
 
-    this.kafkaClient.emit(KafkaTopics.CallAccepted, acceptedEvent);
+    this.kafkaClient.emit(KafkaTopics.CallAccepted, {
+      key: acceptedEvent.conversation_id,
+      value: acceptedEvent,
+    });
     this.eventsPublisher.publishStateUpdate(cmd.conversation_id, state, {
       traceId: cmd.trace_id,
     });
@@ -256,6 +304,12 @@ export class CallConsumer {
       return;
     }
 
+    await this.stateLock.withLock(cmd.conversation_id, () =>
+      this.callRejectInternal(cmd),
+    );
+  }
+
+  private async callRejectInternal(cmd: CallRejectCommand): Promise<void> {
     const state = await this.stateStore.get(cmd.conversation_id);
     if (!state || state.call_id !== cmd.call_id || state.status === 'ended') {
       this.eventsPublisher.publishCallNotFoundUpdate(
@@ -269,6 +323,7 @@ export class CallConsumer {
 
     state.participants[cmd.user_id] = 'rejected';
     state.trace_id = cmd.trace_id;
+    state.version = (state.version ?? 0) + 1;
 
     const rejectedEvent: CallRejectedEvent = {
       call_id: cmd.call_id,
@@ -278,7 +333,10 @@ export class CallConsumer {
       rejected_at: cmd.rejected_at,
       trace_id: cmd.trace_id,
     };
-    this.kafkaClient.emit(KafkaTopics.CallRejected, rejectedEvent);
+    this.kafkaClient.emit(KafkaTopics.CallRejected, {
+      key: rejectedEvent.conversation_id,
+      value: rejectedEvent,
+    });
 
     // Direct call: auto-end when all non-initiator participants have rejected
     if (state.conversation_type === 'direct') {
@@ -291,10 +349,11 @@ export class CallConsumer {
       if (pendingCount === 0) {
         await this.terminateCall(
           state,
-          state.initiator_id,
+          cmd.user_id,
           cmd.rejected_at,
           'rejected',
           cmd.trace_id,
+          { forceDurationMs: 0 },
         );
         return;
       }
@@ -321,6 +380,12 @@ export class CallConsumer {
       return;
     }
 
+    await this.stateLock.withLock(cmd.conversation_id, () =>
+      this.callEndInternal(cmd),
+    );
+  }
+
+  private async callEndInternal(cmd: CallEndCommand): Promise<void> {
     const state = await this.stateStore.get(cmd.conversation_id);
     if (!state || state.call_id !== cmd.call_id || state.status === 'ended') {
       this.eventsPublisher.publishCallNotFoundUpdate(
@@ -372,6 +437,12 @@ export class CallConsumer {
       return;
     }
 
+    await this.stateLock.withLock(cmd.conversation_id, () =>
+      this.callLeaveInternal(cmd),
+    );
+  }
+
+  private async callLeaveInternal(cmd: CallLeaveCommand): Promise<void> {
     const state = await this.stateStore.get(cmd.conversation_id);
     if (!state || state.call_id !== cmd.call_id || state.status === 'ended') {
       this.eventsPublisher.publishCallNotFoundUpdate(
@@ -428,6 +499,7 @@ export class CallConsumer {
   ): Promise<void> {
     state.participants[userId] = 'left';
     state.trace_id = traceId;
+    state.version = (state.version ?? 0) + 1;
 
     const activeCount = Object.values(state.participants).filter(
       (s) => s === 'accepted',
@@ -448,7 +520,10 @@ export class CallConsumer {
       left_at: leftAt,
       trace_id: traceId,
     };
-    this.kafkaClient.emit(KafkaTopics.CallLeft, leftEvent);
+    this.kafkaClient.emit(KafkaTopics.CallLeft, {
+      key: leftEvent.conversation_id,
+      value: leftEvent,
+    });
     this.eventsPublisher.publishStateUpdate(state.conversation_id, state, {
       traceId,
     });
@@ -460,6 +535,7 @@ export class CallConsumer {
     endedAt: number,
     reason?: string,
     traceId?: string,
+    options?: { forceDurationMs?: number },
   ): Promise<void> {
     await this.callTimeoutService.cancelTimeout(
       state.call_id,
@@ -469,6 +545,7 @@ export class CallConsumer {
     state.ended_at = endedAt;
     state.participants[userId] = 'left';
     state.trace_id = traceId;
+    state.version = (state.version ?? 0) + 1;
 
     const endedEvent: CallEndedEvent = {
       call_id: state.call_id,
@@ -479,13 +556,17 @@ export class CallConsumer {
       trace_id: traceId,
     };
 
-    this.kafkaClient.emit(KafkaTopics.CallEnded, endedEvent);
+    this.kafkaClient.emit(KafkaTopics.CallEnded, {
+      key: endedEvent.conversation_id,
+      value: endedEvent,
+    });
     await this.stateStore.clear(state.conversation_id);
     this.callHistoryService
       .closeSession(state.call_id, {
         endedAt,
         startedAt: state.started_at,
         reason,
+        forceDurationMs: options?.forceDurationMs,
       })
       .catch((err: Error) =>
         this.logger.error(

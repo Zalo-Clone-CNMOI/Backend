@@ -1335,11 +1335,11 @@ describe('ConversationsService', () => {
   // ─── sendGroupInvites ─────────────────────────────────
 
   describe('sendGroupInvites', () => {
-    it('should return accurate acceptedCount when join_approval=true', async () => {
+    it('should direct-add members when join_approval=false (default — no approval needed)', async () => {
       // uuid(2) is already a member in createMockConversation → will be skipped
-      // uuid(4) is new → will be added
+      // uuid(4) is new → will be added directly
       const conv = createMockConversation({
-        settings: { policies: { join_approval: true } },
+        settings: { policies: { join_approval: false } },
       });
       conversationRepository.findOne.mockResolvedValue(conv);
       userRepository.find.mockResolvedValue([
@@ -1357,10 +1357,10 @@ describe('ConversationsService', () => {
       });
     });
 
-    it('should return acceptedCount=0 skippedCount=N when all userIds are existing members', async () => {
+    it('should return acceptedCount=0 skippedCount=N when all userIds are existing members (join_approval=false)', async () => {
       // uuid(2) is OWNER in createMockConversation → already an active member
       const conv = createMockConversation({
-        settings: { policies: { join_approval: true } },
+        settings: { policies: { join_approval: false } },
       });
       conversationRepository.findOne.mockResolvedValue(conv);
 
@@ -1375,10 +1375,10 @@ describe('ConversationsService', () => {
       });
     });
 
-    it('should deduplicate userIds before computing skippedCount when join_approval=true', async () => {
+    it('should deduplicate userIds before computing skippedCount when join_approval=false', async () => {
       // uuid(4) appears twice → dedup → 2 unique IDs → both added → skippedCount=0
       const conv = createMockConversation({
-        settings: { policies: { join_approval: true } },
+        settings: { policies: { join_approval: false } },
       });
       conversationRepository.findOne.mockResolvedValue(conv);
       userRepository.find.mockResolvedValue([
@@ -1393,6 +1393,35 @@ describe('ConversationsService', () => {
       // Without dedup: skippedCount would be 3-2=1; with dedup it is 2-2=0
       expect(result.skippedCount).toBe(0);
       expect(result.acceptedCount).toBe(2);
+      expect(result.inviteIds).toEqual([]);
+    });
+
+    it('should route to inviteService (not direct-add) when join_approval=true', async () => {
+      const conv = createMockConversation({
+        settings: { policies: { join_approval: true } },
+      });
+      conversationRepository.findOne.mockResolvedValue(conv);
+      const spy = jest
+        .spyOn(GroupInviteService.prototype, 'sendGroupInvites')
+        .mockResolvedValue({ inviteIds: ['invite-1'], acceptedCount: 0, skippedCount: 1 });
+
+      await service.sendGroupInvites(uuid(2), uuid(1), { userIds: [uuid(4)] });
+
+      expect(spy).toHaveBeenCalledWith(uuid(2), uuid(1), { userIds: [uuid(4)] });
+    });
+
+    it('should direct-add when GROUP has settings=null (null fallback = no approval required)', async () => {
+      const conv = createMockConversation({ settings: null });
+      conversationRepository.findOne.mockResolvedValue(conv);
+      userRepository.find.mockResolvedValue([
+        { id: uuid(4), fullName: 'User 4', avatarUrl: null },
+      ]);
+
+      const result = await service.sendGroupInvites(uuid(2), uuid(1), {
+        userIds: [uuid(4)],
+      });
+
+      expect(result.acceptedCount).toBe(1);
       expect(result.inviteIds).toEqual([]);
     });
   });

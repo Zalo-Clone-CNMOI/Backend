@@ -25,7 +25,11 @@ export class AddConversationSettings1782000000000 implements MigrationInterface 
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
-      `ALTER TABLE "conversations" ADD "settings" jsonb DEFAULT '${DEFAULT_SETTINGS}'`,
+      `ALTER TABLE "conversations" ADD COLUMN "settings" jsonb`,
+    );
+    // Backfill only group conversations — direct conversations remain null by design.
+    await queryRunner.query(
+      `UPDATE "conversations" SET "settings" = '${DEFAULT_SETTINGS}' WHERE "type" = 'group'`,
     );
   }
 

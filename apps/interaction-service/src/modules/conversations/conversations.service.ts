@@ -171,9 +171,13 @@ export class ConversationsService {
       throw BusinessException.notFound(ErrorCode.CONVERSATION_NOT_FOUND);
     }
 
+    // join_approval=false (default) → admin can add directly without user consent.
+    // join_approval=true → approval mode is on → fall through to pending invites.
+    // When settings is null (legacy/unset groups), the ?. chain resolves to undefined
+    // which is !== true, so the null fallback intentionally allows direct-add.
     if (
       conv.type === ConversationType.GROUP &&
-      conv.settings?.policies?.join_approval === true
+      conv.settings?.policies?.join_approval !== true
     ) {
       const deduped = Array.from(new Set(dto.userIds));
       try {
@@ -188,13 +192,15 @@ export class ConversationsService {
           inviteIds: [],
         };
       } catch (e) {
-        // addMembers throws CONFLICT when all requested users are already active
-        // members — treat this as 0 added rather than surfacing a 409.
         if (
           e instanceof BusinessException &&
           e.errorCode === ErrorCode.CONFLICT
         ) {
-          return { acceptedCount: 0, skippedCount: deduped.length, inviteIds: [] };
+          return {
+            acceptedCount: 0,
+            skippedCount: deduped.length,
+            inviteIds: [],
+          };
         }
         throw e;
       }

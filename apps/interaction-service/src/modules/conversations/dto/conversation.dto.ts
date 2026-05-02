@@ -276,7 +276,7 @@ export class UpdatePermissionsDto {
 export class UpdatePoliciesDto {
   @ApiPropertyOptional({
     description:
-      'Admin invite bypasses user consent (true) or creates pending invite (false)',
+      'When true, invites create pending requests that users must accept. When false (default), admins can add members directly without consent.',
     example: false,
   })
   @IsOptional()

@@ -18,7 +18,7 @@ export const WsPayloadLimits = {
   callParticipantsMaxItems: 50,
   callSignalTextMaxLength: 12000,
   mentionsMaxItems: 50,
-  mentionOffsetMax: 5000,
+  mentionOffsetMax: 4000,
   mentionLengthMax: 100,
 } as const;
 

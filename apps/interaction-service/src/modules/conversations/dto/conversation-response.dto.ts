@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { GroupSettings } from '@app/constant';
 
 /**
  * Conversation member response
@@ -161,6 +162,31 @@ export class ConversationDetailDto {
     pinnedAt: Date | null;
     lastReadAt: Date | null;
   };
+
+  @ApiPropertyOptional({
+    description: 'Group configuration settings (null for direct conversations)',
+    nullable: true,
+    type: 'object',
+    additionalProperties: true,
+    example: {
+      permissions: {
+        change_info: true,
+        pin_message: true,
+        create_note: true,
+        create_poll: true,
+        send_message: true,
+      },
+      policies: {
+        join_approval: false,
+        allow_read_history: true,
+        allow_join_link: true,
+      },
+      features: {
+        admin_tagging: true,
+      },
+    },
+  })
+  settings: GroupSettings | null;
 
   @ApiProperty({ description: 'Created at' })
   createdAt: Date;

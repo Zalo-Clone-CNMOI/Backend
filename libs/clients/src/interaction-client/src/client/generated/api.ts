@@ -192,6 +192,12 @@ export interface ConversationDetailDto {
     'members'?: Array<ConversationMemberResponseDto>;
     /**
      * 
+     * @type {GroupSettings}
+     * @memberof ConversationDetailDto
+     */
+    'settings'?: GroupSettings;
+    /**
+     * 
      * @type {string}
      * @memberof ConversationDetailDto
      */
@@ -607,6 +613,106 @@ export enum GroupInviteStatus {
 /**
  * 
  * @export
+ * @interface GroupSettings
+ */
+export interface GroupSettings {
+    /**
+     * 
+     * @type {GroupSettingsPermissions}
+     * @memberof GroupSettings
+     */
+    'permissions'?: GroupSettingsPermissions;
+    /**
+     * 
+     * @type {GroupSettingsPolicies}
+     * @memberof GroupSettings
+     */
+    'policies'?: GroupSettingsPolicies;
+    /**
+     * 
+     * @type {GroupSettingsFeatures}
+     * @memberof GroupSettings
+     */
+    'features'?: GroupSettingsFeatures;
+}
+/**
+ * 
+ * @export
+ * @interface GroupSettingsFeatures
+ */
+export interface GroupSettingsFeatures {
+    /**
+     * 
+     * @type {boolean}
+     * @memberof GroupSettingsFeatures
+     */
+    'admin_tagging'?: boolean;
+}
+/**
+ * 
+ * @export
+ * @interface GroupSettingsPermissions
+ */
+export interface GroupSettingsPermissions {
+    /**
+     * 
+     * @type {boolean}
+     * @memberof GroupSettingsPermissions
+     */
+    'change_info'?: boolean;
+    /**
+     * 
+     * @type {boolean}
+     * @memberof GroupSettingsPermissions
+     */
+    'pin_message'?: boolean;
+    /**
+     * 
+     * @type {boolean}
+     * @memberof GroupSettingsPermissions
+     */
+    'create_note'?: boolean;
+    /**
+     * 
+     * @type {boolean}
+     * @memberof GroupSettingsPermissions
+     */
+    'create_poll'?: boolean;
+    /**
+     * 
+     * @type {boolean}
+     * @memberof GroupSettingsPermissions
+     */
+    'send_message'?: boolean;
+}
+/**
+ * 
+ * @export
+ * @interface GroupSettingsPolicies
+ */
+export interface GroupSettingsPolicies {
+    /**
+     * 
+     * @type {boolean}
+     * @memberof GroupSettingsPolicies
+     */
+    'join_approval'?: boolean;
+    /**
+     * 
+     * @type {boolean}
+     * @memberof GroupSettingsPolicies
+     */
+    'allow_read_history'?: boolean;
+    /**
+     * 
+     * @type {boolean}
+     * @memberof GroupSettingsPolicies
+     */
+    'allow_join_link'?: boolean;
+}
+/**
+ * 
+ * @export
  * @interface PaginatedResponseConversationListItemDto
  */
 export interface PaginatedResponseConversationListItemDto {
@@ -962,6 +1068,31 @@ export interface UpdateConversationDto {
      * @memberof UpdateConversationDto
      */
     'avatarUrl'?: string;
+}
+/**
+ * 
+ * @export
+ * @interface UpdateGroupSettingsDto
+ */
+export interface UpdateGroupSettingsDto {
+    /**
+     * 
+     * @type {GroupSettingsPermissions}
+     * @memberof UpdateGroupSettingsDto
+     */
+    'permissions'?: GroupSettingsPermissions;
+    /**
+     * 
+     * @type {GroupSettingsPolicies}
+     * @memberof UpdateGroupSettingsDto
+     */
+    'policies'?: GroupSettingsPolicies;
+    /**
+     * 
+     * @type {GroupSettingsFeatures}
+     * @memberof UpdateGroupSettingsDto
+     */
+    'features'?: GroupSettingsFeatures;
 }
 /**
  * 
@@ -1852,6 +1983,50 @@ export const ConversationsApiAxiosParamCreator = function (configuration?: Confi
         },
         /**
          * 
+         * @summary Update group settings (admin/owner only)
+         * @param {string} conversationId 
+         * @param {UpdateGroupSettingsDto} updateGroupSettingsDto 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        updateGroupSettings: async (conversationId: string, updateGroupSettingsDto: UpdateGroupSettingsDto, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'conversationId' is not null or undefined
+            assertParamExists('updateGroupSettings', 'conversationId', conversationId)
+            // verify required parameter 'updateGroupSettingsDto' is not null or undefined
+            assertParamExists('updateGroupSettings', 'updateGroupSettingsDto', updateGroupSettingsDto)
+            const localVarPath = `/conversations/{conversationId}/group-settings`
+                .replace(`{${"conversationId"}}`, encodeURIComponent(String(conversationId)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'PATCH', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication BearerAuth required
+            // http bearer authentication required
+            await setBearerAuthToObject(localVarHeaderParameter, configuration)
+
+
+    
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(updateGroupSettingsDto, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
          * @summary Update member role
          * @param {string} conversationId 
          * @param {string} memberId 
@@ -2229,6 +2404,20 @@ export const ConversationsApiFp = function(configuration?: Configuration) {
         },
         /**
          * 
+         * @summary Update group settings (admin/owner only)
+         * @param {string} conversationId 
+         * @param {UpdateGroupSettingsDto} updateGroupSettingsDto 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async updateGroupSettings(conversationId: string, updateGroupSettingsDto: UpdateGroupSettingsDto, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ConversationDetailDto>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.updateGroupSettings(conversationId, updateGroupSettingsDto, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['ConversationsApi.updateGroupSettings']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
          * @summary Update member role
          * @param {string} conversationId 
          * @param {string} memberId 
@@ -2465,6 +2654,16 @@ export const ConversationsApiFactory = function (configuration?: Configuration, 
          */
         updateConversation(requestParameters: ConversationsApiUpdateConversationRequest, options?: RawAxiosRequestConfig): AxiosPromise<ConversationDetailDto> {
             return localVarFp.updateConversation(requestParameters.conversationId, requestParameters.updateConversationDto, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
+         * @summary Update group settings (admin/owner only)
+         * @param {ConversationsApiUpdateGroupSettingsRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        updateGroupSettings(requestParameters: ConversationsApiUpdateGroupSettingsRequest, options?: RawAxiosRequestConfig): AxiosPromise<ConversationDetailDto> {
+            return localVarFp.updateGroupSettings(requestParameters.conversationId, requestParameters.updateGroupSettingsDto, options).then((request) => request(axios, basePath));
         },
         /**
          * 
@@ -2875,6 +3074,27 @@ export interface ConversationsApiUpdateConversationRequest {
 }
 
 /**
+ * Request parameters for updateGroupSettings operation in ConversationsApi.
+ * @export
+ * @interface ConversationsApiUpdateGroupSettingsRequest
+ */
+export interface ConversationsApiUpdateGroupSettingsRequest {
+    /**
+     * 
+     * @type {string}
+     * @memberof ConversationsApiUpdateGroupSettings
+     */
+    readonly conversationId: string
+
+    /**
+     * 
+     * @type {UpdateGroupSettingsDto}
+     * @memberof ConversationsApiUpdateGroupSettings
+     */
+    readonly updateGroupSettingsDto: UpdateGroupSettingsDto
+}
+
+/**
  * Request parameters for updateMemberRole operation in ConversationsApi.
  * @export
  * @interface ConversationsApiUpdateMemberRoleRequest
@@ -3168,6 +3388,18 @@ export class ConversationsApi extends BaseAPI {
      */
     public updateConversation(requestParameters: ConversationsApiUpdateConversationRequest, options?: RawAxiosRequestConfig) {
         return ConversationsApiFp(this.configuration).updateConversation(requestParameters.conversationId, requestParameters.updateConversationDto, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
+     * @summary Update group settings (admin/owner only)
+     * @param {ConversationsApiUpdateGroupSettingsRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ConversationsApi
+     */
+    public updateGroupSettings(requestParameters: ConversationsApiUpdateGroupSettingsRequest, options?: RawAxiosRequestConfig) {
+        return ConversationsApiFp(this.configuration).updateGroupSettings(requestParameters.conversationId, requestParameters.updateGroupSettingsDto, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**

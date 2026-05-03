@@ -479,6 +479,34 @@ paths:
                 properties:
                   message:
                     type: string
+  /conversations/{conversationId}/group-settings:
+    patch:
+      tags:
+        - Conversations
+      summary: Update group settings (admin/owner only)
+      operationId: updateGroupSettings
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateGroupSettingsDto'
+      responses:
+        '200':
+          description: Group settings updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationDetailDto'
   /conversations/{conversationId}/settings:
     patch:
       tags:
@@ -1213,12 +1241,75 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ConversationMemberResponseDto'
+        settings:
+          nullable: true
+          $ref: '#/components/schemas/GroupSettings'
         createdAt:
           type: string
           format: date-time
         updatedAt:
           type: string
           format: date-time
+    GroupSettings:
+      type: object
+      properties:
+        permissions:
+          type: object
+          properties:
+            change_info:
+              type: boolean
+            pin_message:
+              type: boolean
+            create_note:
+              type: boolean
+            create_poll:
+              type: boolean
+            send_message:
+              type: boolean
+        policies:
+          type: object
+          properties:
+            join_approval:
+              type: boolean
+            allow_read_history:
+              type: boolean
+            allow_join_link:
+              type: boolean
+        features:
+          type: object
+          properties:
+            admin_tagging:
+              type: boolean
+    UpdateGroupSettingsDto:
+      type: object
+      properties:
+        permissions:
+          type: object
+          properties:
+            change_info:
+              type: boolean
+            pin_message:
+              type: boolean
+            create_note:
+              type: boolean
+            create_poll:
+              type: boolean
+            send_message:
+              type: boolean
+        policies:
+          type: object
+          properties:
+            join_approval:
+              type: boolean
+            allow_read_history:
+              type: boolean
+            allow_join_link:
+              type: boolean
+        features:
+          type: object
+          properties:
+            admin_tagging:
+              type: boolean
     ConversationCallStateSnapshotDto:
       type: object
       properties:

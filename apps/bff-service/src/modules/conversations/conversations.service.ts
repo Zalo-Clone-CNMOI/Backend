@@ -11,6 +11,7 @@ import {
   UpdateMemberRoleDto,
   UpdateMemberSettingsDto,
   EndConversationCallDto,
+  UpdateGroupSettingsDto,
 } from '@app/clients/interaction-client';
 import { CreatePollDto, EditPollDto, ListPollsQueryDto } from './dto';
 
@@ -177,6 +178,18 @@ export class ConversationsService {
       accessToken,
       conversationId,
       memberId,
+      dto,
+    );
+  }
+
+  async updateGroupSettings(
+    accessToken: string,
+    conversationId: string,
+    dto: UpdateGroupSettingsDto,
+  ) {
+    return this.interactionClient.updateGroupSettings(
+      accessToken,
+      conversationId,
       dto,
     );
   }

@@ -88,8 +88,14 @@ describe('ConversationsService', () => {
   let kafkaClient: Record<string, jest.Mock>;
   let notificationPublisher: Record<string, jest.Mock>;
   let redisClient: Record<string, jest.Mock>;
+  let txManager: Record<string, jest.Mock>;
 
   beforeEach(async () => {
+    txManager = {
+      findOne: jest.fn(),
+      save: jest.fn().mockResolvedValue(undefined),
+    };
+
     userRepository = {
       find: jest.fn(),
       findOne: jest.fn(),
@@ -108,6 +114,14 @@ describe('ConversationsService', () => {
         }),
       ),
       createQueryBuilder: jest.fn(),
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (conversationRepository as any).manager = {
+      transaction: jest
+        .fn()
+        .mockImplementation((cb: (m: unknown) => Promise<unknown>) =>
+          cb(txManager),
+        ),
     };
 
     memberRepository = {
@@ -533,8 +547,9 @@ describe('ConversationsService', () => {
       ).rejects.toThrow();
     });
 
-    it('should reject updates from MEMBER role (not admin/owner)', async () => {
+    it('should reject MEMBER update when change_info=false', async () => {
       const conv = createMockConversation({
+        settings: { permissions: { change_info: false } },
         members: [
           createMockMember({
             userId: uuid(2),
@@ -551,6 +566,25 @@ describe('ConversationsService', () => {
       ).rejects.toThrow();
     });
 
+    it('should allow MEMBER to update when change_info=true (default, settings=null)', async () => {
+      const conv = createMockConversation({
+        settings: null,
+        members: [
+          createMockMember({
+            userId: uuid(2),
+            role: UpdateMemberRoleDtoRoleEnum.MEMBER,
+          }),
+        ],
+      });
+      conversationRepository.findOne
+        .mockResolvedValueOnce(conv)
+        .mockResolvedValueOnce(conv);
+
+      await expect(
+        service.updateConversation(uuid(2), uuid(1), { name: 'New' }),
+      ).resolves.toBeDefined();
+    });
+
     it('should allow OWNER to update group name', async () => {
       const conv = createMockConversation();
       conversationRepository.findOne
@@ -563,6 +597,132 @@ describe('ConversationsService', () => {
 
       expect(conversationRepository.save).toHaveBeenCalled();
       expect(cacheService.invalidateConversation).toHaveBeenCalled();
+    });
+
+    it('should allow ADMIN to update even when change_info=false', async () => {
+      const conv = createMockConversation({
+        settings: { permissions: { change_info: false } },
+        members: [
+          createMockMember({
+            userId: uuid(2),
+            role: UpdateMemberRoleDtoRoleEnum.ADMIN,
+          }),
+        ],
+      });
+      conversationRepository.findOne
+        .mockResolvedValueOnce(conv)
+        .mockResolvedValueOnce(conv);
+
+      await expect(
+        service.updateConversation(uuid(2), uuid(1), { name: 'New' }),
+      ).resolves.toBeDefined();
+    });
+  });
+
+  // ─── updateGroupSettings ──────────────────────────────
+
+  describe('updateGroupSettings', () => {
+    it('should update settings and emit Kafka event (ADMIN)', async () => {
+      const conv = createMockConversation({
+        settings: null,
+        members: [
+          createMockMember({
+            userId: uuid(2),
+            role: UpdateMemberRoleDtoRoleEnum.ADMIN,
+            leftAt: null,
+          }),
+        ],
+      });
+      txManager.findOne.mockResolvedValue(conv);
+      conversationRepository.findOne.mockResolvedValue(conv);
+
+      await service.updateGroupSettings(uuid(2), uuid(1), {
+        permissions: { send_message: false },
+      });
+
+      expect(kafkaClient.emit).toHaveBeenCalledWith(
+        expect.stringContaining('settings'),
+        expect.objectContaining({ conversation_id: uuid(1) }),
+      );
+    });
+
+    it('should throw PERMISSION_DENIED when MEMBER tries to update settings', async () => {
+      const conv = createMockConversation({
+        settings: null,
+        members: [
+          createMockMember({
+            userId: uuid(2),
+            role: UpdateMemberRoleDtoRoleEnum.MEMBER,
+            leftAt: null,
+          }),
+        ],
+      });
+      txManager.findOne.mockResolvedValue(conv);
+
+      await expect(
+        service.updateGroupSettings(uuid(2), uuid(1), {
+          permissions: { send_message: false },
+        }),
+      ).rejects.toThrow();
+    });
+
+    it('should throw when conversation is not a GROUP', async () => {
+      const conv = createMockConversation({
+        type: ConversationType.DIRECT,
+        members: [
+          createMockMember({
+            userId: uuid(2),
+            role: UpdateMemberRoleDtoRoleEnum.ADMIN,
+          }),
+        ],
+      });
+      txManager.findOne.mockResolvedValue(conv);
+
+      await expect(
+        service.updateGroupSettings(uuid(2), uuid(1), {
+          permissions: { send_message: false },
+        }),
+      ).rejects.toThrow();
+    });
+
+    it('should deep-merge settings preserving unmodified fields', async () => {
+      const conv = createMockConversation({
+        settings: {
+          permissions: {
+            send_message: true,
+            change_info: true,
+            create_poll: true,
+            pin_message: true,
+            create_note: true,
+          },
+          policies: {
+            join_approval: false,
+            allow_read_history: true,
+            allow_join_link: true,
+          },
+          features: { admin_tagging: true },
+        },
+        members: [
+          createMockMember({
+            userId: uuid(2),
+            role: UpdateMemberRoleDtoRoleEnum.OWNER,
+            leftAt: null,
+          }),
+        ],
+      });
+      txManager.findOne.mockResolvedValue(conv);
+      conversationRepository.findOne.mockResolvedValue(conv);
+
+      await service.updateGroupSettings(uuid(2), uuid(1), {
+        permissions: { send_message: false },
+      });
+
+      const savedConv = txManager.save.mock.calls[0][1] as {
+        settings: { permissions: Record<string, boolean> };
+      };
+      expect(savedConv.settings.permissions.send_message).toBe(false);
+      expect(savedConv.settings.permissions.change_info).toBe(true);
+      expect(savedConv.settings.permissions.create_poll).toBe(true);
     });
   });
 });

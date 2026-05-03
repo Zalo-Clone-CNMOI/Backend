@@ -1,10 +1,21 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull, In } from 'typeorm';
-import { ConversationMember } from '@libs/database/entities';
+import { Conversation, ConversationMember } from '@libs/database/entities';
+import { ConversationType, UpdateMemberRoleDtoRoleEnum } from '@app/constant';
 
 interface MembershipCacheEntry {
   allowed: boolean;
+  expiresAt: number;
+}
+
+interface SettingsCacheEntry {
+  sendMessage: boolean;
+  expiresAt: number;
+}
+
+interface RoleCacheEntry {
+  role: string;
   expiresAt: number;
 }
 
@@ -22,23 +33,31 @@ interface PendingMembershipBatch {
 
 @Injectable()
 export class ConversationMembershipService {
-  // RC#15: short TTL minimizes window where a removed member retains access.
-  // Combined with explicit invalidate() called from member-removal consumers.
-  private readonly ACCESS_CACHE_TTL_MS = 500;
+  private readonly ACCESS_CACHE_TTL_MS = 2000;
+  private readonly SETTINGS_CACHE_TTL_MS = 30_000;
+  private readonly ROLE_CACHE_TTL_MS = 5_000;
   private readonly logger = new Logger(ConversationMembershipService.name);
   private readonly accessCache = new Map<string, MembershipCacheEntry>();
+  private readonly settingsCache = new Map<string, SettingsCacheEntry>();
+  private readonly roleCache = new Map<string, RoleCacheEntry>();
   private readonly pendingBatches = new Map<string, PendingMembershipBatch>();
 
   constructor(
     @InjectRepository(ConversationMember)
     private readonly memberRepository: Repository<ConversationMember>,
+    @InjectRepository(Conversation)
+    private readonly conversationRepository: Repository<Conversation>,
   ) {
     setInterval(() => {
       const now = Date.now();
       for (const [key, entry] of this.accessCache) {
-        if (entry.expiresAt <= now) {
-          this.accessCache.delete(key);
-        }
+        if (entry.expiresAt <= now) this.accessCache.delete(key);
+      }
+      for (const [key, entry] of this.settingsCache) {
+        if (entry.expiresAt <= now) this.settingsCache.delete(key);
+      }
+      for (const [key, entry] of this.roleCache) {
+        if (entry.expiresAt <= now) this.roleCache.delete(key);
       }
     }, 10_000).unref();
   }
@@ -85,6 +104,86 @@ export class ConversationMembershipService {
     });
 
     return memberships.map((m) => m.userId);
+  }
+
+  async canUserSendMessage(
+    userId: string,
+    conversationId: string,
+  ): Promise<{ allowed: boolean; reason?: string }> {
+    const isMember = await this.canUserAccessConversation(
+      userId,
+      conversationId,
+    );
+    if (!isMember) {
+      return { allowed: false, reason: 'not_member' };
+    }
+
+    const cached = this.settingsCache.get(conversationId);
+    let sendMessage: boolean;
+
+    if (cached && cached.expiresAt > Date.now()) {
+      sendMessage = cached.sendMessage;
+    } else {
+      const conversation = await this.conversationRepository.findOne({
+        where: { id: conversationId },
+        select: ['type', 'settings'],
+      });
+
+      if (!conversation || conversation.type !== ConversationType.GROUP) {
+        return { allowed: true };
+      }
+
+      sendMessage = conversation.settings?.permissions?.send_message ?? true;
+      this.settingsCache.set(conversationId, {
+        sendMessage,
+        expiresAt: Date.now() + this.SETTINGS_CACHE_TTL_MS,
+      });
+    }
+
+    if (sendMessage) {
+      return { allowed: true };
+    }
+
+    // send_message disabled — only ADMIN/OWNER may send
+    const roleCacheKey = `${userId}:${conversationId}`;
+    const cachedRole = this.roleCache.get(roleCacheKey);
+    let role: string | undefined;
+
+    if (cachedRole && cachedRole.expiresAt > Date.now()) {
+      role = cachedRole.role;
+    } else {
+      const membership = await this.memberRepository.findOne({
+        where: { conversationId, userId, leftAt: IsNull() },
+        select: ['role'],
+      });
+      role = membership?.role;
+      if (role) {
+        this.roleCache.set(roleCacheKey, {
+          role,
+          expiresAt: Date.now() + this.ROLE_CACHE_TTL_MS,
+        });
+      }
+    }
+
+    const isPrivileged =
+      role === UpdateMemberRoleDtoRoleEnum.OWNER ||
+      role === UpdateMemberRoleDtoRoleEnum.ADMIN;
+
+    return isPrivileged
+      ? { allowed: true }
+      : { allowed: false, reason: 'send_permission_denied' };
+  }
+
+  invalidateSettingsCache(conversationId: string): void {
+    this.settingsCache.delete(conversationId);
+    const suffix = `:${conversationId}`;
+    for (const key of Array.from(this.roleCache.keys())) {
+      if (key.endsWith(suffix)) this.roleCache.delete(key);
+    }
+  }
+
+  invalidateRoleCache(userId: string, conversationId: string): void {
+    this.roleCache.delete(`${userId}:${conversationId}`);
   }
 
   /**

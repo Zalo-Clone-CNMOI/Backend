@@ -16,6 +16,7 @@ import {
   Min,
   Max,
   Matches,
+  ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -222,4 +223,115 @@ export class GetGroupInvitesQueryDto {
   @IsOptional()
   @IsEnum(GroupInviteStatus)
   status?: GroupInviteStatus;
+}
+
+/**
+ * Partial update for group member permissions
+ */
+export class UpdatePermissionsDto {
+  @ApiPropertyOptional({
+    description: 'Members can change group name/avatar',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  change_info?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Members can pin messages',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  pin_message?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Members can create notes',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  create_note?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Members can create polls',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  create_poll?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Members can send messages',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  send_message?: boolean;
+}
+
+/**
+ * Partial update for group-level policies
+ */
+export class UpdatePoliciesDto {
+  @ApiPropertyOptional({
+    description:
+      'When true, invites create pending requests that users must accept. When false (default), admins can add members directly without consent.',
+    example: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  join_approval?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'New members can read message history',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  allow_read_history?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Allow joining via invite link',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  allow_join_link?: boolean;
+}
+
+/**
+ * Partial update for group UI features
+ */
+export class UpdateFeaturesDto {
+  @ApiPropertyOptional({
+    description: 'Show admin/owner badge on messages',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  admin_tagging?: boolean;
+}
+
+/**
+ * Update group conversation settings (ADMIN/OWNER only)
+ */
+export class UpdateGroupSettingsDto {
+  @ApiPropertyOptional({ type: () => UpdatePermissionsDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => UpdatePermissionsDto)
+  permissions?: UpdatePermissionsDto;
+
+  @ApiPropertyOptional({ type: () => UpdatePoliciesDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => UpdatePoliciesDto)
+  policies?: UpdatePoliciesDto;
+
+  @ApiPropertyOptional({ type: () => UpdateFeaturesDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => UpdateFeaturesDto)
+  features?: UpdateFeaturesDto;
 }

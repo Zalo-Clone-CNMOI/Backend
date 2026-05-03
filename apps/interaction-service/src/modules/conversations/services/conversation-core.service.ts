@@ -9,7 +9,9 @@ import {
   KafkaTopics,
   type ConversationCreatedEvent,
   type ConversationUpdatedEvent,
+  type ConversationSettingsUpdatedEvent,
 } from '@libs/contracts';
+
 import {
   User,
   Conversation,
@@ -20,6 +22,8 @@ import {
   ConversationType,
   UpdateMemberRoleDtoRoleEnum,
   UserStatus,
+  DEFAULT_GROUP_SETTINGS,
+  type GroupSettings,
 } from '@app/constant';
 import {
   BusinessException,
@@ -33,6 +37,7 @@ import {
   CreateGroupConversationDto,
   CreateDirectConversationDto,
   UpdateConversationDto,
+  UpdateGroupSettingsDto,
   ConversationListItemDto,
   ConversationDetailDto,
 } from '../dto';
@@ -256,6 +261,7 @@ export class ConversationCoreService {
       name: dto.name,
       avatarUrl: dto.avatarUrl ?? null,
       createdById: userId,
+      settings: DEFAULT_GROUP_SETTINGS,
     });
 
     const savedConversation =
@@ -376,6 +382,7 @@ export class ConversationCoreService {
       type: ConversationType.DIRECT,
       name: null,
       createdById: userId,
+      settings: null,
     });
 
     const savedConversation =
@@ -422,7 +429,12 @@ export class ConversationCoreService {
       throw BusinessException.forbidden(ErrorCode.CONVERSATION_NOT_MEMBER);
     }
 
-    if (myMembership.role === UpdateMemberRoleDtoRoleEnum.MEMBER) {
+    const isPrivileged =
+      myMembership.role !== UpdateMemberRoleDtoRoleEnum.MEMBER;
+    const changeInfoAllowed =
+      isPrivileged || (conversation.settings?.permissions?.change_info ?? true);
+
+    if (!changeInfoAllowed) {
       throw BusinessException.forbidden(
         ErrorCode.CONVERSATION_PERMISSION_DENIED,
       );
@@ -448,6 +460,74 @@ export class ConversationCoreService {
     const memberIds = conversation.members
       .filter((m) => m.leftAt === null)
       .map((m) => m.userId);
+    await this.cacheService.invalidateConversation(conversationId, memberIds);
+
+    return this.getConversationById(userId, conversationId);
+  }
+
+  async updateGroupSettings(
+    userId: string,
+    conversationId: string,
+    dto: UpdateGroupSettingsDto,
+  ): Promise<ConversationDetailDto> {
+    let updatedSettings!: GroupSettings;
+    let memberIds!: string[];
+
+    await this.conversationRepository.manager.transaction(async (manager) => {
+      const conversation = await manager.findOne(Conversation, {
+        where: { id: conversationId },
+        relations: ['members'],
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      if (!conversation) {
+        throw BusinessException.notFound(ErrorCode.CONVERSATION_NOT_FOUND);
+      }
+
+      if (conversation.type !== ConversationType.GROUP) {
+        throw BusinessException.badRequest(ErrorCode.CONVERSATION_INVALID_TYPE);
+      }
+
+      const myMembership = conversation.members.find(
+        (m) => m.userId === userId && m.leftAt === null,
+      );
+
+      if (!myMembership) {
+        throw BusinessException.forbidden(ErrorCode.CONVERSATION_NOT_MEMBER);
+      }
+
+      if (myMembership.role === UpdateMemberRoleDtoRoleEnum.MEMBER) {
+        throw BusinessException.forbidden(
+          ErrorCode.CONVERSATION_PERMISSION_DENIED,
+        );
+      }
+
+      const existing = conversation.settings ?? DEFAULT_GROUP_SETTINGS;
+      conversation.settings = {
+        permissions: { ...existing.permissions, ...dto.permissions },
+        policies: { ...existing.policies, ...dto.policies },
+        features: { ...existing.features, ...dto.features },
+      };
+
+      await manager.save(Conversation, conversation);
+
+      updatedSettings = conversation.settings;
+      memberIds = conversation.members
+        .filter((m) => m.leftAt === null)
+        .map((m) => m.userId);
+    });
+
+    this.logger.log(`Group settings updated: ${conversationId} by ${userId}`);
+
+    const event: ConversationSettingsUpdatedEvent = {
+      conversation_id: conversationId,
+      updated_by: userId,
+      settings: updatedSettings as unknown as Record<string, unknown>,
+      updated_at: Date.now(),
+      trace_id: `conversation-settings-updated:${conversationId}`,
+    };
+    this.kafkaClient.emit(KafkaTopics.ConversationSettingsUpdated, event);
+
     await this.cacheService.invalidateConversation(conversationId, memberIds);
 
     return this.getConversationById(userId, conversationId);

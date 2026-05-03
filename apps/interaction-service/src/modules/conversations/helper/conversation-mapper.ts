@@ -85,6 +85,7 @@ export function toDetailResponse(
       pinnedAt: myMembership.pinnedAt,
       lastReadAt: myMembership.lastReadAt,
     },
+    settings: conversation.settings ?? null,
     createdAt: conversation.createdAt,
   };
 }

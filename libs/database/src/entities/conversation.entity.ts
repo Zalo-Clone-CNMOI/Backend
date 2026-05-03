@@ -11,7 +11,11 @@ import { ConversationMember } from './conversation-member.entity';
 import { ConversationInvite } from './conversation-invite.entity';
 import { ConversationPoll } from './conversation-poll.entity';
 import { MediaFile } from './media-file.entity';
-import { ConversationType } from '@app/constant';
+import {
+  ConversationType,
+  GroupSettings,
+  DEFAULT_GROUP_SETTINGS,
+} from '@app/constant';
 import { BaseEntity } from '@libs/shared';
 
 @Entity('conversations')
@@ -34,6 +38,15 @@ export class Conversation extends BaseEntity {
   @Column({ type: 'timestamp', name: 'last_message_at', nullable: true })
   @Index()
   lastMessageAt: Date | null;
+
+  // null for direct conversations; always populated for group conversations
+  @Column({
+    type: 'jsonb',
+    name: 'settings',
+    nullable: true,
+    default: () => `'${JSON.stringify(DEFAULT_GROUP_SETTINGS)}'`,
+  })
+  settings: GroupSettings | null;
 
   @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'created_by' })

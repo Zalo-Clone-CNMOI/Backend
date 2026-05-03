@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AiCoreClientModule } from '@app/clients';
-import { JwtService } from '@libs/auth';
 import { EntityInfoController } from './entity-info.controller';
 import { EntityInfoService } from './entity-info.service';
 
@@ -17,6 +16,6 @@ import { EntityInfoService } from './entity-info.service';
     }),
   ],
   controllers: [EntityInfoController],
-  providers: [EntityInfoService, JwtService],
+  providers: [EntityInfoService],
 })
 export class EntityInfoModule {}

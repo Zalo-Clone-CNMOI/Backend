@@ -34,6 +34,7 @@ import {
   UpdateConversationDto,
   UpdateMemberRoleDto,
   UpdateMemberSettingsDto,
+  UpdateGroupSettingsDto,
 } from './dto';
 
 @ApiTags('Conversations')
@@ -121,6 +122,26 @@ export class ConversationsController {
     @Body() dto: UpdateConversationDto,
   ) {
     return this.conversationsService.updateConversation(
+      token,
+      conversationId,
+      dto,
+    );
+  }
+
+  @Patch(':conversationId/group-settings')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update group settings (admin/owner only)' })
+  @ApiResponse({ status: 200, description: 'Group settings updated' })
+  @ApiResponse({ status: 400, description: 'Validation error' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  @ApiResponse({ status: 404, description: 'Conversation not found' })
+  updateGroupSettings(
+    @AccessToken() token: string,
+    @Param('conversationId') conversationId: string,
+    @Body() dto: UpdateGroupSettingsDto,
+  ) {
+    return this.conversationsService.updateGroupSettings(
       token,
       conversationId,
       dto,

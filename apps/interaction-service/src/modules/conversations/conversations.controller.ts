@@ -32,6 +32,7 @@ import {
   CreateGroupConversationDto,
   CreateDirectConversationDto,
   UpdateConversationDto,
+  UpdateGroupSettingsDto,
   AddMembersDto,
   GetGroupInvitesQueryDto,
   GroupInviteItemDto,
@@ -345,6 +346,28 @@ export class ConversationsController {
       user.id,
       conversationId,
       memberId,
+      dto,
+    );
+  }
+
+  @Patch(':conversationId/group-settings')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @ApiOperation({ summary: 'Update group settings (admin/owner only)' })
+  @ApiParam({ name: 'conversationId', description: 'Conversation ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Group settings updated',
+    type: ConversationDetailDto,
+  })
+  async updateGroupSettings(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('conversationId', ParseUUIDPipe) conversationId: string,
+    @Body() dto: UpdateGroupSettingsDto,
+  ): Promise<ConversationDetailDto> {
+    return this.conversationsService.updateGroupSettings(
+      user.id,
+      conversationId,
       dto,
     );
   }

@@ -57,17 +57,19 @@ export class ChatHandler {
     void socket.join(`conv:${conversationId}`);
   }
 
+  // send_message=false blocks new messages only.
+  // Edit, delete, and reactions on existing messages remain allowed by design.
   async handleSend(socket: AuthedSocket, body: WsChatSendPayload) {
     const userId = String(socket.data.userId);
-    const canAccess = await this.membershipService.canUserAccessConversation(
+    const { allowed, reason } = await this.membershipService.canUserSendMessage(
       userId,
       body.conversation_id,
     );
-    if (!canAccess) {
+    if (!allowed) {
       socket.emit(WsEvents.ChatAck, {
         message_id: body.message_id,
         status: 'rejected',
-        reason: 'not_member',
+        reason: reason ?? 'not_member',
       } satisfies WsChatAckPayload);
       return;
     }

@@ -176,6 +176,15 @@ export class ConversationPollService {
       throw BusinessException.forbidden(ErrorCode.CONVERSATION_NOT_MEMBER);
     }
 
+    const createPollAllowed =
+      membership.role !== UpdateMemberRoleDtoRoleEnum.MEMBER ||
+      (conversation.settings?.permissions?.create_poll ?? true);
+    if (!createPollAllowed) {
+      throw BusinessException.forbidden(
+        ErrorCode.CONVERSATION_PERMISSION_DENIED,
+      );
+    }
+
     const trimmedLabels = (dto.options ?? [])
       .map((o) => (o?.label ?? '').trim())
       .filter((label) => label.length > 0);

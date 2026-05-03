@@ -218,7 +218,18 @@ describe('ConversationsService', () => {
           }
           if (entityName === 'ConversationMember') {
             return {
-              find: jest.fn().mockResolvedValue(activeMembers),
+              findOne: jest
+                .fn()
+                .mockImplementation(
+                  ({
+                    where: { userId: uid },
+                  }: {
+                    where: { userId: string };
+                  }) =>
+                    Promise.resolve(
+                      activeMembers.find((m) => m.userId === uid) ?? null,
+                    ),
+                ),
               update: memberUpdate,
             };
           }

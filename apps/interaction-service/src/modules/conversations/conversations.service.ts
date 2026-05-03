@@ -12,8 +12,8 @@ import {
   type ConversationPinnedEvent,
   type ConversationUnpinnedEvent,
 } from '@libs/contracts';
-import { ConversationMember } from '@libs/database/entities';
-import { ErrorCode } from '@app/constant';
+import { Conversation, ConversationMember } from '@libs/database/entities';
+import { ConversationType, ErrorCode } from '@app/constant';
 import {
   BusinessException,
   PaginatedResponse,
@@ -23,6 +23,7 @@ import {
   CreateGroupConversationDto,
   CreateDirectConversationDto,
   UpdateConversationDto,
+  UpdateGroupSettingsDto,
   AddMembersDto,
   GetGroupInvitesQueryDto,
   GroupInviteItemDto,
@@ -65,6 +66,8 @@ export class ConversationsService {
   constructor(
     @InjectRepository(ConversationMember)
     private readonly memberRepository: Repository<ConversationMember>,
+    @InjectRepository(Conversation)
+    private readonly conversationRepository: Repository<Conversation>,
     private readonly cacheService: CacheService,
     @Inject(KAFKA_CLIENT) private readonly kafkaClient: ClientKafka,
     @Inject(REDIS_CLIENT) private readonly redis: RedisClientType,
@@ -111,12 +114,17 @@ export class ConversationsService {
     return this.coreService.updateConversation(userId, conversationId, dto);
   }
 
-  addMembers(
+  async addMembers(
     userId: string,
     conversationId: string,
     dto: AddMembersDto,
   ): Promise<ConversationDetailDto> {
-    return this.memberService.addMembers(userId, conversationId, dto);
+    const { detail } = await this.memberService.addMembers(
+      userId,
+      conversationId,
+      dto,
+    );
+    return detail;
   }
 
   removeMember(
@@ -149,12 +157,64 @@ export class ConversationsService {
     return this.memberService.transferOwnership(userId, conversationId, dto);
   }
 
-  sendGroupInvites(
+  async sendGroupInvites(
     userId: string,
     conversationId: string,
     dto: SendGroupInvitesDto,
   ): Promise<SendGroupInvitesResponseDto> {
+    const conv = await this.conversationRepository.findOne({
+      where: { id: conversationId },
+      select: ['id', 'settings', 'type'],
+    });
+
+    if (!conv) {
+      throw BusinessException.notFound(ErrorCode.CONVERSATION_NOT_FOUND);
+    }
+
+    // join_approval=false (default) → admin can add directly without user consent.
+    // join_approval=true → approval mode is on → fall through to pending invites.
+    // When settings is null (legacy/unset groups), the ?. chain resolves to undefined
+    // which is !== true, so the null fallback intentionally allows direct-add.
+    if (
+      conv.type === ConversationType.GROUP &&
+      conv.settings?.policies?.join_approval !== true
+    ) {
+      const deduped = Array.from(new Set(dto.userIds));
+      try {
+        const { addedCount } = await this.memberService.addMembers(
+          userId,
+          conversationId,
+          { memberIds: deduped },
+        );
+        return {
+          acceptedCount: addedCount,
+          skippedCount: deduped.length - addedCount,
+          inviteIds: [],
+        };
+      } catch (e) {
+        if (
+          e instanceof BusinessException &&
+          e.errorCode === ErrorCode.CONFLICT
+        ) {
+          return {
+            acceptedCount: 0,
+            skippedCount: deduped.length,
+            inviteIds: [],
+          };
+        }
+        throw e;
+      }
+    }
+
     return this.inviteService.sendGroupInvites(userId, conversationId, dto);
+  }
+
+  updateGroupSettings(
+    userId: string,
+    conversationId: string,
+    dto: UpdateGroupSettingsDto,
+  ): Promise<ConversationDetailDto> {
+    return this.coreService.updateGroupSettings(userId, conversationId, dto);
   }
 
   getPendingGroupInvites(

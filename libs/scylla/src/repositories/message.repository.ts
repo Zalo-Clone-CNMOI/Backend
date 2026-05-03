@@ -10,7 +10,7 @@ import {
   PersistedMessage,
   ReactionType,
 } from '@app/types/interfaces/chat.interface';
-import type { MessageMention } from '@libs/contracts';
+import { MENTION_ALL_SENTINEL, type MessageMention } from '@libs/contracts';
 
 export interface MessageProcessingState {
   message_id: string;
@@ -187,9 +187,9 @@ export class MessageRepository {
       );
     }
 
-    // 2) mentions_by_user — skip '__ALL__' (do NOT fan out)
+    // 2) mentions_by_user — skip MENTION_ALL_SENTINEL (do NOT fan out)
     for (const m of params.mentions) {
-      if (m.user_id === '__ALL__') continue;
+      if (m.user_id === MENTION_ALL_SENTINEL) continue;
       tasks.push(
         this.client.execute(
           `INSERT INTO mentions_by_user

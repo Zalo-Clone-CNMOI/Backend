@@ -171,7 +171,12 @@ export class MessageConsumerSharedService {
         });
       }
 
-      // Increment counter for mentioned users (badge UI)
+      // Increment counter for mentioned users (badge UI).
+      // Known v1 trade-off: this counter is non-idempotent. When a Kafka replay
+      // re-runs the post-persist path (status='pending' branch in
+      // SendMessageHandler), the same user's badge can be incremented twice.
+      // Replays are rare (require mid-process failure) and the counter is
+      // reset when the user opens the conversation, so off-by-one is accepted.
       const recipientSet = new Set(recipients);
       const counterTargets = Array.from(mentionedUserIds).filter((id) =>
         recipientSet.has(id),

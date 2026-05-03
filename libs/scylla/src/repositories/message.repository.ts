@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { Client, types } from 'cassandra-driver';
 import { SCYLLA_CLIENT } from '../scylla.tokens';
 import {
@@ -21,6 +21,8 @@ export interface MessageProcessingState {
 
 @Injectable()
 export class MessageRepository {
+  private readonly logger = new Logger(MessageRepository.name);
+
   constructor(@Inject(SCYLLA_CLIENT) private readonly client: Client) {}
 
   async tryBeginMessageProcessing(
@@ -228,8 +230,7 @@ export class MessageRepository {
     const results = await Promise.allSettled(tasks);
     for (const r of results) {
       if (r.status === 'rejected') {
-        // eslint-disable-next-line no-console
-        console.error('[insertMentions] task failed', r.reason);
+        this.logger.error('[insertMentions] task failed', r.reason);
       }
     }
   }

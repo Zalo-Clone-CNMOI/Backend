@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { MessageRepository } from './message.repository';
 import { SCYLLA_CLIENT } from '../scylla.tokens';
@@ -141,6 +142,9 @@ describe('MessageRepository - insertMentions', () => {
   });
 
   it('should not throw when one of the parallel inserts fails (eventual consistency)', async () => {
+    const loggerErrorSpy = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
     scyllaClient.execute.mockImplementationOnce(() =>
       Promise.reject(new Error('scylla unavailable')),
     );
@@ -156,5 +160,12 @@ describe('MessageRepository - insertMentions', () => {
         ],
       }),
     ).resolves.toBeUndefined();
+
+    expect(loggerErrorSpy).toHaveBeenCalledWith(
+      '[insertMentions] task failed',
+      expect.any(Error),
+    );
+
+    loggerErrorSpy.mockRestore();
   });
 });

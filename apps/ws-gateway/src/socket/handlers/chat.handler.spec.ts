@@ -13,6 +13,7 @@ import { ChatHandler } from './chat.handler';
 import { MediaFile, Conversation } from '@libs/database';
 import { ConversationMembershipService } from '@libs/mvp-access';
 import { KAFKA_CLIENT } from '@libs/kafka';
+import { RedisService } from '@libs/redis';
 import { KafkaTopics, WsEvents } from '@libs/contracts';
 import type {
   WsChatSendPayload,
@@ -99,11 +100,16 @@ describe('ChatHandler', () => {
   let kafka: { emit: jest.Mock };
   let mediaFileRepo: { find: jest.Mock };
   let conversationRepo: { findOne: jest.Mock };
+  let redisService: { incrBy: jest.Mock; expire: jest.Mock };
 
   beforeEach(async () => {
     kafka = { emit: jest.fn() };
     mediaFileRepo = { find: jest.fn().mockResolvedValue([]) };
     conversationRepo = { findOne: jest.fn().mockResolvedValue({ type: 'group' }) };
+    redisService = {
+      incrBy: jest.fn().mockResolvedValue(1),
+      expire: jest.fn().mockResolvedValue(1),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -119,6 +125,7 @@ describe('ChatHandler', () => {
         },
         { provide: getRepositoryToken(MediaFile), useValue: mediaFileRepo },
         { provide: getRepositoryToken(Conversation), useValue: conversationRepo },
+        { provide: RedisService, useValue: redisService },
       ],
     }).compile();
 
@@ -669,6 +676,35 @@ describe('ChatHandler', () => {
       );
 
       expect(result.error).toBe('mention_offset_out_of_bounds');
+    });
+
+    it('should reject @all when rate-limit exceeded', async () => {
+      conversationRepo.findOne.mockResolvedValue({ type: 'group' });
+      redisService.incrBy.mockResolvedValue(4);  // over limit of 3
+
+      const result = await callValidate(
+        [{ user_id: '__ALL__', mention_type: 'all', offset: 0, length: 4 }],
+        'conv-1',
+        'user-sender',
+        '@all hello',
+      );
+
+      expect(result.error).toBe('at_all_rate_limited');
+    });
+
+    it('should allow @all when under rate-limit threshold', async () => {
+      conversationRepo.findOne.mockResolvedValue({ type: 'group' });
+      redisService.incrBy.mockResolvedValue(2);
+
+      const result = await callValidate(
+        [{ user_id: '__ALL__', mention_type: 'all', offset: 0, length: 4 }],
+        'conv-1',
+        'user-sender',
+        '@all hello',
+      );
+
+      expect(result.error).toBeUndefined();
+      expect(result.normalized).toHaveLength(1);
     });
   });
 });

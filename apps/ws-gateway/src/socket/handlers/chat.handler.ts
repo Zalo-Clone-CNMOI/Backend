@@ -5,6 +5,7 @@ import { Repository, In } from 'typeorm';
 import { KAFKA_CLIENT } from '@libs/kafka';
 import { MediaFile, Conversation } from '@libs/database';
 import { ConversationMembershipService } from '@libs/mvp-access';
+import { RedisService } from '@libs/redis';
 import { ConversationType } from '@app/constant';
 import {
   KafkaTopics,
@@ -37,6 +38,9 @@ type AuthedSocket = Socket<
 
 @Injectable()
 export class ChatHandler {
+  private readonly AT_ALL_RATE_LIMIT_MAX = 3;
+  private readonly AT_ALL_RATE_LIMIT_WINDOW_S = 60;
+
   constructor(
     @Inject(KAFKA_CLIENT) private readonly kafka: ClientKafka,
     private readonly membershipService: ConversationMembershipService,
@@ -44,6 +48,7 @@ export class ChatHandler {
     private readonly mediaFileRepo: Repository<MediaFile>,
     @InjectRepository(Conversation)
     private readonly conversationRepo: Repository<Conversation>,
+    private readonly redisService: RedisService,
   ) {}
 
   async handleJoin(socket: AuthedSocket, conversationId: string) {
@@ -239,6 +244,14 @@ export class ChatHandler {
       }
       if (conv.type !== ConversationType.GROUP) {
         return { normalized: [], error: 'at_all_in_direct_chat_disallowed' };
+      }
+      const rateKey = `at_all:${conversationId}:${senderId}`;
+      const count = await this.redisService.incrBy(rateKey, 1);
+      if (count === 1) {
+        await this.redisService.expire(rateKey, this.AT_ALL_RATE_LIMIT_WINDOW_S);
+      }
+      if (count > this.AT_ALL_RATE_LIMIT_MAX) {
+        return { normalized: [], error: 'at_all_rate_limited' };
       }
     }
 

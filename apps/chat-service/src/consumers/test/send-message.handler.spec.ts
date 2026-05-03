@@ -28,6 +28,7 @@ describe('SendMessageHandler', () => {
     tryClaimPendingReplay: jest.Mock;
     restoreMessageProcessingToPending: jest.Mock;
     insertMessage: jest.Mock;
+    insertMentions: jest.Mock;
     markMessageStored: jest.Mock;
     clearMessageProcessing: jest.Mock;
     getMessage: jest.Mock;
@@ -67,6 +68,7 @@ describe('SendMessageHandler', () => {
       tryClaimPendingReplay: jest.fn(),
       restoreMessageProcessingToPending: jest.fn(),
       insertMessage: jest.fn(),
+      insertMentions: jest.fn().mockResolvedValue(undefined),
       markMessageStored: jest.fn(),
       clearMessageProcessing: jest.fn().mockResolvedValue(undefined),
       getMessage: jest.fn(),
@@ -404,6 +406,62 @@ describe('SendMessageHandler', () => {
       expect(repo.clearMessageProcessing).toHaveBeenCalledWith(
         payload.message_id,
       );
+    });
+  });
+
+  // ─── Mentions persistence + event propagation (Task 11) ───────────────────
+
+  describe('SendMessageHandler — mentions', () => {
+    it('should call insertMentions and include mentions in ChatMessageCreated event', async () => {
+      repo.tryBeginMessageProcessing.mockResolvedValue(true);
+      membershipService.canUserAccessConversation.mockResolvedValue(true);
+      repo.insertMessage.mockResolvedValue(undefined);
+      repo.insertMentions = jest.fn().mockResolvedValue(undefined);
+      publisher.emit.mockResolvedValue(undefined);
+
+      const payload = {
+        message_id: 'msg-1',
+        conversation_id: 'conv-1',
+        sender_id: 'user-sender',
+        body: 'Hi @user-1',
+        sent_at: 1700000000000,
+        mentions: [
+          { user_id: 'user-1', mention_type: 'user', offset: 3, length: 6 },
+        ],
+      };
+
+      await handler.handle(payload as any);
+
+      expect(repo.insertMentions).toHaveBeenCalledWith({
+        message_id: 'msg-1',
+        conversation_id: 'conv-1',
+        sender_id: 'user-sender',
+        created_at: 1700000000000,
+        mentions: payload.mentions,
+      });
+
+      const emittedEvent = publisher.emit.mock.calls.find(
+        ([topic]: [string]) => topic === 'chat.message.created',
+      )?.[1];
+      expect(emittedEvent.mentions).toEqual(payload.mentions);
+    });
+
+    it('should NOT call insertMentions when mentions array is empty or undefined', async () => {
+      repo.tryBeginMessageProcessing.mockResolvedValue(true);
+      membershipService.canUserAccessConversation.mockResolvedValue(true);
+      repo.insertMessage.mockResolvedValue(undefined);
+      repo.insertMentions = jest.fn().mockResolvedValue(undefined);
+      publisher.emit.mockResolvedValue(undefined);
+
+      await handler.handle({
+        message_id: 'msg-2',
+        conversation_id: 'conv-1',
+        sender_id: 'user-sender',
+        body: 'no mentions',
+        sent_at: 1700000000000,
+      } as any);
+
+      expect(repo.insertMentions).not.toHaveBeenCalled();
     });
   });
 });

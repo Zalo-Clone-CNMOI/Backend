@@ -115,8 +115,8 @@ describe('MessageRepository - insertMentions', () => {
       String(q).includes('UPDATE messages_by_conversation'),
     );
 
-    expect(mentionsByMessageInserts).toHaveLength(2);   // both mentions
-    expect(mentionsByUserInserts).toHaveLength(1);      // only real user, NOT __ALL__
+    expect(mentionsByMessageInserts).toHaveLength(2); // both mentions
+    expect(mentionsByUserInserts).toHaveLength(1); // only real user, NOT __ALL__
     expect(updateInline).toHaveLength(1);
     expect(updateInline[0][1]).toEqual([
       JSON.stringify([

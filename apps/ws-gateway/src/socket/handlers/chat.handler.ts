@@ -271,7 +271,10 @@ export class ChatHandler {
       const rateKey = `at_all:${conversationId}:${senderId}`;
       const count = await this.redisService.incrBy(rateKey, 1);
       if (count === 1) {
-        await this.redisService.expire(rateKey, this.AT_ALL_RATE_LIMIT_WINDOW_S);
+        await this.redisService.expire(
+          rateKey,
+          this.AT_ALL_RATE_LIMIT_WINDOW_S,
+        );
       }
       if (count > this.AT_ALL_RATE_LIMIT_MAX) {
         return { normalized: [], error: 'at_all_rate_limited' };

@@ -98,7 +98,7 @@ describe('ChatFanoutConsumer', () => {
     } as any);
 
     const args = (gateway.broadcastToConversation as jest.Mock).mock
-      .calls[0][2] as any;
+      .calls[0][2];
     expect(args.mentions).toBeUndefined();
   });
 

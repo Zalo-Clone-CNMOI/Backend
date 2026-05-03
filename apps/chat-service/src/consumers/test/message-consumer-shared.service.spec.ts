@@ -22,11 +22,13 @@ describe('MessageConsumerSharedService - emitMessageNotification mention branchi
       findOne: jest.fn().mockResolvedValue({ fullName: 'Sender Name' }),
     };
     conversationMemberRepo = {
-      find: jest.fn().mockResolvedValue([
-        { userId: 'sender-1' },
-        { userId: 'user-mentioned' },
-        { userId: 'user-other' },
-      ]),
+      find: jest
+        .fn()
+        .mockResolvedValue([
+          { userId: 'sender-1' },
+          { userId: 'user-mentioned' },
+          { userId: 'user-other' },
+        ]),
     };
     messageRepo = {
       incrementUnreadMentionCount: jest.fn().mockResolvedValue(undefined),
@@ -35,10 +37,16 @@ describe('MessageConsumerSharedService - emitMessageNotification mention branchi
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         MessageConsumerSharedService,
-        { provide: NotificationOutboxPublisher, useValue: notificationPublisher },
+        {
+          provide: NotificationOutboxPublisher,
+          useValue: notificationPublisher,
+        },
         { provide: ChatPublisher, useValue: { emit: jest.fn() } },
         { provide: getRepositoryToken(User), useValue: userRepo },
-        { provide: getRepositoryToken(ConversationMember), useValue: conversationMemberRepo },
+        {
+          provide: getRepositoryToken(ConversationMember),
+          useValue: conversationMemberRepo,
+        },
         { provide: MessageRepository, useValue: messageRepo },
       ],
     }).compile();
@@ -53,7 +61,14 @@ describe('MessageConsumerSharedService - emitMessageNotification mention branchi
       'Hi @user-mentioned',
       'msg-1',
       'trace-1',
-      [{ user_id: 'user-mentioned', mention_type: 'user', offset: 3, length: 14 }],
+      [
+        {
+          user_id: 'user-mentioned',
+          mention_type: 'user',
+          offset: 3,
+          length: 14,
+        },
+      ],
     );
 
     const calls = notificationPublisher.publish.mock.calls;
@@ -80,7 +95,9 @@ describe('MessageConsumerSharedService - emitMessageNotification mention branchi
 
     const calls = notificationPublisher.publish.mock.calls;
     expect(calls).toHaveLength(2);
-    expect(calls.every((c) => c[0].type === NotificationType.Mention)).toBe(true);
+    expect(calls.every((c) => c[0].type === NotificationType.Mention)).toBe(
+      true,
+    );
   });
 
   it('should increment unread mention counter for mentioned users', async () => {
@@ -90,7 +107,14 @@ describe('MessageConsumerSharedService - emitMessageNotification mention branchi
       'Hi @user-mentioned',
       'msg-3',
       'trace-3',
-      [{ user_id: 'user-mentioned', mention_type: 'user', offset: 3, length: 14 }],
+      [
+        {
+          user_id: 'user-mentioned',
+          mention_type: 'user',
+          offset: 3,
+          length: 14,
+        },
+      ],
     );
 
     expect(messageRepo.incrementUnreadMentionCount).toHaveBeenCalledWith(
@@ -109,7 +133,9 @@ describe('MessageConsumerSharedService - emitMessageNotification mention branchi
     );
 
     const calls = notificationPublisher.publish.mock.calls;
-    expect(calls.every((c) => c[0].type === NotificationType.ChatMessage)).toBe(true);
+    expect(calls.every((c) => c[0].type === NotificationType.ChatMessage)).toBe(
+      true,
+    );
     expect(messageRepo.incrementUnreadMentionCount).not.toHaveBeenCalled();
   });
 
@@ -120,7 +146,14 @@ describe('MessageConsumerSharedService - emitMessageNotification mention branchi
       'Hi @user-mentioned',
       'msg-priority',
       'trace-priority',
-      [{ user_id: 'user-mentioned', mention_type: 'user', offset: 3, length: 14 }],
+      [
+        {
+          user_id: 'user-mentioned',
+          mention_type: 'user',
+          offset: 3,
+          length: 14,
+        },
+      ],
     );
 
     const calls = notificationPublisher.publish.mock.calls;

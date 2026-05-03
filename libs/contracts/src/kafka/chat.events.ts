@@ -80,9 +80,9 @@ export interface MessageAttachment {
 }
 
 export interface MessageMention {
-  user_id: string;                    // UUID of mentioned user, or '__ALL__' sentinel
+  user_id: string; // UUID of mentioned user, or '__ALL__' sentinel
   mention_type: 'user' | 'all';
-  offset: number;                     // UTF-16 code unit offset into body
+  offset: number; // UTF-16 code unit offset into body
   length: number;
 }
 

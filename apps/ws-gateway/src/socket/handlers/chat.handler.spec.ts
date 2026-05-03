@@ -105,7 +105,9 @@ describe('ChatHandler', () => {
   beforeEach(async () => {
     kafka = { emit: jest.fn() };
     mediaFileRepo = { find: jest.fn().mockResolvedValue([]) };
-    conversationRepo = { findOne: jest.fn().mockResolvedValue({ type: 'group' }) };
+    conversationRepo = {
+      findOne: jest.fn().mockResolvedValue({ type: 'group' }),
+    };
     redisService = {
       incrBy: jest.fn().mockResolvedValue(1),
       expire: jest.fn().mockResolvedValue(1),
@@ -124,7 +126,10 @@ describe('ChatHandler', () => {
           },
         },
         { provide: getRepositoryToken(MediaFile), useValue: mediaFileRepo },
-        { provide: getRepositoryToken(Conversation), useValue: conversationRepo },
+        {
+          provide: getRepositoryToken(Conversation),
+          useValue: conversationRepo,
+        },
         { provide: RedisService, useValue: redisService },
       ],
     }).compile();
@@ -392,7 +397,12 @@ describe('ChatHandler', () => {
         makeSendPayload({
           body: 'Hi @stranger',
           mentions: [
-            { user_id: 'user-stranger', mention_type: 'user', offset: 3, length: 9 },
+            {
+              user_id: 'user-stranger',
+              mention_type: 'user',
+              offset: 3,
+              length: 9,
+            },
           ],
         }),
       );
@@ -628,9 +638,7 @@ describe('ChatHandler', () => {
     });
 
     it('should reject mention of a non-member', async () => {
-      membership.listActiveMemberIds = jest
-        .fn()
-        .mockResolvedValue([]) as any;
+      membership.listActiveMemberIds = jest.fn().mockResolvedValue([]) as any;
 
       const result = await callValidate(
         [{ user_id: 'user-evil', mention_type: 'user', offset: 0, length: 5 }],
@@ -657,7 +665,14 @@ describe('ChatHandler', () => {
 
     it('should silently strip self-mention without rejecting', async () => {
       const result = await callValidate(
-        [{ user_id: 'user-sender', mention_type: 'user', offset: 0, length: 5 }],
+        [
+          {
+            user_id: 'user-sender',
+            mention_type: 'user',
+            offset: 0,
+            length: 5,
+          },
+        ],
         'conv-1',
         'user-sender',
         'Hello',
@@ -734,7 +749,7 @@ describe('ChatHandler', () => {
 
     it('should reject @all when rate-limit exceeded', async () => {
       conversationRepo.findOne.mockResolvedValue({ type: 'group' });
-      redisService.incrBy.mockResolvedValue(4);  // over limit of 3
+      redisService.incrBy.mockResolvedValue(4); // over limit of 3
 
       const result = await callValidate(
         [{ user_id: '__ALL__', mention_type: 'all', offset: 0, length: 4 }],

@@ -253,7 +253,10 @@ export class MessageRepository {
     const results = await Promise.allSettled(tasks);
     for (const r of results) {
       if (r.status === 'rejected') {
-        this.logger.error('[incrementUnreadMentionCount] task failed', r.reason);
+        this.logger.error(
+          '[incrementUnreadMentionCount] task failed',
+          r.reason,
+        );
       }
     }
   }

@@ -916,11 +916,7 @@ describe('ConversationsService', () => {
               findOne: jest
                 .fn()
                 .mockImplementation(
-                  ({
-                    where: { userId: uid },
-                  }: {
-                    where: { userId: string };
-                  }) =>
+                  ({ where: { userId: uid } }: { where: { userId: string } }) =>
                     Promise.resolve(
                       activeMembers.find((m) => m.userId === uid) ?? null,
                     ),
@@ -1026,7 +1022,10 @@ describe('ConversationsService', () => {
     it('should throw not-found when target member is not in the conversation', async () => {
       const conv = createMockConversation({
         members: [
-          createMockMember({ userId: uuid(2), role: UpdateMemberRoleDtoRoleEnum.OWNER }),
+          createMockMember({
+            userId: uuid(2),
+            role: UpdateMemberRoleDtoRoleEnum.OWNER,
+          }),
           // uuid(3) intentionally absent
         ],
       });

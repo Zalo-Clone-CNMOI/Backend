@@ -44,6 +44,7 @@ describe('ModerationResultHandler', () => {
       publisher as unknown as ChatPublisher,
       userRepo as unknown as Repository<User>,
       conversationMemberRepo as unknown as Repository<ConversationMember>,
+      repo as unknown as MessageRepository,
     );
     jest.spyOn(shared.logger, 'debug').mockImplementation(() => undefined);
     jest.spyOn(shared.logger, 'log').mockImplementation(() => undefined);

@@ -336,8 +336,8 @@ export class SendMessageHandler {
     messageId: string;
     createdAt: number;
     traceId: string;
-    // Forwarded to emitMessageNotification by Task 12 for branched
-    // (Mention vs ChatMessage) notification fanout. Currently unused.
+    // Forwarded to emitMessageNotification for branched
+    // (Mention vs ChatMessage) notification fanout.
     mentions?: MessageMention[];
   }): Promise<void> {
     await this.shared.emitMessageNotification(
@@ -346,6 +346,7 @@ export class SendMessageHandler {
       params.body,
       params.messageId,
       params.traceId,
+      params.mentions,
     );
 
     // ── AI Moderation: auto-moderate every new message ──────────────

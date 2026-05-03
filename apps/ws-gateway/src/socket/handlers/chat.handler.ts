@@ -98,6 +98,26 @@ export class ChatHandler {
       return;
     }
 
+    let normalizedMentions: MessageMention[] | undefined;
+    if (body.mentions && body.mentions.length > 0) {
+      const result = await this.validateMentions(
+        body.mentions,
+        body.conversation_id,
+        userId,
+        body.body,
+      );
+      if (result.error) {
+        socket.emit(WsEvents.ChatAck, {
+          message_id: body.message_id,
+          status: 'rejected',
+          reason: result.error,
+        } satisfies WsChatAckPayload);
+        return;
+      }
+      normalizedMentions =
+        result.normalized.length > 0 ? result.normalized : undefined;
+    }
+
     void this.kafka.emit(KafkaTopics.ChatMessageSend, {
       message_id: body.message_id,
       conversation_id: body.conversation_id,
@@ -106,6 +126,7 @@ export class ChatHandler {
       sent_at: body.sent_at,
       attachments: body.attachments,
       reply_to_message_id: body.reply_to_message_id,
+      mentions: normalizedMentions,
       trace_id: `ws:${socket.id}:${body.message_id}`,
     });
 

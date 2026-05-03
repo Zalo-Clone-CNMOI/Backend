@@ -350,6 +350,60 @@ describe('ChatHandler', () => {
         reason: 'attachment_not_owned',
       });
     });
+
+    it('should propagate normalized mentions in Kafka emit', async () => {
+      const socket = createMockSocket('user-sender');
+      membership.canUserSendMessage.mockResolvedValue({ allowed: true });
+      membership.listActiveMemberIds = jest
+        .fn()
+        .mockResolvedValue(['user-1']) as any;
+
+      await handler.handleSend(
+        socket,
+        makeSendPayload({
+          body: 'Hi @user-1',
+          mentions: [
+            { user_id: 'user-1', mention_type: 'user', offset: 3, length: 6 },
+          ],
+        }),
+      );
+
+      expect(kafka.emit).toHaveBeenCalledWith(
+        KafkaTopics.ChatMessageSend,
+        expect.objectContaining({
+          mentions: [
+            { user_id: 'user-1', mention_type: 'user', offset: 3, length: 6 },
+          ],
+        }),
+      );
+      expect(socket.emit).toHaveBeenCalledWith(WsEvents.ChatAck, {
+        message_id: 'msg-001',
+        status: 'accepted',
+      });
+    });
+
+    it('should reject when mentions validation fails', async () => {
+      const socket = createMockSocket('user-sender');
+      membership.canUserSendMessage.mockResolvedValue({ allowed: true });
+      membership.listActiveMemberIds = jest.fn().mockResolvedValue([]) as any;
+
+      await handler.handleSend(
+        socket,
+        makeSendPayload({
+          body: 'Hi @stranger',
+          mentions: [
+            { user_id: 'user-stranger', mention_type: 'user', offset: 3, length: 9 },
+          ],
+        }),
+      );
+
+      expect(kafka.emit).not.toHaveBeenCalled();
+      expect(socket.emit).toHaveBeenCalledWith(WsEvents.ChatAck, {
+        message_id: 'msg-001',
+        status: 'rejected',
+        reason: 'mention_target_not_member',
+      });
+    });
   });
 
   // ── handleEdit ────────────────────────────────────────────────────────

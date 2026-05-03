@@ -1,5 +1,6 @@
 export enum NotificationType {
   ChatMessage = 'chat_message',
+  Mention = 'mention',
   FriendRequest = 'friend_request',
   FriendAccepted = 'friend_accepted',
   GroupInvite = 'group_invite',

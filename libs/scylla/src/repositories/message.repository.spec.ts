@@ -169,3 +169,64 @@ describe('MessageRepository - insertMentions', () => {
     loggerErrorSpy.mockRestore();
   });
 });
+
+describe('MessageRepository - incrementUnreadMentionCount', () => {
+  let repository: MessageRepository;
+  let scyllaClient: { batch: jest.Mock; execute: jest.Mock };
+
+  beforeEach(async () => {
+    scyllaClient = {
+      batch: jest.fn().mockResolvedValue(undefined),
+      execute: jest.fn().mockResolvedValue({ rowLength: 0, rows: [] }),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        MessageRepository,
+        { provide: SCYLLA_CLIENT, useValue: scyllaClient },
+      ],
+    }).compile();
+
+    repository = module.get<MessageRepository>(MessageRepository);
+  });
+
+  it('should issue one counter UPDATE per (user, conversation) pair', async () => {
+    await repository.incrementUnreadMentionCount(
+      ['user-1', 'user-2', 'user-3'],
+      'conv-1',
+    );
+
+    const calls = scyllaClient.execute.mock.calls;
+    expect(calls).toHaveLength(3);
+    expect(calls[0][0]).toContain(
+      'UPDATE unread_mention_count_by_conversation SET count = count + 1',
+    );
+    expect(calls[0][1]).toEqual(['user-1', 'conv-1']);
+    expect(calls[1][1]).toEqual(['user-2', 'conv-1']);
+    expect(calls[2][1]).toEqual(['user-3', 'conv-1']);
+  });
+
+  it('should be a no-op when user list is empty', async () => {
+    await repository.incrementUnreadMentionCount([], 'conv-1');
+    expect(scyllaClient.execute).not.toHaveBeenCalled();
+  });
+
+  it('should not throw and should log error when an UPDATE fails', async () => {
+    const loggerErrorSpy = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
+    scyllaClient.execute.mockImplementationOnce(() =>
+      Promise.reject(new Error('counter UPDATE failed')),
+    );
+
+    await expect(
+      repository.incrementUnreadMentionCount(['user-1'], 'conv-1'),
+    ).resolves.toBeUndefined();
+
+    expect(loggerErrorSpy).toHaveBeenCalledWith(
+      '[incrementUnreadMentionCount] task failed',
+      expect.any(Error),
+    );
+    loggerErrorSpy.mockRestore();
+  });
+});

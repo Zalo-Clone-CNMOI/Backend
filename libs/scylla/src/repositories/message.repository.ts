@@ -235,6 +235,29 @@ export class MessageRepository {
     }
   }
 
+  async incrementUnreadMentionCount(
+    userIds: string[],
+    conversationId: string,
+  ): Promise<void> {
+    if (userIds.length === 0) return;
+
+    const tasks = userIds.map((userId) =>
+      this.client.execute(
+        `UPDATE unread_mention_count_by_conversation SET count = count + 1
+         WHERE user_id = ? AND conversation_id = ?`,
+        [userId, conversationId],
+        { prepare: true },
+      ),
+    );
+
+    const results = await Promise.allSettled(tasks);
+    for (const r of results) {
+      if (r.status === 'rejected') {
+        this.logger.error('[incrementUnreadMentionCount] task failed', r.reason);
+      }
+    }
+  }
+
   async insertSystemMessage(message: {
     message_id: string;
     conversation_id: string;

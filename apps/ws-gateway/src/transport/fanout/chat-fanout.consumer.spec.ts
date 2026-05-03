@@ -5,6 +5,7 @@ import {
   SystemMessageMetadata,
   WsEvents,
 } from '@libs/contracts';
+import type { ChatMessageCreatedEvent } from '@libs/contracts';
 
 describe('ChatFanoutConsumer', () => {
   const gateway: {
@@ -57,11 +58,50 @@ describe('ChatFanoutConsumer', () => {
         created_at: 1706162800000,
         attachments: undefined,
         reply_to_message_id: undefined,
+        mentions: undefined,
       },
     );
     expect(conversationMemberRepo.find).not.toHaveBeenCalled();
     expect(friendshipAccess.getFriendSet).not.toHaveBeenCalled();
     expect(gateway.emitToUser).not.toHaveBeenCalled();
+  });
+
+  it('should include mentions in broadcast payload when present', async () => {
+    await consumer.onMessageCreated({
+      message_id: 'msg-1',
+      conversation_id: 'conv-1',
+      sender_id: 'sender-1',
+      body: 'Hi @user-1',
+      created_at: 1700000000000,
+      mentions: [
+        { user_id: 'user-1', mention_type: 'user', offset: 3, length: 6 },
+      ],
+    } as unknown as ChatMessageCreatedEvent);
+
+    expect(gateway.broadcastToConversation).toHaveBeenCalledWith(
+      'conv-1',
+      WsEvents.ChatMessage,
+      expect.objectContaining({
+        mentions: [
+          { user_id: 'user-1', mention_type: 'user', offset: 3, length: 6 },
+        ],
+      }),
+    );
+  });
+
+  it('should omit mentions field when payload has no mentions (existing behavior unchanged)', async () => {
+    await consumer.onMessageCreated({
+      message_id: 'msg-2',
+      conversation_id: 'conv-1',
+      sender_id: 'sender-1',
+      body: 'no mentions',
+      created_at: 1700000000001,
+    } as unknown as ChatMessageCreatedEvent);
+
+    const args = gateway.broadcastToConversation.mock.calls[0][2] as {
+      mentions?: unknown;
+    };
+    expect(args.mentions).toBeUndefined();
   });
 
   it('should emit forwarded message per member and hide forwarded_from for non-friends', async () => {

@@ -17,6 +17,9 @@ export const WsPayloadLimits = {
   attachmentMaxBytes: 50 * 1024 * 1024,
   callParticipantsMaxItems: 50,
   callSignalTextMaxLength: 12000,
+  mentionsMaxItems: 50,
+  mentionOffsetMax: 4000,
+  mentionLengthMax: 100,
 } as const;
 
 export const WsReactionTypes = [

@@ -10,9 +10,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ChatHandler } from './chat.handler';
-import { MediaFile } from '@libs/database';
+import { MediaFile, Conversation } from '@libs/database';
 import { ConversationMembershipService } from '@libs/mvp-access';
 import { KAFKA_CLIENT } from '@libs/kafka';
+import { RedisService } from '@libs/redis';
 import { KafkaTopics, WsEvents } from '@libs/contracts';
 import type {
   WsChatSendPayload,
@@ -20,6 +21,8 @@ import type {
   WsChatDeletePayload,
   WsChatReactPayload,
   WsChatUnreactPayload,
+  WsMention,
+  MessageMention,
 } from '@libs/contracts';
 
 type AuthedSocket = Parameters<ChatHandler['handleJoin']>[0];
@@ -98,10 +101,19 @@ describe('ChatHandler', () => {
   let membership: jest.Mocked<ConversationMembershipService>;
   let kafka: { emit: jest.Mock };
   let mediaFileRepo: { find: jest.Mock };
+  let conversationRepo: { findOne: jest.Mock };
+  let redisService: { incrBy: jest.Mock; expire: jest.Mock };
 
   beforeEach(async () => {
     kafka = { emit: jest.fn() };
     mediaFileRepo = { find: jest.fn().mockResolvedValue([]) };
+    conversationRepo = {
+      findOne: jest.fn().mockResolvedValue({ type: 'group' }),
+    };
+    redisService = {
+      incrBy: jest.fn().mockResolvedValue(1),
+      expire: jest.fn().mockResolvedValue(1),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -112,9 +124,15 @@ describe('ChatHandler', () => {
           useValue: {
             canUserAccessConversation: jest.fn(),
             canUserSendMessage: jest.fn(),
+            listActiveMemberIds: jest.fn().mockResolvedValue([]),
           },
         },
         { provide: getRepositoryToken(MediaFile), useValue: mediaFileRepo },
+        {
+          provide: getRepositoryToken(Conversation),
+          useValue: conversationRepo,
+        },
+        { provide: RedisService, useValue: redisService },
       ],
     }).compile();
 
@@ -339,6 +357,63 @@ describe('ChatHandler', () => {
         reason: 'attachment_not_owned',
       });
     });
+
+    it('should propagate normalized mentions in Kafka emit', async () => {
+      const socket = createMockSocket('user-sender');
+      membership.canUserSendMessage.mockResolvedValue({ allowed: true });
+      membership.listActiveMemberIds.mockResolvedValue(['user-1']);
+
+      await handler.handleSend(
+        socket,
+        makeSendPayload({
+          body: 'Hi @user-1',
+          mentions: [
+            { user_id: 'user-1', mention_type: 'user', offset: 3, length: 6 },
+          ],
+        }),
+      );
+
+      expect(kafka.emit).toHaveBeenCalledWith(
+        KafkaTopics.ChatMessageSend,
+        expect.objectContaining({
+          mentions: [
+            { user_id: 'user-1', mention_type: 'user', offset: 3, length: 6 },
+          ],
+        }),
+      );
+      expect(socket.emit).toHaveBeenCalledWith(WsEvents.ChatAck, {
+        message_id: 'msg-001',
+        status: 'accepted',
+      });
+    });
+
+    it('should reject when mentions validation fails', async () => {
+      const socket = createMockSocket('user-sender');
+      membership.canUserSendMessage.mockResolvedValue({ allowed: true });
+      membership.listActiveMemberIds.mockResolvedValue([]);
+
+      await handler.handleSend(
+        socket,
+        makeSendPayload({
+          body: 'Hi @stranger',
+          mentions: [
+            {
+              user_id: 'user-stranger',
+              mention_type: 'user',
+              offset: 3,
+              length: 9,
+            },
+          ],
+        }),
+      );
+
+      expect(kafka.emit).not.toHaveBeenCalled();
+      expect(socket.emit).toHaveBeenCalledWith(WsEvents.ChatAck, {
+        message_id: 'msg-001',
+        status: 'rejected',
+        reason: 'mention_target_not_member',
+      });
+    });
   });
 
   // ── handleEdit ────────────────────────────────────────────────────────
@@ -533,6 +608,177 @@ describe('ChatHandler', () => {
       // handleSend now uses canUserSendMessage; all other operations use canUserAccessConversation
       expect(membership.canUserAccessConversation).toHaveBeenCalledTimes(5);
       expect(membership.canUserSendMessage).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('validateMentions', () => {
+    type ValidateMentionsFn = (
+      mentions: WsMention[],
+      conversationId: string,
+      senderId: string,
+      body: string,
+    ) => Promise<{ normalized: MessageMention[]; error?: string }>;
+
+    const callValidate = (
+      mentions: WsMention[],
+      conversationId: string,
+      userId: string,
+      body: string,
+    ) =>
+      (
+        handler as unknown as { validateMentions: ValidateMentionsFn }
+      ).validateMentions(mentions, conversationId, userId, body);
+
+    it('should accept valid mentions of active members', async () => {
+      membership.listActiveMemberIds.mockResolvedValue(['user-1']);
+
+      const result = await callValidate(
+        [{ user_id: 'user-1', mention_type: 'user', offset: 0, length: 5 }],
+        'conv-1',
+        'user-sender',
+        'Hello world',
+      );
+
+      expect(result.error).toBeUndefined();
+      expect(result.normalized).toHaveLength(1);
+      expect(result.normalized[0].user_id).toBe('user-1');
+    });
+
+    it('should reject mention of a non-member', async () => {
+      membership.listActiveMemberIds.mockResolvedValue([]);
+
+      const result = await callValidate(
+        [{ user_id: 'user-evil', mention_type: 'user', offset: 0, length: 5 }],
+        'conv-1',
+        'user-sender',
+        'Hello world',
+      );
+
+      expect(result.error).toBe('mention_target_not_member');
+    });
+
+    it('should reject @all in a direct (1-1) conversation', async () => {
+      conversationRepo.findOne.mockResolvedValue({ type: 'direct' });
+
+      const result = await callValidate(
+        [{ user_id: '__ALL__', mention_type: 'all', offset: 0, length: 4 }],
+        'conv-direct',
+        'user-sender',
+        '@all hello',
+      );
+
+      expect(result.error).toBe('at_all_in_direct_chat_disallowed');
+    });
+
+    it('should silently strip self-mention without rejecting', async () => {
+      const result = await callValidate(
+        [
+          {
+            user_id: 'user-sender',
+            mention_type: 'user',
+            offset: 0,
+            length: 5,
+          },
+        ],
+        'conv-1',
+        'user-sender',
+        'Hello',
+      );
+
+      expect(result.error).toBeUndefined();
+      expect(result.normalized).toHaveLength(0);
+    });
+
+    it('should dedupe duplicate user_ids', async () => {
+      membership.listActiveMemberIds.mockResolvedValue(['user-1']);
+
+      const result = await callValidate(
+        [
+          { user_id: 'user-1', mention_type: 'user', offset: 0, length: 5 },
+          { user_id: 'user-1', mention_type: 'user', offset: 10, length: 5 },
+        ],
+        'conv-1',
+        'user-sender',
+        'Hello world Hello world',
+      );
+
+      expect(result.error).toBeUndefined();
+      expect(result.normalized).toHaveLength(1);
+    });
+
+    it('should reject when offset+length exceeds body length', async () => {
+      const result = await callValidate(
+        [{ user_id: 'user-1', mention_type: 'user', offset: 100, length: 5 }],
+        'conv-1',
+        'user-sender',
+        'short',
+      );
+
+      expect(result.error).toBe('mention_offset_out_of_bounds');
+    });
+
+    it('should return conversation_not_found when @all targets a missing conversation', async () => {
+      conversationRepo.findOne.mockResolvedValue(null);
+
+      const result = await callValidate(
+        [{ user_id: '__ALL__', mention_type: 'all', offset: 0, length: 4 }],
+        'conv-missing',
+        'user-sender',
+        '@all hello',
+      );
+
+      expect(result.error).toBe('conversation_not_found');
+    });
+
+    it('should reject negative offset', async () => {
+      const result = await callValidate(
+        [{ user_id: 'user-1', mention_type: 'user', offset: -1, length: 5 }],
+        'conv-1',
+        'user-sender',
+        'Hello world',
+      );
+
+      expect(result.error).toBe('mention_offset_out_of_bounds');
+    });
+
+    it('should reject zero or negative length', async () => {
+      const result = await callValidate(
+        [{ user_id: 'user-1', mention_type: 'user', offset: 0, length: 0 }],
+        'conv-1',
+        'user-sender',
+        'Hello',
+      );
+
+      expect(result.error).toBe('mention_offset_out_of_bounds');
+    });
+
+    it('should reject @all when rate-limit exceeded', async () => {
+      conversationRepo.findOne.mockResolvedValue({ type: 'group' });
+      redisService.incrBy.mockResolvedValue(4); // over limit of 3
+
+      const result = await callValidate(
+        [{ user_id: '__ALL__', mention_type: 'all', offset: 0, length: 4 }],
+        'conv-1',
+        'user-sender',
+        '@all hello',
+      );
+
+      expect(result.error).toBe('at_all_rate_limited');
+    });
+
+    it('should allow @all when under rate-limit threshold', async () => {
+      conversationRepo.findOne.mockResolvedValue({ type: 'group' });
+      redisService.incrBy.mockResolvedValue(2);
+
+      const result = await callValidate(
+        [{ user_id: '__ALL__', mention_type: 'all', offset: 0, length: 4 }],
+        'conv-1',
+        'user-sender',
+        '@all hello',
+      );
+
+      expect(result.error).toBeUndefined();
+      expect(result.normalized).toHaveLength(1);
     });
   });
 });

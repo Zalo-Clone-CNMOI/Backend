@@ -79,6 +79,15 @@ export interface MessageAttachment {
   visibility?: 'public' | 'private';
 }
 
+export interface MessageMention {
+  user_id: string; // UUID of mentioned user, or '__ALL__' sentinel
+  mention_type: 'user' | 'all';
+  offset: number; // UTF-16 code unit offset into body
+  length: number;
+}
+
+export const MENTION_ALL_SENTINEL = '__ALL__' as const;
+
 export interface ForwardedFrom {
   source_message_id: string;
   source_conversation_id: string;
@@ -109,6 +118,7 @@ export interface ChatMessageSendCommand {
   attachments?: MessageAttachment[];
   reply_to_message_id?: string;
   trace_id?: string;
+  mentions?: MessageMention[];
 }
 
 export interface ChatMessageCreatedEvent {
@@ -122,6 +132,7 @@ export interface ChatMessageCreatedEvent {
   forwarded_from?: ForwardedFrom;
   trace_id?: string;
   message_type?: string;
+  mentions?: MessageMention[];
 }
 
 export interface ChatSystemMessageCommand {

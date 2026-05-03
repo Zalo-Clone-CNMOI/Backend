@@ -6,7 +6,7 @@ import { LoggerModule } from '@libs/logger';
 import { KafkaModule } from '@libs/kafka';
 import { AuthModule } from '@libs/auth';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { DatabaseModule, MediaFile } from '@libs/database';
+import { DatabaseModule, MediaFile, Conversation } from '@libs/database';
 import { ConversationMembershipModule } from '@libs/mvp-access';
 import { ScyllaModule } from '@libs/scylla';
 import { RedisModule } from '@libs/redis';
@@ -37,7 +37,7 @@ import {
     LoggerModule,
     AuthModule,
     DatabaseModule,
-    TypeOrmModule.forFeature([MediaFile]),
+    TypeOrmModule.forFeature([MediaFile, Conversation]),
     ConversationMembershipModule,
     ScyllaModule,
     RedisModule.forRootAsync(),

@@ -5,8 +5,11 @@ import { NotificationOutboxPublisher } from '@libs/kafka';
 import {
   type NotificationRequestedEvent,
   NotificationType,
+  type MessageMention,
+  MENTION_ALL_SENTINEL,
 } from '@libs/contracts';
 import { User, ConversationMember } from '@libs/database';
+import { MessageRepository } from '@libs/scylla';
 import { ChatPublisher } from '../services/chat.publisher';
 import {
   getConversationMemberIds,
@@ -33,6 +36,7 @@ export class MessageConsumerSharedService {
     private readonly userRepo: Repository<User>,
     @InjectRepository(ConversationMember)
     private readonly conversationMemberRepo: Repository<ConversationMember>,
+    private readonly messageRepo: MessageRepository,
   ) {}
 
   bumpConsistencyCounter(
@@ -78,14 +82,12 @@ export class MessageConsumerSharedService {
     messageBody: string,
     messageId: string,
     traceId?: string,
+    mentions?: MessageMention[],
   ): Promise<void> {
     const notificationTraceId = traceId || `trace-noti-${Date.now()}`;
     this.logger.debug(
       `[${notificationTraceId}] Emitting message notification`,
-      {
-        messageId,
-        conversationId,
-      },
+      { messageId, conversationId },
     );
 
     try {
@@ -94,12 +96,26 @@ export class MessageConsumerSharedService {
         conversationId,
       );
       const recipients = recipientIds.filter((id) => id !== senderId);
-
       if (recipients.length === 0) {
         this.logger.debug(
           `[${notificationTraceId}] No recipients for notification.`,
         );
         return;
+      }
+
+      // Build mentioned-user set
+      const mentionedUserIds = new Set<string>();
+      if (mentions && mentions.length > 0) {
+        const isAtAll = mentions.some((m) => m.mention_type === 'all');
+        if (isAtAll) {
+          recipients.forEach((id) => mentionedUserIds.add(id));
+        } else {
+          for (const m of mentions) {
+            if (m.user_id !== MENTION_ALL_SENTINEL && m.user_id !== senderId) {
+              mentionedUserIds.add(m.user_id);
+            }
+          }
+        }
       }
 
       const senderName = await getUserDisplayName(this.userRepo, senderId);
@@ -115,26 +131,31 @@ export class MessageConsumerSharedService {
       for (let offset = 0; offset < recipients.length; offset += batchSize) {
         const batchRecipients = recipients.slice(offset, offset + batchSize);
         const publishTasks = batchRecipients.map((recipientId) => {
+          const isMentioned = mentionedUserIds.has(recipientId);
           const notification: NotificationRequestedEvent = {
             channel: 'push',
             user_id: recipientId,
-            title: senderName || 'New message',
+            title: isMentioned
+              ? `${senderName ?? 'Someone'} đã nhắc bạn`
+              : senderName || 'New message',
             body: preview,
-            type: NotificationType.ChatMessage,
+            type: isMentioned
+              ? NotificationType.Mention
+              : NotificationType.ChatMessage,
             data: {
               conversation_id: conversationId,
               message_id: messageId,
               sender_id: senderId,
+              ...(isMentioned ? { is_mention: 'true' } : {}),
             },
             rich: {
-              priority: 'high',
+              priority: isMentioned ? 'high' : 'normal',
               thread_id: conversationId,
-              category: 'message',
+              category: isMentioned ? 'mention' : 'message',
             },
             requested_at: Date.now(),
             trace_id: notificationTraceId,
           };
-
           return this.notificationPublisher.publish(notification);
         });
 
@@ -148,13 +169,29 @@ export class MessageConsumerSharedService {
             );
             return;
           }
-
           successCount += 1;
         });
       }
 
+      // Increment counter for mentioned users (badge UI).
+      // Known v1 trade-off: this counter is non-idempotent. When a Kafka replay
+      // re-runs the post-persist path (status='pending' branch in
+      // SendMessageHandler), the same user's badge can be incremented twice.
+      // Replays are rare (require mid-process failure) and the counter is
+      // reset when the user opens the conversation, so off-by-one is accepted.
+      const recipientSet = new Set(recipients);
+      const counterTargets = Array.from(mentionedUserIds).filter((id) =>
+        recipientSet.has(id),
+      );
+      if (counterTargets.length > 0) {
+        await this.messageRepo.incrementUnreadMentionCount(
+          counterTargets,
+          conversationId,
+        );
+      }
+
       this.logger.log(
-        `[${notificationTraceId}] Notification enqueue attempted for ${recipients.length} recipients (success=${successCount}, failed=${failureCount})`,
+        `[${notificationTraceId}] Notification enqueue: ${recipients.length} recipients (success=${successCount}, failed=${failureCount}, mentioned=${mentionedUserIds.size})`,
         { messageId, successCount, failureCount },
       );
     } catch (error) {

@@ -64,6 +64,28 @@ export class WsMessageAttachmentDto {
   visibility?: 'public' | 'private';
 }
 
+export class WsMentionDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(WsPayloadLimits.idMaxLength)
+  user_id!: string;
+
+  @IsIn(['user', 'all'])
+  mention_type!: 'user' | 'all';
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(WsPayloadLimits.mentionOffsetMax)
+  offset!: number;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(WsPayloadLimits.mentionLengthMax)
+  length!: number;
+}
+
 export class WsChatSendPayloadDto {
   @IsString()
   @IsNotEmpty()
@@ -95,6 +117,12 @@ export class WsChatSendPayloadDto {
   @IsString()
   @MaxLength(WsPayloadLimits.idMaxLength)
   reply_to_message_id?: string;
+
+  @IsOptional()
+  @ArrayMaxSize(WsPayloadLimits.mentionsMaxItems)
+  @ValidateNested({ each: true })
+  @Type(() => WsMentionDto)
+  mentions?: WsMentionDto[];
 }
 
 export class WsChatEditPayloadDto {

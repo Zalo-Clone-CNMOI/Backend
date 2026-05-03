@@ -3,6 +3,7 @@ import {
   KafkaTopics,
   type ChatMessageSendCommand,
   type ChatMessageCreatedEvent,
+  type MessageMention,
   AiModerationRequestEvent,
   AiEntityDetectionRequestEvent,
 } from '@libs/contracts';
@@ -146,6 +147,11 @@ export class SendMessageHandler {
               created_at: existingMessage.created_at,
               attachments: existingMessage.attachments,
               reply_to_message_id: existingMessage.reply_to_message_id,
+              // Mentions come from the incoming payload, not from existingMessage:
+              // if the original write failed mid-way, the mentions JSON column on
+              // messages_by_conversation may be unpopulated, while the retried
+              // command still carries the canonical mentions list.
+              mentions: payload.mentions,
               trace_id: traceId,
             };
 
@@ -177,6 +183,7 @@ export class SendMessageHandler {
               messageId: existingMessage.message_id,
               createdAt: existingMessage.created_at,
               traceId,
+              mentions: payload.mentions,
             });
 
             return;
@@ -227,6 +234,18 @@ export class SendMessageHandler {
         });
         inserted = true;
 
+        // Persist mentions (idempotent — Scylla upsert).
+        // insertMentions never throws; partial failures are logged for replay.
+        if (payload.mentions && payload.mentions.length > 0) {
+          await this.repo.insertMentions({
+            message_id: payload.message_id,
+            conversation_id: payload.conversation_id,
+            sender_id: payload.sender_id,
+            created_at: createdAt,
+            mentions: payload.mentions,
+          });
+        }
+
         const event: ChatMessageCreatedEvent = {
           message_id: payload.message_id,
           conversation_id: payload.conversation_id,
@@ -235,6 +254,7 @@ export class SendMessageHandler {
           created_at: createdAt,
           attachments: payload.attachments,
           reply_to_message_id: payload.reply_to_message_id,
+          mentions: payload.mentions,
           trace_id: traceId,
         };
 
@@ -293,6 +313,7 @@ export class SendMessageHandler {
         messageId: payload.message_id,
         createdAt,
         traceId,
+        mentions: payload.mentions,
       });
 
       this.shared.logger.log(`[${traceId}] ChatMessageSend completed`, {
@@ -315,6 +336,9 @@ export class SendMessageHandler {
     messageId: string;
     createdAt: number;
     traceId: string;
+    // Forwarded to emitMessageNotification for branched
+    // (Mention vs ChatMessage) notification fanout.
+    mentions?: MessageMention[];
   }): Promise<void> {
     await this.shared.emitMessageNotification(
       params.conversationId,
@@ -322,6 +346,7 @@ export class SendMessageHandler {
       params.body,
       params.messageId,
       params.traceId,
+      params.mentions,
     );
 
     // ── AI Moderation: auto-moderate every new message ──────────────

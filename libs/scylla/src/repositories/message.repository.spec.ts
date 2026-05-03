@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { MessageRepository } from './message.repository';
 import { SCYLLA_CLIENT } from '../scylla.tokens';
@@ -68,5 +69,164 @@ describe('MessageRepository - insertSystemMessage', () => {
       ],
       { prepare: true },
     );
+  });
+});
+
+describe('MessageRepository - insertMentions', () => {
+  let repository: MessageRepository;
+  let scyllaClient: { batch: jest.Mock; execute: jest.Mock };
+
+  beforeEach(async () => {
+    scyllaClient = {
+      batch: jest.fn().mockResolvedValue(undefined),
+      execute: jest.fn().mockResolvedValue({ rowLength: 0, rows: [] }),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        MessageRepository,
+        { provide: SCYLLA_CLIENT, useValue: scyllaClient },
+      ],
+    }).compile();
+
+    repository = module.get<MessageRepository>(MessageRepository);
+  });
+
+  it('should insert one row per mention into mentions_by_message and skip __ALL__ for mentions_by_user', async () => {
+    await repository.insertMentions({
+      message_id: 'msg-1',
+      conversation_id: 'conv-1',
+      sender_id: 'user-sender',
+      created_at: 1700000000000,
+      mentions: [
+        { user_id: 'user-1', mention_type: 'user', offset: 0, length: 5 },
+        { user_id: '__ALL__', mention_type: 'all', offset: 6, length: 4 },
+      ],
+    });
+
+    const calls = scyllaClient.execute.mock.calls as [string, unknown[]][];
+    const mentionsByMessageInserts = calls.filter(([q]) =>
+      String(q).includes('INSERT INTO mentions_by_message'),
+    );
+    const mentionsByUserInserts = calls.filter(([q]) =>
+      String(q).includes('INSERT INTO mentions_by_user'),
+    );
+    const updateInline = calls.filter(([q]) =>
+      String(q).includes('UPDATE messages_by_conversation'),
+    );
+
+    expect(mentionsByMessageInserts).toHaveLength(2); // both mentions
+    expect(mentionsByUserInserts).toHaveLength(1); // only real user, NOT __ALL__
+    expect(updateInline).toHaveLength(1);
+    expect(updateInline[0][1]).toEqual([
+      JSON.stringify([
+        { user_id: 'user-1', mention_type: 'user', offset: 0, length: 5 },
+        { user_id: '__ALL__', mention_type: 'all', offset: 6, length: 4 },
+      ]),
+      'conv-1',
+      1700000000000,
+      'msg-1',
+    ]);
+  });
+
+  it('should be a no-op when mentions array is empty', async () => {
+    await repository.insertMentions({
+      message_id: 'msg-2',
+      conversation_id: 'conv-2',
+      sender_id: 'user-sender',
+      created_at: 1700000000000,
+      mentions: [],
+    });
+
+    expect(scyllaClient.execute).not.toHaveBeenCalled();
+  });
+
+  it('should not throw when one of the parallel inserts fails (eventual consistency)', async () => {
+    const loggerErrorSpy = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
+    scyllaClient.execute.mockImplementationOnce(() =>
+      Promise.reject(new Error('scylla unavailable')),
+    );
+
+    await expect(
+      repository.insertMentions({
+        message_id: 'msg-3',
+        conversation_id: 'conv-3',
+        sender_id: 'user-sender',
+        created_at: 1700000000000,
+        mentions: [
+          { user_id: 'user-1', mention_type: 'user', offset: 0, length: 5 },
+        ],
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(loggerErrorSpy).toHaveBeenCalledWith(
+      '[insertMentions] task failed',
+      expect.any(Error),
+    );
+
+    loggerErrorSpy.mockRestore();
+  });
+});
+
+describe('MessageRepository - incrementUnreadMentionCount', () => {
+  let repository: MessageRepository;
+  let scyllaClient: { batch: jest.Mock; execute: jest.Mock };
+
+  beforeEach(async () => {
+    scyllaClient = {
+      batch: jest.fn().mockResolvedValue(undefined),
+      execute: jest.fn().mockResolvedValue({ rowLength: 0, rows: [] }),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        MessageRepository,
+        { provide: SCYLLA_CLIENT, useValue: scyllaClient },
+      ],
+    }).compile();
+
+    repository = module.get<MessageRepository>(MessageRepository);
+  });
+
+  it('should issue one counter UPDATE per (user, conversation) pair', async () => {
+    await repository.incrementUnreadMentionCount(
+      ['user-1', 'user-2', 'user-3'],
+      'conv-1',
+    );
+
+    const calls = scyllaClient.execute.mock.calls as [string, unknown[]][];
+    expect(calls).toHaveLength(3);
+    expect(calls[0][0]).toContain(
+      'UPDATE unread_mention_count_by_conversation SET count = count + 1',
+    );
+    expect(calls[0][1]).toEqual(['user-1', 'conv-1']);
+    expect(calls[1][1]).toEqual(['user-2', 'conv-1']);
+    expect(calls[2][1]).toEqual(['user-3', 'conv-1']);
+  });
+
+  it('should be a no-op when user list is empty', async () => {
+    await repository.incrementUnreadMentionCount([], 'conv-1');
+    expect(scyllaClient.execute).not.toHaveBeenCalled();
+  });
+
+  it('should not throw and should log error when an UPDATE fails', async () => {
+    const loggerErrorSpy = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
+    scyllaClient.execute.mockImplementationOnce(() =>
+      Promise.reject(new Error('counter UPDATE failed')),
+    );
+
+    await expect(
+      repository.incrementUnreadMentionCount(['user-1'], 'conv-1'),
+    ).resolves.toBeUndefined();
+
+    expect(loggerErrorSpy).toHaveBeenCalledWith(
+      '[incrementUnreadMentionCount] task failed',
+      expect.any(Error),
+    );
+    loggerErrorSpy.mockRestore();
   });
 });

@@ -635,5 +635,40 @@ describe('ChatHandler', () => {
 
       expect(result.error).toBe('mention_offset_out_of_bounds');
     });
+
+    it('should return conversation_not_found when @all targets a missing conversation', async () => {
+      conversationRepo.findOne.mockResolvedValue(null);
+
+      const result = await callValidate(
+        [{ user_id: '__ALL__', mention_type: 'all', offset: 0, length: 4 }],
+        'conv-missing',
+        'user-sender',
+        '@all hello',
+      );
+
+      expect(result.error).toBe('conversation_not_found');
+    });
+
+    it('should reject negative offset', async () => {
+      const result = await callValidate(
+        [{ user_id: 'user-1', mention_type: 'user', offset: -1, length: 5 }],
+        'conv-1',
+        'user-sender',
+        'Hello world',
+      );
+
+      expect(result.error).toBe('mention_offset_out_of_bounds');
+    });
+
+    it('should reject zero or negative length', async () => {
+      const result = await callValidate(
+        [{ user_id: 'user-1', mention_type: 'user', offset: 0, length: 0 }],
+        'conv-1',
+        'user-sender',
+        'Hello',
+      );
+
+      expect(result.error).toBe('mention_offset_out_of_bounds');
+    });
   });
 });

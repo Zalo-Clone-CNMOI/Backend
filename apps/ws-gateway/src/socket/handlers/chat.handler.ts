@@ -5,6 +5,7 @@ import { Repository, In } from 'typeorm';
 import { KAFKA_CLIENT } from '@libs/kafka';
 import { MediaFile, Conversation } from '@libs/database';
 import { ConversationMembershipService } from '@libs/mvp-access';
+import { ConversationType } from '@app/constant';
 import {
   KafkaTopics,
   WsEvents,
@@ -211,7 +212,7 @@ export class ChatHandler {
   ): Promise<{ normalized: MessageMention[]; error?: string }> {
     // 1) Bounds check first (cheap, no DB)
     for (const m of mentions) {
-      if (m.offset + m.length > body.length) {
+      if (m.offset < 0 || m.length <= 0 || m.offset + m.length > body.length) {
         return { normalized: [], error: 'mention_offset_out_of_bounds' };
       }
     }
@@ -233,7 +234,10 @@ export class ChatHandler {
         where: { id: conversationId },
         select: ['type'],
       });
-      if (conv?.type !== 'group') {
+      if (!conv) {
+        return { normalized: [], error: 'conversation_not_found' };
+      }
+      if (conv.type !== ConversationType.GROUP) {
         return { normalized: [], error: 'at_all_in_direct_chat_disallowed' };
       }
     }

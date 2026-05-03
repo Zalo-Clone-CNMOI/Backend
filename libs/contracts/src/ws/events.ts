@@ -117,6 +117,13 @@ export interface WsMessageAttachment {
   visibility?: 'public' | 'private';
 }
 
+export interface WsMention {
+  user_id: string;
+  mention_type: 'user' | 'all';
+  offset: number;
+  length: number;
+}
+
 export interface WsChatSendPayload {
   message_id: string;
   conversation_id: string;
@@ -124,6 +131,7 @@ export interface WsChatSendPayload {
   sent_at: number;
   attachments?: WsMessageAttachment[];
   reply_to_message_id?: string;
+  mentions?: WsMention[];
 }
 
 export interface WsChatMessagePayload {
@@ -145,6 +153,7 @@ export interface WsChatMessagePayload {
     source_created_at: number;
     source_type: 'text' | 'image' | 'file' | 'mixed';
   };
+  mentions?: WsMention[];
 }
 
 export interface WsChatSystemMessagePayload {

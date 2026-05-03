@@ -431,7 +431,9 @@ describe('SendMessageHandler', () => {
         ],
       };
 
-      await handler.handle(payload as any);
+      await handler.handle(
+        payload as unknown as Parameters<typeof handler.handle>[0],
+      );
 
       expect(repo.insertMentions).toHaveBeenCalledWith({
         message_id: 'msg-1',
@@ -441,10 +443,11 @@ describe('SendMessageHandler', () => {
         mentions: payload.mentions,
       });
 
-      const emittedEvent = publisher.emit.mock.calls.find(
-        ([topic]: [string]) => topic === 'chat.message.created',
+      type EmitArgs = [string, { mentions?: unknown }];
+      const emittedEvent = (publisher.emit.mock.calls as EmitArgs[]).find(
+        ([topic]) => topic === 'chat.message.created',
       )?.[1];
-      expect(emittedEvent.mentions).toEqual(payload.mentions);
+      expect(emittedEvent?.mentions).toEqual(payload.mentions);
     });
 
     it('should NOT call insertMentions when mentions array is empty or undefined', async () => {
@@ -460,7 +463,7 @@ describe('SendMessageHandler', () => {
         sender_id: 'user-sender',
         body: 'no mentions',
         sent_at: 1700000000000,
-      } as any);
+      } as unknown as Parameters<typeof handler.handle>[0]);
 
       expect(repo.insertMentions).not.toHaveBeenCalled();
     });

@@ -5,6 +5,7 @@ import {
   SystemMessageMetadata,
   WsEvents,
 } from '@libs/contracts';
+import type { ChatMessageCreatedEvent } from '@libs/contracts';
 
 describe('ChatFanoutConsumer', () => {
   const gateway: {
@@ -75,7 +76,7 @@ describe('ChatFanoutConsumer', () => {
       mentions: [
         { user_id: 'user-1', mention_type: 'user', offset: 3, length: 6 },
       ],
-    } as any);
+    } as unknown as ChatMessageCreatedEvent);
 
     expect(gateway.broadcastToConversation).toHaveBeenCalledWith(
       'conv-1',
@@ -95,10 +96,11 @@ describe('ChatFanoutConsumer', () => {
       sender_id: 'sender-1',
       body: 'no mentions',
       created_at: 1700000000001,
-    } as any);
+    } as unknown as ChatMessageCreatedEvent);
 
-    const args = (gateway.broadcastToConversation as jest.Mock).mock
-      .calls[0][2];
+    const args = gateway.broadcastToConversation.mock.calls[0][2] as {
+      mentions?: unknown;
+    };
     expect(args.mentions).toBeUndefined();
   });
 

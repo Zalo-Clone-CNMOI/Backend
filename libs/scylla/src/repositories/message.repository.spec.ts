@@ -104,7 +104,7 @@ describe('MessageRepository - insertMentions', () => {
       ],
     });
 
-    const calls = scyllaClient.execute.mock.calls;
+    const calls = scyllaClient.execute.mock.calls as [string, unknown[]][];
     const mentionsByMessageInserts = calls.filter(([q]) =>
       String(q).includes('INSERT INTO mentions_by_message'),
     );
@@ -196,7 +196,7 @@ describe('MessageRepository - incrementUnreadMentionCount', () => {
       'conv-1',
     );
 
-    const calls = scyllaClient.execute.mock.calls;
+    const calls = scyllaClient.execute.mock.calls as [string, unknown[]][];
     expect(calls).toHaveLength(3);
     expect(calls[0][0]).toContain(
       'UPDATE unread_mention_count_by_conversation SET count = count + 1',

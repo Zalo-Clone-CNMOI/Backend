@@ -3,6 +3,13 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { NotificationOutboxPublisher } from '@libs/kafka';
 import { NotificationType } from '@libs/contracts';
 import { User, ConversationMember } from '@libs/database';
+
+type NotifyArg = {
+  user_id: string;
+  type: NotificationType;
+  rich?: { priority: string };
+  title?: string;
+};
 import { MessageRepository } from '@libs/scylla';
 import { MessageConsumerSharedService } from '../message-consumer-shared.service';
 import { ChatPublisher } from '../../services/chat.publisher';
@@ -71,15 +78,15 @@ describe('MessageConsumerSharedService - emitMessageNotification mention branchi
       ],
     );
 
-    const calls = notificationPublisher.publish.mock.calls;
+    const calls = notificationPublisher.publish.mock.calls as [NotifyArg][];
     expect(calls).toHaveLength(2);
 
-    const mentionCall = calls.find((c) => c[0].user_id === 'user-mentioned');
+    const mentionCall = calls.find((c) => c[0].user_id === 'user-mentioned')!;
     expect(mentionCall[0].type).toBe(NotificationType.Mention);
-    expect(mentionCall[0].rich.priority).toBe('high');
+    expect(mentionCall[0].rich?.priority).toBe('high');
     expect(mentionCall[0].title).toContain('đã nhắc bạn');
 
-    const otherCall = calls.find((c) => c[0].user_id === 'user-other');
+    const otherCall = calls.find((c) => c[0].user_id === 'user-other')!;
     expect(otherCall[0].type).toBe(NotificationType.ChatMessage);
   });
 
@@ -93,7 +100,7 @@ describe('MessageConsumerSharedService - emitMessageNotification mention branchi
       [{ user_id: '__ALL__', mention_type: 'all', offset: 0, length: 4 }],
     );
 
-    const calls = notificationPublisher.publish.mock.calls;
+    const calls = notificationPublisher.publish.mock.calls as [NotifyArg][];
     expect(calls).toHaveLength(2);
     expect(calls.every((c) => c[0].type === NotificationType.Mention)).toBe(
       true,
@@ -132,7 +139,7 @@ describe('MessageConsumerSharedService - emitMessageNotification mention branchi
       'trace-4',
     );
 
-    const calls = notificationPublisher.publish.mock.calls;
+    const calls = notificationPublisher.publish.mock.calls as [NotifyArg][];
     expect(calls.every((c) => c[0].type === NotificationType.ChatMessage)).toBe(
       true,
     );
@@ -156,11 +163,11 @@ describe('MessageConsumerSharedService - emitMessageNotification mention branchi
       ],
     );
 
-    const calls = notificationPublisher.publish.mock.calls;
-    const mentionCall = calls.find((c) => c[0].user_id === 'user-mentioned');
-    const otherCall = calls.find((c) => c[0].user_id === 'user-other');
-    expect(mentionCall[0].rich.priority).toBe('high');
-    expect(otherCall[0].rich.priority).toBe('normal');
+    const calls = notificationPublisher.publish.mock.calls as [NotifyArg][];
+    const mentionCall = calls.find((c) => c[0].user_id === 'user-mentioned')!;
+    const otherCall = calls.find((c) => c[0].user_id === 'user-other')!;
+    expect(mentionCall[0].rich?.priority).toBe('high');
+    expect(otherCall[0].rich?.priority).toBe('normal');
   });
 
   it('should NOT increment counter for mentioned users who are not active members', async () => {

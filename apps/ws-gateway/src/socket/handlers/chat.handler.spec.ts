@@ -21,6 +21,8 @@ import type {
   WsChatDeletePayload,
   WsChatReactPayload,
   WsChatUnreactPayload,
+  WsMention,
+  MessageMention,
 } from '@libs/contracts';
 
 type AuthedSocket = Parameters<ChatHandler['handleJoin']>[0];
@@ -359,9 +361,7 @@ describe('ChatHandler', () => {
     it('should propagate normalized mentions in Kafka emit', async () => {
       const socket = createMockSocket('user-sender');
       membership.canUserSendMessage.mockResolvedValue({ allowed: true });
-      membership.listActiveMemberIds = jest
-        .fn()
-        .mockResolvedValue(['user-1']) as any;
+      membership.listActiveMemberIds.mockResolvedValue(['user-1']);
 
       await handler.handleSend(
         socket,
@@ -390,7 +390,7 @@ describe('ChatHandler', () => {
     it('should reject when mentions validation fails', async () => {
       const socket = createMockSocket('user-sender');
       membership.canUserSendMessage.mockResolvedValue({ allowed: true });
-      membership.listActiveMemberIds = jest.fn().mockResolvedValue([]) as any;
+      membership.listActiveMemberIds.mockResolvedValue([]);
 
       await handler.handleSend(
         socket,
@@ -612,18 +612,25 @@ describe('ChatHandler', () => {
   });
 
   describe('validateMentions', () => {
+    type ValidateMentionsFn = (
+      mentions: WsMention[],
+      conversationId: string,
+      senderId: string,
+      body: string,
+    ) => Promise<{ normalized: MessageMention[]; error?: string }>;
+
     const callValidate = (
-      mentions: any[],
+      mentions: WsMention[],
       conversationId: string,
       userId: string,
       body: string,
     ) =>
-      (handler as any).validateMentions(mentions, conversationId, userId, body);
+      (
+        handler as unknown as { validateMentions: ValidateMentionsFn }
+      ).validateMentions(mentions, conversationId, userId, body);
 
     it('should accept valid mentions of active members', async () => {
-      membership.listActiveMemberIds = jest
-        .fn()
-        .mockResolvedValue(['user-1']) as any;
+      membership.listActiveMemberIds.mockResolvedValue(['user-1']);
 
       const result = await callValidate(
         [{ user_id: 'user-1', mention_type: 'user', offset: 0, length: 5 }],
@@ -638,7 +645,7 @@ describe('ChatHandler', () => {
     });
 
     it('should reject mention of a non-member', async () => {
-      membership.listActiveMemberIds = jest.fn().mockResolvedValue([]) as any;
+      membership.listActiveMemberIds.mockResolvedValue([]);
 
       const result = await callValidate(
         [{ user_id: 'user-evil', mention_type: 'user', offset: 0, length: 5 }],
@@ -683,9 +690,7 @@ describe('ChatHandler', () => {
     });
 
     it('should dedupe duplicate user_ids', async () => {
-      membership.listActiveMemberIds = jest
-        .fn()
-        .mockResolvedValue(['user-1']) as any;
+      membership.listActiveMemberIds.mockResolvedValue(['user-1']);
 
       const result = await callValidate(
         [

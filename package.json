@@ -62,7 +62,7 @@
     "migration:up": "npm run build:all && npm run typeorm migration:run -- -d libs/database/src/data-source.ts",
     "migration:revert": "npm run typeorm -- migration:revert -d libs/database/src/data-source.ts",
     "migration:show": "npm run typeorm -- migration:show -d libs/database/src/data-source.ts",
-    "scylla:init": "docker cp infra/scylla/schema.cql zalo-clone-scylla-1:/tmp/schema.cql && docker exec -it zalo-clone-scylla-1 cqlsh -f /tmp/schema.cql",
+    "scylla:init": "docker cp infra/scylla/schema.cql zalo-clone-scylla-1:/tmp/schema.cql && docker exec zalo-clone-scylla-1 cqlsh -f /tmp/schema.cql && docker cp infra/scylla/migrations/002_add_mentions.cql zalo-clone-scylla-1:/tmp/002_add_mentions.cql && (docker exec zalo-clone-scylla-1 cqlsh -f /tmp/002_add_mentions.cql || echo 'migration 002 may have already run, continuing')",
     "scylla:reset": "docker exec -it zalo-clone-scylla-1 cqlsh -e \"DROP KEYSPACE IF EXISTS chat;\" && pnpm run scylla:init",
     "scylla:status": "docker exec -it zalo-clone-scylla-1 cqlsh -e \"DESCRIBE KEYSPACE chat;\""
   },

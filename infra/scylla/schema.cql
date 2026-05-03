@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS messages_by_conversation (
     message_type text,          -- 'user' or 'system'
     system_event_type text,     -- e.g., 'member_added', 'member_removed'
     metadata text,              -- JSON string for system message data
+    mentions text,              -- JSON array of {user_id, mention_type, offset, length}
     PRIMARY KEY ((conversation_id), created_at, message_id)
 ) WITH CLUSTERING ORDER BY (created_at ASC, message_id ASC)
   AND default_time_to_live = 0
@@ -90,6 +91,40 @@ CREATE TABLE IF NOT EXISTS message_reaction_counts (
     reaction_type text,
     count         counter,
     PRIMARY KEY (message_id, reaction_type)
+);
+
+-- =============================================================================
+-- MESSAGE MENTIONS DOMAIN
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS mentions_by_message (
+    message_id          text,
+    mentioned_user_id   text,
+    conversation_id     text,
+    mention_type        text,
+    "offset"            int,
+    length              int,
+    sender_id           text,
+    created_at          bigint,
+    PRIMARY KEY ((message_id), mentioned_user_id)
+);
+
+CREATE TABLE IF NOT EXISTS mentions_by_user (
+    mentioned_user_id   text,
+    created_at          bigint,
+    message_id          text,
+    conversation_id     text,
+    sender_id           text,
+    mention_type        text,
+    is_read             boolean,
+    PRIMARY KEY ((mentioned_user_id), created_at, message_id)
+) WITH CLUSTERING ORDER BY (created_at DESC, message_id ASC);
+
+CREATE TABLE IF NOT EXISTS unread_mention_count_by_conversation (
+    user_id             text,
+    conversation_id     text,
+    count               counter,
+    PRIMARY KEY ((user_id), conversation_id)
 );
 
 -- =============================================================================

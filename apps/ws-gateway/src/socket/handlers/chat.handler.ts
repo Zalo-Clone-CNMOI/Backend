@@ -20,6 +20,7 @@ import {
   type WsMessageAttachment,
   type WsMention,
   type MessageMention,
+  type ChatMessageSendCommand,
   type ChatMessageEditCommand,
   type ChatMessageDeleteCommand,
   type ChatReactionAddCommand,
@@ -118,17 +119,18 @@ export class ChatHandler {
         result.normalized.length > 0 ? result.normalized : undefined;
     }
 
-    void this.kafka.emit(KafkaTopics.ChatMessageSend, {
+    const cmd: ChatMessageSendCommand = {
       message_id: body.message_id,
       conversation_id: body.conversation_id,
       sender_id: userId,
       body: body.body,
       sent_at: body.sent_at,
-      attachments: body.attachments,
+      attachments: body.attachments as ChatMessageSendCommand['attachments'],
       reply_to_message_id: body.reply_to_message_id,
       mentions: normalizedMentions,
       trace_id: `ws:${socket.id}:${body.message_id}`,
-    });
+    };
+    void this.kafka.emit(KafkaTopics.ChatMessageSend, cmd);
 
     socket.emit(WsEvents.ChatAck, {
       message_id: body.message_id,

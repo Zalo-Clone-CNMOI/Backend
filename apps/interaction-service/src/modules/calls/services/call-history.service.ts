@@ -24,6 +24,7 @@ export interface CloseSessionPayload {
   endedAt: number;
   startedAt: number;
   reason?: string;
+  forceDurationMs?: number;
 }
 
 export interface PaginatedCallSessions {
@@ -64,7 +65,10 @@ export class CallHistoryService {
     payload: CloseSessionPayload,
   ): Promise<void> {
     const status = this.resolveStatus(payload.reason);
-    const durationMs = Math.max(0, payload.endedAt - payload.startedAt);
+    const durationMs =
+      payload.forceDurationMs !== undefined
+        ? payload.forceDurationMs
+        : Math.max(0, payload.endedAt - payload.startedAt);
     const result = await this.repo.update(
       { id: callId },
       {

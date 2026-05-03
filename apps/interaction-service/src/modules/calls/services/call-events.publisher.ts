@@ -20,6 +20,7 @@ export class CallEventsPublisher {
       requestedBy?: string;
       reason?: string;
       traceId?: string;
+      details?: Record<string, unknown>;
     },
   ): void {
     const event: CallStateUpdatedEvent = {
@@ -29,9 +30,13 @@ export class CallEventsPublisher {
       updated_at: Date.now(),
       reason: options?.reason,
       trace_id: options?.traceId,
+      details: options?.details,
     };
 
-    this.kafkaClient.emit(KafkaTopics.CallStateUpdated, event);
+    this.kafkaClient.emit(KafkaTopics.CallStateUpdated, {
+      key: conversationId,
+      value: event,
+    });
   }
 
   publishNotMemberUpdate(
@@ -43,6 +48,7 @@ export class CallEventsPublisher {
       requestedBy: userId,
       reason: 'not_member',
       traceId,
+      details: { conversation_id: conversationId },
     });
   }
 

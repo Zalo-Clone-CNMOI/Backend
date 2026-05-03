@@ -8,6 +8,10 @@ describe('CallConsumer', () => {
     clear: jest.fn(),
   };
 
+  const callStateLock = {
+    withLock: jest.fn((_scope: string, fn: () => Promise<unknown>) => fn()),
+  };
+
   const callEventsPublisher = {
     publishStateUpdate: jest.fn(),
     publishNotMemberUpdate: jest.fn(),
@@ -81,6 +85,7 @@ describe('CallConsumer', () => {
       kafkaClient as never,
       callMembershipAccessService as never,
       callStateStore as never,
+      callStateLock as never,
       callEventsPublisher as never,
       callTimeoutService as never,
       callHistoryService as never,
@@ -209,8 +214,12 @@ describe('CallConsumer', () => {
     expect(kafkaClient.emit).toHaveBeenCalledWith(
       KafkaTopics.CallSignalForwarded,
       expect.objectContaining({
-        sender_id: 'user-1',
-        target_user_id: 'user-2',
+        key: 'conv-1',
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        value: expect.objectContaining({
+          sender_id: 'user-1',
+          target_user_id: 'user-2',
+        }),
       }),
     );
   });
@@ -250,7 +259,14 @@ describe('CallConsumer', () => {
 
     expect(kafkaClient.emit).toHaveBeenCalledWith(
       KafkaTopics.CallEnded,
-      expect.objectContaining({ call_id: 'call-1', conversation_id: 'conv-1' }),
+      expect.objectContaining({
+        key: 'conv-1',
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        value: expect.objectContaining({
+          call_id: 'call-1',
+          conversation_id: 'conv-1',
+        }),
+      }),
     );
     expect(callStateStore.clear).toHaveBeenCalledWith('conv-1');
     expect(callEventsPublisher.publishStateUpdate).toHaveBeenCalledWith(
@@ -274,7 +290,11 @@ describe('CallConsumer', () => {
 
     expect(kafkaClient.emit).toHaveBeenCalledWith(
       KafkaTopics.CallEnded,
-      expect.objectContaining({ call_id: 'call-1' }),
+      expect.objectContaining({
+        key: 'conv-1',
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        value: expect.objectContaining({ call_id: 'call-1' }),
+      }),
     );
     expect(callStateStore.clear).toHaveBeenCalledWith('conv-1');
   });
@@ -291,7 +311,11 @@ describe('CallConsumer', () => {
 
     expect(kafkaClient.emit).toHaveBeenCalledWith(
       KafkaTopics.CallLeft,
-      expect.objectContaining({ user_id: 'user-2' }),
+      expect.objectContaining({
+        key: 'conv-1',
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        value: expect.objectContaining({ user_id: 'user-2' }),
+      }),
     );
     expect(kafkaClient.emit).not.toHaveBeenCalledWith(
       KafkaTopics.CallEnded,
@@ -325,7 +349,14 @@ describe('CallConsumer', () => {
 
     expect(kafkaClient.emit).toHaveBeenCalledWith(
       KafkaTopics.CallLeft,
-      expect.objectContaining({ user_id: 'user-3', call_id: 'call-1' }),
+      expect.objectContaining({
+        key: 'conv-1',
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        value: expect.objectContaining({
+          user_id: 'user-3',
+          call_id: 'call-1',
+        }),
+      }),
     );
     expect(callStateStore.clear).not.toHaveBeenCalled();
     expect(callStateStore.set).toHaveBeenLastCalledWith(
@@ -360,7 +391,11 @@ describe('CallConsumer', () => {
 
     expect(kafkaClient.emit).toHaveBeenCalledWith(
       KafkaTopics.CallEnded,
-      expect.objectContaining({ reason: 'all_left' }),
+      expect.objectContaining({
+        key: 'conv-1',
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        value: expect.objectContaining({ reason: 'all_left' }),
+      }),
     );
     expect(callStateStore.clear).toHaveBeenCalledWith('conv-1');
     expect(kafkaClient.emit).not.toHaveBeenCalledWith(
@@ -389,11 +424,19 @@ describe('CallConsumer', () => {
 
     expect(kafkaClient.emit).toHaveBeenCalledWith(
       KafkaTopics.CallRejected,
-      expect.objectContaining({ user_id: 'user-2' }),
+      expect.objectContaining({
+        key: 'conv-1',
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        value: expect.objectContaining({ user_id: 'user-2' }),
+      }),
     );
     expect(kafkaClient.emit).toHaveBeenCalledWith(
       KafkaTopics.CallEnded,
-      expect.objectContaining({ reason: 'rejected' }),
+      expect.objectContaining({
+        key: 'conv-1',
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        value: expect.objectContaining({ reason: 'rejected' }),
+      }),
     );
     expect(callStateStore.clear).toHaveBeenCalledWith('conv-1');
   });
@@ -419,7 +462,11 @@ describe('CallConsumer', () => {
 
     expect(kafkaClient.emit).toHaveBeenCalledWith(
       KafkaTopics.CallRejected,
-      expect.objectContaining({ user_id: 'user-2' }),
+      expect.objectContaining({
+        key: 'conv-1',
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        value: expect.objectContaining({ user_id: 'user-2' }),
+      }),
     );
     expect(kafkaClient.emit).not.toHaveBeenCalledWith(
       KafkaTopics.CallEnded,

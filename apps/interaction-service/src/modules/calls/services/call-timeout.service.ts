@@ -40,15 +40,37 @@ export class CallTimeoutService {
       0,
       now,
     );
-    return members.flatMap((m) => {
-      const idx = m.indexOf(':');
-      if (idx === -1) {
-        this.logger.warn(`Skipping malformed timeout entry: "${m}"`);
-        return [];
-      }
-      return [
-        { callId: m.substring(0, idx), conversationId: m.substring(idx + 1) },
-      ];
-    });
+    return members.flatMap((m) => this.parseEntry(m));
+  }
+
+  /**
+   * Atomic pop: fetches due entries AND removes them in a single Lua script.
+   * Multiple replicas calling this concurrently will each receive a disjoint set
+   * of entries, eliminating duplicate timeout processing.
+   */
+  async popDueTimeouts(): Promise<DueTimeout[]> {
+    const now = Date.now();
+    const result = (await this.redis.eval(
+      `local entries = redis.call('ZRANGEBYSCORE', KEYS[1], 0, ARGV[1])
+       redis.call('ZREMRANGEBYSCORE', KEYS[1], 0, ARGV[1])
+       return entries`,
+      {
+        keys: [CallTimeoutService.TIMEOUT_KEY],
+        arguments: [String(now)],
+      },
+    )) as string[];
+
+    return (result ?? []).flatMap((m) => this.parseEntry(m));
+  }
+
+  private parseEntry(m: string): DueTimeout[] {
+    const idx = m.indexOf(':');
+    if (idx === -1) {
+      this.logger.warn(`Skipping malformed timeout entry: "${m}"`);
+      return [];
+    }
+    return [
+      { callId: m.substring(0, idx), conversationId: m.substring(idx + 1) },
+    ];
   }
 }

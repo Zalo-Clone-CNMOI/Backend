@@ -13,6 +13,9 @@ describe('CallHandler', () => {
   const rateLimiter = {
     checkStart: jest.fn(),
     checkEvent: jest.fn(),
+    checkSignal: jest.fn(),
+    checkControl: jest.fn(),
+    checkStateRequest: jest.fn(),
   };
 
   let handler: CallHandler;
@@ -22,6 +25,9 @@ describe('CallHandler', () => {
     membershipService.canUserAccessConversation.mockResolvedValue(true);
     rateLimiter.checkStart.mockResolvedValue(0);
     rateLimiter.checkEvent.mockResolvedValue(0);
+    rateLimiter.checkSignal.mockResolvedValue(0);
+    rateLimiter.checkControl.mockResolvedValue(0);
+    rateLimiter.checkStateRequest.mockResolvedValue(0);
     handler = new CallHandler(
       kafka as never,
       membershipService as never,
@@ -49,8 +55,12 @@ describe('CallHandler', () => {
     expect(kafka.emit).toHaveBeenCalledWith(
       KafkaTopics.CallStart,
       expect.objectContaining({
-        call_id: 'call-1',
-        initiator_id: 'user-1',
+        key: 'conv-1',
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        value: expect.objectContaining({
+          call_id: 'call-1',
+          initiator_id: 'user-1',
+        }),
       }),
     );
     expect(emit).not.toHaveBeenCalled();

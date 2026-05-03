@@ -7,6 +7,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  IsUUID,
   Max,
   MaxLength,
   Min,
@@ -175,14 +176,10 @@ export class WsChatTypingPayloadDto {
 }
 
 export class WsCallStartPayloadDto {
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(WsPayloadLimits.idMaxLength)
+  @IsUUID()
   call_id!: string;
 
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(WsPayloadLimits.idMaxLength)
+  @IsUUID()
   conversation_id!: string;
 
   @IsIn(['direct', 'group'])
@@ -205,19 +202,14 @@ export class WsCallStartPayloadDto {
 }
 
 export class WsCallSignalPayloadDto {
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(WsPayloadLimits.idMaxLength)
+  @IsUUID()
   call_id!: string;
 
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(WsPayloadLimits.idMaxLength)
+  @IsUUID()
   conversation_id!: string;
 
   @IsOptional()
-  @IsString()
-  @MaxLength(WsPayloadLimits.idMaxLength)
+  @IsUUID()
   target_user_id?: string;
 
   @IsIn(WsCallSignalTypes)
@@ -251,14 +243,10 @@ export class WsCallSignalPayloadDto {
 }
 
 export class WsCallAcceptPayloadDto {
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(WsPayloadLimits.idMaxLength)
+  @IsUUID()
   call_id!: string;
 
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(WsPayloadLimits.idMaxLength)
+  @IsUUID()
   conversation_id!: string;
 
   @Type(() => Number)
@@ -268,14 +256,10 @@ export class WsCallAcceptPayloadDto {
 }
 
 export class WsCallRejectPayloadDto {
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(WsPayloadLimits.idMaxLength)
+  @IsUUID()
   call_id!: string;
 
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(WsPayloadLimits.idMaxLength)
+  @IsUUID()
   conversation_id!: string;
 
   @IsOptional()
@@ -290,14 +274,10 @@ export class WsCallRejectPayloadDto {
 }
 
 export class WsCallEndPayloadDto {
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(WsPayloadLimits.idMaxLength)
+  @IsUUID()
   call_id!: string;
 
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(WsPayloadLimits.idMaxLength)
+  @IsUUID()
   conversation_id!: string;
 
   @IsOptional()
@@ -312,14 +292,10 @@ export class WsCallEndPayloadDto {
 }
 
 export class WsCallLeavePayloadDto {
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(WsPayloadLimits.idMaxLength)
+  @IsUUID()
   call_id!: string;
 
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(WsPayloadLimits.idMaxLength)
+  @IsUUID()
   conversation_id!: string;
 
   @IsOptional()
@@ -334,9 +310,7 @@ export class WsCallLeavePayloadDto {
 }
 
 export class WsCallStateRequestPayloadDto {
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(WsPayloadLimits.idMaxLength)
+  @IsUUID()
   conversation_id!: string;
 
   @Type(() => Number)

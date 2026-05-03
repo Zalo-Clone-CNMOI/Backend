@@ -68,12 +68,15 @@ export class CallHandler {
       trace_id: `ws:${socket.id}:${body.call_id}`,
     };
 
-    void this.kafka.emit(KafkaTopics.CallStart, cmd);
+    void this.kafka.emit(KafkaTopics.CallStart, {
+      key: cmd.conversation_id,
+      value: cmd,
+    });
   }
 
   async handleSignal(socket: AuthedSocket, body: WsCallSignalPayload) {
     const userId = String(socket.data.userId);
-    const retryAfter = await this.rateLimiter.checkEvent(userId);
+    const retryAfter = await this.rateLimiter.checkSignal(userId);
     if (retryAfter > 0) {
       this.emitRateLimited(socket, retryAfter);
       return;
@@ -101,12 +104,15 @@ export class CallHandler {
       trace_id: `ws:${socket.id}:${body.call_id}`,
     };
 
-    void this.kafka.emit(KafkaTopics.CallSignalSend, cmd);
+    void this.kafka.emit(KafkaTopics.CallSignalSend, {
+      key: cmd.conversation_id,
+      value: cmd,
+    });
   }
 
   async handleAccept(socket: AuthedSocket, body: WsCallAcceptPayload) {
     const userId = String(socket.data.userId);
-    const retryAfter = await this.rateLimiter.checkEvent(userId);
+    const retryAfter = await this.rateLimiter.checkControl(userId);
     if (retryAfter > 0) {
       this.emitRateLimited(socket, retryAfter);
       return;
@@ -128,12 +134,15 @@ export class CallHandler {
       trace_id: `ws:${socket.id}:${body.call_id}`,
     };
 
-    void this.kafka.emit(KafkaTopics.CallAccept, cmd);
+    void this.kafka.emit(KafkaTopics.CallAccept, {
+      key: cmd.conversation_id,
+      value: cmd,
+    });
   }
 
   async handleReject(socket: AuthedSocket, body: WsCallRejectPayload) {
     const userId = String(socket.data.userId);
-    const retryAfter = await this.rateLimiter.checkEvent(userId);
+    const retryAfter = await this.rateLimiter.checkControl(userId);
     if (retryAfter > 0) {
       this.emitRateLimited(socket, retryAfter);
       return;
@@ -156,12 +165,15 @@ export class CallHandler {
       trace_id: `ws:${socket.id}:${body.call_id}`,
     };
 
-    void this.kafka.emit(KafkaTopics.CallReject, cmd);
+    void this.kafka.emit(KafkaTopics.CallReject, {
+      key: cmd.conversation_id,
+      value: cmd,
+    });
   }
 
   async handleEnd(socket: AuthedSocket, body: WsCallEndPayload) {
     const userId = String(socket.data.userId);
-    const retryAfter = await this.rateLimiter.checkEvent(userId);
+    const retryAfter = await this.rateLimiter.checkControl(userId);
     if (retryAfter > 0) {
       this.emitRateLimited(socket, retryAfter);
       return;
@@ -184,12 +196,15 @@ export class CallHandler {
       trace_id: `ws:${socket.id}:${body.call_id}`,
     };
 
-    void this.kafka.emit(KafkaTopics.CallEnd, cmd);
+    void this.kafka.emit(KafkaTopics.CallEnd, {
+      key: cmd.conversation_id,
+      value: cmd,
+    });
   }
 
   async handleLeave(socket: AuthedSocket, body: WsCallLeavePayload) {
     const userId = String(socket.data.userId);
-    const retryAfter = await this.rateLimiter.checkEvent(userId);
+    const retryAfter = await this.rateLimiter.checkControl(userId);
     if (retryAfter > 0) {
       this.emitRateLimited(socket, retryAfter);
       return;
@@ -212,7 +227,10 @@ export class CallHandler {
       trace_id: `ws:${socket.id}:${body.call_id}`,
     };
 
-    void this.kafka.emit(KafkaTopics.CallLeave, cmd);
+    void this.kafka.emit(KafkaTopics.CallLeave, {
+      key: cmd.conversation_id,
+      value: cmd,
+    });
   }
 
   async handleStateRequest(
@@ -220,6 +238,11 @@ export class CallHandler {
     body: WsCallStateRequestPayload,
   ) {
     const userId = String(socket.data.userId);
+    const retryAfter = await this.rateLimiter.checkStateRequest(userId);
+    if (retryAfter > 0) {
+      this.emitRateLimited(socket, retryAfter);
+      return;
+    }
     const canAccess = await this.membershipService.canUserAccessConversation(
       userId,
       body.conversation_id,
@@ -236,7 +259,10 @@ export class CallHandler {
       trace_id: `ws:${socket.id}:state:${body.conversation_id}`,
     };
 
-    void this.kafka.emit(KafkaTopics.CallStateRequest, cmd);
+    void this.kafka.emit(KafkaTopics.CallStateRequest, {
+      key: cmd.conversation_id,
+      value: cmd,
+    });
   }
 
   private emitForbidden(socket: AuthedSocket, conversationId: string) {

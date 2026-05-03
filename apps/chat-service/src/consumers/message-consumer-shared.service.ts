@@ -97,7 +97,9 @@ export class MessageConsumerSharedService {
       );
       const recipients = recipientIds.filter((id) => id !== senderId);
       if (recipients.length === 0) {
-        this.logger.debug(`[${notificationTraceId}] No recipients for notification.`);
+        this.logger.debug(
+          `[${notificationTraceId}] No recipients for notification.`,
+        );
         return;
       }
 

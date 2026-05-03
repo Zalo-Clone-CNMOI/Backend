@@ -10,6 +10,7 @@ import {
   PersistedMessage,
   ReactionType,
 } from '@app/types/interfaces/chat.interface';
+import type { MessageMention } from '@libs/contracts';
 
 export interface MessageProcessingState {
   message_id: string;
@@ -147,6 +148,90 @@ export class MessageRepository {
       ],
       { prepare: true },
     );
+  }
+
+  async insertMentions(params: {
+    message_id: string;
+    conversation_id: string;
+    sender_id: string;
+    created_at: number;
+    mentions: MessageMention[];
+  }): Promise<void> {
+    if (params.mentions.length === 0) {
+      return;
+    }
+
+    const tasks: Promise<unknown>[] = [];
+
+    // 1) mentions_by_message — 1 row per mention (including __ALL__)
+    for (const m of params.mentions) {
+      tasks.push(
+        this.client.execute(
+          `INSERT INTO mentions_by_message
+             (message_id, mentioned_user_id, conversation_id, mention_type, "offset", length, sender_id, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            params.message_id,
+            m.user_id,
+            params.conversation_id,
+            m.mention_type,
+            m.offset,
+            m.length,
+            params.sender_id,
+            params.created_at,
+          ],
+          { prepare: true },
+        ),
+      );
+    }
+
+    // 2) mentions_by_user — skip '__ALL__' (do NOT fan out)
+    for (const m of params.mentions) {
+      if (m.user_id === '__ALL__') continue;
+      tasks.push(
+        this.client.execute(
+          `INSERT INTO mentions_by_user
+             (mentioned_user_id, created_at, message_id, conversation_id, sender_id, mention_type, is_read)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [
+            m.user_id,
+            params.created_at,
+            params.message_id,
+            params.conversation_id,
+            params.sender_id,
+            m.mention_type,
+            false,
+          ],
+          { prepare: true },
+        ),
+      );
+    }
+
+    // 3) Inline JSON update on messages_by_conversation
+    tasks.push(
+      this.client.execute(
+        `UPDATE messages_by_conversation SET mentions = ?
+         WHERE conversation_id = ? AND created_at = ? AND message_id = ?`,
+        [
+          JSON.stringify(params.mentions),
+          params.conversation_id,
+          params.created_at,
+          params.message_id,
+        ],
+        { prepare: true },
+      ),
+    );
+
+    // Eventual consistency: log failures, do NOT throw — re-throwing would cause
+    // consumer retry → double notification fanout. Idempotency lock + INSERT
+    // upsert make replay safe.
+    const results = await Promise.allSettled(tasks);
+    for (const r of results) {
+      if (r.status === 'rejected') {
+        // eslint-disable-next-line no-console
+        console.error('[insertMentions] task failed', r.reason);
+      }
+    }
   }
 
   async insertSystemMessage(message: {

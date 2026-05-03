@@ -112,4 +112,37 @@ describe('MessageConsumerSharedService - emitMessageNotification mention branchi
     expect(calls.every((c) => c[0].type === NotificationType.ChatMessage)).toBe(true);
     expect(messageRepo.incrementUnreadMentionCount).not.toHaveBeenCalled();
   });
+
+  it('should set priority=normal for non-mentioned recipients (spec compliance)', async () => {
+    await service.emitMessageNotification(
+      'conv-1',
+      'sender-1',
+      'Hi @user-mentioned',
+      'msg-priority',
+      'trace-priority',
+      [{ user_id: 'user-mentioned', mention_type: 'user', offset: 3, length: 14 }],
+    );
+
+    const calls = notificationPublisher.publish.mock.calls;
+    const mentionCall = calls.find((c) => c[0].user_id === 'user-mentioned');
+    const otherCall = calls.find((c) => c[0].user_id === 'user-other');
+    expect(mentionCall[0].rich.priority).toBe('high');
+    expect(otherCall[0].rich.priority).toBe('normal');
+  });
+
+  it('should NOT increment counter for mentioned users who are not active members', async () => {
+    // Active members: sender-1, user-mentioned, user-other (per beforeEach mock)
+    // Mention `user-ghost` who is NOT in the conversation
+    await service.emitMessageNotification(
+      'conv-1',
+      'sender-1',
+      'Hi @ghost',
+      'msg-ghost',
+      'trace-ghost',
+      [{ user_id: 'user-ghost', mention_type: 'user', offset: 3, length: 9 }],
+    );
+
+    // Counter should NOT be called because user-ghost isn't a recipient
+    expect(messageRepo.incrementUnreadMentionCount).not.toHaveBeenCalled();
+  });
 });

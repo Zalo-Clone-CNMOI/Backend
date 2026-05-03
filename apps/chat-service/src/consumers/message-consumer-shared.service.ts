@@ -6,6 +6,7 @@ import {
   type NotificationRequestedEvent,
   NotificationType,
   type MessageMention,
+  MENTION_ALL_SENTINEL,
 } from '@libs/contracts';
 import { User, ConversationMember } from '@libs/database';
 import { MessageRepository } from '@libs/scylla';
@@ -108,7 +109,7 @@ export class MessageConsumerSharedService {
           recipients.forEach((id) => mentionedUserIds.add(id));
         } else {
           for (const m of mentions) {
-            if (m.user_id !== '__ALL__' && m.user_id !== senderId) {
+            if (m.user_id !== MENTION_ALL_SENTINEL && m.user_id !== senderId) {
               mentionedUserIds.add(m.user_id);
             }
           }
@@ -146,7 +147,7 @@ export class MessageConsumerSharedService {
               ...(isMentioned ? { is_mention: 'true' } : {}),
             },
             rich: {
-              priority: 'high',
+              priority: isMentioned ? 'high' : 'normal',
               thread_id: conversationId,
               category: isMentioned ? 'mention' : 'message',
             },
@@ -171,9 +172,13 @@ export class MessageConsumerSharedService {
       }
 
       // Increment counter for mentioned users (badge UI)
-      if (mentionedUserIds.size > 0) {
+      const recipientSet = new Set(recipients);
+      const counterTargets = Array.from(mentionedUserIds).filter((id) =>
+        recipientSet.has(id),
+      );
+      if (counterTargets.length > 0) {
         await this.messageRepo.incrementUnreadMentionCount(
-          Array.from(mentionedUserIds),
+          counterTargets,
           conversationId,
         );
       }

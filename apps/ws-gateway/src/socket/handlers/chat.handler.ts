@@ -69,7 +69,6 @@ export class ChatHandler {
     void socket.join(`conv:${conversationId}`);
   }
 
-
   async handleSend(socket: AuthedSocket, body: WsChatSendPayload) {
     const userId = String(socket.data.userId);
     const { allowed, reason } = await this.membershipService.canUserSendMessage(

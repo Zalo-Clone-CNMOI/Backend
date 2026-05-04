@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
     inputs:
       service:
-        description: "Service to deploy (all, bff, sso, interaction, media, chat, ws, presence, notification, ai)"
+        description: "Service(s) to deploy — comma-separated (e.g. interaction,ws) or 'all'"
         required: false
         default: "all"
       force:
@@ -70,9 +70,9 @@ jobs:
           fi
 
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            SERVICE="${{ github.event.inputs.service }}"
+            SERVICE=$(echo "${{ github.event.inputs.service }}" | sed 's/ *, */,/g' | sed 's/^ *//;s/ *$//')
             for s in bff sso interaction media chat ws presence notification ai; do
-              if [ "$SERVICE" = "all" ] || [ "$SERVICE" = "$s" ]; then
+              if [ "$SERVICE" = "all" ] || echo ",$SERVICE," | grep -q ",$s,"; then
                 echo "$s=true" >> $GITHUB_OUTPUT
               else
                 echo "$s=false" >> $GITHUB_OUTPUT

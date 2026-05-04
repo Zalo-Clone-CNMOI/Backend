@@ -10,6 +10,7 @@ export enum NotificationType {
   GroupPoll = 'group_poll',
   GroupPollClosed = 'group_poll_closed',
   Reaction = 'reaction',
+  IncomingCall = 'incoming_call',
   MissedCall = 'missed_call',
   System = 'system',
 }
@@ -28,6 +29,12 @@ export interface RichNotificationPayload {
   priority?: 'normal' | 'high';
   ttl_seconds?: number;
   collapse_key?: string;
+  /**
+   * If true, the notification ignores the recipient's quiet-hours window
+   * (still respects pushEnabled=false). Reserved for time-critical UX
+   * like incoming calls.
+   */
+  bypass_quiet_hours?: boolean;
 }
 
 export interface NotificationRequestedEvent {

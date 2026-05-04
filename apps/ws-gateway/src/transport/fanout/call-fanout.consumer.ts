@@ -25,6 +25,7 @@ export class CallFanoutConsumer {
       {
         call_id: payload.call_id,
         conversation_id: payload.conversation_id,
+        conversation_type: payload.conversation_type,
         initiator_id: payload.initiator_id,
         call_type: payload.call_type,
         participant_ids: payload.participant_ids,

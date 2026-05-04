@@ -92,6 +92,9 @@ export class CallTimeoutScheduler {
       user_id: state.initiator_id,
       reason: 'timeout',
       ended_at: now,
+      conversation_type: state.conversation_type,
+      initiator_id: state.initiator_id,
+      participant_ids: Object.keys(state.participants),
       trace_id: traceId,
     };
     this.kafkaClient.emit(KafkaTopics.CallEnded, {

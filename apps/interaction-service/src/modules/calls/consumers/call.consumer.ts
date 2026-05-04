@@ -141,6 +141,7 @@ export class CallConsumer {
     const startedEvent: CallStartedEvent = {
       call_id: cmd.call_id,
       conversation_id: cmd.conversation_id,
+      conversation_type: cmd.conversation_type,
       initiator_id: cmd.initiator_id,
       call_type: cmd.call_type,
       participant_ids: participantIds,
@@ -558,6 +559,9 @@ export class CallConsumer {
       user_id: userId,
       reason,
       ended_at: endedAt,
+      conversation_type: state.conversation_type,
+      initiator_id: state.initiator_id,
+      participant_ids: Object.keys(state.participants),
       trace_id: traceId,
     };
 

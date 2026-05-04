@@ -18,6 +18,7 @@ describe('CallFanoutConsumer', () => {
     consumer.onCallStarted({
       call_id: 'call-1',
       conversation_id: 'conv-1',
+      conversation_type: 'direct',
       initiator_id: 'user-1',
       call_type: 'video',
       participant_ids: ['user-1', 'user-2'],
@@ -30,6 +31,7 @@ describe('CallFanoutConsumer', () => {
       expect.objectContaining({
         call_id: 'call-1',
         call_type: 'video',
+        conversation_type: 'direct',
       }),
     );
   });

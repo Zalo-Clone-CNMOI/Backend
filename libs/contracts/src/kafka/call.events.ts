@@ -44,6 +44,7 @@ export interface CallStartCommand {
 export interface CallStartedEvent {
   call_id: string;
   conversation_id: string;
+  conversation_type: CallConversationType;
   initiator_id: string;
   call_type: CallType;
   participant_ids: string[];
@@ -133,6 +134,9 @@ export interface CallEndedEvent {
   user_id: string;
   reason?: string;
   ended_at: number;
+  conversation_type: CallConversationType;
+  initiator_id: string;
+  participant_ids: string[];
   trace_id?: string;
 }
 

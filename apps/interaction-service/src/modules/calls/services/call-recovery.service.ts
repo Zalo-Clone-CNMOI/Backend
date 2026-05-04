@@ -95,6 +95,9 @@ export class CallRecoveryService implements OnApplicationBootstrap {
       user_id: state.initiator_id,
       reason: 'recovered_orphan',
       ended_at: endedAt,
+      conversation_type: state.conversation_type,
+      initiator_id: state.initiator_id,
+      participant_ids: Object.keys(state.participants),
       trace_id: traceId,
     };
     this.kafkaClient.emit(KafkaTopics.CallEnded, {

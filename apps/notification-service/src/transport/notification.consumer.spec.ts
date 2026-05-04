@@ -5,12 +5,16 @@
  * listens for NotificationRequested events, delegates to
  * NotificationBatcher/NotificationService, then handles the flush.
  */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotificationConsumer } from './notification.consumer';
 import { NotificationService } from '../services/notification.service';
 import { NotificationBatcher } from '../services/notification.batcher';
 import { NotificationMetrics } from '../services/notification.metrics';
+import { NotificationType } from '@libs/contracts';
 import type {
+  CallEndedEvent,
+  CallStartedEvent,
   NotificationRequestedEvent,
   NotificationBatchCommand,
 } from '@libs/contracts';
@@ -187,6 +191,191 @@ describe('NotificationConsumer', () => {
       await expect(
         consumer.onNotificationBatch(batchPayload),
       ).resolves.not.toThrow();
+    });
+  });
+
+  // ─── onCallStarted ────────────────────────────────────────────────────────
+
+  describe('onCallStarted', () => {
+    const baseCallStarted: CallStartedEvent = {
+      call_id: 'call-1',
+      conversation_id: 'conv-1',
+      conversation_type: 'direct',
+      initiator_id: 'user-1',
+      call_type: 'audio',
+      participant_ids: ['user-1', 'user-2'],
+      started_at: Date.now(),
+      trace_id: 'trace-call-start',
+      push_recipient_ids: ['user-2'],
+    };
+
+    it('sends a high-priority IncomingCall push to every push_recipient_id, bypassing the batcher', async () => {
+      const payload: CallStartedEvent = {
+        ...baseCallStarted,
+        push_recipient_ids: ['user-2', 'user-3'],
+      };
+
+      await consumer.onCallStarted(payload);
+
+      expect(notificationService.processNotification).toHaveBeenCalledTimes(2);
+      expect(batcher.addToBatch).not.toHaveBeenCalled();
+
+      const firstCall = notificationService.processNotification.mock
+        .calls[0][0] as NotificationRequestedEvent;
+      expect(firstCall).toMatchObject({
+        user_id: 'user-2',
+        type: NotificationType.IncomingCall,
+        title: 'Cuộc gọi thoại đến',
+        rich: expect.objectContaining({
+          priority: 'high',
+          collapse_key: 'call:call-1',
+          bypass_quiet_hours: true,
+        }),
+        data: expect.objectContaining({
+          call_id: 'call-1',
+          conversation_id: 'conv-1',
+          conversation_type: 'direct',
+          call_type: 'audio',
+          initiator_id: 'user-1',
+          action: 'incoming_call',
+        }),
+      });
+    });
+
+    it('forwards group conversation_type so FE can render group call UI', async () => {
+      await consumer.onCallStarted({
+        ...baseCallStarted,
+        conversation_type: 'group',
+      });
+
+      const sent = notificationService.processNotification.mock
+        .calls[0][0] as NotificationRequestedEvent;
+      expect(sent.data?.conversation_type).toBe('group');
+    });
+
+    it('uses the video label for video calls', async () => {
+      await consumer.onCallStarted({ ...baseCallStarted, call_type: 'video' });
+
+      const sent = notificationService.processNotification.mock
+        .calls[0][0] as NotificationRequestedEvent;
+      expect(sent.title).toBe('Cuộc gọi video đến');
+    });
+
+    it('skips entirely when push_recipient_ids is empty', async () => {
+      await consumer.onCallStarted({
+        ...baseCallStarted,
+        push_recipient_ids: [],
+      });
+
+      expect(notificationService.processNotification).not.toHaveBeenCalled();
+    });
+
+    it('skips entirely when push_recipient_ids is missing', async () => {
+      const { push_recipient_ids: _drop, ...withoutRecipients } =
+        baseCallStarted;
+      void _drop;
+
+      await consumer.onCallStarted(withoutRecipients as CallStartedEvent);
+
+      expect(notificationService.processNotification).not.toHaveBeenCalled();
+    });
+
+    it('does not throw when one recipient push fails', async () => {
+      notificationService.processNotification.mockRejectedValueOnce(
+        new Error('FCM 500'),
+      );
+
+      await expect(
+        consumer.onCallStarted({
+          ...baseCallStarted,
+          push_recipient_ids: ['user-2', 'user-3'],
+        }),
+      ).resolves.not.toThrow();
+
+      expect(notificationService.processNotification).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // ─── onCallEnded (missed-call push) ───────────────────────────────────────
+
+  describe('onCallEnded', () => {
+    const baseCallEnded: CallEndedEvent = {
+      call_id: 'call-1',
+      conversation_id: 'conv-1',
+      user_id: 'user-1',
+      reason: 'timeout',
+      ended_at: Date.now(),
+      conversation_type: 'direct',
+      initiator_id: 'user-1',
+      participant_ids: ['user-1', 'user-2'],
+      trace_id: 'trace-call-end',
+    };
+
+    it('sends MissedCall push to non-initiator on direct timeout', async () => {
+      await consumer.onCallEnded(baseCallEnded);
+
+      expect(notificationService.processNotification).toHaveBeenCalledTimes(1);
+      const sent = notificationService.processNotification.mock
+        .calls[0][0] as NotificationRequestedEvent;
+      expect(sent).toMatchObject({
+        user_id: 'user-2',
+        type: NotificationType.MissedCall,
+        title: 'Cuộc gọi nhỡ',
+        data: expect.objectContaining({
+          call_id: 'call-1',
+          action: 'missed_call',
+          initiator_id: 'user-1',
+        }),
+      });
+    });
+
+    it('also pushes for direct rejected and missed reasons', async () => {
+      await consumer.onCallEnded({ ...baseCallEnded, reason: 'rejected' });
+      await consumer.onCallEnded({ ...baseCallEnded, reason: 'missed' });
+
+      expect(notificationService.processNotification).toHaveBeenCalledTimes(2);
+    });
+
+    it('skips when conversation is a group call', async () => {
+      await consumer.onCallEnded({
+        ...baseCallEnded,
+        conversation_type: 'group',
+        participant_ids: ['user-1', 'user-2', 'user-3'],
+      });
+
+      expect(notificationService.processNotification).not.toHaveBeenCalled();
+    });
+
+    it('skips when reason is undefined (normal hang-up after answer)', async () => {
+      const { reason: _reason, ...withoutReason } = baseCallEnded;
+      void _reason;
+
+      await consumer.onCallEnded(withoutReason as CallEndedEvent);
+
+      expect(notificationService.processNotification).not.toHaveBeenCalled();
+    });
+
+    it('skips for non-missed reasons like all_left', async () => {
+      await consumer.onCallEnded({ ...baseCallEnded, reason: 'all_left' });
+
+      expect(notificationService.processNotification).not.toHaveBeenCalled();
+    });
+
+    it('skips when no callees remain (only initiator in participant_ids)', async () => {
+      await consumer.onCallEnded({
+        ...baseCallEnded,
+        participant_ids: ['user-1'],
+      });
+
+      expect(notificationService.processNotification).not.toHaveBeenCalled();
+    });
+
+    it('does not throw when push delivery fails', async () => {
+      notificationService.processNotification.mockRejectedValueOnce(
+        new Error('FCM 500'),
+      );
+
+      await expect(consumer.onCallEnded(baseCallEnded)).resolves.not.toThrow();
     });
   });
 });

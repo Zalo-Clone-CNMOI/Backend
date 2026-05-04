@@ -46,8 +46,10 @@ export class NotificationService {
   ): Promise<void> {
     const { user_id, title, body, data, rich, type, trace_id } = payload;
 
-    // 1. Check user preferences
-    const allowed = await this.checkPreferences(user_id);
+    // 1. Check user preferences (incoming calls bypass quiet-hours by design)
+    const allowed = await this.checkPreferences(user_id, {
+      bypassQuietHours: rich?.bypass_quiet_hours === true,
+    });
     if (!allowed) {
       this.logger.debug(
         `Notification suppressed for user ${user_id} (preferences)`,
@@ -119,9 +121,14 @@ export class NotificationService {
   }
 
   /**
-   * Check if user allows push notifications and is not in quiet hours
+   * Check if user allows push notifications and is not in quiet hours.
+   * Pass `bypassQuietHours: true` to skip the quiet-hours window only
+   * (still respects an explicit pushEnabled=false opt-out).
    */
-  private async checkPreferences(userId: string): Promise<boolean> {
+  private async checkPreferences(
+    userId: string,
+    opts?: { bypassQuietHours?: boolean },
+  ): Promise<boolean> {
     try {
       const prefs = await this.preferenceRepo.findOne({
         where: { userId },
@@ -129,7 +136,11 @@ export class NotificationService {
       if (!prefs) return true;
       if (!prefs.pushEnabled) return false;
 
-      if (prefs.quietHoursStart && prefs.quietHoursEnd) {
+      if (
+        !opts?.bypassQuietHours &&
+        prefs.quietHoursStart &&
+        prefs.quietHoursEnd
+      ) {
         if (this.isInQuietHours(prefs.quietHoursStart, prefs.quietHoursEnd)) {
           return false;
         }

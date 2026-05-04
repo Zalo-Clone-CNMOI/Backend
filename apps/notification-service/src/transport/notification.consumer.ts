@@ -2,12 +2,21 @@ import { Controller, Logger, OnModuleInit } from '@nestjs/common';
 import { EventPattern, Payload } from '@nestjs/microservices';
 import {
   KafkaTopics,
+  NotificationType,
+  type CallEndedEvent,
+  type CallStartedEvent,
   type NotificationRequestedEvent,
   type NotificationBatchCommand,
 } from '@libs/contracts';
 import { NotificationService } from '../services/notification.service';
 import { NotificationBatcher } from '../services/notification.batcher';
 import { NotificationMetrics } from '../services/notification.metrics';
+
+const MISSED_CALL_REASONS: ReadonlySet<string> = new Set([
+  'timeout',
+  'rejected',
+  'missed',
+]);
 
 @Controller()
 export class NotificationConsumer implements OnModuleInit {
@@ -84,6 +93,101 @@ export class NotificationConsumer implements OnModuleInit {
         error instanceof Error ? error.stack : error,
       );
     }
+  }
+
+  /**
+   * Incoming-call push for every offline / non-initiator participant.
+   * Bypasses the batcher: a 3s delay or dedup would break call UX.
+   */
+  @EventPattern(KafkaTopics.CallStarted)
+  async onCallStarted(@Payload() payload: CallStartedEvent): Promise<void> {
+    const recipients = payload.push_recipient_ids ?? [];
+    if (recipients.length === 0) return;
+
+    const callTypeLabel = payload.call_type === 'audio' ? 'thoại' : 'video';
+    const title = `Cuộc gọi ${callTypeLabel} đến`;
+
+    await Promise.all(
+      recipients.map((userId) =>
+        this.notificationService
+          .processNotification({
+            channel: 'push',
+            user_id: userId,
+            type: NotificationType.IncomingCall,
+            title,
+            body: 'Bạn có một cuộc gọi đến',
+            data: {
+              call_id: payload.call_id,
+              conversation_id: payload.conversation_id,
+              conversation_type: payload.conversation_type,
+              call_type: payload.call_type,
+              initiator_id: payload.initiator_id,
+              action: 'incoming_call',
+            },
+            rich: {
+              priority: 'high',
+              category: 'call',
+              collapse_key: `call:${payload.call_id}`,
+              bypass_quiet_hours: true,
+            },
+            requested_at: Date.now(),
+            trace_id: payload.trace_id,
+          })
+          .catch((err: unknown) =>
+            this.logger.error(
+              `IncomingCall push failed user=${userId} call=${payload.call_id}`,
+              err instanceof Error ? err.stack : String(err),
+            ),
+          ),
+      ),
+    );
+  }
+
+  /**
+   * Missed-call notification for direct calls only — group calls would be
+   * noisy. Routes a normal-priority push to every non-initiator participant
+   * when the call ended without being answered.
+   */
+  @EventPattern(KafkaTopics.CallEnded)
+  async onCallEnded(@Payload() payload: CallEndedEvent): Promise<void> {
+    if (payload.conversation_type !== 'direct') return;
+    if (!payload.reason || !MISSED_CALL_REASONS.has(payload.reason)) return;
+
+    const callees = (payload.participant_ids ?? []).filter(
+      (id) => id !== payload.initiator_id,
+    );
+    if (callees.length === 0) return;
+
+    await Promise.all(
+      callees.map((userId) =>
+        this.notificationService
+          .processNotification({
+            channel: 'push',
+            user_id: userId,
+            type: NotificationType.MissedCall,
+            title: 'Cuộc gọi nhỡ',
+            body: 'Bạn có một cuộc gọi nhỡ',
+            data: {
+              call_id: payload.call_id,
+              conversation_id: payload.conversation_id,
+              initiator_id: payload.initiator_id,
+              action: 'missed_call',
+            },
+            rich: {
+              priority: 'normal',
+              category: 'call',
+            },
+            requested_at: Date.now(),
+            trace_id: payload.trace_id,
+          })
+          .catch((err: unknown) =>
+            this.logger.error(
+              `MissedCall push failed user=${userId} call=${payload.call_id}`,
+              err instanceof Error ? err.stack : String(err),
+            ),
+          ),
+      ),
+    );
   }
 
   /**

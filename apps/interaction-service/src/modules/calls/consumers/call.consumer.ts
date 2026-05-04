@@ -26,6 +26,7 @@ import { NotificationOutboxPublisher } from '@libs/kafka/publisher/notification-
 import { CallEventsPublisher } from '../services/call-events.publisher';
 import { CallHistoryService } from '../services/call-history.service';
 import { CallMembershipAccessService } from '../services/call-membership-access.service';
+import { CallSystemMessageEmitter } from '../services/call-system-message.emitter';
 import { CallTimeoutService } from '../services/call-timeout.service';
 import { uniqueParticipants } from '../utils/call-participants.util';
 import { CallStateStore } from '../utils/call-state.store';
@@ -45,6 +46,7 @@ export class CallConsumer {
     private readonly callTimeoutService: CallTimeoutService,
     private readonly callHistoryService: CallHistoryService,
     private readonly outbox: NotificationOutboxPublisher,
+    private readonly systemMessageEmitter: CallSystemMessageEmitter,
   ) {}
 
   @EventPattern(KafkaTopics.CallStart)
@@ -546,6 +548,7 @@ export class CallConsumer {
       state.call_id,
       state.conversation_id,
     );
+    const wasAnswered = state.status === 'ongoing';
     state.status = 'ended';
     state.ended_at = endedAt;
     state.participants[userId] = 'left';
@@ -579,6 +582,14 @@ export class CallConsumer {
           err.stack,
         ),
       );
+    this.systemMessageEmitter.publish({
+      state,
+      endedAt,
+      wasAnswered,
+      reason,
+      forceDurationMs: options?.forceDurationMs,
+      traceId,
+    });
     this.eventsPublisher.publishStateUpdate(state.conversation_id, null, {
       reason: reason ?? 'ended',
       traceId,

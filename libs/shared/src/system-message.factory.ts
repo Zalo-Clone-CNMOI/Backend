@@ -13,9 +13,10 @@ export class SystemMessageFactory {
     metadata: SystemMessageMetadata;
     traceId: string;
     bodyFallback: string;
+    messageId?: string;
   }): ChatSystemMessageCommand {
     return {
-      message_id: randomUUID(),
+      message_id: params.messageId ?? randomUUID(),
       conversation_id: params.conversationId,
       message_type: MessageType.SYSTEM,
       system_event_type: params.systemEventType,

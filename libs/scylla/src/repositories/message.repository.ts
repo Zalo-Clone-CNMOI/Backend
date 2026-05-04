@@ -4,20 +4,24 @@ import { SCYLLA_CLIENT } from '../scylla.tokens';
 import {
   CursorPaginatedResult,
   CursorPaginationOptions,
-  MessageAttachment,
   MessageReaction,
   PinnedMessageRecord,
   PersistedMessage,
   ReactionType,
 } from '@app/types/interfaces/chat.interface';
 import { MENTION_ALL_SENTINEL, type MessageMention } from '@libs/contracts';
+import {
+  MessageProcessingState,
+  toNumber,
+  getAppliedValue,
+  encodeCursor,
+  decodeCursor,
+  rowToMessage,
+  rowToPinnedMessage,
+  rowToMessageProcessingState,
+} from './message-row-mapper';
 
-export interface MessageProcessingState {
-  message_id: string;
-  conversation_id: string;
-  created_at: number;
-  status: string;
-}
+export type { MessageProcessingState };
 
 @Injectable()
 export class MessageRepository {
@@ -36,7 +40,7 @@ export class MessageRepository {
       { prepare: true },
     );
 
-    return this.getAppliedValue(result);
+    return getAppliedValue(result);
   }
 
   async getMessageProcessingState(
@@ -52,7 +56,7 @@ export class MessageRepository {
       return null;
     }
 
-    return this.rowToMessageProcessingState(result.rows[0]);
+    return rowToMessageProcessingState(result.rows[0]);
   }
 
   async tryClaimPendingReplay(messageId: string): Promise<boolean> {
@@ -62,7 +66,7 @@ export class MessageRepository {
       { prepare: true },
     );
 
-    return this.getAppliedValue(result);
+    return getAppliedValue(result);
   }
 
   async restoreMessageProcessingToPending(messageId: string): Promise<void> {
@@ -109,7 +113,7 @@ export class MessageRepository {
       { prepare: true },
     );
 
-    return this.getAppliedValue(result);
+    return getAppliedValue(result);
   }
 
   async insertMessage(message: PersistedMessage): Promise<void> {
@@ -415,7 +419,7 @@ export class MessageRepository {
     let params: unknown[];
 
     if (options.cursor) {
-      const cursorTimestamp = this.decodeCursor(options.cursor);
+      const cursorTimestamp = decodeCursor(options.cursor);
       query = `SELECT * FROM messages_by_conversation 
                WHERE conversation_id = ? AND created_at < ? 
                ORDER BY created_at DESC LIMIT ?`;
@@ -431,11 +435,11 @@ export class MessageRepository {
     const rows = result.rows;
 
     const hasMore = rows.length > limit;
-    const items = rows.slice(0, limit).map((row) => this.rowToMessage(row));
+    const items = rows.slice(0, limit).map((row) => rowToMessage(row));
 
     const nextCursor =
       hasMore && items.length > 0
-        ? this.encodeCursor(items[items.length - 1].created_at)
+        ? encodeCursor(items[items.length - 1].created_at)
         : null;
 
     return { items, next_cursor: nextCursor, has_more: hasMore };
@@ -450,7 +454,7 @@ export class MessageRepository {
       [conversationId, limit],
       { prepare: true },
     );
-    return result.rows.map((row) => this.rowToMessage(row));
+    return result.rows.map((row) => rowToMessage(row));
   }
 
   async getMessage(
@@ -466,7 +470,7 @@ export class MessageRepository {
     );
 
     if (result.rowLength === 0) return null;
-    return this.rowToMessage(result.rows[0]);
+    return rowToMessage(result.rows[0]);
   }
 
   async getMessageById(
@@ -483,7 +487,7 @@ export class MessageRepository {
     const row = result.rows[0];
     return {
       conversation_id: row.get('conversation_id') as string,
-      created_at: this.toNumber(row.get('created_at')),
+      created_at: toNumber(row.get('created_at')),
     };
   }
 
@@ -503,7 +507,7 @@ export class MessageRepository {
       return null;
     }
 
-    return this.rowToPinnedMessage(result.rows[0]);
+    return rowToPinnedMessage(result.rows[0]);
   }
 
   async getPinnedMessages(
@@ -520,7 +524,7 @@ export class MessageRepository {
       { prepare: true },
     );
 
-    return result.rows.map((row) => this.rowToPinnedMessage(row));
+    return result.rows.map((row) => rowToPinnedMessage(row));
   }
 
   async pinMessage(record: PinnedMessageRecord): Promise<void> {
@@ -732,129 +736,5 @@ export class MessageRepository {
     }
 
     return stats;
-  }
-
-  private rowToMessage(row: types.Row): PersistedMessage {
-    const attachmentsRaw = row.get('attachments') as string | null;
-    let attachments: MessageAttachment[] | undefined;
-
-    if (attachmentsRaw) {
-      try {
-        attachments = JSON.parse(attachmentsRaw) as MessageAttachment[];
-      } catch {
-        attachments = undefined;
-      }
-    }
-
-    const forwardedFromRaw = row.get('forwarded_from') as string | null;
-    let forwarded_from: PersistedMessage['forwarded_from'] | undefined;
-    if (forwardedFromRaw) {
-      try {
-        forwarded_from = JSON.parse(
-          forwardedFromRaw,
-        ) as PersistedMessage['forwarded_from'];
-      } catch {
-        forwarded_from = undefined;
-      }
-    }
-
-    const metadataRaw = row.get('metadata') as string | null;
-    let parsedMetadata: Record<string, unknown> | undefined = undefined;
-
-    if (metadataRaw) {
-      try {
-        parsedMetadata = JSON.parse(metadataRaw) as Record<string, unknown>;
-      } catch {
-        parsedMetadata = {};
-      }
-    }
-
-    return {
-      message_id: row.get('message_id') as string,
-      conversation_id: row.get('conversation_id') as string,
-      sender_id: row.get('sender_id') as string,
-      body: (row.get('body') as string | null) || '',
-      created_at: Number(row.get('created_at')),
-      attachments,
-      reply_to_message_id:
-        (row.get('reply_to_message_id') as string | null) || undefined,
-      edited_at: row.get('edited_at')
-        ? Number(row.get('edited_at'))
-        : undefined,
-      deleted_at: row.get('deleted_at')
-        ? Number(row.get('deleted_at'))
-        : undefined,
-      message_type: (row.get('message_type') as string | null) || undefined,
-      system_event_type:
-        (row.get('system_event_type') as string | null) || undefined,
-      metadata: parsedMetadata,
-      forwarded_from,
-    };
-  }
-
-  private rowToPinnedMessage(row: types.Row): PinnedMessageRecord {
-    return {
-      conversation_id: row.get('conversation_id') as string,
-      message_id: row.get('message_id') as string,
-      created_at: this.toNumber(row.get('created_at')),
-      pinned_by: row.get('pinned_by') as string,
-      pinned_at: this.toNumber(row.get('pinned_at')),
-    };
-  }
-
-  private encodeCursor(timestamp: number): string {
-    return Buffer.from(timestamp.toString()).toString('base64');
-  }
-
-  private decodeCursor(cursor: string): number {
-    return parseInt(Buffer.from(cursor, 'base64').toString('utf8'), 10);
-  }
-
-  private getAppliedValue(result: types.ResultSet): boolean {
-    const firstRow = this.getFirstRow(result);
-    if (!firstRow) {
-      return false;
-    }
-
-    const appliedValue: unknown = firstRow.get('[applied]');
-    return typeof appliedValue === 'boolean' ? appliedValue : false;
-  }
-
-  private getFirstRow(result: types.ResultSet): types.Row | null {
-    if (typeof result.first === 'function') {
-      return result.first() ?? null;
-    }
-
-    return result.rows.length > 0 ? result.rows[0] : null;
-  }
-
-  private rowToMessageProcessingState(row: types.Row): MessageProcessingState {
-    return {
-      message_id: row.get('message_id') as string,
-      conversation_id: row.get('conversation_id') as string,
-      created_at: this.toNumber(row.get('created_at')),
-      status: (row.get('status') as string) || 'unknown',
-    };
-  }
-
-  private toNumber(value: unknown): number {
-    if (typeof value === 'number') {
-      return value;
-    }
-
-    if (this.hasToNumber(value)) {
-      return value.toNumber();
-    }
-
-    return Number(value);
-  }
-
-  private hasToNumber(value: unknown): value is { toNumber: () => number } {
-    return (
-      typeof value === 'object' &&
-      value !== null &&
-      'toNumber' in value &&
-      typeof (value as { toNumber?: unknown }).toNumber === 'function'
-    );
   }
 }

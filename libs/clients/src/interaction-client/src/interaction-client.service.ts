@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { AxiosInstance } from 'axios';
 import { FriendsApi, ConversationsApi } from './client/generated';
 import { BaseHttpClient } from '../../base-http-client';
 import type {
@@ -24,68 +23,21 @@ import type {
   PaginatedResponseConversationListItemDto,
   UpdateGroupSettingsDto,
 } from './client/generated';
-
-export interface CreatePollPayload {
-  question: string;
-  options: { label: string }[];
-  allow_multiple?: boolean;
-  allow_add_option?: boolean;
-  is_anonymous?: boolean;
-  expires_in_hours?: number;
-}
-
-export interface EditPollPayload {
-  question?: string;
-  allow_multiple?: boolean;
-  allow_add_option?: boolean;
-  expires_at?: string | null;
-  edited_option_labels?: { option_id: string; label: string }[];
-}
-
-export interface ListPollsQueryPayload {
-  status?: string;
-  page?: number;
-  limit?: number;
-}
-
-export interface IceServerConfigEntry {
-  urls: string;
-  username?: string;
-  credential?: string;
-}
-
-export interface IceServersResponse {
-  username: string;
-  credential: string;
-  ttl: number;
-  ice_servers: IceServerConfigEntry[];
-}
-
-export interface CallHistoryItem {
-  id: string;
-  conversationId: string;
-  initiatorId: string;
-  callType: 'audio' | 'video';
-  conversationType: 'direct' | 'group';
-  status: 'completed' | 'missed' | 'rejected' | 'timeout';
-  startedAt: number;
-  endedAt: number | null;
-  durationMs: number | null;
-  participantIds: string[];
-  reason: string | null;
-}
-
-export interface CallHistoryResponse {
-  items: CallHistoryItem[];
-  total: number;
-  page: number;
-  limit: number;
-}
-
-type ApiInternals = {
-  axios: AxiosInstance;
-  basePath: string;
-};
+import type {
+  CreatePollPayload,
+  EditPollPayload,
+  ListPollsQueryPayload,
+  IceServersResponse,
+  CallHistoryResponse,
+  ApiInternals,
+} from './interaction-client.types';
+import {
+  getIceServersViaApi,
+  getCallHistoryViaApi,
+  closePollViaApi,
+  retractPollVoteViaApi,
+  getPollDetailViaApi,
+} from './interaction-client-calls.helper';
 
 @Injectable()
 export class InteractionClientService extends BaseHttpClient {
@@ -653,12 +605,10 @@ export class InteractionClientService extends BaseHttpClient {
     pollId: string,
   ): Promise<unknown> {
     try {
-      const { axios, basePath } = this.getInternals();
-      const response = await axios.get(
-        `${basePath}/conversations/${conversationId}/polls/${pollId}`,
-        { headers: this.authHeaders(accessToken) },
-      );
-      return response.data;
+      return await getPollDetailViaApi(this.getInternals(), accessToken, {
+        conversationId,
+        pollId,
+      });
     } catch (error) {
       this.handleError('getPollDetail', error);
     }
@@ -708,12 +658,10 @@ export class InteractionClientService extends BaseHttpClient {
     pollId: string,
   ): Promise<unknown> {
     try {
-      const { axios, basePath } = this.getInternals();
-      const response = await axios.delete(
-        `${basePath}/conversations/${conversationId}/polls/${pollId}/vote`,
-        { headers: this.authHeaders(accessToken) },
-      );
-      return response.data;
+      return await retractPollVoteViaApi(this.getInternals(), accessToken, {
+        conversationId,
+        pollId,
+      });
     } catch (error) {
       this.handleError('retractPollVote', error);
     }
@@ -762,13 +710,10 @@ export class InteractionClientService extends BaseHttpClient {
     pollId: string,
   ): Promise<unknown> {
     try {
-      const { axios, basePath } = this.getInternals();
-      const response = await axios.post(
-        `${basePath}/conversations/${conversationId}/polls/${pollId}/close`,
-        undefined,
-        { headers: this.authHeaders(accessToken) },
-      );
-      return response.data;
+      return await closePollViaApi(this.getInternals(), accessToken, {
+        conversationId,
+        pollId,
+      });
     } catch (error) {
       this.handleError('closePoll', error);
     }
@@ -776,12 +721,7 @@ export class InteractionClientService extends BaseHttpClient {
 
   async getIceServers(accessToken: string): Promise<IceServersResponse> {
     try {
-      const { axios, basePath } = this.getInternals();
-      const response = await axios.get<IceServersResponse>(
-        `${basePath}/calls/ice-servers`,
-        { headers: this.authHeaders(accessToken) },
-      );
-      return response.data;
+      return await getIceServersViaApi(this.getInternals(), accessToken);
     } catch (error) {
       this.handleError('getIceServers', error);
     }
@@ -794,15 +734,11 @@ export class InteractionClientService extends BaseHttpClient {
     limit?: number,
   ): Promise<CallHistoryResponse> {
     try {
-      const { axios, basePath } = this.getInternals();
-      const response = await axios.get<CallHistoryResponse>(
-        `${basePath}/conversations/${conversationId}/calls`,
-        {
-          params: { page, limit },
-          headers: this.authHeaders(accessToken),
-        },
-      );
-      return response.data;
+      return await getCallHistoryViaApi(this.getInternals(), accessToken, {
+        conversationId,
+        page,
+        limit,
+      });
     } catch (error) {
       this.handleError('getCallHistory', error);
     }

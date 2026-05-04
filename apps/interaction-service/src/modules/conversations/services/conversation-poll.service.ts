@@ -22,7 +22,6 @@ import {
   type ConversationPollEditedEvent,
   type ConversationPollOptionAddedEvent,
   type ConversationPollOptionRemovedEvent,
-  type NotificationRequestedEvent,
   type PollMessageMetadata,
 } from '@libs/contracts';
 import {
@@ -35,100 +34,27 @@ import {
 } from '@libs/database/entities';
 import { PollMetadataBuilder } from './poll-metadata.builder';
 import { enqueueNotifications } from '../helper/conversations-notification.helper';
-
-export interface CreatePollInput {
-  question: string;
-  options: Array<{ label: string }>;
-  allow_multiple?: boolean;
-  allow_add_option?: boolean;
-  expires_in_hours?: number | null;
-  is_anonymous?: boolean;
-}
-
-export interface CreatePollResult {
-  poll_id: string;
-  message_id: string;
-  options: Array<{ option_id: string; label: string; order_index: number }>;
-}
-
-export interface ClosePollResult {
-  poll_id: string;
-  status: 'closed';
-  final_tally: Array<{ option_id: string; vote_count: number }>;
-}
-
-export interface AddOptionResult {
-  option_id: string;
-  label: string;
-  order_index: number;
-}
-
-export interface EditPollDto {
-  question?: string;
-  allow_multiple?: boolean;
-  allow_add_option?: boolean;
-  expires_at?: string | null;
-  edited_option_labels?: Array<{ option_id: string; label: string }>;
-}
-
-export interface EditPollResult {
-  poll_id: string;
-  edited_at: number;
-}
-
-export interface RemoveOptionResult {
-  option_id: string;
-}
-
-export interface ListPollsQuery {
-  status?: PollStatus;
-  page?: number;
-  limit?: number;
-}
-
-export interface PollListItem {
-  poll_id: string;
-  conversation_id: string;
-  creator_id: string;
-  question: string;
-  status: PollStatus;
-  allow_multiple: boolean;
-  allow_add_option: boolean;
-  expires_at: number | null;
-  closed_at: number | null;
-  created_at: number | undefined;
-  options_count: number;
-}
-
-export interface ListPollsResult {
-  items: PollListItem[];
-  total: number;
-  page: number;
-  limit: number;
-}
-
-export interface PollDetailOption {
-  option_id: string;
-  label: string;
-  order_index: number;
-  vote_count: number;
-  added_by_user_id: string | null;
-}
-
-export interface PollDetailResult {
-  poll_id: string;
-  conversation_id: string;
-  creator_id: string;
-  question: string;
-  status: PollStatus;
-  allow_multiple: boolean;
-  allow_add_option: boolean;
-  expires_at: number | null;
-  closed_at: number | null;
-  options: PollDetailOption[];
-  my_vote: string[];
-  total_votes: number;
-}
+import type {
+  CreatePollInput,
+  CreatePollResult,
+  ClosePollResult,
+  AddOptionResult,
+  EditPollDto,
+  EditPollResult,
+  RemoveOptionResult,
+  ListPollsQuery,
+  PollListItem,
+  ListPollsResult,
+  PollDetailOption,
+  PollDetailResult,
+} from './conversation-poll.types';
+import {
+  isUniqueViolationError,
+  buildPollMemberNotifications,
+  loadPollTally,
+  parseExpiresAt,
+  validateOptionLabelEdits,
+} from './conversation-poll.helpers';
 
 @Injectable()
 export class ConversationPollService {
@@ -165,11 +91,7 @@ export class ConversationPollService {
     }
 
     const membership = await this.memberRepo.findOne({
-      where: {
-        conversationId,
-        userId,
-        leftAt: IsNull(),
-      },
+      where: { conversationId, userId, leftAt: IsNull() },
     });
 
     if (!membership) {
@@ -192,7 +114,6 @@ export class ConversationPollService {
     if (trimmedLabels.length < POLL_LIMITS.MIN_OPTIONS) {
       throw BusinessException.badRequest(ErrorCode.POLL_MIN_OPTIONS_REQUIRED);
     }
-
     if (trimmedLabels.length > POLL_LIMITS.MAX_OPTIONS) {
       throw BusinessException.badRequest(ErrorCode.POLL_OPTION_LIMIT_REACHED);
     }
@@ -309,20 +230,19 @@ export class ConversationPollService {
     try {
       const creator = await this.userRepo.findOne({ where: { id: userId } });
       const creatorName = creator?.fullName ?? 'Someone';
-      const title = `${creatorName} started a poll`;
-      const body = trimmedQuestion;
-
-      const notifications = await this.buildPollNotifications({
+      const pollMembers = await this.memberRepo.find({
+        where: { conversationId, leftAt: IsNull() },
+      });
+      const notifications = buildPollMemberNotifications(pollMembers, {
         conversationId,
         excludeUserId: userId,
         pollId: savedPoll.id,
-        title,
-        body,
+        title: `${creatorName} started a poll`,
+        body: trimmedQuestion,
         notificationType: NotificationType.GroupPoll,
         category: 'group_poll',
         traceIdPrefix: `group-poll-created:${savedPoll.id}`,
       });
-
       await enqueueNotifications(
         notifications,
         `group_poll_created:${savedPoll.id}`,
@@ -435,7 +355,6 @@ export class ConversationPollService {
       KafkaTopics.ConversationPollClosed,
       closedEvent,
     );
-
     await this.metadataBuilder.emitUpdated(pollId, traceId);
 
     try {
@@ -444,13 +363,15 @@ export class ConversationPollService {
         const creator = await this.userRepo.findOne({
           where: { id: poll.creatorId },
         });
-        const creatorName = creator?.fullName ?? 'The creator';
-        title = `${creatorName} ended the poll`;
+        title = `${creator?.fullName ?? 'The creator'} ended the poll`;
       } else if (effectiveReason === PollClosedReason.BY_ADMIN) {
         title = 'An admin ended the poll';
       }
 
-      const notifications = await this.buildPollNotifications({
+      const pollMembers = await this.memberRepo.find({
+        where: { conversationId: poll.conversationId, leftAt: IsNull() },
+      });
+      const notifications = buildPollMemberNotifications(pollMembers, {
         conversationId: poll.conversationId,
         excludeUserId: closedByUserId,
         pollId,
@@ -460,7 +381,6 @@ export class ConversationPollService {
         category: 'group_poll',
         traceIdPrefix: `group-poll-closed:${pollId}`,
       });
-
       await enqueueNotifications(
         notifications,
         `group_poll_closed:${pollId}`,
@@ -508,11 +428,7 @@ export class ConversationPollService {
     }
 
     const membership = await this.memberRepo.findOne({
-      where: {
-        conversationId: poll.conversationId,
-        userId,
-        leftAt: IsNull(),
-      },
+      where: { conversationId: poll.conversationId, userId, leftAt: IsNull() },
     });
 
     if (!membership) {
@@ -538,7 +454,7 @@ export class ConversationPollService {
         }),
       );
     } catch (err: unknown) {
-      if (this.isUniqueViolationError(err)) {
+      if (isUniqueViolationError(err)) {
         throw new BusinessException(
           ErrorCode.POLL_DUPLICATE_OPTION_LABEL,
           ErrorCode.POLL_DUPLICATE_OPTION_LABEL,
@@ -565,7 +481,6 @@ export class ConversationPollService {
       KafkaTopics.ConversationPollOptionAdded,
       optionAddedEvent,
     );
-
     await this.metadataBuilder.emitUpdated(pollId, traceId);
 
     return {
@@ -615,21 +530,7 @@ export class ConversationPollService {
       throw new BusinessException(ErrorCode.POLL_CLOSED, ErrorCode.POLL_CLOSED);
     }
 
-    let nextExpiresAt: Date | null | undefined = undefined;
-    if (dto.expires_at !== undefined) {
-      if (dto.expires_at === null) {
-        nextExpiresAt = null;
-      } else {
-        const parsed = new Date(dto.expires_at);
-        if (Number.isNaN(parsed.getTime()) || parsed.getTime() <= Date.now()) {
-          throw new BusinessException(
-            ErrorCode.POLL_EXPIRES_AT_IN_PAST,
-            ErrorCode.POLL_EXPIRES_AT_IN_PAST,
-          );
-        }
-        nextExpiresAt = parsed;
-      }
-    }
+    const nextExpiresAt = parseExpiresAt(dto.expires_at);
 
     const changes: ConversationPollEditedEvent['changes'] = {};
     const pollPatch: Partial<ConversationPoll> = {};
@@ -649,44 +550,14 @@ export class ConversationPollService {
       pollPatch.allowMultiple = dto.allow_multiple;
     }
 
-    const normalizedLabelEdits: Array<{ option_id: string; label: string }> =
-      [];
-    if (
-      Array.isArray(dto.edited_option_labels) &&
-      dto.edited_option_labels.length > 0
-    ) {
-      for (const edit of dto.edited_option_labels) {
-        const trimmedLabel = (edit?.label ?? '').trim();
-        const option = await this.optionRepo.findOne({
-          where: {
-            id: edit.option_id,
-            pollId,
-            deletedAt: IsNull() as unknown as Date,
-          },
-        });
-        if (!option) {
-          throw new BusinessException(
-            ErrorCode.POLL_INVALID_OPTION,
-            ErrorCode.POLL_INVALID_OPTION,
-          );
-        }
-        const optionVotes = await this.voteRepo.count({
-          where: { pollId, optionId: edit.option_id },
-        });
-        if (optionVotes > 0) {
-          throw new BusinessException(
-            ErrorCode.POLL_CANNOT_EDIT_OPTION_WITH_VOTES,
-            ErrorCode.POLL_CANNOT_EDIT_OPTION_WITH_VOTES,
-          );
-        }
-        normalizedLabelEdits.push({
-          option_id: edit.option_id,
-          label: trimmedLabel,
-        });
-      }
-      if (normalizedLabelEdits.length > 0) {
-        changes.edited_option_labels = normalizedLabelEdits;
-      }
+    const normalizedLabelEdits = await validateOptionLabelEdits(
+      this.optionRepo,
+      this.voteRepo,
+      pollId,
+      dto.edited_option_labels,
+    );
+    if (normalizedLabelEdits.length > 0) {
+      changes.edited_option_labels = normalizedLabelEdits;
     }
 
     if (dto.question !== undefined) {
@@ -742,13 +613,9 @@ export class ConversationPollService {
       KafkaTopics.ConversationPollEdited,
       editedEvent,
     );
-
     await this.metadataBuilder.emitUpdated(pollId, traceId);
 
-    return {
-      poll_id: pollId,
-      edited_at: editedAt.getTime(),
-    };
+    return { poll_id: pollId, edited_at: editedAt.getTime() };
   }
 
   async removeOption(
@@ -776,11 +643,7 @@ export class ConversationPollService {
     }
 
     const option = await this.optionRepo.findOne({
-      where: {
-        id: optionId,
-        pollId,
-        deletedAt: IsNull() as unknown as Date,
-      },
+      where: { id: optionId, pollId, deletedAt: IsNull() as unknown as Date },
     });
     if (!option) {
       throw BusinessException.badRequest(ErrorCode.POLL_INVALID_OPTION);
@@ -820,7 +683,6 @@ export class ConversationPollService {
       KafkaTopics.ConversationPollOptionRemoved,
       optionRemovedEvent,
     );
-
     await this.metadataBuilder.emitUpdated(pollId, traceId);
 
     return { option_id: optionId };
@@ -832,11 +694,7 @@ export class ConversationPollService {
     query: ListPollsQuery,
   ): Promise<ListPollsResult> {
     const membership = await this.memberRepo.findOne({
-      where: {
-        conversationId,
-        userId,
-        leftAt: IsNull(),
-      },
+      where: { conversationId, userId, leftAt: IsNull() },
     });
 
     if (!membership) {
@@ -891,11 +749,7 @@ export class ConversationPollService {
     }
 
     const membership = await this.memberRepo.findOne({
-      where: {
-        conversationId: poll.conversationId,
-        userId,
-        leftAt: IsNull(),
-      },
+      where: { conversationId: poll.conversationId, userId, leftAt: IsNull() },
     });
 
     if (!membership) {
@@ -903,7 +757,7 @@ export class ConversationPollService {
     }
 
     const myVotes = await this.voteRepo.find({ where: { pollId, userId } });
-    const tally = await this.loadTally(pollId);
+    const tally = await loadPollTally(this.pollRepo.manager, pollId);
 
     const options: PollDetailOption[] = (poll.options ?? [])
       .filter((o) => !o.deletedAt)
@@ -932,80 +786,5 @@ export class ConversationPollService {
       my_vote: myVotes.map((v) => v.optionId),
       total_votes,
     };
-  }
-
-  private async loadTally(pollId: string): Promise<Map<string, number>> {
-    const rows = await this.pollRepo.manager
-      .createQueryBuilder()
-      .select('option_id', 'option_id')
-      .addSelect('COUNT(*)', 'count')
-      .from('conversation_poll_votes', 'v')
-      .where('v.poll_id = :pid', { pid: pollId })
-      .groupBy('option_id')
-      .getRawMany<{ option_id: string; count: string }>();
-    return new Map(rows.map((r) => [r.option_id, Number(r.count)]));
-  }
-
-  private async buildPollNotifications(args: {
-    conversationId: string;
-    excludeUserId: string | null;
-    pollId: string;
-    title: string;
-    body: string;
-    notificationType: NotificationType;
-    category: string;
-    traceIdPrefix: string;
-  }): Promise<NotificationRequestedEvent[]> {
-    const members = await this.memberRepo.find({
-      where: {
-        conversationId: args.conversationId,
-        leftAt: IsNull(),
-      },
-    });
-
-    const recipientIds = members
-      .map((m) => m.userId)
-      .filter((id) => !!id && id !== args.excludeUserId);
-
-    if (recipientIds.length === 0) {
-      return [];
-    }
-
-    const requestedAt = Date.now();
-    return recipientIds.map<NotificationRequestedEvent>((recipientId) => ({
-      channel: 'push',
-      user_id: recipientId,
-      title: args.title,
-      body: args.body,
-      type: args.notificationType,
-      data: {
-        poll_id: args.pollId,
-        conversation_id: args.conversationId,
-      },
-      rich: {
-        priority: 'normal',
-        category: args.category,
-        thread_id: args.conversationId,
-      },
-      requested_at: requestedAt,
-      trace_id: `${args.traceIdPrefix}:${recipientId}`,
-    }));
-  }
-
-  private isUniqueViolationError(err: unknown): boolean {
-    if (!err || typeof err !== 'object') {
-      return false;
-    }
-    const anyErr = err as {
-      code?: unknown;
-      driverError?: { code?: unknown };
-    };
-    if (anyErr.code === '23505') {
-      return true;
-    }
-    if (anyErr.driverError && anyErr.driverError.code === '23505') {
-      return true;
-    }
-    return false;
   }
 }

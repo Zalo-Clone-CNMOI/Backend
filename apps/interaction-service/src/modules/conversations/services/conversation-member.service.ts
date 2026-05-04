@@ -10,14 +10,9 @@ import {
   type ConversationMemberAddedEvent,
   type ConversationMemberRemovedEvent,
   type ConversationMemberRoleUpdatedEvent,
-  type ConversationDisbandedEvent,
-  type GroupInviteCancelledEvent,
   SystemEventType,
   type MemberAddedMetadata,
   type MemberRemovedMetadata,
-  type MemberLeftMetadata,
-  type OwnerTransferredMetadata,
-  type GroupDisbandedMetadata,
   type RoleChangedMetadata,
 } from '@libs/contracts';
 import { SystemMessageFactory } from '@libs/shared';
@@ -30,7 +25,6 @@ import {
 import {
   ErrorCode,
   ConversationType,
-  GroupInviteStatus,
   UpdateMemberRoleDtoRoleEnum,
   UserStatus,
 } from '@app/constant';
@@ -46,6 +40,11 @@ import {
 } from '../dto';
 import { enqueueNotifications } from '../helper/conversations-notification.helper';
 import { ConversationCoreService } from './conversation-core.service';
+import {
+  emitOwnerTransferredEvent,
+  leaveConversationCore,
+  disbandConversationCore,
+} from './conversation-member.helpers';
 
 @Injectable()
 export class ConversationMemberService {
@@ -396,137 +395,18 @@ export class ConversationMemberService {
     userId: string,
     conversationId: string,
   ): Promise<{ message: string }> {
-    const txResult = await this.memberRepository.manager.transaction(
-      async (manager) => {
-        const conversationRepo = manager.getRepository(Conversation);
-        const memberRepo = manager.getRepository(ConversationMember);
-
-        const conversation = await conversationRepo
-          .createQueryBuilder('conversation')
-          .setLock('pessimistic_write')
-          .where('conversation.id = :conversationId', { conversationId })
-          .getOne();
-
-        if (!conversation) {
-          throw BusinessException.notFound(ErrorCode.CONVERSATION_NOT_FOUND);
-        }
-
-        if (conversation.type === ConversationType.DIRECT) {
-          throw BusinessException.badRequest(
-            ErrorCode.CONVERSATION_CANNOT_LEAVE,
-          );
-        }
-
-        const activeMembers = await memberRepo.find({
-          where: { conversationId, leftAt: IsNull() },
-        });
-
-        const myMembership = activeMembers.find((m) => m.userId === userId);
-        if (!myMembership) {
-          throw BusinessException.forbidden(ErrorCode.CONVERSATION_NOT_MEMBER);
-        }
-
-        if (
-          myMembership.role === UpdateMemberRoleDtoRoleEnum.OWNER &&
-          activeMembers.length === 1
-        ) {
-          return { action: 'sole_owner_disband' as const };
-        }
-
-        let transferredTo: {
-          userId: string;
-          previousRole: UpdateMemberRoleDtoRoleEnum;
-        } | null = null;
-
-        if (myMembership.role === UpdateMemberRoleDtoRoleEnum.OWNER) {
-          const candidates = activeMembers.filter((m) => m.userId !== userId);
-          const sortByJoined = (a: ConversationMember, b: ConversationMember) =>
-            a.joinedAt.getTime() - b.joinedAt.getTime();
-          const newOwner =
-            candidates
-              .filter((m) => m.role === UpdateMemberRoleDtoRoleEnum.ADMIN)
-              .sort(sortByJoined)[0] || candidates.sort(sortByJoined)[0];
-
-          if (!newOwner) {
-            throw BusinessException.internal(
-              'Owner transfer failed: no candidate',
-            );
-          }
-
-          const demote = await memberRepo.update(
-            {
-              conversationId,
-              userId,
-              role: UpdateMemberRoleDtoRoleEnum.OWNER,
-              leftAt: IsNull(),
-            },
-            { role: UpdateMemberRoleDtoRoleEnum.MEMBER },
-          );
-          if ((demote.affected ?? 0) !== 1) {
-            throw BusinessException.conflict(
-              ErrorCode.CONVERSATION_PERMISSION_DENIED,
-            );
-          }
-
-          const promote = await memberRepo.update(
-            {
-              conversationId,
-              userId: newOwner.userId,
-              leftAt: IsNull(),
-            },
-            { role: UpdateMemberRoleDtoRoleEnum.OWNER },
-          );
-          if ((promote.affected ?? 0) !== 1) {
-            throw BusinessException.internal('Owner transfer promote failed');
-          }
-
-          transferredTo = {
-            userId: newOwner.userId,
-            previousRole: newOwner.role,
-          };
-        }
-
-        const leftAt = new Date();
-        const leaveResult = await memberRepo.update(
-          { conversationId, userId, leftAt: IsNull() },
-          { leftAt },
-        );
-        if ((leaveResult.affected ?? 0) !== 1) {
-          throw BusinessException.conflict(ErrorCode.CONVERSATION_NOT_MEMBER);
-        }
-
-        return { action: 'left' as const, transferredTo, leftAt };
+    return leaveConversationCore(
+      {
+        memberRepository: this.memberRepository,
+        conversationRepository: this.conversationRepository,
+        kafkaClient: this.kafkaClient,
+        userRepository: this.userRepository,
+        cacheService: this.cacheService,
+        disbandConversation: (uid, cid) => this.disbandConversation(uid, cid),
       },
+      userId,
+      conversationId,
     );
-
-    if (txResult.action === 'sole_owner_disband') {
-      return this.disbandConversation(userId, conversationId);
-    }
-
-    if (txResult.transferredTo) {
-      await this.emitOwnerTransferred(
-        conversationId,
-        userId,
-        txResult.transferredTo.userId,
-        txResult.transferredTo.previousRole,
-      );
-    }
-
-    const removedEvent: ConversationMemberRemovedEvent = {
-      conversation_id: conversationId,
-      removed_by: userId,
-      removed_user_id: userId,
-      removed_at: txResult.leftAt.getTime(),
-      trace_id: `conversation-member-left:${conversationId}`,
-    };
-    this.kafkaClient.emit(KafkaTopics.ConversationMemberRemoved, removedEvent);
-
-    await this.emitMemberLeftSystemMessage(conversationId, userId);
-
-    this.logger.log(`User ${userId} left conversation ${conversationId}`);
-    await this.cacheService.invalidateConversationList(userId);
-    await this.cacheService.invalidateConversation(conversationId);
-    return { message: 'Left conversation successfully' };
   }
 
   async transferOwnership(
@@ -616,7 +496,9 @@ export class ConversationMemberService {
       },
     );
 
-    await this.emitOwnerTransferred(
+    await emitOwnerTransferredEvent(
+      this.kafkaClient,
+      this.userRepository,
       conversationId,
       userId,
       dto.targetUserId,
@@ -630,70 +512,6 @@ export class ConversationMemberService {
     await this.cacheService.invalidateConversation(conversationId);
 
     return { message: 'Ownership transferred successfully' };
-  }
-
-  private async emitOwnerTransferred(
-    conversationId: string,
-    previousOwnerId: string,
-    newOwnerId: string,
-    previousRoleOfNewOwner: UpdateMemberRoleDtoRoleEnum,
-  ): Promise<void> {
-    const event: ConversationMemberRoleUpdatedEvent = {
-      conversation_id: conversationId,
-      updated_by: previousOwnerId,
-      user_id: newOwnerId,
-      previous_role: previousRoleOfNewOwner,
-      current_role: UpdateMemberRoleDtoRoleEnum.OWNER,
-      updated_at: Date.now(),
-      trace_id: `conversation-owner-transferred:${conversationId}`,
-    };
-    this.kafkaClient.emit(KafkaTopics.ConversationMemberRoleUpdated, event);
-
-    const [prevUser, newUser] = await Promise.all([
-      this.userRepository.findOne({
-        where: { id: previousOwnerId },
-        select: ['fullName'],
-      }),
-      this.userRepository.findOne({
-        where: { id: newOwnerId },
-        select: ['fullName'],
-      }),
-    ]);
-
-    const systemMsg = SystemMessageFactory.create({
-      conversationId,
-      systemEventType: SystemEventType.OWNER_TRANSFERRED,
-      metadata: {
-        previous_owner_id: previousOwnerId,
-        previous_owner_name: prevUser?.fullName ?? 'Unknown',
-        new_owner_id: newOwnerId,
-        new_owner_name: newUser?.fullName ?? 'Unknown',
-      } satisfies OwnerTransferredMetadata,
-      traceId: `system-msg:owner-transferred:${conversationId}:${Date.now()}`,
-      bodyFallback: `Ownership transferred to ${newUser?.fullName ?? 'a member'}.`,
-    });
-    this.kafkaClient.emit(KafkaTopics.ChatSystemMessageCreated, systemMsg);
-  }
-
-  private async emitMemberLeftSystemMessage(
-    conversationId: string,
-    userId: string,
-  ): Promise<void> {
-    const leavingUser = await this.userRepository.findOne({
-      where: { id: userId },
-      select: ['fullName'],
-    });
-    const systemMsg = SystemMessageFactory.create({
-      conversationId,
-      systemEventType: SystemEventType.MEMBER_LEFT,
-      metadata: {
-        user_id: userId,
-        user_name: leavingUser?.fullName ?? 'Unknown',
-      } satisfies MemberLeftMetadata,
-      traceId: `system-msg:member-left:${conversationId}:${Date.now()}`,
-      bodyFallback: `${leavingUser?.fullName ?? 'A member'} left the group.`,
-    });
-    this.kafkaClient.emit(KafkaTopics.ChatSystemMessageCreated, systemMsg);
   }
 
   async updateMemberRole(
@@ -881,177 +699,17 @@ export class ConversationMemberService {
     userId: string,
     conversationId: string,
   ): Promise<{ message: string }> {
-    const { activeMemberIds, cancelledInvites, disbandAt, conversationName } =
-      await this.inviteRepository.manager.transaction(async (manager) => {
-        const conversationRepository = manager.getRepository(Conversation);
-        const memberRepository = manager.getRepository(ConversationMember);
-        const inviteRepository = manager.getRepository(ConversationInvite);
-
-        const conversation = await conversationRepository
-          .createQueryBuilder('conversation')
-          .setLock('pessimistic_write')
-          .where('conversation.id = :conversationId', { conversationId })
-          .getOne();
-
-        if (!conversation) {
-          throw BusinessException.notFound(ErrorCode.CONVERSATION_NOT_FOUND);
-        }
-
-        if (conversation.type !== ConversationType.GROUP) {
-          throw BusinessException.badRequest(
-            ErrorCode.CONVERSATION_INVALID_TYPE,
-          );
-        }
-
-        const myMembership = await memberRepository.findOne({
-          where: {
-            conversationId,
-            userId,
-            leftAt: IsNull(),
-          },
-        });
-
-        if (
-          !myMembership ||
-          myMembership.role !== UpdateMemberRoleDtoRoleEnum.OWNER
-        ) {
-          throw BusinessException.forbidden(
-            ErrorCode.CONVERSATION_PERMISSION_DENIED,
-          );
-        }
-
-        const disbandAt = new Date();
-
-        conversation.createdById = null;
-        await conversationRepository.save(conversation);
-
-        const activeMembers = await memberRepository.find({
-          where: {
-            conversationId,
-            leftAt: IsNull(),
-          },
-        });
-        for (const member of activeMembers) {
-          member.leftAt = disbandAt;
-        }
-        if (activeMembers.length > 0) {
-          await memberRepository.save(activeMembers);
-        }
-
-        const pendingInvites = await inviteRepository.find({
-          where: {
-            conversationId,
-            status: GroupInviteStatus.PENDING,
-          },
-        });
-
-        const cancelledInvites: Array<{
-          id: string;
-          conversationId: string;
-          inviterUserId: string;
-          invitedUserId: string;
-        }> = [];
-        for (const invite of pendingInvites) {
-          const updateResult = await inviteRepository.update(
-            { id: invite.id, status: GroupInviteStatus.PENDING },
-            { status: GroupInviteStatus.CANCELLED, respondedAt: disbandAt },
-          );
-          if ((updateResult.affected ?? 0) === 1) {
-            cancelledInvites.push({
-              id: invite.id,
-              conversationId: invite.conversationId,
-              inviterUserId: invite.inviterUserId,
-              invitedUserId: invite.invitedUserId,
-            });
-          }
-        }
-
-        return {
-          activeMemberIds: activeMembers.map((member) => member.userId),
-          cancelledInvites,
-          disbandAt,
-          conversationName: conversation.name,
-        };
-      });
-
-    for (const invite of cancelledInvites) {
-      const cancelledEvent: GroupInviteCancelledEvent = {
-        invite_id: invite.id,
-        conversation_id: invite.conversationId,
-        inviter_id: invite.inviterUserId,
-        invited_user_id: invite.invitedUserId,
-        status: 'cancelled',
-        cancelled_at: disbandAt.getTime(),
-        trace_id: `group-invite-cancelled:${invite.id}`,
-      };
-      this.kafkaClient.emit(KafkaTopics.GroupInviteCancelled, cancelledEvent);
-    }
-
-    const disbandedEvent: ConversationDisbandedEvent = {
-      conversation_id: conversationId,
-      disbanded_by: userId,
-      member_ids: activeMemberIds,
-      disbanded_at: disbandAt.getTime(),
-      trace_id: `conversation-disbanded:${conversationId}`,
-    };
-    this.kafkaClient.emit(KafkaTopics.ConversationDisbanded, disbandedEvent);
-
-    const disbander = await this.userRepository.findOne({
-      where: { id: userId },
-      select: ['fullName'],
-    });
-
-    const systemMsg = SystemMessageFactory.create({
+    return disbandConversationCore(
+      {
+        inviteRepository: this.inviteRepository,
+        kafkaClient: this.kafkaClient,
+        userRepository: this.userRepository,
+        cacheService: this.cacheService,
+        notificationPublisher: this.notificationPublisher,
+        logger: this.logger,
+      },
+      userId,
       conversationId,
-      systemEventType: SystemEventType.GROUP_DISBANDED,
-      metadata: {
-        disbanded_by: userId,
-        disbanded_by_name: disbander?.fullName ?? 'Group owner',
-      } satisfies GroupDisbandedMetadata,
-      traceId: `system-msg:group-disbanded:${conversationId}:${Date.now()}`,
-      bodyFallback: `${disbander?.fullName ?? 'The group owner'} disbanded the group.`,
-    });
-    this.kafkaClient.emit(KafkaTopics.ChatSystemMessageCreated, systemMsg);
-
-    const disbandNotifications = activeMemberIds
-      .filter((memberId) => memberId !== userId)
-      .map((memberId) => ({
-        channel: 'push' as const,
-        user_id: memberId,
-        title: 'Group disbanded',
-        body: `${disbander?.fullName || 'Group owner'} disbanded ${conversationName || 'the group'}`,
-        type: NotificationType.System,
-        data: {
-          conversation_id: conversationId,
-          disbanded_by: userId,
-          action: 'group_disbanded',
-        },
-        rich: {
-          priority: 'normal' as const,
-          category: 'group_disbanded',
-          thread_id: conversationId,
-        },
-        requested_at: Date.now(),
-        trace_id: `group-disbanded-notification:${conversationId}:${memberId}`,
-      }));
-
-    await enqueueNotifications(
-      disbandNotifications,
-      `group_disbanded:${conversationId}`,
-      this.notificationPublisher,
-      this.logger,
     );
-
-    await this.cacheService.invalidateConversation(
-      conversationId,
-      activeMemberIds,
-    );
-    await Promise.all(
-      activeMemberIds.map((memberId) =>
-        this.cacheService.invalidateConversationList(memberId),
-      ),
-    );
-
-    return { message: 'Conversation disbanded successfully' };
   }
 }

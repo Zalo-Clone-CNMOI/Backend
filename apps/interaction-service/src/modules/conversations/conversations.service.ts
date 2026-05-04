@@ -43,16 +43,16 @@ import {
 import { ConversationCoreService } from './services/conversation-core.service';
 import { ConversationMemberService } from './services/conversation-member.service';
 import { GroupInviteService } from './services/group-invite.service';
-import {
-  ConversationPollService,
-  type CreatePollResult,
-  type ClosePollResult,
-  type AddOptionResult,
-  type RemoveOptionResult,
-  type EditPollResult,
-  type ListPollsResult,
-  type PollDetailResult,
-} from './services/conversation-poll.service';
+import { ConversationPollService } from './services/conversation-poll.service';
+import type {
+  CreatePollResult,
+  ClosePollResult,
+  AddOptionResult,
+  RemoveOptionResult,
+  EditPollResult,
+  ListPollsResult,
+  PollDetailResult,
+} from './services/conversation-poll.types';
 import {
   ConversationVoteService,
   type CastVoteResult,

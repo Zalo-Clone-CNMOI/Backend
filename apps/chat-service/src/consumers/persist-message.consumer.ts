@@ -56,7 +56,6 @@ export class PersistMessageConsumer {
   async onSystemMessage(@Payload() payload: ChatSystemMessageCommand) {
     const traceId = payload.trace_id;
 
-    // Idempotency: reuse existing pattern
     const acquired = await this.repo.tryBeginMessageProcessing(
       payload.message_id,
       payload.conversation_id,
@@ -82,7 +81,6 @@ export class PersistMessageConsumer {
 
       await this.repo.markMessageStored(payload.message_id);
 
-      // Invalidate recent messages cache
       await this.cacheService
         .invalidateRecentMessages(payload.conversation_id)
         .catch(() => {});

@@ -147,10 +147,6 @@ export class SendMessageHandler {
               created_at: existingMessage.created_at,
               attachments: existingMessage.attachments,
               reply_to_message_id: existingMessage.reply_to_message_id,
-              // Mentions come from the incoming payload, not from existingMessage:
-              // if the original write failed mid-way, the mentions JSON column on
-              // messages_by_conversation may be unpopulated, while the retried
-              // command still carries the canonical mentions list.
               mentions: payload.mentions,
               trace_id: traceId,
             };

@@ -40,6 +40,10 @@ describe('CallConsumer', () => {
     publishToTopic: jest.fn().mockResolvedValue('queued'),
   };
 
+  const systemMessageEmitter = {
+    publish: jest.fn(),
+  };
+
   let consumer: CallConsumer;
 
   const makeDirectState = (overrides = {}) => ({
@@ -90,6 +94,7 @@ describe('CallConsumer', () => {
       callTimeoutService as never,
       callHistoryService as never,
       outbox as never,
+      systemMessageEmitter as never,
     );
   });
 
@@ -513,5 +518,125 @@ describe('CallConsumer', () => {
         },
       }),
     );
+  });
+
+  // ── CallSystemMessageEmitter is invoked on every terminateCall path ──
+
+  it('emits an answered termination context when an ongoing direct call ends', async () => {
+    callStateStore.get.mockResolvedValue(
+      makeDirectState({ call_type: 'audio' }),
+    );
+
+    await consumer.onCallEnd({
+      call_id: 'call-1',
+      conversation_id: 'conv-1',
+      user_id: 'user-1',
+      ended_at: 1700000005000,
+      trace_id: 'trace-end',
+    });
+
+    expect(systemMessageEmitter.publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        wasAnswered: true,
+        endedAt: 1700000005000,
+        traceId: 'trace-end',
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        state: expect.objectContaining({
+          call_id: 'call-1',
+          call_type: 'audio',
+          initiator_id: 'user-1',
+          started_at: 1700000000000,
+        }),
+      }),
+    );
+  });
+
+  it('emits a missed termination context with reason=rejected when callee rejects a ringing direct call', async () => {
+    callStateStore.get.mockResolvedValue(
+      makeDirectState({
+        status: 'ringing',
+        participants: { 'user-1': 'accepted', 'user-2': 'invited' },
+      }),
+    );
+
+    await consumer.onCallReject({
+      call_id: 'call-1',
+      conversation_id: 'conv-1',
+      user_id: 'user-2',
+      rejected_at: 1700000000800,
+      trace_id: 'trace-reject',
+    });
+
+    expect(systemMessageEmitter.publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        wasAnswered: false,
+        reason: 'rejected',
+        endedAt: 1700000000800,
+        forceDurationMs: 0,
+      }),
+    );
+  });
+
+  it('emits a missed termination context with no explicit reason when initiator hangs up while ringing', async () => {
+    callStateStore.get.mockResolvedValue(
+      makeDirectState({
+        status: 'ringing',
+        participants: { 'user-1': 'accepted', 'user-2': 'invited' },
+      }),
+    );
+
+    await consumer.onCallEnd({
+      call_id: 'call-1',
+      conversation_id: 'conv-1',
+      user_id: 'user-1',
+      ended_at: 1700000000800,
+    });
+
+    expect(systemMessageEmitter.publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        wasAnswered: false,
+        reason: undefined,
+      }),
+    );
+  });
+
+  it('emits an answered termination context when last group participant leaves', async () => {
+    callStateStore.get.mockResolvedValue(
+      makeGroupState({
+        participants: {
+          'user-1': 'left',
+          'user-2': 'left',
+          'user-3': 'accepted',
+        },
+      }),
+    );
+
+    await consumer.onCallLeave({
+      call_id: 'call-1',
+      conversation_id: 'conv-1',
+      user_id: 'user-3',
+      left_at: 1700000010000,
+    });
+
+    expect(systemMessageEmitter.publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        wasAnswered: true,
+        reason: 'all_left',
+        endedAt: 1700000010000,
+      }),
+    );
+  });
+
+  it('does not call the system-message emitter when terminate is short-circuited (no active call)', async () => {
+    callStateStore.get.mockResolvedValue(null);
+
+    await consumer.onCallEnd({
+      call_id: 'call-1',
+      conversation_id: 'conv-1',
+      user_id: 'user-1',
+      ended_at: 1700000005000,
+    });
+
+    expect(systemMessageEmitter.publish).not.toHaveBeenCalled();
   });
 });

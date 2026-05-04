@@ -6,6 +6,7 @@ import { CallEventsPublisher } from '../services/call-events.publisher';
 import { CallMembershipAccessService } from '../services/call-membership-access.service';
 import { CallTimeoutService } from '../services/call-timeout.service';
 import { CallHistoryService } from '../services/call-history.service';
+import { CallSystemMessageEmitter } from '../services/call-system-message.emitter';
 import { NotificationOutboxPublisher } from '@libs/kafka/publisher/notification-outbox.publisher';
 import { KAFKA_CLIENT } from '@libs/kafka';
 import { KafkaTopics } from '@libs/contracts';
@@ -63,6 +64,10 @@ describe('CallConsumer — VoIP push outbox', () => {
         { provide: CallTimeoutService, useValue: timeoutService },
         { provide: CallHistoryService, useValue: historyService },
         { provide: NotificationOutboxPublisher, useValue: outbox },
+        {
+          provide: CallSystemMessageEmitter,
+          useValue: { publish: jest.fn() },
+        },
       ],
     }).compile();
     consumer = module.get(CallConsumer);

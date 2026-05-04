@@ -14,6 +14,7 @@ import { CallTimeoutService } from './services/call-timeout.service';
 import { CallTimeoutScheduler } from './services/call-timeout.scheduler';
 import { CallHistoryService } from './services/call-history.service';
 import { CallRecoveryService } from './services/call-recovery.service';
+import { CallSystemMessageEmitter } from './services/call-system-message.emitter';
 import { CallHistoryController } from './call-history.controller';
 import { CallConsumer } from './consumers/call.consumer';
 import { MembershipInvalidationConsumer } from './consumers/membership-invalidation.consumer';
@@ -42,6 +43,7 @@ import { MembershipInvalidationConsumer } from './consumers/membership-invalidat
     CallTimeoutScheduler,
     CallHistoryService,
     CallRecoveryService,
+    CallSystemMessageEmitter,
   ],
 })
 export class CallsModule {}

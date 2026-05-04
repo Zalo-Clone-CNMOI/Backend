@@ -1,4 +1,5 @@
 import { MessageType } from '@app/constant';
+import type { CallType } from './call.events';
 
 export type MessageAttachmentType = 'image' | 'video' | 'audio' | 'document';
 
@@ -11,6 +12,8 @@ export enum SystemEventType {
   ROLE_CHANGED = 'role_changed',
   OWNER_TRANSFERRED = 'owner_transferred',
   GROUP_DISBANDED = 'group_disbanded',
+  CALL_ENDED = 'call_ended',
+  CALL_MISSED = 'call_missed',
 }
 
 export interface MemberAddedMetadata {
@@ -52,6 +55,24 @@ export interface GroupDisbandedMetadata {
   disbanded_by_name: string;
 }
 
+export interface CallEndedMetadata {
+  call_id: string;
+  call_type: CallType;
+  initiator_id: string;
+  duration_ms: number;
+  started_at: number;
+  ended_at: number;
+}
+
+export interface CallMissedMetadata {
+  call_id: string;
+  call_type: CallType;
+  initiator_id: string;
+  reason: 'timeout' | 'rejected' | 'missed';
+  started_at: number;
+  ended_at: number;
+}
+
 export interface InviteMessageMetadata {
   invite_id: string;
   group_id: string;
@@ -67,7 +88,9 @@ export type SystemMessageMetadata =
   | MemberLeftMetadata
   | RoleChangedMetadata
   | OwnerTransferredMetadata
-  | GroupDisbandedMetadata;
+  | GroupDisbandedMetadata
+  | CallEndedMetadata
+  | CallMissedMetadata;
 
 export interface MessageAttachment {
   key: string;

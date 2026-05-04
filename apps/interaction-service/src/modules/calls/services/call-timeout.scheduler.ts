@@ -12,6 +12,7 @@ import { CallTimeoutService, type DueTimeout } from './call-timeout.service';
 import { CallStateStore } from '../utils/call-state.store';
 import { CallStateLock } from '../utils/call-state.lock';
 import { CallHistoryService } from './call-history.service';
+import { CallSystemMessageEmitter } from './call-system-message.emitter';
 
 @Injectable()
 export class CallTimeoutScheduler {
@@ -23,6 +24,7 @@ export class CallTimeoutScheduler {
     private readonly stateLock: CallStateLock,
     @Inject(KAFKA_CLIENT) private readonly kafkaClient: ClientKafka,
     private readonly callHistoryService: CallHistoryService,
+    private readonly systemMessageEmitter: CallSystemMessageEmitter,
   ) {}
 
   @Interval(5000)
@@ -114,5 +116,15 @@ export class CallTimeoutScheduler {
           err.stack,
         ),
       );
+
+    // A timed-out ringing call never reaches 'ongoing', so wasAnswered=false.
+    // Emits a CALL_MISSED system message into the conversation history.
+    this.systemMessageEmitter.publish({
+      state,
+      endedAt: now,
+      wasAnswered: false,
+      reason: 'timeout',
+      traceId,
+    });
   }
 }

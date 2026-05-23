@@ -68,7 +68,13 @@ export class ConversationCoreService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    await this.kafkaClient.connect();
+    try {
+      await this.kafkaClient.connect();
+    } catch (error) {
+      this.logger.warn(
+        `Kafka unavailable on startup, continuing in degraded mode: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   async getConversations(

@@ -1,10 +1,15 @@
 packages:
   - apps/*
   - libs/*
-ignoredBuiltDependencies:
-  - '@nestjs/core'
-  - '@scarf/scarf'
-  - bcrypt
+allowBuilds:
+  '@firebase/util': true
+  '@nestjs/core': true
+  '@openapitools/openapi-generator-cli': true
+  '@scarf/scarf': false
+  '@swc/core': true
+  bcrypt: true
+  protobufjs: true
+  sharp: true
 overrides:
   # ── CVE / audit remediations ─────────────────────────────────────────────
   # Each entry pins the minimum safe version for a given vulnerable range.
@@ -20,8 +25,14 @@ overrides:
 
   qs@>=6.7.0 <=6.14.1: '>=6.14.2'
 
-  # axios — <1.15.0 subsumes the narrower >=1.0.0 <=1.13.4 range
-  axios@<1.15.0: '>=1.15.0'
+  # axios — CVE-2025-62718 + prototype pollution gadgets; >=1.15.1 is the fix
+  axios@<1.15.1: '>=1.15.1'
+
+  # protobufjs — prototype pollution + DoS via unbounded recursion (transitive via @grpc)
+  protobufjs@<=7.5.5: '>=7.5.6'
+
+  # fast-xml-builder — attribute value bypass (transitive via @aws-sdk/client-s3)
+  fast-xml-builder@<=1.1.6: '>=1.1.7'
 
   # minimatch — two major-version ranges; latest bounds subsume earlier ones
   minimatch@>=9.0.0 <9.0.7: '>=9.0.7'

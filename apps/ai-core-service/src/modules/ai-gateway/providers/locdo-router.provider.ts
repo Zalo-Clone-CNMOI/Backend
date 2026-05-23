@@ -43,6 +43,23 @@ export class LocDoRouterProvider implements ILlmProvider {
     return this.config.lcdoRouterModel ?? 'claude-sonnet-4-6';
   }
 
+  private transformMessages(
+    messages: import('openai').default.ChatCompletionMessageParam[],
+  ): import('openai').default.ChatCompletionMessageParam[] {
+    const systemMsg = messages.find((m) => m.role === 'system');
+    const rest = messages.filter((m) => m.role !== 'system');
+    if (!systemMsg) return messages;
+    return [
+      { role: 'user', content: systemMsg.content as string },
+      {
+        role: 'assistant',
+        content:
+          'Understood. I will follow these instructions and respond only with the requested JSON format.',
+      },
+      ...rest,
+    ];
+  }
+
   async complete(options: LlmCompletionOptions): Promise<LlmCompletionResult> {
     const start = Date.now();
     const model = options.model ?? this.defaultModel;
@@ -52,7 +69,7 @@ export class LocDoRouterProvider implements ILlmProvider {
 
       const response = await client.chat.completions.create({
         model,
-        messages: options.messages,
+        messages: this.transformMessages(options.messages),
         max_tokens: options.maxTokens ?? 1024,
         temperature: options.temperature ?? 0.7,
       });
@@ -90,7 +107,7 @@ export class LocDoRouterProvider implements ILlmProvider {
 
       const stream = await client.chat.completions.create({
         model,
-        messages: options.messages,
+        messages: this.transformMessages(options.messages),
         max_tokens: options.maxTokens ?? 1024,
         temperature: options.temperature ?? 0.7,
         stream: true,

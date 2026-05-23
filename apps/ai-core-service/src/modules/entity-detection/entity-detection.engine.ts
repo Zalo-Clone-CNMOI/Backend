@@ -164,7 +164,13 @@ export class EntityDetectionEngine {
 
     const cached = await this.redis.get(cacheKey);
     if (cached) {
-      return JSON.parse(cached) as AiEntityInfoResultEvent;
+      try {
+        return JSON.parse(cached) as AiEntityInfoResultEvent;
+      } catch {
+        this.logger.warn(
+          `Corrupt entity info cache for "${event.entity_text}" — regenerating`,
+        );
+      }
     }
 
     try {

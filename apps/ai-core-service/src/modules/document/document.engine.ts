@@ -92,6 +92,12 @@ export class DocumentEngine {
         model: this.embeddingModel,
       });
 
+      if (chunks.length === 0) {
+        throw new Error(
+          'No text content could be extracted from this document. It may be a scanned image or contain no readable text.',
+        );
+      }
+
       const embeddingResults = await this.gateway.embedBatch(
         event.user_id,
         chunks,
@@ -259,6 +265,22 @@ export class DocumentEngine {
     try {
       const { chunks: relevantChunks, embeddingTokens } =
         await this.searchRelevantChunks(event);
+
+      if (relevantChunks.length === 0) {
+        return {
+          document_id: event.document_id,
+          conversation_id: event.conversation_id,
+          user_id: event.user_id,
+          query: event.query,
+          answer:
+            'No content was found in this document to answer your question.',
+          sources: [],
+          provider: 'openai',
+          tokens_used: embeddingTokens,
+          processed_at: Date.now(),
+          trace_id: event.trace_id,
+        };
+      }
 
       const messages = this.promptBuilder.buildDocumentQueryPrompt(
         event.query,

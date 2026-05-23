@@ -485,11 +485,15 @@ export class ConversationCoreService implements OnModuleInit {
 
     await this.conversationRepository.manager.transaction(async (manager) => {
       await manager.query('SET LOCAL lock_timeout = 5000');
-      const conversation = await manager.findOne(Conversation, {
-        where: { id: conversationId },
-        relations: ['members'],
-        lock: { mode: 'pessimistic_write', tables: ['Conversation'] },
-      });
+
+      // Use createQueryBuilder so we control the alias and can use setLock with
+      // a specific table list. findOne + lock.tables fails because TypeORM can't
+      // resolve the alias name when relations (LEFT JOINs) are involved.
+      const conversation = await manager
+        .createQueryBuilder(Conversation, 'conv')
+        .where('conv.id = :conversationId', { conversationId })
+        .setLock('pessimistic_write', undefined, ['conv'])
+        .getOne();
 
       if (!conversation) {
         throw BusinessException.notFound(ErrorCode.CONVERSATION_NOT_FOUND);
@@ -499,7 +503,11 @@ export class ConversationCoreService implements OnModuleInit {
         throw BusinessException.badRequest(ErrorCode.CONVERSATION_INVALID_TYPE);
       }
 
-      const myMembership = conversation.members.find(
+      const members = await manager.find(ConversationMember, {
+        where: { conversationId },
+      });
+
+      const myMembership = members.find(
         (m) => m.userId === userId && m.leftAt === null,
       );
 
@@ -513,17 +521,34 @@ export class ConversationCoreService implements OnModuleInit {
         );
       }
 
-      const existing = conversation.settings ?? DEFAULT_GROUP_SETTINGS;
+      // Normalize existing settings against the current DEFAULT shape so that
+      // conversations created with an old settings schema are upgraded on save.
+      const existing = (conversation.settings ?? {}) as Partial<GroupSettings>;
+      const normalized: GroupSettings = {
+        permissions: {
+          ...DEFAULT_GROUP_SETTINGS.permissions,
+          ...(existing.permissions ?? {}),
+        },
+        policies: {
+          ...DEFAULT_GROUP_SETTINGS.policies,
+          ...(existing.policies ?? {}),
+        },
+        features: {
+          ...DEFAULT_GROUP_SETTINGS.features,
+          ...(existing.features ?? {}),
+        },
+      };
+
       conversation.settings = {
-        permissions: { ...existing.permissions, ...dto.permissions },
-        policies: { ...existing.policies, ...dto.policies },
-        features: { ...existing.features, ...dto.features },
+        permissions: { ...normalized.permissions, ...(dto.permissions ?? {}) },
+        policies: { ...normalized.policies, ...(dto.policies ?? {}) },
+        features: { ...normalized.features, ...(dto.features ?? {}) },
       };
 
       await manager.save(Conversation, conversation);
 
       updatedSettings = conversation.settings;
-      memberIds = conversation.members
+      memberIds = members
         .filter((m) => m.leftAt === null)
         .map((m) => m.userId);
     });

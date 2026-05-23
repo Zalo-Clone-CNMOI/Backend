@@ -3,13 +3,30 @@ import {
   ConversationMember,
   ConversationInvite,
 } from '@libs/database/entities';
-import { ConversationType, GroupInviteStatus } from '@app/constant';
+import {
+  ConversationType,
+  GroupInviteStatus,
+  DEFAULT_GROUP_SETTINGS,
+  type GroupSettings,
+} from '@app/constant';
 import {
   ConversationListItemDto,
   ConversationDetailDto,
   ConversationMemberResponseDto,
   GroupInviteItemDto,
 } from '../dto';
+
+function normalizeGroupSettings(raw: unknown): GroupSettings {
+  const s = (raw ?? {}) as Partial<GroupSettings>;
+  return {
+    permissions: {
+      ...DEFAULT_GROUP_SETTINGS.permissions,
+      ...(s.permissions ?? {}),
+    },
+    policies: { ...DEFAULT_GROUP_SETTINGS.policies, ...(s.policies ?? {}) },
+    features: { ...DEFAULT_GROUP_SETTINGS.features, ...(s.features ?? {}) },
+  };
+}
 
 export interface LastMessage {
   message_id: string;
@@ -85,7 +102,10 @@ export function toDetailResponse(
       pinnedAt: myMembership.pinnedAt,
       lastReadAt: myMembership.lastReadAt,
     },
-    settings: conversation.settings ?? null,
+    settings:
+      conversation.type === ConversationType.GROUP
+        ? normalizeGroupSettings(conversation.settings)
+        : null,
     createdAt: conversation.createdAt,
   };
 }

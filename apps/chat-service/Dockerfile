@@ -1,6 +1,6 @@
-FROM node:20-alpine AS builder
+﻿FROM node:22-alpine AS builder
 
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@11.2.2 --activate
 
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -14,9 +14,9 @@ COPY apps/chat-service ./apps/chat-service
 
 RUN pnpm run build:chat
 
-FROM node:20-alpine AS production
+FROM node:22-alpine AS production
 
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@11.2.2 --activate
 
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nestjs -u 1001

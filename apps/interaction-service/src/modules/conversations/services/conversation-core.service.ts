@@ -1,4 +1,4 @@
-import { Injectable, Logger, Inject } from '@nestjs/common';
+import { Injectable, Logger, Inject, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, IsNull } from 'typeorm';
 import { ClientKafka } from '@nestjs/microservices';
@@ -50,7 +50,7 @@ import {
 import { enqueueNotifications } from '../helper/conversations-notification.helper';
 
 @Injectable()
-export class ConversationCoreService {
+export class ConversationCoreService implements OnModuleInit {
   private readonly logger = new Logger(ConversationCoreService.name);
 
   constructor(
@@ -66,6 +66,10 @@ export class ConversationCoreService {
     private readonly kafkaClient: ClientKafka,
     @Inject(REDIS_CLIENT) private readonly redis: RedisClientType,
   ) {}
+
+  async onModuleInit() {
+    await this.kafkaClient.connect();
+  }
 
   async getConversations(
     userId: string,
@@ -474,10 +478,11 @@ export class ConversationCoreService {
     let memberIds!: string[];
 
     await this.conversationRepository.manager.transaction(async (manager) => {
+      await manager.query('SET LOCAL lock_timeout = 5000');
       const conversation = await manager.findOne(Conversation, {
         where: { id: conversationId },
         relations: ['members'],
-        lock: { mode: 'pessimistic_write' },
+        lock: { mode: 'pessimistic_write', tables: ['Conversation'] },
       });
 
       if (!conversation) {

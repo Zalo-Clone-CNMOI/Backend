@@ -14,7 +14,7 @@ export class InteractionClientModule {
   static register(config: InteractionClientConfig): DynamicModule {
     return {
       module: InteractionClientModule,
-      imports: [HttpModule],
+      imports: [HttpModule.register({ timeout: 30000 })],
       providers: [
         injectApiProvider(FriendsApi, config),
         injectApiProvider(ConversationsApi, config),
@@ -29,7 +29,7 @@ export class InteractionClientModule {
   ): DynamicModule {
     return {
       module: InteractionClientModule,
-      imports: [HttpModule],
+      imports: [HttpModule.register({ timeout: 30000 })],
       providers: [
         {
           provide: 'INTERACTION_CLIENT_CONFIG',

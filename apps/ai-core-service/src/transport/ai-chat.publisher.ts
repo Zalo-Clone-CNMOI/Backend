@@ -28,6 +28,11 @@ export interface AiChatSendInput {
 export class AiChatPublisher {
   private readonly logger = new Logger(AiChatPublisher.name);
 
+  /**
+   * NOTE: The shared KAFKA_CLIENT is connected/closed by AiPublisher.
+   * Do NOT add OnModuleInit/OnModuleDestroy here — duplicate lifecycle
+   * hooks would double-connect or race-close the same client instance.
+   */
   constructor(
     @Inject(KAFKA_CLIENT) private readonly kafka: ClientKafka,
     @Inject(APP_CONFIG) private readonly config: AppConfig,

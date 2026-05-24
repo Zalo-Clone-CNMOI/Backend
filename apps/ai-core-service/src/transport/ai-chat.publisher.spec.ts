@@ -82,4 +82,29 @@ describe('AiChatPublisher', () => {
     ]);
     expect(payload.metadata).toEqual({ feature: 'document', tokens_used: 42 });
   });
+
+  it('propagates errors from kafka publish', async () => {
+    // Use fake timers to flush retry backoff delays (backoffBaseMs=1000, maxRetries=3)
+    // without waiting for real wall-clock time.
+    jest.useFakeTimers();
+
+    const { throwError } = await import('rxjs');
+    // mockReturnValue (not Once) — defer() re-calls emit on every retry attempt,
+    // and emitToDlq also calls emit once more for the DLQ topic. All must throw.
+    kafka.emit.mockReturnValue(throwError(() => new Error('broker down')));
+
+    const sendPromise = publisher.send({
+      message_id: 'm-err',
+      conversation_id: 'c-err',
+      body: 'fails',
+      trace_id: 't-err',
+    });
+
+    // Advance timers to flush all retry backoff delays in one shot
+    jest.runAllTimersAsync();
+
+    await expect(sendPromise).rejects.toThrow(/broker down/);
+
+    jest.useRealTimers();
+  });
 });

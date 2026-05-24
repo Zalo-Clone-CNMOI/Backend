@@ -113,8 +113,8 @@ describe('AiChatPublisher', () => {
       body_format: 'markdown',
     });
 
-    const payload = kafka.emit.mock.calls[0][1] as ChatAiMessageCommand;
-    expect(payload.body_format).toBe('markdown');
+    const call = kafka.emit.mock.calls[0] as [string, ChatAiMessageCommand];
+    expect(call[1].body_format).toBe('markdown');
   });
 
   it('omits body_format when not provided (frontend defaults to text)', async () => {
@@ -125,8 +125,8 @@ describe('AiChatPublisher', () => {
       trace_id: 't5',
     });
 
-    const payload = kafka.emit.mock.calls[0][1] as ChatAiMessageCommand;
-    expect(payload.body_format).toBeUndefined();
+    const call = kafka.emit.mock.calls[0] as [string, ChatAiMessageCommand];
+    expect(call[1].body_format).toBeUndefined();
   });
 
   it('propagates errors from kafka publish', async () => {

@@ -1,0 +1,174 @@
+openapi: 3.0.0
+info:
+  title: AI Core Service API
+  version: 1.0.0
+  description: Internal HTTP endpoints for ai-core-service. Port 5005 must be firewalled; BFF supplies a trusted user_id after JWT verification.
+servers:
+  - url: http://localhost:5005/api
+    description: Local development server
+  - url: http://ai-core-service:5005/api
+    description: Docker internal service (default)
+paths:
+  /entity-info:
+    get:
+      tags:
+        - EntityInfo
+      summary: Get AI-generated information about a detected entity
+      operationId: getEntityInfo
+      parameters:
+        - name: text
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: type
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/EntityType'
+        - name: lang
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: user_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Entity information result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiEntityInfoResultDto'
+        '400':
+          description: Validation error
+  /catch-up:
+    get:
+      tags:
+        - ZaiAssist
+      summary: Get a catch-up summary of unread messages for a user
+      operationId: getCatchUpSummary
+      parameters:
+        - name: conversation_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: user_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: since
+          in: query
+          required: false
+          description: Epoch-ms boundary — only messages after this timestamp are considered unread
+          schema:
+            type: number
+        - name: limit
+          in: query
+          required: false
+          description: Max messages to include in the summary window (server-side cap 50)
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Catch-up summary result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiCatchUpResultDto'
+        '400':
+          description: Validation error
+components:
+  schemas:
+    EntityType:
+      type: string
+      enum:
+        - tool
+        - company
+        - person
+        - concept
+        - location
+        - product
+        - other
+    AiEntityInfoResultDto:
+      type: object
+      required:
+        - entity_text
+        - entity_type
+        - title
+        - summary
+        - details
+        - provider
+        - tokens_used
+        - processed_at
+      properties:
+        entity_text:
+          type: string
+        entity_type:
+          $ref: '#/components/schemas/EntityType'
+        title:
+          type: string
+        summary:
+          type: string
+        details:
+          type: string
+        related_entities:
+          type: array
+          items:
+            type: string
+        provider:
+          type: string
+        tokens_used:
+          type: number
+        processed_at:
+          type: number
+        trace_id:
+          type: string
+    AiCatchUpResultDto:
+      type: object
+      required:
+        - conversation_id
+        - user_id
+        - had_unread
+        - summary
+        - message_count
+        - truncated
+        - provider
+        - tokens_used
+        - cached
+        - generated_at
+      properties:
+        conversation_id:
+          type: string
+        user_id:
+          type: string
+        had_unread:
+          type: boolean
+        summary:
+          type: string
+        message_count:
+          type: number
+        from_message_id:
+          type: string
+        to_message_id:
+          type: string
+        since:
+          type: number
+          description: Epoch-ms boundary used to bound the unread window
+        truncated:
+          type: boolean
+        provider:
+          type: string
+        tokens_used:
+          type: number
+        cached:
+          type: boolean
+        generated_at:
+          type: number
+        trace_id:
+          type: string

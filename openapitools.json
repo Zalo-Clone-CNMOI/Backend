@@ -59,6 +59,20 @@
           "withNodeImports": true,
           "suppressGenerationTimestamp": true
         }
+      },
+      "ai-core-client": {
+        "generatorName": "typescript-axios",
+        "inputSpec": "libs/clients/src/ai-core-client/src/utils/oas.yml",
+        "output": "libs/clients/src/ai-core-client/src/client/generated",
+        "additionalProperties": {
+          "stringEnums": true,
+          "supportsES6": true,
+          "typescriptThreePlus": true,
+          "enumPropertyNaming": "original",
+          "useSingleRequestParameter": true,
+          "withNodeImports": true,
+          "suppressGenerationTimestamp": true
+        }
       }
     }
   }

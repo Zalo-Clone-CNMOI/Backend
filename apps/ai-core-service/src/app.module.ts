@@ -22,6 +22,7 @@ import { SummaryModule } from './modules/summary/summary.module';
 import { TranslationModule } from './modules/translation/translation.module';
 import { DocumentModule } from './modules/document/document.module';
 import { EntityDetectionModule } from './modules/entity-detection/entity-detection.module';
+import { CatchUpModule } from './modules/catch-up/catch-up.module';
 import { AiConsumer } from './transport/ai.consumer';
 import { AiPublisher } from './transport/ai.publisher';
 import { AiChatPublisher } from './transport/ai-chat.publisher';
@@ -65,6 +66,7 @@ import { AiChatPublisher } from './transport/ai-chat.publisher';
     TranslationModule,
     DocumentModule,
     EntityDetectionModule,
+    CatchUpModule,
   ],
   controllers: [AiConsumer],
   providers: [AiPublisher, AiChatPublisher],

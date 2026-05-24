@@ -234,6 +234,40 @@ Respond ONLY with the JSON object, no explanation.`,
     ];
   }
 
+  /**
+   * Build a prompt for the catch-up summary feature.
+   * Asks the model to write a short briefing of what the user missed while away,
+   * covering key topics, decisions, questions directed at them, and action items,
+   * in the same language as the messages.
+   */
+  buildCatchUpPrompt(lines: string[]): LlmChatMessage[] {
+    return [
+      {
+        role: 'system',
+        content: `${APP_CONTEXT}
+Your task: write a short catch-up briefing for a user who was away from this chat.
+${LANGUAGE_RULE}
+
+Focus on:
+- Key topics discussed
+- Decisions made
+- Questions or action items directed at all participants (including the returning user)
+- Any important announcements or links shared
+
+Keep the briefing under 150 words. Write in a neutral, friendly tone as if telling a colleague what they missed.
+
+Return a JSON object with:
+- "summary": string
+
+Respond ONLY with the JSON object, no explanation.`,
+      },
+      {
+        role: 'user',
+        content: lines.join('\n'),
+      },
+    ];
+  }
+
   buildDocumentQueryPrompt(
     query: string,
     relevantChunks: Array<{ content: string; chunkIndex: number }>,

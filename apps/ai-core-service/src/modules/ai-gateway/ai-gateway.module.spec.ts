@@ -157,9 +157,9 @@ describe('toAiProviderType (from @libs/contracts)', () => {
     expect(toAiProviderType(input)).toBe(expected);
   });
 
-  it('falls back to "openai" for unknown provider names', () => {
-    expect(toAiProviderType('unknown-provider')).toBe('openai');
-    expect(toAiProviderType('')).toBe('openai');
-    expect(toAiProviderType('OPENAI')).toBe('openai');
+  it('falls back to "unknown" for unrecognized provider names', () => {
+    expect(toAiProviderType('unknown-provider')).toBe('unknown');
+    expect(toAiProviderType('')).toBe('unknown');
+    expect(toAiProviderType('OPENAI')).toBe('unknown');
   });
 });

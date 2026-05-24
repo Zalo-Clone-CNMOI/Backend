@@ -1,7 +1,7 @@
 import { HttpService } from '@nestjs/axios';
 import type { FactoryProvider } from '@nestjs/common';
 import type { AxiosInstance } from 'axios';
-import { Configuration } from '../client/configuration';
+import { Configuration } from '../client/generated';
 
 export interface AiCoreClientConfig {
   baseUrl: string;

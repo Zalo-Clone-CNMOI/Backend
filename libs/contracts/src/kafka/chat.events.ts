@@ -331,3 +331,31 @@ export interface ChatPollMessageUpdatedEvent {
   metadata: PollMessageMetadata;
   trace_id: string;
 }
+
+/**
+ * Metadata attached to a Zai-produced message. Used by frontend to render
+ * citations, debug tags, and feature-specific affordances.
+ */
+export interface AiMessageMetadata {
+  feature: 'document' | 'translation' | 'summary' | 'general';
+  sources?: Array<{ chunk_index: number; preview: string }>;
+  tokens_used?: number;
+  model?: string;
+  parent_message_id?: string;
+  is_streaming?: boolean;
+}
+
+/**
+ * Kafka command sent from ai-core-service to chat-service to persist a Zai
+ * message. `sender_id` MUST equal config.zaiBotUserId — enforced by consumer.
+ */
+export interface ChatAiMessageCommand {
+  message_id: string;
+  conversation_id: string;
+  sender_id: string;
+  body: string;
+  attachments?: MessageAttachment[];
+  metadata?: AiMessageMetadata;
+  created_at: number;
+  trace_id: string;
+}

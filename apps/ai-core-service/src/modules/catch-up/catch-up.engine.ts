@@ -115,7 +115,9 @@ export class CatchUpEngine {
     const messageCount = windowAsc.length;
 
     // ── 5. Check Redis cache ────────────────────────────────────────────────
-    const cacheKey = `ai:catchup:${conversation_id}:${since ?? 'none'}:${toMessageId}`;
+    // effectiveCap is part of the key: two requests ending at the same message
+    // but with different caps can differ in message_count/truncated.
+    const cacheKey = `ai:catchup:${conversation_id}:${since ?? 'none'}:${toMessageId}:${effectiveCap}`;
 
     const cachedRaw = await this.redis.get(cacheKey);
     if (cachedRaw) {

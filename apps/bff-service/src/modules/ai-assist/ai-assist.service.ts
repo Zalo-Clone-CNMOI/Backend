@@ -41,7 +41,10 @@ export class AiAssistService {
     const lastReadAt = (
       detail as { mySettings?: { lastReadAt?: string | Date | null } }
     ).mySettings?.lastReadAt;
-    const since = lastReadAt ? new Date(lastReadAt).getTime() : undefined;
+    const sinceMs = lastReadAt ? new Date(lastReadAt).getTime() : NaN;
+    // Guard against a malformed lastReadAt: fall back to "no boundary" rather
+    // than forwarding NaN, which ai-core would reject as an invalid query param.
+    const since = Number.isFinite(sinceMs) ? sinceMs : undefined;
 
     const result = await this.aiCoreClient.getCatchUpSummary({
       conversationId,

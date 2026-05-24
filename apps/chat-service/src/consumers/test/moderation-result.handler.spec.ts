@@ -92,6 +92,7 @@ describe('ModerationResultHandler', () => {
       scyllaKeyspace: 'chat',
       allowedOrigins: ['http://localhost:3000'],
       chatModerationDeleteLockTtlSeconds: 120,
+      zaiBotUserId: '00000000-0000-0000-0000-0000000000a1',
     };
 
     notificationPublisher = {

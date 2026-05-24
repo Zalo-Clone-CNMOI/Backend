@@ -548,9 +548,7 @@ export class ConversationCoreService implements OnModuleInit {
       await manager.save(Conversation, conversation);
 
       updatedSettings = conversation.settings;
-      memberIds = members
-        .filter((m) => m.leftAt === null)
-        .map((m) => m.userId);
+      memberIds = members.filter((m) => m.leftAt === null).map((m) => m.userId);
     });
 
     this.logger.log(`Group settings updated: ${conversationId} by ${userId}`);

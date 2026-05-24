@@ -40,14 +40,28 @@ export class GeminiProvider implements ILlmProvider {
       const systemMsg = options.messages.find((m) => m.role === 'system');
       const chatMessages = options.messages
         .filter((m) => m.role !== 'system')
-        .map((m) => ({
-          role: m.role === 'assistant' ? 'model' : 'user',
-          parts: [{ text: m.content }],
-        }));
+        .map((m) => {
+          if (Array.isArray(m.content)) {
+            throw new Error(
+              'Gemini provider does not yet support multimodal LlmContentPart[] content. Phase 3 work.',
+            );
+          }
+          return {
+            role: m.role === 'assistant' ? 'model' : 'user',
+            // TODO(Phase-3): when m.content is LlmContentPart[], this produces a malformed
+            // Gemini part ({ text: <array> }). Map to multiple parts with image data before
+            // shipping any engine that emits image_url content.
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
+            parts: [{ text: m.content as any }],
+          };
+        });
 
       const chat = genModel.startChat({
         history: chatMessages.slice(0, -1),
-        systemInstruction: systemMsg?.content,
+        // TODO(Phase-3): multimodal content parts are passed through as-is; provider
+        // SDK error path is currently the only signal if an array reaches the API.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
+        systemInstruction: systemMsg?.content as any,
         generationConfig: {
           maxOutputTokens: options.maxTokens ?? 1024,
           temperature: options.temperature ?? 0.7,
@@ -55,6 +69,7 @@ export class GeminiProvider implements ILlmProvider {
       });
 
       const lastMessage = chatMessages[chatMessages.length - 1];
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       const result = await chat.sendMessage(lastMessage.parts[0].text);
       const response = result.response;
 
@@ -94,14 +109,28 @@ export class GeminiProvider implements ILlmProvider {
       const systemMsg = options.messages.find((m) => m.role === 'system');
       const chatMessages = options.messages
         .filter((m) => m.role !== 'system')
-        .map((m) => ({
-          role: m.role === 'assistant' ? 'model' : 'user',
-          parts: [{ text: m.content }],
-        }));
+        .map((m) => {
+          if (Array.isArray(m.content)) {
+            throw new Error(
+              'Gemini provider does not yet support multimodal LlmContentPart[] content. Phase 3 work.',
+            );
+          }
+          return {
+            role: m.role === 'assistant' ? 'model' : 'user',
+            // TODO(Phase-3): when m.content is LlmContentPart[], this produces a malformed
+            // Gemini part ({ text: <array> }). Map to multiple parts with image data before
+            // shipping any engine that emits image_url content.
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
+            parts: [{ text: m.content as any }],
+          };
+        });
 
       const chat = genModel.startChat({
         history: chatMessages.slice(0, -1),
-        systemInstruction: systemMsg?.content,
+        // TODO(Phase-3): multimodal content parts are passed through as-is; provider
+        // SDK error path is currently the only signal if an array reaches the API.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
+        systemInstruction: systemMsg?.content as any,
         generationConfig: {
           maxOutputTokens: options.maxTokens ?? 1024,
           temperature: options.temperature ?? 0.7,
@@ -109,6 +138,7 @@ export class GeminiProvider implements ILlmProvider {
       });
 
       const lastMessage = chatMessages[chatMessages.length - 1];
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       const result = await chat.sendMessageStream(lastMessage.parts[0].text);
 
       let fullContent = '';

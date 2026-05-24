@@ -102,6 +102,7 @@ export const KafkaTopics = {
   AiEntityDetectionResult: 'ai.entity.detection.result',
   AiEntityInfoRequest: 'ai.entity.info.request',
   AiEntityInfoResult: 'ai.entity.info.result',
+  ChatAiMessage: 'chat.ai.message',
 } as const;
 
 export type KafkaTopic = (typeof KafkaTopics)[keyof typeof KafkaTopics];

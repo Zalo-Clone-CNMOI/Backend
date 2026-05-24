@@ -8,6 +8,7 @@ import { RedisModule } from '@libs/redis';
 import { HealthCheckService } from '@libs/shared';
 import { DatabaseModule, User, ConversationMember } from '@libs/database';
 import { ConversationMembershipModule } from '@libs/mvp-access';
+import { AiMessageConsumer } from './consumers/ai-message.consumer';
 import { PersistMessageConsumer } from './consumers/persist-message.consumer';
 import { PollMessageConsumer } from './consumers/poll-message.consumer';
 import { SendMessageHandler } from './consumers/send-message.handler';
@@ -30,7 +31,12 @@ import { HealthController } from './health.controller';
     ConversationMembershipModule,
     MessagesModule,
   ],
-  controllers: [PersistMessageConsumer, PollMessageConsumer, HealthController],
+  controllers: [
+    AiMessageConsumer,
+    PersistMessageConsumer,
+    PollMessageConsumer,
+    HealthController,
+  ],
   providers: [
     ChatPublisher,
     HealthCheckService,

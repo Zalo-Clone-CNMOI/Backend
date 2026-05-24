@@ -217,3 +217,84 @@ describe('loadConfig', () => {
     );
   });
 });
+
+describe('Zai bot configuration', () => {
+  const ORIGINAL_ENV = { ...process.env };
+
+  beforeEach(() => {
+    process.env = { ...ORIGINAL_ENV };
+  });
+
+  afterAll(() => {
+    process.env = ORIGINAL_ENV;
+  });
+
+  it('reads ZAI_BOT_USER_ID from environment', () => {
+    process.env.ZAI_BOT_USER_ID = '11111111-2222-3333-4444-555555555555';
+    process.env.NODE_ENV = 'production';
+    // satisfy minimum config requirements; reuse helpers from existing tests
+    process.env.KAFKA_BROKERS = 'localhost:9092';
+    process.env.KAFKA_CLIENT_ID = 'test';
+    process.env.KAFKA_GROUP_ID = 'test-group';
+    process.env.REDIS_URL = 'redis://localhost';
+    process.env.SCYLLA_CONTACT_POINTS = 'localhost';
+    process.env.SCYLLA_LOCAL_DATACENTER = 'dc1';
+    process.env.SCYLLA_KEYSPACE = 'test';
+    process.env.DB_HOST = 'localhost';
+    process.env.DB_PORT = '5432';
+    process.env.DB_USERNAME = 'u';
+    process.env.DB_PASSWORD = 'p';
+    process.env.DB_NAME = 'd';
+
+    jest.resetModules();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const m1 = require('./app-config') as typeof import('./app-config');
+    const config = m1.loadConfig('chat-service');
+    expect(config.zaiBotUserId).toBe('11111111-2222-3333-4444-555555555555');
+  });
+
+  it('uses dev default UUID when ZAI_BOT_USER_ID unset in development', () => {
+    delete process.env.ZAI_BOT_USER_ID;
+    process.env.NODE_ENV = 'development';
+    process.env.KAFKA_BROKERS = 'localhost:9092';
+    process.env.KAFKA_CLIENT_ID = 'test';
+    process.env.KAFKA_GROUP_ID = 'test-group';
+    process.env.REDIS_URL = 'redis://localhost';
+    process.env.SCYLLA_CONTACT_POINTS = 'localhost';
+    process.env.SCYLLA_LOCAL_DATACENTER = 'dc1';
+    process.env.SCYLLA_KEYSPACE = 'test';
+    process.env.DB_HOST = 'localhost';
+    process.env.DB_PORT = '5432';
+    process.env.DB_USERNAME = 'u';
+    process.env.DB_PASSWORD = 'p';
+    process.env.DB_NAME = 'd';
+
+    jest.resetModules();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const m2 = require('./app-config') as typeof import('./app-config');
+    const config = m2.loadConfig('chat-service');
+    expect(config.zaiBotUserId).toBe('00000000-0000-0000-0000-0000000000a1');
+  });
+
+  it('rejects invalid UUID format', () => {
+    process.env.ZAI_BOT_USER_ID = 'not-a-uuid';
+    process.env.NODE_ENV = 'production';
+    process.env.KAFKA_BROKERS = 'localhost:9092';
+    process.env.KAFKA_CLIENT_ID = 'test';
+    process.env.KAFKA_GROUP_ID = 'test-group';
+    process.env.REDIS_URL = 'redis://localhost';
+    process.env.SCYLLA_CONTACT_POINTS = 'localhost';
+    process.env.SCYLLA_LOCAL_DATACENTER = 'dc1';
+    process.env.SCYLLA_KEYSPACE = 'test';
+    process.env.DB_HOST = 'localhost';
+    process.env.DB_PORT = '5432';
+    process.env.DB_USERNAME = 'u';
+    process.env.DB_PASSWORD = 'p';
+    process.env.DB_NAME = 'd';
+
+    jest.resetModules();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const m3 = require('./app-config') as typeof import('./app-config');
+    expect(() => m3.loadConfig('chat-service')).toThrow(/ZAI_BOT_USER_ID/);
+  });
+});

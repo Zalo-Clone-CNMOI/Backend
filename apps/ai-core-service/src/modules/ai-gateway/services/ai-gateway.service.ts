@@ -53,7 +53,13 @@ export class AiGatewayService {
         ...options,
         messages: options.messages.map((m) => ({
           ...m,
-          content: this.sanitizer.sanitize(m.content),
+          // TODO(Phase-3): when m.content is LlmContentPart[], text parts inside the array
+          // are NOT sanitized. Add per-part sanitization before shipping any engine that
+          // constructs multimodal messages from user input.
+          content:
+            typeof m.content === 'string'
+              ? this.sanitizer.sanitize(m.content)
+              : m.content,
         })),
       };
     }
@@ -105,7 +111,13 @@ export class AiGatewayService {
         ...options,
         messages: options.messages.map((m) => ({
           ...m,
-          content: this.sanitizer.sanitize(m.content),
+          // TODO(Phase-3): when m.content is LlmContentPart[], text parts inside the array
+          // are NOT sanitized. Add per-part sanitization before shipping any engine that
+          // constructs multimodal messages from user input.
+          content:
+            typeof m.content === 'string'
+              ? this.sanitizer.sanitize(m.content)
+              : m.content,
         })),
       };
     }
@@ -203,7 +215,13 @@ export class AiGatewayService {
         ...options,
         messages: options.messages.map((m) => ({
           ...m,
-          content: this.sanitizer.sanitize(m.content),
+          // TODO(Phase-3): when m.content is LlmContentPart[], text parts inside the array
+          // are NOT sanitized. Add per-part sanitization before shipping any engine that
+          // constructs multimodal messages from user input.
+          content:
+            typeof m.content === 'string'
+              ? this.sanitizer.sanitize(m.content)
+              : m.content,
         })),
       };
     }

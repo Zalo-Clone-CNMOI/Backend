@@ -1,5 +1,9 @@
 import { MessageType } from '@app/constant';
 import type { CallType } from './call.events';
+import type {
+  AiMessageFeature,
+  MessageBodyFormat,
+} from '../types/ai-conversation';
 
 export type MessageAttachmentType = 'image' | 'video' | 'audio' | 'document';
 
@@ -149,6 +153,8 @@ export interface ChatMessageCreatedEvent {
   conversation_id: string;
   sender_id: string;
   body: string;
+  /** Render-format hint for AI-authored messages. Undefined for human-authored messages (treated as text). */
+  body_format?: MessageBodyFormat;
   created_at: number;
   attachments?: MessageAttachment[];
   reply_to_message_id?: string;
@@ -329,5 +335,36 @@ export interface ChatPollMessageUpdatedEvent {
   message_id: string;
   conversation_id: string;
   metadata: PollMessageMetadata;
+  trace_id: string;
+}
+
+/**
+ * Metadata attached to a Zai-produced message. Used by frontend to render
+ * citations, debug tags, and feature-specific affordances.
+ */
+export interface AiMessageMetadata {
+  feature: AiMessageFeature;
+  sources?: Array<{ chunk_index: number; preview: string }>;
+  tokens_used?: number;
+  model?: string;
+  parent_message_id?: string;
+  /** Reserved for streaming UI in future phases; Phase 1 always omits. */
+  is_streaming?: boolean;
+}
+
+/**
+ * Kafka command sent from ai-core-service to chat-service to persist a Zai
+ * message. `sender_id` MUST equal config.zaiBotUserId — enforced by consumer.
+ */
+export interface ChatAiMessageCommand {
+  message_id: string;
+  conversation_id: string;
+  sender_id: string;
+  body: string;
+  /** Render-format hint. Omit or use 'text' for plain text rendering. */
+  body_format?: MessageBodyFormat;
+  attachments?: MessageAttachment[];
+  metadata?: AiMessageMetadata;
+  created_at: number;
   trace_id: string;
 }

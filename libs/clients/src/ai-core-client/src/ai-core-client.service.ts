@@ -1,7 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { EntityInfoApi, ZaiAssistApi, EntityType } from './client';
 import { BaseHttpClient } from '../../base-http-client';
-import type { AiEntityInfoResultEvent, AiCatchUpResultEvent } from '@libs/contracts';
+import type {
+  AiEntityInfoResultEvent,
+  AiCatchUpResultEvent,
+} from '@libs/contracts';
 
 @Injectable()
 export class AiCoreClientService extends BaseHttpClient {

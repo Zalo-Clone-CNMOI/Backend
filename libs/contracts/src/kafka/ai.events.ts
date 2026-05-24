@@ -176,6 +176,32 @@ export interface AiSummaryResultEvent {
   trace_id?: string;
 }
 
+// ── Catch-up Summary ───────────────────────────────────────────────────────
+
+/**
+ * Result of a per-user "catch up on what you missed" summary. Returned
+ * synchronously over HTTP (BFF → ai-core); NOT persisted as a chat message.
+ * When had_unread is false, summary is empty and no LLM call was made.
+ */
+export interface AiCatchUpResultEvent {
+  conversation_id: string;
+  user_id: string;
+  had_unread: boolean;
+  summary: string;
+  message_count: number;
+  from_message_id?: string;
+  to_message_id?: string;
+  /** The lastReadAt boundary (epoch ms) used to bound the unread window, if any. */
+  since?: number;
+  /** True when unread messages exceeded the cap and only the newest were summarized. */
+  truncated: boolean;
+  provider: AiProviderType;
+  tokens_used: number;
+  cached: boolean;
+  generated_at: number;
+  trace_id?: string;
+}
+
 // ── Translation ────────────────────────────────────────────────────────────
 
 export interface AiTranslateRequestEvent {

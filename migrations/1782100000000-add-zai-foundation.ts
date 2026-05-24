@@ -42,7 +42,7 @@ export class AddZaiFoundation1782100000000 implements MigrationInterface {
         "status", "createdAt", "updatedAt"
       )
       VALUES ($1, $2, $3, $4, $5, 'active', NOW(), NOW())
-      ON CONFLICT ("id") DO NOTHING
+      ON CONFLICT DO NOTHING
       `,
       [
         ZAI_BOT_USER_ID,
@@ -55,6 +55,9 @@ export class AddZaiFoundation1782100000000 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
+    // ConversationMember.user FK is ON DELETE CASCADE → memberships cascade away.
+    // Messages in ScyllaDB are not cleaned up (orphaned sender_id refs) — by design,
+    // migrations only manage Postgres state.
     await queryRunner.query(`DELETE FROM "users" WHERE "id" = $1`, [
       ZAI_BOT_USER_ID,
     ]);

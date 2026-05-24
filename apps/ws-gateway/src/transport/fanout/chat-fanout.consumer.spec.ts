@@ -55,6 +55,7 @@ describe('ChatFanoutConsumer', () => {
         conversation_id: 'conv-1',
         sender_id: 'user-1',
         body: 'hello',
+        body_format: undefined,
         created_at: 1706162800000,
         attachments: undefined,
         reply_to_message_id: undefined,
@@ -86,6 +87,23 @@ describe('ChatFanoutConsumer', () => {
           { user_id: 'user-1', mention_type: 'user', offset: 3, length: 6 },
         ],
       }),
+    );
+  });
+
+  it('should include body_format in broadcast payload when set to markdown', async () => {
+    await consumer.onMessageCreated({
+      message_id: 'msg-md',
+      conversation_id: 'conv-1',
+      sender_id: 'zai-bot',
+      body: '**bold** response',
+      body_format: 'markdown',
+      created_at: 1706162800000,
+    } as unknown as ChatMessageCreatedEvent);
+
+    expect(gateway.broadcastToConversation).toHaveBeenCalledWith(
+      'conv-1',
+      WsEvents.ChatMessage,
+      expect.objectContaining({ body_format: 'markdown' }),
     );
   });
 

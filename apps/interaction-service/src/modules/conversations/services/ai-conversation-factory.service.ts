@@ -90,12 +90,17 @@ export class AiConversationFactoryService {
       );
 
       // Set Redis marker so chat-service can route messages without a DB lookup.
-      void this.cacheService.setAiConversationMarker(saved.id);
+      // Awaited here: if the marker is missing, chat-service won't route AI messages
+      // for this conversation until the user calls getOrCreateGeneral again.
+      await this.cacheService.setAiConversationMarker(saved.id);
 
       return saved;
     });
   }
 
+  // TODO(Phase-3-follow-up): add a partial unique index on conversations
+  // (created_by_id) WHERE type='AI_ASSISTANT' AND ai_context->>'feature'='general'
+  // to prevent duplicate conversations under concurrent first-use requests.
   async getOrCreateGeneral(
     userId: string,
   ): Promise<{ conversationId: string }> {

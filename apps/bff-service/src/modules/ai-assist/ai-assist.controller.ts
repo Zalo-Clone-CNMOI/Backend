@@ -1,4 +1,11 @@
-import { Controller, Get, Param } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -18,7 +25,8 @@ import { ZaiConversationResponseDto } from './dto/zai-conversation-response.dto'
 export class AiAssistController {
   constructor(private readonly service: AiAssistService) {}
 
-  @Get('conversations/zai')
+  @Post('conversations/zai')
+  @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiOperation({
     summary:

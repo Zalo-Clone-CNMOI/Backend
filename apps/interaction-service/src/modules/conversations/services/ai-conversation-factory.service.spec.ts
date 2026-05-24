@@ -89,6 +89,8 @@ describe('AiConversationFactoryService', () => {
     );
   });
 
+  afterEach(() => jest.clearAllMocks());
+
   it('creates an AI_ASSISTANT conversation with user + Zai as members', async () => {
     const context: AiConversationContext = {
       feature: 'document',

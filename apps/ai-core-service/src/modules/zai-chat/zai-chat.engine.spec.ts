@@ -122,6 +122,7 @@ describe('ZaiChatEngine', () => {
   }
 
   beforeEach(() => build());
+  afterEach(() => jest.clearAllMocks());
 
   // ── Loop guard ─────────────────────────────────────────────────────────────
 

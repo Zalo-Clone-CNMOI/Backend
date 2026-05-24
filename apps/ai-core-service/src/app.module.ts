@@ -24,6 +24,7 @@ import { DocumentModule } from './modules/document/document.module';
 import { EntityDetectionModule } from './modules/entity-detection/entity-detection.module';
 import { AiConsumer } from './transport/ai.consumer';
 import { AiPublisher } from './transport/ai.publisher';
+import { AiChatPublisher } from './transport/ai-chat.publisher';
 
 @Module({
   imports: [
@@ -66,7 +67,7 @@ import { AiPublisher } from './transport/ai.publisher';
     EntityDetectionModule,
   ],
   controllers: [AiConsumer],
-  providers: [AiPublisher],
-  exports: [AiPublisher],
+  providers: [AiPublisher, AiChatPublisher],
+  exports: [AiPublisher, AiChatPublisher],
 })
 export class AppModule {}

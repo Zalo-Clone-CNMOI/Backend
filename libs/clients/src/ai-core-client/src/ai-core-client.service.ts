@@ -1,11 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { EntityInfoApi, ZaiAssistApi } from './client';
+import { EntityInfoApi, ZaiAssistApi, EntityType } from './client';
 import { BaseHttpClient } from '../../base-http-client';
-import type {
-  AiEntityInfoResultEvent,
-  EntityType,
-  AiCatchUpResultEvent,
-} from '@libs/contracts';
+import type { AiEntityInfoResultEvent, AiCatchUpResultEvent } from '@libs/contracts';
 
 @Injectable()
 export class AiCoreClientService extends BaseHttpClient {
@@ -20,18 +16,18 @@ export class AiCoreClientService extends BaseHttpClient {
 
   async getEntityInfo(params: {
     text: string;
-    type: EntityType;
+    type: string;
     lang: string;
     userId: string;
   }): Promise<AiEntityInfoResultEvent> {
     try {
       const response = await this.entityInfoApi.getEntityInfo({
         text: params.text,
-        type: params.type,
+        type: params.type as EntityType,
         lang: params.lang,
-        user_id: params.userId,
+        userId: params.userId,
       });
-      return response.data;
+      return response.data as unknown as AiEntityInfoResultEvent;
     } catch (error) {
       this.handleError('getEntityInfo', error);
     }
@@ -45,15 +41,14 @@ export class AiCoreClientService extends BaseHttpClient {
   }): Promise<AiCatchUpResultEvent> {
     try {
       const response = await this.zaiAssistApi.getCatchUpSummary({
-        conversation_id: params.conversationId,
-        user_id: params.userId,
+        conversationId: params.conversationId,
+        userId: params.userId,
         since: params.since,
         limit: params.limit,
       });
-      return response.data;
+      return response.data as unknown as AiCatchUpResultEvent;
     } catch (error) {
       this.handleError('getCatchUpSummary', error);
     }
   }
-
 }

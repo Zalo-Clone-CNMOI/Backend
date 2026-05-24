@@ -86,7 +86,7 @@ describe('AiCoreClientService', () => {
         text: 'React',
         type: 'tool',
         lang: 'vi',
-        user_id: 'user-1',
+        userId: 'user-1',
       });
     });
 
@@ -108,7 +108,7 @@ describe('AiCoreClientService', () => {
   // ── getCatchUpSummary ──────────────────────────────────────────────────────
 
   describe('getCatchUpSummary', () => {
-    it('maps camelCase params to snake_case and returns response.data', async () => {
+    it('passes camelCase params to generated API and returns response.data', async () => {
       mockZaiAssistApi.getCatchUpSummary.mockResolvedValue({
         data: CATCH_UP_FIXTURE,
       });
@@ -122,8 +122,8 @@ describe('AiCoreClientService', () => {
 
       expect(result).toEqual(CATCH_UP_FIXTURE);
       expect(mockZaiAssistApi.getCatchUpSummary).toHaveBeenCalledWith({
-        conversation_id: 'conv-1',
-        user_id: 'user-1',
+        conversationId: 'conv-1',
+        userId: 'user-1',
         since: 1_700_000_000_000,
         limit: 20,
       });
@@ -140,8 +140,8 @@ describe('AiCoreClientService', () => {
       });
 
       expect(mockZaiAssistApi.getCatchUpSummary).toHaveBeenCalledWith({
-        conversation_id: 'conv-2',
-        user_id: 'user-2',
+        conversationId: 'conv-2',
+        userId: 'user-2',
         since: undefined,
         limit: undefined,
       });

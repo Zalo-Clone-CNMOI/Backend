@@ -27,7 +27,8 @@ export type AiProviderType =
   | 'gemini'
   | 'anthropic'
   | 'locdo_router'
-  | 'ensemble';
+  | 'ensemble'
+  | 'unknown';
 
 const AI_PROVIDER_VALUES: readonly AiProviderType[] = [
   'openai',
@@ -35,12 +36,13 @@ const AI_PROVIDER_VALUES: readonly AiProviderType[] = [
   'anthropic',
   'locdo_router',
   'ensemble',
+  'unknown',
 ];
 
 export function toAiProviderType(provider: string): AiProviderType {
   return (AI_PROVIDER_VALUES as readonly string[]).includes(provider)
     ? (provider as AiProviderType)
-    : 'openai';
+    : 'unknown';
 }
 
 export type ModerationDecisionSourceType =

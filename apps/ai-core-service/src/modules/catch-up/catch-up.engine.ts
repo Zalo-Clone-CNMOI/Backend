@@ -119,7 +119,14 @@ export class CatchUpEngine {
     // but with different caps can differ in message_count/truncated.
     const cacheKey = `ai:catchup:${conversation_id}:${since ?? 'none'}:${toMessageId}:${effectiveCap}`;
 
-    const cachedRaw = await this.redis.get(cacheKey);
+    let cachedRaw: string | null = null;
+    try {
+      cachedRaw = await this.redis.get(cacheKey);
+    } catch (cacheReadErr) {
+      this.logger.warn(
+        `Catch-up cache read failed (Redis unavailable): ${cacheReadErr instanceof Error ? cacheReadErr.message : String(cacheReadErr)}`,
+      );
+    }
     if (cachedRaw) {
       try {
         const hit = JSON.parse(cachedRaw) as AiCatchUpResultEvent;
@@ -149,7 +156,7 @@ export class CatchUpEngine {
         message_count: 0,
         since,
         truncated: false,
-        provider: 'openai',
+        provider: 'unknown',
         tokens_used: 0,
         cached: false,
         generated_at: Date.now(),
@@ -240,7 +247,7 @@ export class CatchUpEngine {
         to_message_id: toMessageId,
         since,
         truncated,
-        provider: 'openai',
+        provider: 'unknown',
         tokens_used: 0,
         cached: false,
         generated_at: Date.now(),

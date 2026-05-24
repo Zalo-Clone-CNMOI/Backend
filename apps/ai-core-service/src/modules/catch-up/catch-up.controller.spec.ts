@@ -96,6 +96,27 @@ describe('CatchUpController', () => {
         } as never),
       ).rejects.toBeInstanceOf(BusinessException);
     });
+
+    // m2: limit bounds
+    it('throws 400 when limit is zero', async () => {
+      await expect(
+        controller.getCatchUp({
+          conversation_id: 'conv-001',
+          user_id: 'user-001',
+          limit: '0',
+        } as never),
+      ).rejects.toBeInstanceOf(BusinessException);
+    });
+
+    it('throws 400 when limit is negative', async () => {
+      await expect(
+        controller.getCatchUp({
+          conversation_id: 'conv-001',
+          user_id: 'user-001',
+          limit: '-5',
+        } as never),
+      ).rejects.toBeInstanceOf(BusinessException);
+    });
   });
 
   // ── delegation ───────────────────────────────────────────────────────────

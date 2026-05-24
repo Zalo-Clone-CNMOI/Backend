@@ -3,9 +3,12 @@ import { RedisService } from '@libs/redis';
 import { MessageRepository } from '@libs/scylla';
 import { AiGatewayService } from '../ai-gateway/services/ai-gateway.service';
 import { PromptBuilderService } from '../ai-gateway/services/prompt-builder.service';
+import { AiMetricsService } from '../ai-gateway/services/ai-metrics.service';
 import { parseJsonResponse } from '../ai-gateway/services/parse-json.util';
 import type { AiCatchUpResultEvent } from '@libs/contracts';
 import { toAiProviderType } from '@libs/contracts';
+import { BusinessException } from '@app/types';
+import type { PersistedMessage } from '@app/types/interfaces/chat.interface';
 
 /** How many messages to fetch from ScyllaDB in one shot (newest-first DESC). */
 const FETCH_CAP = 200;
@@ -24,6 +27,7 @@ export class CatchUpEngine {
     private readonly messageRepo: MessageRepository,
     private readonly gateway: AiGatewayService,
     private readonly promptBuilder: PromptBuilderService,
+    private readonly aiMetrics: AiMetricsService,
     private readonly redis: RedisService,
   ) {}
 
@@ -54,15 +58,25 @@ export class CatchUpEngine {
         : SUMMARY_CAP;
 
     // ── 1. Fetch newest messages from ScyllaDB ──────────────────────────────
-    const allMessages = await this.messageRepo.getAllMessages(
-      conversation_id,
-      FETCH_CAP,
-    );
+    let allMessages: PersistedMessage[];
+    try {
+      allMessages = await this.messageRepo.getAllMessages(
+        conversation_id,
+        FETCH_CAP,
+      );
+    } catch (err) {
+      this.logger.error(
+        `ScyllaDB fetch failed for catch-up conversation_id=${conversation_id} trace_id=${trace_id ?? 'none'}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      throw BusinessException.internal(
+        'Upstream message store is unavailable. Please try again later.',
+      );
+    }
 
     // ── 2. Determine the unread window ──────────────────────────────────────
     // getAllMessages returns DESC (newest first). Filter out deleted messages and
     // messages older than `since`.
-    let windowDesc = allMessages.filter((m) => {
+    let windowDesc: PersistedMessage[] = allMessages.filter((m) => {
       if (m.deleted_at) return false;
       if (since !== undefined && m.created_at <= since) return false;
       return true;
@@ -107,7 +121,9 @@ export class CatchUpEngine {
     if (cachedRaw) {
       try {
         const hit = JSON.parse(cachedRaw) as AiCatchUpResultEvent;
-        return { ...hit, cached: true };
+        // I1: Override identity fields so the cached content is attributed to
+        // the CURRENT caller, not the original requester.
+        return { ...hit, cached: true, user_id, trace_id };
       } catch {
         this.logger.warn(
           `Corrupt catch-up cache for conversation ${conversation_id} — regenerating`,
@@ -115,51 +131,120 @@ export class CatchUpEngine {
       }
     }
 
-    // ── 6. Build prompt and call AI gateway ────────────────────────────────
-    const lines = windowAsc.filter((m) => m.body).map((m) => m.body);
+    // ── 6. Build prompt lines ───────────────────────────────────────────────
+    // I2: Only messages that have a text body are fed to the LLM.
+    const lines: string[] = windowAsc
+      .filter((m): m is PersistedMessage & { body: string } => Boolean(m.body))
+      .map((m) => m.body);
 
-    const messages = this.promptBuilder.buildCatchUpPrompt(lines);
-
-    const result = await this.gateway.complete(user_id, {
-      messages,
-      maxTokens: 400,
-      temperature: 0.3,
-    });
-
-    const summary = this.parseResponse(result.content);
-
-    // ── 7. Build result ─────────────────────────────────────────────────────
-    const catchUpResult: AiCatchUpResultEvent = {
-      conversation_id,
-      user_id,
-      had_unread: true,
-      summary,
-      message_count: messageCount,
-      from_message_id: fromMessageId,
-      to_message_id: toMessageId,
-      since,
-      truncated,
-      provider: toAiProviderType(result.provider),
-      tokens_used: result.tokensIn + result.tokensOut,
-      cached: false,
-      generated_at: Date.now(),
-      trace_id,
-    };
-
-    // ── 8. Store in Redis cache ─────────────────────────────────────────────
-    try {
-      await this.redis.setEx(
-        cacheKey,
-        CACHE_TTL_SECONDS,
-        JSON.stringify(catchUpResult),
-      );
-    } catch (cacheErr) {
-      this.logger.warn(
-        `Catch-up cache write failed (Redis unavailable): ${cacheErr instanceof Error ? cacheErr.message : String(cacheErr)}`,
-      );
+    // I2: Short-circuit when all unread messages are media-only (no body text).
+    if (lines.length === 0) {
+      return {
+        conversation_id,
+        user_id,
+        had_unread: false,
+        summary: '',
+        message_count: 0,
+        since,
+        truncated: false,
+        provider: 'openai',
+        tokens_used: 0,
+        cached: false,
+        generated_at: Date.now(),
+        trace_id,
+      };
     }
 
-    return catchUpResult;
+    // ── 7. Call AI gateway ──────────────────────────────────────────────────
+    const messages = this.promptBuilder.buildCatchUpPrompt(lines);
+
+    try {
+      const result = await this.gateway.complete(user_id, {
+        messages,
+        maxTokens: 400,
+        temperature: 0.3,
+      });
+
+      const summary = this.parseResponse(result.content);
+
+      // I3: Record metrics on success path.
+      this.aiMetrics.recordRequest(
+        'catch_up',
+        result.provider,
+        result.model,
+        result.tokensIn,
+        result.tokensOut,
+        result.latencyMs,
+        true,
+      );
+
+      // ── 8. Build result ─────────────────────────────────────────────────────
+      const catchUpResult: AiCatchUpResultEvent = {
+        conversation_id,
+        user_id,
+        had_unread: true,
+        summary,
+        message_count: messageCount,
+        from_message_id: fromMessageId,
+        to_message_id: toMessageId,
+        since,
+        truncated,
+        provider: toAiProviderType(result.provider),
+        tokens_used: result.tokensIn + result.tokensOut,
+        cached: false,
+        generated_at: Date.now(),
+        trace_id,
+      };
+
+      // ── 9. Store in Redis cache ─────────────────────────────────────────────
+      try {
+        await this.redis.setEx(
+          cacheKey,
+          CACHE_TTL_SECONDS,
+          JSON.stringify(catchUpResult),
+        );
+      } catch (cacheErr) {
+        this.logger.warn(
+          `Catch-up cache write failed (Redis unavailable): ${cacheErr instanceof Error ? cacheErr.message : String(cacheErr)}`,
+        );
+      }
+
+      return catchUpResult;
+    } catch (error) {
+      // C2: Gateway failure — log, record failure metric, return graceful fallback.
+      this.logger.error(
+        `Catch-up AI gateway failed for conversation_id=${conversation_id} trace_id=${trace_id ?? 'none'}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+
+      // I3: Record metrics on failure path.
+      this.aiMetrics.recordRequest(
+        'catch_up',
+        'unknown',
+        'unknown',
+        0,
+        0,
+        0,
+        false,
+      );
+
+      return {
+        conversation_id,
+        user_id,
+        had_unread: true,
+        summary:
+          'Could not generate your catch-up summary right now. Please try again later.',
+        message_count: messageCount,
+        from_message_id: fromMessageId,
+        to_message_id: toMessageId,
+        since,
+        truncated,
+        provider: 'openai',
+        tokens_used: 0,
+        cached: false,
+        generated_at: Date.now(),
+        trace_id,
+      };
+    }
   }
 
   private parseResponse(content: string): string {

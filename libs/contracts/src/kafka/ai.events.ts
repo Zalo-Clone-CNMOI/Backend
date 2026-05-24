@@ -6,6 +6,7 @@ export type AiFeatureType =
   | 'moderation'
   | 'smart_reply'
   | 'summary'
+  | 'catch_up'
   | 'translation'
   | 'document_analysis'
   | 'entity_detection'

@@ -2,8 +2,10 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { CatchUpEngine } from './catch-up.engine';
 import { AiGatewayService } from '../ai-gateway/services/ai-gateway.service';
 import { PromptBuilderService } from '../ai-gateway/services/prompt-builder.service';
+import { AiMetricsService } from '../ai-gateway/services/ai-metrics.service';
 import { RedisService } from '@libs/redis';
 import { MessageRepository } from '@libs/scylla';
+import { BusinessException } from '@app/types';
 import type { AiCatchUpResultEvent } from '@libs/contracts';
 import type { PersistedMessage } from '@app/types/interfaces/chat.interface';
 
@@ -75,6 +77,14 @@ function makePromptBuilder(): jest.Mocked<PromptBuilderService> {
   } as unknown as jest.Mocked<PromptBuilderService>;
 }
 
+function makeAiMetrics(): jest.Mocked<AiMetricsService> {
+  return {
+    recordRequest: jest.fn(),
+    recordCost: jest.fn(),
+    setCircuitState: jest.fn(),
+  } as unknown as jest.Mocked<AiMetricsService>;
+}
+
 // ── Test suite ─────────────────────────────────────────────────────────────
 
 describe('CatchUpEngine', () => {
@@ -83,18 +93,21 @@ describe('CatchUpEngine', () => {
   let mockRedis: jest.Mocked<RedisService>;
   let mockRepo: { getAllMessages: jest.Mock };
   let mockPromptBuilder: jest.Mocked<PromptBuilderService>;
+  let mockAiMetrics: jest.Mocked<AiMetricsService>;
 
   beforeEach(async () => {
     mockGateway = makeGateway();
     mockRedis = makeRedis();
     mockPromptBuilder = makePromptBuilder();
     mockRepo = { getAllMessages: jest.fn() };
+    mockAiMetrics = makeAiMetrics();
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CatchUpEngine,
         { provide: AiGatewayService, useValue: mockGateway },
         { provide: PromptBuilderService, useValue: mockPromptBuilder },
+        { provide: AiMetricsService, useValue: mockAiMetrics },
         { provide: RedisService, useValue: mockRedis },
         { provide: MessageRepository, useValue: mockRepo },
       ],
@@ -305,6 +318,46 @@ describe('CatchUpEngine', () => {
       expect(second.cached).toBe(true);
       expect(mockGateway.complete).not.toHaveBeenCalled();
     });
+
+    // I1: cache hit must return the CURRENT caller's user_id / trace_id
+    it('I1: cache hit overrides user_id and trace_id with the current caller identity', async () => {
+      const messages = makeMessages(5, 1000);
+      mockRepo.getAllMessages.mockResolvedValue(messages);
+
+      // Seed a cached payload that belongs to the ORIGINAL requester.
+      const originalPayload: AiCatchUpResultEvent = {
+        conversation_id: 'conv-001',
+        user_id: 'original-user',
+        had_unread: true,
+        summary: 'Something happened',
+        message_count: 5,
+        from_message_id: 'msg-1',
+        to_message_id: 'msg-5',
+        since: 0,
+        truncated: false,
+        provider: 'openai',
+        tokens_used: 150,
+        cached: false,
+        generated_at: Date.now(),
+        trace_id: 'original-trace',
+      };
+      mockRedis.get.mockResolvedValue(JSON.stringify(originalPayload));
+
+      const result = await engine.summarizeUnread({
+        conversation_id: 'conv-001',
+        user_id: 'new-user',
+        since: 0,
+        trace_id: 'new-trace',
+      });
+
+      expect(result.cached).toBe(true);
+      // Must reflect the NEW caller's identity.
+      expect(result.user_id).toBe('new-user');
+      expect(result.trace_id).toBe('new-trace');
+      // The summary content should be unchanged (it's conversation-scoped).
+      expect(result.summary).toBe('Something happened');
+      expect(mockGateway.complete).not.toHaveBeenCalled();
+    });
   });
 
   // ── happy path ────────────────────────────────────────────────────────────
@@ -372,6 +425,160 @@ describe('CatchUpEngine', () => {
       expect(ttl).toBe(600);
       const stored = JSON.parse(payload) as AiCatchUpResultEvent;
       expect(stored.summary).toBe('cached later');
+    });
+
+    // I3: metrics recorded on success
+    it('I3: records a metric with feature=catch_up on the success path', async () => {
+      const messages = makeMessages(5, 1000);
+      mockRepo.getAllMessages.mockResolvedValue(messages);
+      mockGateway.complete.mockResolvedValue(llmResult('Success summary'));
+
+      await engine.summarizeUnread({
+        conversation_id: 'conv-001',
+        user_id: 'user-001',
+      });
+
+      expect(mockAiMetrics.recordRequest).toHaveBeenCalledTimes(1);
+      const [feature, , , , , , success] = mockAiMetrics.recordRequest.mock
+        .calls[0] as [string, string, string, number, number, number, boolean];
+      expect(feature).toBe('catch_up');
+      expect(success).toBe(true);
+    });
+  });
+
+  // ── C1: ScyllaDB read failure ─────────────────────────────────────────────
+
+  describe('C1: ScyllaDB read failure', () => {
+    it('throws a BusinessException (not a raw error) when the repo throws', async () => {
+      mockRepo.getAllMessages.mockRejectedValue(new Error('ScyllaDB timeout'));
+
+      await expect(
+        engine.summarizeUnread({
+          conversation_id: 'conv-001',
+          user_id: 'user-001',
+          trace_id: 'trace-c1',
+        }),
+      ).rejects.toBeInstanceOf(BusinessException);
+    });
+
+    it('does NOT call the gateway when ScyllaDB fails', async () => {
+      mockRepo.getAllMessages.mockRejectedValue(new Error('ScyllaDB timeout'));
+
+      await expect(
+        engine.summarizeUnread({
+          conversation_id: 'conv-001',
+          user_id: 'user-001',
+        }),
+      ).rejects.toThrow();
+
+      expect(mockGateway.complete).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── C2: AI gateway failure → graceful fallback ────────────────────────────
+
+  describe('C2: AI gateway failure', () => {
+    it('returns graceful fallback result (does NOT throw) when gateway throws', async () => {
+      const messages = makeMessages(5, 1000);
+      mockRepo.getAllMessages.mockResolvedValue(messages);
+      mockGateway.complete.mockRejectedValue(new Error('LLM timeout'));
+
+      const result = await engine.summarizeUnread({
+        conversation_id: 'conv-001',
+        user_id: 'user-001',
+        trace_id: 'trace-c2',
+      });
+
+      // Must not throw — graceful fallback
+      expect(result.had_unread).toBe(true);
+      expect(result.tokens_used).toBe(0);
+      expect(result.summary).toContain('Could not generate');
+      expect(result.cached).toBe(false);
+    });
+
+    it('C2: records a failure metric when gateway throws', async () => {
+      const messages = makeMessages(5, 1000);
+      mockRepo.getAllMessages.mockResolvedValue(messages);
+      mockGateway.complete.mockRejectedValue(new Error('LLM timeout'));
+
+      await engine.summarizeUnread({
+        conversation_id: 'conv-001',
+        user_id: 'user-001',
+      });
+
+      expect(mockAiMetrics.recordRequest).toHaveBeenCalledTimes(1);
+      const [feature, provider, , , , , success] = mockAiMetrics.recordRequest
+        .mock.calls[0] as [
+        string,
+        string,
+        string,
+        number,
+        number,
+        number,
+        boolean,
+      ];
+      expect(feature).toBe('catch_up');
+      expect(provider).toBe('unknown');
+      expect(success).toBe(false);
+    });
+
+    it('C2: fallback result preserves message_count from the actual window size', async () => {
+      const messages = makeMessages(10, 1000);
+      mockRepo.getAllMessages.mockResolvedValue(messages);
+      mockGateway.complete.mockRejectedValue(new Error('LLM timeout'));
+
+      const result = await engine.summarizeUnread({
+        conversation_id: 'conv-001',
+        user_id: 'user-001',
+      });
+
+      expect(result.message_count).toBe(10);
+      expect(result.from_message_id).toBeDefined();
+      expect(result.to_message_id).toBeDefined();
+    });
+  });
+
+  // ── I2: all-media window (no body text) ──────────────────────────────────
+
+  describe('I2: all-media unread window', () => {
+    it('returns had_unread:false and does NOT call gateway when all unread messages have no body', async () => {
+      const now = 1_000_000;
+      // 3 messages with body=undefined (media-only)
+      const messages: PersistedMessage[] = [
+        makeMessage('msg-3', now + 3000, { body: undefined }),
+        makeMessage('msg-2', now + 2000, { body: undefined }),
+        makeMessage('msg-1', now + 1000, { body: undefined }),
+      ];
+      mockRepo.getAllMessages.mockResolvedValue(messages);
+
+      const result = await engine.summarizeUnread({
+        conversation_id: 'conv-001',
+        user_id: 'user-001',
+        since: 0,
+      });
+
+      expect(result.had_unread).toBe(false);
+      expect(result.summary).toBe('');
+      expect(result.message_count).toBe(0);
+      expect(mockGateway.complete).not.toHaveBeenCalled();
+    });
+
+    it('I2: also returns had_unread:false when all bodies are empty strings', async () => {
+      const now = 1_000_000;
+      const messages: PersistedMessage[] = [
+        makeMessage('msg-2', now + 2000, { body: '' }),
+        makeMessage('msg-1', now + 1000, { body: '' }),
+      ];
+      mockRepo.getAllMessages.mockResolvedValue(messages);
+
+      const result = await engine.summarizeUnread({
+        conversation_id: 'conv-001',
+        user_id: 'user-001',
+        since: 0,
+      });
+
+      expect(result.had_unread).toBe(false);
+      expect(mockGateway.complete).not.toHaveBeenCalled();
     });
   });
 });

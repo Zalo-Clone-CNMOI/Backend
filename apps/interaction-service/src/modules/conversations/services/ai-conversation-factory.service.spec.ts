@@ -5,7 +5,13 @@ import {
   ConversationMember,
   User,
 } from '@libs/database/entities';
-import { ConversationType, UpdateMemberRoleDtoRoleEnum } from '@app/constant';
+import {
+  ConversationType,
+  ErrorCode,
+  UpdateMemberRoleDtoRoleEnum,
+  UserStatus,
+} from '@app/constant';
+import { BusinessException } from '@app/types';
 import { AiConversationFactoryService } from './ai-conversation-factory.service';
 import type { AiConversationContext } from '@libs/contracts';
 
@@ -13,29 +19,47 @@ const ZAI_ID = '00000000-0000-0000-0000-0000000000a1';
 
 describe('AiConversationFactoryService', () => {
   let service: AiConversationFactoryService;
+  let entityManager: {
+    create: jest.Mock;
+    save: jest.Mock;
+  };
   let conversationRepo: jest.Mocked<Repository<Conversation>>;
   let memberRepo: jest.Mocked<Repository<ConversationMember>>;
   let userRepo: jest.Mocked<Repository<User>>;
 
   beforeEach(() => {
+    entityManager = {
+      create: jest.fn((_, dto) => dto),
+      save: jest.fn(async (entity) => {
+        if (Array.isArray(entity)) return entity;
+        if (!entity.id) return { ...entity, id: 'conv-new' };
+        return entity;
+      }),
+    };
+
     conversationRepo = {
-      create: jest.fn((x) => x as Conversation),
-      save: jest.fn(async (x: Conversation) => ({ ...x, id: 'conv-new' })),
+      manager: {
+        transaction: jest.fn(
+          async (cb: (em: typeof entityManager) => Promise<unknown>) =>
+            cb(entityManager),
+        ),
+      },
     } as unknown as jest.Mocked<Repository<Conversation>>;
 
-    memberRepo = {
-      create: jest.fn((x) => x as ConversationMember),
-      save: jest.fn(async (xs: ConversationMember[]) => xs),
-    } as unknown as jest.Mocked<Repository<ConversationMember>>;
+    memberRepo = {} as unknown as jest.Mocked<Repository<ConversationMember>>;
 
     userRepo = {
-      findOneBy: jest.fn(async (cond) => {
-        if ('id' in cond && (cond as { id: string }).id === ZAI_ID) {
-          return { id: ZAI_ID, fullName: 'Zai' } as User;
+      findOne: jest.fn(async ({ where }: { where: { id: string; status?: string } }) => {
+        const { id, status } = where;
+        if (status === UserStatus.ACTIVE) {
+          // Only return the user if they are not "nonexistent"
+          if (id === 'nonexistent') return null;
+          return { id, fullName: 'User' } as User;
         }
-        if ('id' in cond) {
-          return { id: (cond as { id: string }).id, fullName: 'User' } as User;
-        }
+        return null;
+      }),
+      findOneBy: jest.fn(async ({ id }: { id: string }) => {
+        if (id === ZAI_ID) return { id: ZAI_ID, fullName: 'Zai' } as User;
         return null;
       }),
     } as unknown as jest.Mocked<Repository<User>>;
@@ -57,50 +81,88 @@ describe('AiConversationFactoryService', () => {
 
     const result = await service.createZaiConversation('user-1', context);
 
-    expect(conversationRepo.create).toHaveBeenCalledWith(
+    // Transaction was started
+    expect(
+      (conversationRepo.manager as unknown as { transaction: jest.Mock }).transaction,
+    ).toHaveBeenCalledTimes(1);
+
+    // Conversation entity created with correct shape
+    expect(entityManager.create).toHaveBeenCalledWith(
+      Conversation,
       expect.objectContaining({
         type: ConversationType.AI_ASSISTANT,
         aiContext: context,
         createdById: 'user-1',
       }),
     );
-    expect(memberRepo.create).toHaveBeenCalledTimes(2);
-    expect(memberRepo.save).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({
-          userId: 'user-1',
-          role: UpdateMemberRoleDtoRoleEnum.MEMBER,
-        }),
-        expect.objectContaining({
-          userId: ZAI_ID,
-          role: UpdateMemberRoleDtoRoleEnum.MEMBER,
-        }),
-      ]),
+
+    // Member entities created for both participants
+    expect(entityManager.create).toHaveBeenCalledWith(
+      ConversationMember,
+      expect.objectContaining({
+        userId: 'user-1',
+        role: UpdateMemberRoleDtoRoleEnum.MEMBER,
+      }),
     );
+    expect(entityManager.create).toHaveBeenCalledWith(
+      ConversationMember,
+      expect.objectContaining({
+        userId: ZAI_ID,
+        role: UpdateMemberRoleDtoRoleEnum.MEMBER,
+      }),
+    );
+
+    // em.save called twice: once for conversation, once for members array
+    expect(entityManager.save).toHaveBeenCalledTimes(2);
+
     expect(result.id).toBe('conv-new');
   });
 
-  it('rejects when user does not exist', async () => {
-    userRepo.findOneBy.mockResolvedValueOnce(null); // first call (the user) returns null
+  it('rejects with BusinessException when user does not exist or is inactive', async () => {
+    userRepo.findOne.mockResolvedValueOnce(null);
 
     await expect(
       service.createZaiConversation('nonexistent', {
         feature: 'general',
         created_at: Date.now(),
       }),
-    ).rejects.toThrow(/user not found/i);
+    ).rejects.toThrow(BusinessException);
+
+    // Transaction must NOT have been started
+    expect(
+      (conversationRepo.manager as unknown as { transaction: jest.Mock }).transaction,
+    ).not.toHaveBeenCalled();
   });
 
-  it('rejects when Zai bot user is missing (migration not run)', async () => {
-    userRepo.findOneBy
-      .mockResolvedValueOnce({ id: 'user-1', fullName: 'U' } as User)
-      .mockResolvedValueOnce(null); // Zai missing
+  it('rejects with BusinessException when Zai bot user is missing (migration not run)', async () => {
+    userRepo.findOne.mockResolvedValueOnce({ id: 'user-1', fullName: 'U' } as User);
+    userRepo.findOneBy.mockResolvedValueOnce(null); // Zai missing
 
     await expect(
       service.createZaiConversation('user-1', {
         feature: 'general',
         created_at: Date.now(),
       }),
-    ).rejects.toThrow(/zai bot user not seeded/i);
+    ).rejects.toThrow(BusinessException);
+
+    // Transaction must NOT have been started
+    expect(
+      (conversationRepo.manager as unknown as { transaction: jest.Mock }).transaction,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('throws BusinessException with NOT_FOUND error code when user is not found', async () => {
+    userRepo.findOne.mockResolvedValueOnce(null);
+
+    const error = await service
+      .createZaiConversation('nonexistent', {
+        feature: 'general',
+        created_at: Date.now(),
+      })
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(BusinessException);
+    // BusinessException.notFound() always uses ErrorCode.NOT_FOUND internally
+    expect((error as BusinessException).errorCode).toBe(ErrorCode.NOT_FOUND);
   });
 });

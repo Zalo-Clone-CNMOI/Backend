@@ -7,7 +7,13 @@ import {
   ConversationMember,
   User,
 } from '@libs/database/entities';
-import { ConversationType, UpdateMemberRoleDtoRoleEnum } from '@app/constant';
+import {
+  ConversationType,
+  ErrorCode,
+  UpdateMemberRoleDtoRoleEnum,
+  UserStatus,
+} from '@app/constant';
+import { BusinessException } from '@app/types';
 import type { AiConversationContext } from '@libs/contracts';
 
 /**
@@ -33,47 +39,51 @@ export class AiConversationFactoryService {
     userId: string,
     context: AiConversationContext,
   ): Promise<Conversation> {
-    const user = await this.userRepository.findOneBy({ id: userId });
+    // Validation — no DB writes yet
+    const user = await this.userRepository.findOne({
+      where: { id: userId, status: UserStatus.ACTIVE },
+    });
     if (!user) {
-      throw new Error(`User not found: ${userId}`);
+      throw BusinessException.notFound(ErrorCode.USER_NOT_FOUND);
     }
 
     const zai = await this.userRepository.findOneBy({
       id: this.config.zaiBotUserId,
     });
     if (!zai) {
-      throw new Error(
-        `Zai bot user not seeded — run migration AddZaiFoundation`,
-      );
+      throw BusinessException.notFound(ErrorCode.USER_NOT_FOUND);
     }
 
-    const conversation = this.conversationRepository.create({
-      type: ConversationType.AI_ASSISTANT,
-      name: null,
-      avatarUrl: null,
-      createdById: userId,
-      settings: null,
-      aiContext: context,
+    // Atomic write — conversation + members together
+    return this.conversationRepository.manager.transaction(async (em) => {
+      const conversation = em.create(Conversation, {
+        type: ConversationType.AI_ASSISTANT,
+        name: null,
+        avatarUrl: null,
+        createdById: userId,
+        settings: null,
+        aiContext: context,
+      });
+      const saved = await em.save(conversation);
+
+      const members = [
+        em.create(ConversationMember, {
+          conversationId: saved.id,
+          userId,
+          role: UpdateMemberRoleDtoRoleEnum.MEMBER,
+        }),
+        em.create(ConversationMember, {
+          conversationId: saved.id,
+          userId: this.config.zaiBotUserId,
+          role: UpdateMemberRoleDtoRoleEnum.MEMBER,
+        }),
+      ];
+      await em.save(members);
+
+      this.logger.log(
+        `Created Zai conversation ${saved.id} for user ${userId} (feature: ${context.feature})`,
+      );
+      return saved;
     });
-    const saved = await this.conversationRepository.save(conversation);
-
-    const members = [
-      this.memberRepository.create({
-        conversationId: saved.id,
-        userId,
-        role: UpdateMemberRoleDtoRoleEnum.MEMBER,
-      }),
-      this.memberRepository.create({
-        conversationId: saved.id,
-        userId: this.config.zaiBotUserId,
-        role: UpdateMemberRoleDtoRoleEnum.MEMBER,
-      }),
-    ];
-    await this.memberRepository.save(members);
-
-    this.logger.log(
-      `Created Zai conversation ${saved.id} for user ${userId} (feature: ${context.feature})`,
-    );
-    return saved;
   }
 }

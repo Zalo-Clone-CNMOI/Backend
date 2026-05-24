@@ -1,5 +1,6 @@
 import { MessageType } from '@app/constant';
 import type { CallType } from './call.events';
+import type { AiMessageFeature } from '../types/ai-conversation';
 
 export type MessageAttachmentType = 'image' | 'video' | 'audio' | 'document';
 
@@ -337,11 +338,12 @@ export interface ChatPollMessageUpdatedEvent {
  * citations, debug tags, and feature-specific affordances.
  */
 export interface AiMessageMetadata {
-  feature: 'document' | 'translation' | 'summary' | 'general';
+  feature: AiMessageFeature;
   sources?: Array<{ chunk_index: number; preview: string }>;
   tokens_used?: number;
   model?: string;
   parent_message_id?: string;
+  /** Reserved for streaming UI in future phases; Phase 1 always omits. */
   is_streaming?: boolean;
 }
 

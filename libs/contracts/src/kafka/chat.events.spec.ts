@@ -1,6 +1,5 @@
 import { KafkaTopics } from './topics';
 import type { ChatAiMessageCommand, AiMessageMetadata } from './chat.events';
-import type { AiConversationContext } from '../types/ai-conversation';
 
 describe('Zai contracts', () => {
   it('exposes chat.ai.message topic constant', () => {
@@ -30,12 +29,26 @@ describe('Zai contracts', () => {
     expect(meta.sources?.[0]?.chunk_index).toBe(0);
   });
 
-  it('AiConversationContext requires feature and created_at', () => {
-    const ctx: AiConversationContext = {
-      feature: 'document',
-      document_id: 'doc-1',
+  it('ChatAiMessageCommand accepts attachments and metadata', () => {
+    const cmd: ChatAiMessageCommand = {
+      message_id: 'm1',
+      conversation_id: 'c1',
+      sender_id: 'zai',
+      body: 'see attached',
+      attachments: [
+        {
+          key: 'uploads/a.jpg',
+          type: 'image',
+          name: 'a.jpg',
+          size: 100,
+          content_type: 'image/jpeg',
+        },
+      ],
+      metadata: { feature: 'document', tokens_used: 50 },
       created_at: 1_700_000_000_000,
+      trace_id: 't1',
     };
-    expect(ctx.feature).toBe('document');
+    expect(cmd.attachments?.[0]?.type).toBe('image');
+    expect(cmd.metadata?.feature).toBe('document');
   });
 });

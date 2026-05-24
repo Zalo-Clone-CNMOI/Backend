@@ -1,6 +1,9 @@
 import { MessageType } from '@app/constant';
 import type { CallType } from './call.events';
-import type { AiMessageFeature } from '../types/ai-conversation';
+import type {
+  AiMessageFeature,
+  MessageBodyFormat,
+} from '../types/ai-conversation';
 
 export type MessageAttachmentType = 'image' | 'video' | 'audio' | 'document';
 
@@ -150,6 +153,8 @@ export interface ChatMessageCreatedEvent {
   conversation_id: string;
   sender_id: string;
   body: string;
+  /** Render-format hint for AI-authored messages. Undefined for human-authored messages (treated as text). */
+  body_format?: MessageBodyFormat;
   created_at: number;
   attachments?: MessageAttachment[];
   reply_to_message_id?: string;
@@ -356,6 +361,8 @@ export interface ChatAiMessageCommand {
   conversation_id: string;
   sender_id: string;
   body: string;
+  /** Render-format hint. Omit or use 'text' for plain text rendering. */
+  body_format?: MessageBodyFormat;
   attachments?: MessageAttachment[];
   metadata?: AiMessageMetadata;
   created_at: number;

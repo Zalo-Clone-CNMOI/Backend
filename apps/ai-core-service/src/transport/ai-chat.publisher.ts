@@ -7,6 +7,7 @@ import {
   type ChatAiMessageCommand,
   type AiMessageMetadata,
   type MessageAttachment,
+  type MessageBodyFormat,
 } from '@libs/contracts';
 
 export interface AiChatSendInput {
@@ -14,6 +15,8 @@ export interface AiChatSendInput {
   conversation_id: string;
   body: string;
   trace_id: string;
+  /** Default 'text'. Set 'markdown' only when frontend is known to render markdown. */
+  body_format?: MessageBodyFormat;
   attachments?: MessageAttachment[];
   metadata?: AiMessageMetadata;
   /** Override created_at; defaults to Date.now() */
@@ -44,6 +47,7 @@ export class AiChatPublisher {
       conversation_id: input.conversation_id,
       sender_id: this.config.zaiBotUserId,
       body: input.body,
+      body_format: input.body_format,
       attachments: input.attachments,
       metadata: input.metadata,
       created_at: input.created_at ?? Date.now(),

@@ -2,6 +2,7 @@ import type {
   AiConversationContext,
   AiConversationFeature,
   AiMessageFeature,
+  MessageBodyFormat,
 } from './ai-conversation';
 
 describe('ai-conversation types', () => {
@@ -29,5 +30,11 @@ describe('ai-conversation types', () => {
       'general',
     ];
     expect(features).toHaveLength(4);
+  });
+
+  it('MessageBodyFormat accepts text and markdown', () => {
+    const a: MessageBodyFormat = 'text';
+    const b: MessageBodyFormat = 'markdown';
+    expect([a, b]).toEqual(['text', 'markdown']);
   });
 });

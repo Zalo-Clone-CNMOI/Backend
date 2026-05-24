@@ -101,6 +101,60 @@ describe('Zai foundation integration', () => {
     expect(created.trace_id).toBe('trace-int-1');
   });
 
+  it('round-trips body_format through publisher → consumer → created event', async () => {
+    const kafkaTransport: Array<{ topic: string; payload: unknown }> = [];
+    const fakeKafka = {
+      emit: jest.fn((topic: string, payload: unknown) => {
+        kafkaTransport.push({ topic, payload });
+        return of(undefined);
+      }),
+      connect: jest.fn().mockResolvedValue(undefined),
+      close: jest.fn().mockResolvedValue(undefined),
+    };
+    const publisher = new AiChatPublisher(
+      fakeKafka as never,
+      { zaiBotUserId: ZAI_ID, serviceName: 'ai-core-service' } as AppConfig,
+    );
+
+    const emittedEvents: Array<{ topic: string; payload: unknown }> = [];
+    const fakeRepo = {
+      tryBeginMessageProcessing: jest.fn().mockResolvedValue(true),
+      insertMessage: jest.fn().mockResolvedValue(undefined),
+      markMessageStored: jest.fn().mockResolvedValue(undefined),
+      clearMessageProcessing: jest.fn().mockResolvedValue(undefined),
+    };
+    const fakePublisher = {
+      emit: jest.fn((topic: string, payload: unknown) => {
+        emittedEvents.push({ topic, payload });
+        return Promise.resolve();
+      }),
+    };
+    const fakeCache = {
+      invalidateRecentMessages: jest.fn().mockResolvedValue(undefined),
+    };
+    const consumer = new AiMessageConsumer(
+      fakeRepo as never,
+      fakePublisher as never,
+      fakeCache as never,
+      { zaiBotUserId: ZAI_ID } as AppConfig,
+    );
+
+    await publisher.send({
+      message_id: 'msg-md-1',
+      conversation_id: 'conv-md-1',
+      body: '## Heading',
+      trace_id: 'trace-md-1',
+      body_format: 'markdown',
+    });
+
+    await consumer.onAiMessage(
+      kafkaTransport[0].payload as ChatAiMessageCommand,
+    );
+
+    const created = emittedEvents[0].payload as ChatMessageCreatedEvent;
+    expect(created.body_format).toBe('markdown');
+  });
+
   it('rejects forged Zai message and produces nothing downstream', async () => {
     const inserted: Array<Record<string, unknown>> = [];
     const emittedEvents: Array<{ topic: string; payload: unknown }> = [];

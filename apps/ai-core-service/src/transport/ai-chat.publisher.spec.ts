@@ -104,6 +104,31 @@ describe('AiChatPublisher', () => {
     expect(payload.metadata).toEqual({ feature: 'document', tokens_used: 42 });
   });
 
+  it('forwards body_format when provided', async () => {
+    await publisher.send({
+      message_id: 'm4',
+      conversation_id: 'c4',
+      body: '**styled** body',
+      trace_id: 't4',
+      body_format: 'markdown',
+    });
+
+    const payload = kafka.emit.mock.calls[0][1] as ChatAiMessageCommand;
+    expect(payload.body_format).toBe('markdown');
+  });
+
+  it('omits body_format when not provided (frontend defaults to text)', async () => {
+    await publisher.send({
+      message_id: 'm5',
+      conversation_id: 'c5',
+      body: 'plain hello',
+      trace_id: 't5',
+    });
+
+    const payload = kafka.emit.mock.calls[0][1] as ChatAiMessageCommand;
+    expect(payload.body_format).toBeUndefined();
+  });
+
   it('propagates errors from kafka publish', async () => {
     // Use fake timers to flush retry backoff delays (backoffBaseMs=1000, maxRetries=3)
     // without waiting for real wall-clock time.

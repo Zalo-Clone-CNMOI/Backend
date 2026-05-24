@@ -27,3 +27,19 @@ export interface AiConversationContext {
   document_id?: string;
   created_at: number;
 }
+
+/**
+ * Render-format hint for chat message bodies.
+ *
+ * - 'text' (default when omitted): body MUST be rendered as plain text by the
+ *   frontend. No markdown parsing, no HTML, no special character handling
+ *   beyond newlines.
+ * - 'markdown': body MAY contain CommonMark syntax. Frontend should render with
+ *   a markdown parser. Engines MUST only set this when the receiving UI is
+ *   known to support markdown rendering.
+ *
+ * Convention: AI engines default to 'text' unless their prompt explicitly
+ * instructs the LLM to return markdown AND the target conversation surface
+ * supports it.
+ */
+export type MessageBodyFormat = 'text' | 'markdown';

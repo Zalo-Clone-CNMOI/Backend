@@ -120,6 +120,22 @@ describe('AiMessageConsumer', () => {
     );
   });
 
+  it('forwards body_format into the created event', async () => {
+    await consumer.onAiMessage(buildPayload({ body_format: 'markdown' }));
+
+    expect(publisher.emit).toHaveBeenCalledWith(
+      KafkaTopics.ChatMessageCreated,
+      expect.objectContaining({ body_format: 'markdown' }),
+    );
+  });
+
+  it('emits event without body_format when payload omits it', async () => {
+    await consumer.onAiMessage(buildPayload());
+
+    const emittedEvent = publisher.emit.mock.calls[0][1] as { body_format?: unknown };
+    expect(emittedEvent.body_format).toBeUndefined();
+  });
+
   it('clears idempotency lock and rethrows when insert fails', async () => {
     repo.insertMessage.mockRejectedValueOnce(new Error('Scylla down'));
 

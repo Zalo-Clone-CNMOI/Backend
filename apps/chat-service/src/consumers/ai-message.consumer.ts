@@ -73,6 +73,7 @@ export class AiMessageConsumer {
         conversation_id,
         sender_id: payload.sender_id,
         body: payload.body,
+        body_format: payload.body_format,
         created_at: payload.created_at,
         attachments: payload.attachments,
         trace_id: traceId,

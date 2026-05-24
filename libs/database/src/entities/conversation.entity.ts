@@ -17,6 +17,7 @@ import {
   DEFAULT_GROUP_SETTINGS,
 } from '@app/constant';
 import { BaseEntity } from '@libs/shared';
+import type { AiConversationContext } from '@libs/contracts';
 
 @Entity('conversations')
 export class Conversation extends BaseEntity {
@@ -47,6 +48,9 @@ export class Conversation extends BaseEntity {
     default: () => `'${JSON.stringify(DEFAULT_GROUP_SETTINGS)}'`,
   })
   settings: GroupSettings | null;
+
+  @Column({ type: 'jsonb', name: 'ai_context', nullable: true })
+  aiContext: AiConversationContext | null;
 
   @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'created_by' })

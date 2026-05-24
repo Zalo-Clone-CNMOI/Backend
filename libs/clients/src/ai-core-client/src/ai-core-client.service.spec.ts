@@ -5,7 +5,6 @@ import { EntityInfoApi, ZaiAssistApi } from './client';
 import type {
   AiEntityInfoResultEvent,
   AiCatchUpResultEvent,
-  AiTranslateResultEvent,
 } from '@libs/contracts';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -38,20 +37,6 @@ const CATCH_UP_FIXTURE: AiCatchUpResultEvent = {
   generated_at: 1_700_000_100_000,
 };
 
-const TRANSLATE_FIXTURE: AiTranslateResultEvent = {
-  message_id: 'msg-1',
-  conversation_id: 'conv-1',
-  user_id: 'user-1',
-  original_body: 'Hello',
-  translated_body: 'Xin chào',
-  source_language: 'en',
-  target_language: 'vi',
-  provider: 'openai',
-  tokens_used: 10,
-  cached: false,
-  processed_at: 1_700_000_200_000,
-};
-
 // ── Mock factories ─────────────────────────────────────────────────────────────
 
 const mockEntityInfoApi = {
@@ -60,7 +45,6 @@ const mockEntityInfoApi = {
 
 const mockZaiAssistApi = {
   getCatchUpSummary: jest.fn(),
-  translate: jest.fn(),
 };
 
 // ── Test suite ─────────────────────────────────────────────────────────────────
@@ -176,60 +160,4 @@ describe('AiCoreClientService', () => {
     });
   });
 
-  // ── translate ──────────────────────────────────────────────────────────────
-
-  describe('translate', () => {
-    it('maps camelCase params to snake_case and returns response.data', async () => {
-      mockZaiAssistApi.translate.mockResolvedValue({
-        data: TRANSLATE_FIXTURE,
-      });
-
-      const result = await service.translate({
-        text: 'Hello',
-        targetLanguage: 'vi',
-        sourceLanguage: 'en',
-        userId: 'user-1',
-      });
-
-      expect(result).toEqual(TRANSLATE_FIXTURE);
-      expect(mockZaiAssistApi.translate).toHaveBeenCalledWith({
-        text: 'Hello',
-        target_language: 'vi',
-        source_language: 'en',
-        user_id: 'user-1',
-      });
-    });
-
-    it('omits source_language when not provided', async () => {
-      mockZaiAssistApi.translate.mockResolvedValue({
-        data: TRANSLATE_FIXTURE,
-      });
-
-      await service.translate({
-        text: 'Hello',
-        targetLanguage: 'vi',
-        userId: 'user-1',
-      });
-
-      expect(mockZaiAssistApi.translate).toHaveBeenCalledWith({
-        text: 'Hello',
-        target_language: 'vi',
-        source_language: undefined,
-        user_id: 'user-1',
-      });
-    });
-
-    it('calls handleError and throws when the api rejects', async () => {
-      const axiosErr = new AxiosError('translate failed');
-      mockZaiAssistApi.translate.mockRejectedValue(axiosErr);
-
-      await expect(
-        service.translate({
-          text: 'Hello',
-          targetLanguage: 'vi',
-          userId: 'user-1',
-        }),
-      ).rejects.toThrow();
-    });
-  });
 });

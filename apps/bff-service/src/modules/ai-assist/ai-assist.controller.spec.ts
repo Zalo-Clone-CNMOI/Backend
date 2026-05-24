@@ -3,8 +3,6 @@ import { AiAssistController } from './ai-assist.controller';
 import { AiAssistService } from './ai-assist.service';
 import type { AuthenticatedUser } from '@app/types';
 import type { CatchUpResponseDto } from './dto/catch-up-response.dto';
-import type { TranslateResponseDto } from './dto/translate-response.dto';
-import type { TranslateRequestDto } from './dto/translate-request.dto';
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -26,15 +24,6 @@ const mockCatchUpResponse = (): CatchUpResponseDto => ({
   generatedAt: 1700000000000,
 });
 
-const mockTranslateResponse = (): TranslateResponseDto => ({
-  originalBody: 'Hello',
-  translatedBody: 'Xin chào',
-  sourceLanguage: 'en',
-  targetLanguage: 'vi',
-  provider: 'openai',
-  cached: false,
-});
-
 // ── test suite ──────────────────────────────────────────────────────────────
 
 describe('AiAssistController', () => {
@@ -49,7 +38,6 @@ describe('AiAssistController', () => {
           provide: AiAssistService,
           useValue: {
             catchUp: jest.fn(),
-            translate: jest.fn(),
           },
         },
       ],
@@ -93,20 +81,4 @@ describe('AiAssistController', () => {
     });
   });
 
-  describe('translate', () => {
-    it('delegates to service.translate with (user.id, dto) and returns result', async () => {
-      const expected = mockTranslateResponse();
-      service.translate.mockResolvedValue(expected);
-
-      const dto: TranslateRequestDto = {
-        text: 'Hello',
-        targetLanguage: 'vi',
-        sourceLanguage: 'en',
-      };
-      const result = await controller.translate(mockUser(), dto);
-
-      expect(service.translate).toHaveBeenCalledWith('user-1', dto);
-      expect(result).toEqual(expected);
-    });
-  });
 });

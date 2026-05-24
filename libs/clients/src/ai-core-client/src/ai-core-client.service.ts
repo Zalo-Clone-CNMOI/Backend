@@ -5,7 +5,6 @@ import type {
   AiEntityInfoResultEvent,
   EntityType,
   AiCatchUpResultEvent,
-  AiTranslateResultEvent,
 } from '@libs/contracts';
 
 @Injectable()
@@ -57,22 +56,4 @@ export class AiCoreClientService extends BaseHttpClient {
     }
   }
 
-  async translate(params: {
-    text: string;
-    targetLanguage: string;
-    sourceLanguage?: string;
-    userId: string;
-  }): Promise<AiTranslateResultEvent> {
-    try {
-      const response = await this.zaiAssistApi.translate({
-        text: params.text,
-        target_language: params.targetLanguage,
-        source_language: params.sourceLanguage,
-        user_id: params.userId,
-      });
-      return response.data;
-    } catch (error) {
-      this.handleError('translate', error);
-    }
-  }
 }

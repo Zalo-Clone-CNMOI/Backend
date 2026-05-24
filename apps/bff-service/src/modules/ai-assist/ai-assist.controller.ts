@@ -1,12 +1,4 @@
-import {
-  Body,
-  Controller,
-  Get,
-  HttpCode,
-  HttpStatus,
-  Param,
-  Post,
-} from '@nestjs/common';
+import { Controller, Get, Param } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -18,8 +10,6 @@ import { AccessToken, CurrentUser } from '@app/decorator';
 import { AuthenticatedUser, BusinessException } from '@app/types';
 import { AiAssistService } from './ai-assist.service';
 import { CatchUpResponseDto } from './dto/catch-up-response.dto';
-import { TranslateRequestDto } from './dto/translate-request.dto';
-import { TranslateResponseDto } from './dto/translate-response.dto';
 
 @ApiTags('AI Assist')
 @ApiBearerAuth('BearerAuth')
@@ -51,22 +41,5 @@ export class AiAssistController {
       throw BusinessException.badRequest('conversationId is required');
     }
     return this.service.catchUp(token, user.id, conversationId);
-  }
-
-  @Post('translate')
-  @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 30, ttl: 60_000 } })
-  @ApiOperation({ summary: 'Translate a piece of text' })
-  @ApiResponse({
-    status: 200,
-    description: 'Translation returned successfully',
-    type: TranslateResponseDto,
-  })
-  @ApiResponse({ status: 400, description: 'Validation error' })
-  async translate(
-    @CurrentUser() user: AuthenticatedUser,
-    @Body() dto: TranslateRequestDto,
-  ): Promise<TranslateResponseDto> {
-    return this.service.translate(user.id, dto);
   }
 }

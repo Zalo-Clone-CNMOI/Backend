@@ -3,8 +3,6 @@ import { plainToInstance } from 'class-transformer';
 import { AiCoreClientService } from '@app/clients';
 import { InteractionClientService } from '@app/clients/interaction-client';
 import { CatchUpResponseDto } from './dto/catch-up-response.dto';
-import { TranslateResponseDto } from './dto/translate-response.dto';
-import type { TranslateRequestDto } from './dto/translate-request.dto';
 
 @Injectable()
 export class AiAssistService {
@@ -69,32 +67,4 @@ export class AiAssistService {
     });
   }
 
-  /**
-   * Translate a piece of text to the requested language.  This is a private,
-   * per-user call; the result is never posted into any conversation.
-   */
-  async translate(
-    userId: string,
-    dto: TranslateRequestDto,
-  ): Promise<TranslateResponseDto> {
-    const result = await this.aiCoreClient.translate({
-      text: dto.text,
-      targetLanguage: dto.targetLanguage,
-      sourceLanguage: dto.sourceLanguage,
-      userId,
-    });
-
-    const mapped = {
-      originalBody: result.original_body,
-      translatedBody: result.translated_body,
-      sourceLanguage: result.source_language,
-      targetLanguage: result.target_language,
-      provider: result.provider,
-      cached: result.cached,
-    };
-
-    return plainToInstance(TranslateResponseDto, mapped, {
-      excludeExtraneousValues: true,
-    });
-  }
 }

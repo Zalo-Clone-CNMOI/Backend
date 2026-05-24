@@ -20,6 +20,7 @@ export enum FriendshipStatus {
 export enum ConversationType {
   DIRECT = 'direct',
   GROUP = 'group',
+  AI_ASSISTANT = 'ai_assistant',
 }
 
 export enum UpdateMemberRoleDtoRoleEnum {

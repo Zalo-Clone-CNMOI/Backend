@@ -5,6 +5,7 @@ import {
   LlmCompletionResult,
   LlmStreamChunk,
   LlmEmbeddingResult,
+  LlmContentPart,
   LLM_PROVIDERS,
 } from '../interfaces';
 import { DataSanitizer } from './data-sanitizer.service';
@@ -53,7 +54,9 @@ export class AiGatewayService {
         ...options,
         messages: options.messages.map((m) => ({
           ...m,
-          content: this.sanitizer.sanitize(m.content),
+          content: typeof m.content === 'string'
+              ? this.sanitizer.sanitize(m.content)
+              : (m.content as LlmContentPart[]),
         })),
       };
     }
@@ -105,7 +108,9 @@ export class AiGatewayService {
         ...options,
         messages: options.messages.map((m) => ({
           ...m,
-          content: this.sanitizer.sanitize(m.content),
+          content: typeof m.content === 'string'
+              ? this.sanitizer.sanitize(m.content)
+              : (m.content as LlmContentPart[]),
         })),
       };
     }
@@ -203,7 +208,9 @@ export class AiGatewayService {
         ...options,
         messages: options.messages.map((m) => ({
           ...m,
-          content: this.sanitizer.sanitize(m.content),
+          content: typeof m.content === 'string'
+              ? this.sanitizer.sanitize(m.content)
+              : (m.content as LlmContentPart[]),
         })),
       };
     }

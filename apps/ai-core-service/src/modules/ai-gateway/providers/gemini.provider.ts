@@ -42,12 +42,14 @@ export class GeminiProvider implements ILlmProvider {
         .filter((m) => m.role !== 'system')
         .map((m) => ({
           role: m.role === 'assistant' ? 'model' : 'user',
-          parts: [{ text: m.content }],
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          parts: [{ text: m.content as any }],
         }));
 
       const chat = genModel.startChat({
         history: chatMessages.slice(0, -1),
-        systemInstruction: systemMsg?.content,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        systemInstruction: systemMsg?.content as any,
         generationConfig: {
           maxOutputTokens: options.maxTokens ?? 1024,
           temperature: options.temperature ?? 0.7,
@@ -96,12 +98,14 @@ export class GeminiProvider implements ILlmProvider {
         .filter((m) => m.role !== 'system')
         .map((m) => ({
           role: m.role === 'assistant' ? 'model' : 'user',
-          parts: [{ text: m.content }],
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          parts: [{ text: m.content as any }],
         }));
 
       const chat = genModel.startChat({
         history: chatMessages.slice(0, -1),
-        systemInstruction: systemMsg?.content,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        systemInstruction: systemMsg?.content as any,
         generationConfig: {
           maxOutputTokens: options.maxTokens ?? 1024,
           temperature: options.temperature ?? 0.7,

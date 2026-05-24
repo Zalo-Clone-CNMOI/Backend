@@ -69,7 +69,8 @@ export class LocDoRouterProvider implements ILlmProvider {
 
       const response = await client.chat.completions.create({
         model,
-        messages: this.transformMessages(options.messages),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        messages: this.transformMessages(options.messages as any),
         max_tokens: options.maxTokens ?? 1024,
         temperature: options.temperature ?? 0.7,
       });
@@ -107,7 +108,8 @@ export class LocDoRouterProvider implements ILlmProvider {
 
       const stream = await client.chat.completions.create({
         model,
-        messages: this.transformMessages(options.messages),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        messages: this.transformMessages(options.messages as any),
         max_tokens: options.maxTokens ?? 1024,
         temperature: options.temperature ?? 0.7,
         stream: true,

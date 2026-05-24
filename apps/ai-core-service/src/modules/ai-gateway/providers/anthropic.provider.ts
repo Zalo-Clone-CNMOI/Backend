@@ -47,8 +47,10 @@ export class AnthropicProvider implements ILlmProvider {
       const response = await client.messages.create({
         model,
         max_tokens: options.maxTokens ?? 1024,
-        system: systemMsg?.content,
-        messages: chatMessages,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        system: systemMsg?.content as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        messages: chatMessages as any,
       });
 
       const content =
@@ -94,8 +96,10 @@ export class AnthropicProvider implements ILlmProvider {
       const stream = client.messages.stream({
         model,
         max_tokens: options.maxTokens ?? 1024,
-        system: systemMsg?.content,
-        messages: chatMessages,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        system: systemMsg?.content as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        messages: chatMessages as any,
       });
 
       let fullContent = '';

@@ -92,8 +92,10 @@ describe('ConversationsService', () => {
 
   beforeEach(async () => {
     txManager = {
-      findOne: jest.fn(),
+      query: jest.fn().mockResolvedValue(undefined),
+      find: jest.fn().mockResolvedValue([]),
       save: jest.fn().mockResolvedValue(undefined),
+      createQueryBuilder: jest.fn(),
     };
 
     userRepository = {
@@ -622,6 +624,18 @@ describe('ConversationsService', () => {
   // ─── updateGroupSettings ──────────────────────────────
 
   describe('updateGroupSettings', () => {
+    const setupTxManagerForConv = (
+      conv: ReturnType<typeof createMockConversation>,
+    ) => {
+      const qb = {
+        where: jest.fn().mockReturnThis(),
+        setLock: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockResolvedValue(conv),
+      };
+      txManager.createQueryBuilder.mockReturnValue(qb);
+      txManager.find.mockResolvedValue(conv.members);
+    };
+
     it('should update settings and emit Kafka event (ADMIN)', async () => {
       const conv = createMockConversation({
         settings: null,
@@ -633,7 +647,7 @@ describe('ConversationsService', () => {
           }),
         ],
       });
-      txManager.findOne.mockResolvedValue(conv);
+      setupTxManagerForConv(conv);
       conversationRepository.findOne.mockResolvedValue(conv);
 
       await service.updateGroupSettings(uuid(2), uuid(1), {
@@ -657,7 +671,7 @@ describe('ConversationsService', () => {
           }),
         ],
       });
-      txManager.findOne.mockResolvedValue(conv);
+      setupTxManagerForConv(conv);
 
       await expect(
         service.updateGroupSettings(uuid(2), uuid(1), {
@@ -676,7 +690,7 @@ describe('ConversationsService', () => {
           }),
         ],
       });
-      txManager.findOne.mockResolvedValue(conv);
+      setupTxManagerForConv(conv);
 
       await expect(
         service.updateGroupSettings(uuid(2), uuid(1), {
@@ -710,7 +724,7 @@ describe('ConversationsService', () => {
           }),
         ],
       });
-      txManager.findOne.mockResolvedValue(conv);
+      setupTxManagerForConv(conv);
       conversationRepository.findOne.mockResolvedValue(conv);
 
       await service.updateGroupSettings(uuid(2), uuid(1), {

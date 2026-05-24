@@ -246,6 +246,7 @@ describe('Zai bot configuration', () => {
     process.env.DB_PASSWORD = 'p';
     process.env.DB_NAME = 'd';
 
+    jest.resetModules();
     const { loadConfig } = require('./app-config');
     const config = loadConfig('chat-service');
     expect(config.zaiBotUserId).toBe('11111111-2222-3333-4444-555555555555');

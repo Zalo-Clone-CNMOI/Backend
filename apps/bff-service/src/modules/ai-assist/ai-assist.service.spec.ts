@@ -20,6 +20,17 @@ const mockConversationDetail = (): ConversationDetailDto => ({
   members: [],
 });
 
+// The runtime interaction-service response carries `mySettings.lastReadAt`,
+// but the generated ConversationDetailDto type is stale and omits it — so the
+// test attaches it via a cast, matching how the service reads it.
+const mockConversationDetailWithLastRead = (
+  lastReadAt: string | null,
+): ConversationDetailDto =>
+  ({
+    ...mockConversationDetail(),
+    mySettings: { lastReadAt },
+  }) as unknown as ConversationDetailDto;
+
 const mockCatchUpResult = (): AiCatchUpResultEvent => ({
   conversation_id: 'conv-1',
   user_id: 'user-1',
@@ -85,9 +96,10 @@ describe('AiAssistService', () => {
   // ── catchUp ──────────────────────────────────────────────────────────────
 
   describe('catchUp', () => {
-    it('happy path: calls interactionClient then aiCoreClient and returns camelCase DTO', async () => {
+    it('happy path: passes lastReadAt as `since` (ms) and returns camelCase DTO', async () => {
+      const lastReadAt = '2026-05-20T10:00:00.000Z';
       interactionClient.getConversationById.mockResolvedValue(
-        mockConversationDetail(),
+        mockConversationDetailWithLastRead(lastReadAt),
       );
       aiCoreClient.getCatchUpSummary.mockResolvedValue(mockCatchUpResult());
 
@@ -100,7 +112,7 @@ describe('AiAssistService', () => {
       expect(aiCoreClient.getCatchUpSummary).toHaveBeenCalledWith({
         conversationId: 'conv-1',
         userId: 'user-1',
-        since: undefined,
+        since: new Date(lastReadAt).getTime(),
       });
 
       expect(result.hadUnread).toBe(true);
@@ -129,7 +141,19 @@ describe('AiAssistService', () => {
       expect(aiCoreClient.getCatchUpSummary).not.toHaveBeenCalled();
     });
 
-    it('lastReadAt not available → since is undefined in getCatchUpSummary call', async () => {
+    it('lastReadAt null (never read) → since is undefined in getCatchUpSummary call', async () => {
+      interactionClient.getConversationById.mockResolvedValue(
+        mockConversationDetailWithLastRead(null),
+      );
+      aiCoreClient.getCatchUpSummary.mockResolvedValue(mockCatchUpResult());
+
+      await service.catchUp('token-abc', 'user-1', 'conv-1');
+
+      const callArgs = aiCoreClient.getCatchUpSummary.mock.calls[0][0];
+      expect(callArgs.since).toBeUndefined();
+    });
+
+    it('mySettings absent (stale client shape) → since is undefined', async () => {
       interactionClient.getConversationById.mockResolvedValue(
         mockConversationDetail(),
       );

@@ -21,10 +21,11 @@ export class AiAssistService {
    * gate: if the user is not a member the client throws a 403/404 which the
    * BFF global exception filter maps to the appropriate HTTP status code.
    *
-   * NOTE: `ConversationDetailDto` (generated from the interaction-service
-   * OpenAPI spec) does not expose a per-member `lastReadAt` field.  Until the
-   * spec is regenerated with that field included, `since` is passed as
-   * `undefined` so ai-core uses its own recent-window default.
+   * The response carries the caller's own `mySettings.lastReadAt`, which bounds
+   * the unread window passed to ai-core as `since`. The generated
+   * `ConversationDetailDto` type is stale and omits `mySettings`, so we read it
+   * through a narrow cast; regenerating the interaction client would make this
+   * type-safe (see PR follow-up).
    */
   async catchUp(
     token: string,
@@ -32,11 +33,15 @@ export class AiAssistService {
     conversationId: string,
   ): Promise<CatchUpResponseDto> {
     // Membership enforcement – throws if not a member.
-    await this.interactionClient.getConversationById(token, conversationId);
+    const detail = await this.interactionClient.getConversationById(
+      token,
+      conversationId,
+    );
 
-    // `lastReadAt` is not yet available in the generated ConversationDetailDto.
-    // Pass `since: undefined` so ai-core falls back to its own recent window.
-    const since: number | undefined = undefined;
+    const lastReadAt = (
+      detail as { mySettings?: { lastReadAt?: string | Date | null } }
+    ).mySettings?.lastReadAt;
+    const since = lastReadAt ? new Date(lastReadAt).getTime() : undefined;
 
     const result = await this.aiCoreClient.getCatchUpSummary({
       conversationId,

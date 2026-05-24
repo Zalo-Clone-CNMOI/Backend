@@ -96,7 +96,12 @@ export class AiMessageConsumer {
         conversationId: conversation_id,
       });
     } catch (error) {
-      await this.repo.clearMessageProcessing(message_id).catch(() => {});
+      await this.repo.clearMessageProcessing(message_id).catch((err) => {
+        this.logger.warn(
+          `[${traceId}] Failed to clear processing lock for ${message_id}`,
+          { error: err instanceof Error ? err.message : String(err) },
+        );
+      });
       this.logger.error(`[${traceId}] Failed to persist Zai message`, {
         messageId: message_id,
         error: error instanceof Error ? error.message : String(error),

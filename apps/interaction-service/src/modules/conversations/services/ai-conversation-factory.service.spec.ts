@@ -177,7 +177,9 @@ describe('AiConversationFactoryService', () => {
       .catch((e: unknown) => e);
 
     expect(error).toBeInstanceOf(BusinessException);
-    // BusinessException.notFound() always uses ErrorCode.NOT_FOUND internally
-    expect((error as BusinessException).errorCode).toBe(ErrorCode.NOT_FOUND);
+    // new BusinessException(ErrorCode.USER_NOT_FOUND) preserves the specific error code
+    expect((error as BusinessException).errorCode).toBe(
+      ErrorCode.USER_NOT_FOUND,
+    );
   });
 });

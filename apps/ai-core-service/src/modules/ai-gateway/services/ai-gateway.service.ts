@@ -5,7 +5,6 @@ import {
   LlmCompletionResult,
   LlmStreamChunk,
   LlmEmbeddingResult,
-  LlmContentPart,
   LLM_PROVIDERS,
 } from '../interfaces';
 import { DataSanitizer } from './data-sanitizer.service';
@@ -54,7 +53,11 @@ export class AiGatewayService {
         ...options,
         messages: options.messages.map((m) => ({
           ...m,
-          content: typeof m.content === 'string'
+          // TODO(Phase-3): when m.content is LlmContentPart[], text parts inside the array
+          // are NOT sanitized. Add per-part sanitization before shipping any engine that
+          // constructs multimodal messages from user input.
+          content:
+            typeof m.content === 'string'
               ? this.sanitizer.sanitize(m.content)
               : m.content,
         })),
@@ -108,7 +111,11 @@ export class AiGatewayService {
         ...options,
         messages: options.messages.map((m) => ({
           ...m,
-          content: typeof m.content === 'string'
+          // TODO(Phase-3): when m.content is LlmContentPart[], text parts inside the array
+          // are NOT sanitized. Add per-part sanitization before shipping any engine that
+          // constructs multimodal messages from user input.
+          content:
+            typeof m.content === 'string'
               ? this.sanitizer.sanitize(m.content)
               : m.content,
         })),
@@ -208,7 +215,11 @@ export class AiGatewayService {
         ...options,
         messages: options.messages.map((m) => ({
           ...m,
-          content: typeof m.content === 'string'
+          // TODO(Phase-3): when m.content is LlmContentPart[], text parts inside the array
+          // are NOT sanitized. Add per-part sanitization before shipping any engine that
+          // constructs multimodal messages from user input.
+          content:
+            typeof m.content === 'string'
               ? this.sanitizer.sanitize(m.content)
               : m.content,
         })),

@@ -44,14 +44,17 @@ export class AiConversationFactoryService {
       where: { id: userId, status: UserStatus.ACTIVE },
     });
     if (!user) {
-      throw BusinessException.notFound(ErrorCode.USER_NOT_FOUND);
+      throw new BusinessException(ErrorCode.USER_NOT_FOUND);
     }
 
     const zai = await this.userRepository.findOneBy({
       id: this.config.zaiBotUserId,
     });
     if (!zai) {
-      throw BusinessException.notFound(ErrorCode.USER_NOT_FOUND);
+      throw new BusinessException(
+        ErrorCode.USER_NOT_FOUND,
+        'Zai bot user not seeded — run migration AddZaiFoundation',
+      );
     }
 
     // Atomic write — conversation + members together

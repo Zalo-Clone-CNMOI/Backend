@@ -1,4 +1,4 @@
-import { APP_CONFIG, AppConfig } from '@libs/config';
+import { AppConfig } from '@libs/config';
 import { KafkaTopics, type ChatAiMessageCommand } from '@libs/contracts';
 import { AiMessageConsumer } from '../ai-message.consumer';
 
@@ -15,7 +15,9 @@ describe('AiMessageConsumer', () => {
   let publisher: { emit: jest.Mock };
   let cache: { invalidateRecentMessages: jest.Mock };
 
-  function buildPayload(overrides: Partial<ChatAiMessageCommand> = {}): ChatAiMessageCommand {
+  function buildPayload(
+    overrides: Partial<ChatAiMessageCommand> = {},
+  ): ChatAiMessageCommand {
     return {
       message_id: 'msg-1',
       conversation_id: 'conv-1',
@@ -35,7 +37,9 @@ describe('AiMessageConsumer', () => {
       clearMessageProcessing: jest.fn().mockResolvedValue(undefined),
     };
     publisher = { emit: jest.fn().mockResolvedValue(undefined) };
-    cache = { invalidateRecentMessages: jest.fn().mockResolvedValue(undefined) };
+    cache = {
+      invalidateRecentMessages: jest.fn().mockResolvedValue(undefined),
+    };
 
     consumer = new AiMessageConsumer(
       repo as never,
@@ -87,7 +91,15 @@ describe('AiMessageConsumer', () => {
   it('forwards attachments and metadata into the created event', async () => {
     await consumer.onAiMessage(
       buildPayload({
-        attachments: [{ key: 'uploads/x.jpg', type: 'image', name: 'x.jpg', size: 100, content_type: 'image/jpeg' }],
+        attachments: [
+          {
+            key: 'uploads/x.jpg',
+            type: 'image',
+            name: 'x.jpg',
+            size: 100,
+            content_type: 'image/jpeg',
+          },
+        ],
         metadata: { feature: 'document', tokens_used: 50 },
       }),
     );
@@ -95,7 +107,15 @@ describe('AiMessageConsumer', () => {
     expect(publisher.emit).toHaveBeenCalledWith(
       KafkaTopics.ChatMessageCreated,
       expect.objectContaining({
-        attachments: [{ key: 'uploads/x.jpg', type: 'image', name: 'x.jpg', size: 100, content_type: 'image/jpeg' }],
+        attachments: [
+          {
+            key: 'uploads/x.jpg',
+            type: 'image',
+            name: 'x.jpg',
+            size: 100,
+            content_type: 'image/jpeg',
+          },
+        ],
       }),
     );
   });

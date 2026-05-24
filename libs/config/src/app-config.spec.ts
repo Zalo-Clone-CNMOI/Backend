@@ -247,8 +247,9 @@ describe('Zai bot configuration', () => {
     process.env.DB_NAME = 'd';
 
     jest.resetModules();
-    const { loadConfig } = require('./app-config');
-    const config = loadConfig('chat-service');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const m1 = require('./app-config') as typeof import('./app-config');
+    const config = m1.loadConfig('chat-service');
     expect(config.zaiBotUserId).toBe('11111111-2222-3333-4444-555555555555');
   });
 
@@ -269,8 +270,9 @@ describe('Zai bot configuration', () => {
     process.env.DB_NAME = 'd';
 
     jest.resetModules();
-    const { loadConfig } = require('./app-config');
-    const config = loadConfig('chat-service');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const m2 = require('./app-config') as typeof import('./app-config');
+    const config = m2.loadConfig('chat-service');
     expect(config.zaiBotUserId).toBe('00000000-0000-0000-0000-0000000000a1');
   });
 
@@ -291,7 +293,8 @@ describe('Zai bot configuration', () => {
     process.env.DB_NAME = 'd';
 
     jest.resetModules();
-    const { loadConfig } = require('./app-config');
-    expect(() => loadConfig('chat-service')).toThrow(/ZAI_BOT_USER_ID/);
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const m3 = require('./app-config') as typeof import('./app-config');
+    expect(() => m3.loadConfig('chat-service')).toThrow(/ZAI_BOT_USER_ID/);
   });
 });

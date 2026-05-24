@@ -1,9 +1,8 @@
 import { Test } from '@nestjs/testing';
-import { ClientKafka } from '@nestjs/microservices';
 import { of } from 'rxjs';
 import { KAFKA_CLIENT } from '@libs/kafka';
 import { APP_CONFIG, AppConfig } from '@libs/config';
-import { KafkaTopics } from '@libs/contracts';
+import { KafkaTopics, type ChatAiMessageCommand } from '@libs/contracts';
 import { AiChatPublisher } from './ai-chat.publisher';
 
 describe('AiChatPublisher', () => {
@@ -61,7 +60,11 @@ describe('AiChatPublisher', () => {
     });
     const after = Date.now();
 
-    const payload = kafka.emit.mock.calls[0][1];
+    const firstCall = kafka.emit.mock.calls[0] as [
+      string,
+      ChatAiMessageCommand,
+    ];
+    const payload = firstCall[1];
     expect(payload.created_at).toBeGreaterThanOrEqual(before);
     expect(payload.created_at).toBeLessThanOrEqual(after);
   });
@@ -72,13 +75,31 @@ describe('AiChatPublisher', () => {
       conversation_id: 'c3',
       body: 'see attached',
       trace_id: 't3',
-      attachments: [{ key: 'uploads/y.jpg', type: 'image', name: 'y.jpg', size: 123, content_type: 'image/jpeg' }],
+      attachments: [
+        {
+          key: 'uploads/y.jpg',
+          type: 'image',
+          name: 'y.jpg',
+          size: 123,
+          content_type: 'image/jpeg',
+        },
+      ],
       metadata: { feature: 'document', tokens_used: 42 },
     });
 
-    const payload = kafka.emit.mock.calls[0][1];
+    const firstCall = kafka.emit.mock.calls[0] as [
+      string,
+      ChatAiMessageCommand,
+    ];
+    const payload = firstCall[1];
     expect(payload.attachments).toEqual([
-      { key: 'uploads/y.jpg', type: 'image', name: 'y.jpg', size: 123, content_type: 'image/jpeg' },
+      {
+        key: 'uploads/y.jpg',
+        type: 'image',
+        name: 'y.jpg',
+        size: 123,
+        content_type: 'image/jpeg',
+      },
     ]);
     expect(payload.metadata).toEqual({ feature: 'document', tokens_used: 42 });
   });
@@ -101,7 +122,7 @@ describe('AiChatPublisher', () => {
     });
 
     // Advance timers to flush all retry backoff delays in one shot
-    jest.runAllTimersAsync();
+    void jest.runAllTimersAsync();
 
     await expect(sendPromise).rejects.toThrow(/broker down/);
 

@@ -322,9 +322,7 @@ export function loadConfig(serviceName: string): AppConfig {
       const uuidRe =
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       if (!uuidRe.test(raw)) {
-        throw new Error(
-          `ZAI_BOT_USER_ID must be a valid UUID (got: ${raw})`,
-        );
+        throw new Error(`ZAI_BOT_USER_ID must be a valid UUID (got: ${raw})`);
       }
       return raw;
     })(),

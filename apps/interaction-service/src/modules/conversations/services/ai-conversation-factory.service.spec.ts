@@ -1,5 +1,5 @@
 import { Repository } from 'typeorm';
-import { APP_CONFIG, AppConfig } from '@libs/config';
+import { AppConfig } from '@libs/config';
 import {
   Conversation,
   ConversationMember,
@@ -29,19 +29,21 @@ describe('AiConversationFactoryService', () => {
 
   beforeEach(() => {
     entityManager = {
-      create: jest.fn((_, dto) => dto),
-      save: jest.fn(async (entity) => {
-        if (Array.isArray(entity)) return entity;
-        if (!entity.id) return { ...entity, id: 'conv-new' };
-        return entity;
+      create: jest.fn((_: unknown, dto: unknown): unknown => dto),
+      save: jest.fn((entity: unknown): Promise<unknown> => {
+        if (Array.isArray(entity)) return Promise.resolve(entity);
+        const obj = entity as Record<string, unknown>;
+        if (!obj['id']) return Promise.resolve({ ...obj, id: 'conv-new' });
+        return Promise.resolve(entity);
       }),
     };
 
     conversationRepo = {
       manager: {
         transaction: jest.fn(
-          async (cb: (em: typeof entityManager) => Promise<unknown>) =>
-            cb(entityManager),
+          (
+            cb: (em: typeof entityManager) => Promise<unknown>,
+          ): Promise<unknown> => cb(entityManager),
         ),
       },
     } as unknown as jest.Mocked<Repository<Conversation>>;
@@ -49,18 +51,25 @@ describe('AiConversationFactoryService', () => {
     memberRepo = {} as unknown as jest.Mocked<Repository<ConversationMember>>;
 
     userRepo = {
-      findOne: jest.fn(async ({ where }: { where: { id: string; status?: string } }) => {
-        const { id, status } = where;
-        if (status === UserStatus.ACTIVE) {
-          // Only return the user if they are not "nonexistent"
-          if (id === 'nonexistent') return null;
-          return { id, fullName: 'User' } as User;
-        }
-        return null;
-      }),
-      findOneBy: jest.fn(async ({ id }: { id: string }) => {
-        if (id === ZAI_ID) return { id: ZAI_ID, fullName: 'Zai' } as User;
-        return null;
+      findOne: jest.fn(
+        ({
+          where,
+        }: {
+          where: { id: string; status?: string };
+        }): Promise<User | null> => {
+          const { id, status } = where;
+          if (status === UserStatus.ACTIVE) {
+            // Only return the user if they are not "nonexistent"
+            if (id === 'nonexistent') return Promise.resolve(null);
+            return Promise.resolve({ id, fullName: 'User' } as User);
+          }
+          return Promise.resolve(null);
+        },
+      ),
+      findOneBy: jest.fn(({ id }: { id: string }): Promise<User | null> => {
+        if (id === ZAI_ID)
+          return Promise.resolve({ id: ZAI_ID, fullName: 'Zai' } as User);
+        return Promise.resolve(null);
       }),
     } as unknown as jest.Mocked<Repository<User>>;
 
@@ -83,7 +92,8 @@ describe('AiConversationFactoryService', () => {
 
     // Transaction was started
     expect(
-      (conversationRepo.manager as unknown as { transaction: jest.Mock }).transaction,
+      (conversationRepo.manager as unknown as { transaction: jest.Mock })
+        .transaction,
     ).toHaveBeenCalledTimes(1);
 
     // Conversation entity created with correct shape
@@ -130,12 +140,16 @@ describe('AiConversationFactoryService', () => {
 
     // Transaction must NOT have been started
     expect(
-      (conversationRepo.manager as unknown as { transaction: jest.Mock }).transaction,
+      (conversationRepo.manager as unknown as { transaction: jest.Mock })
+        .transaction,
     ).not.toHaveBeenCalled();
   });
 
   it('rejects with BusinessException when Zai bot user is missing (migration not run)', async () => {
-    userRepo.findOne.mockResolvedValueOnce({ id: 'user-1', fullName: 'U' } as User);
+    userRepo.findOne.mockResolvedValueOnce({
+      id: 'user-1',
+      fullName: 'U',
+    } as User);
     userRepo.findOneBy.mockResolvedValueOnce(null); // Zai missing
 
     await expect(
@@ -147,7 +161,8 @@ describe('AiConversationFactoryService', () => {
 
     // Transaction must NOT have been started
     expect(
-      (conversationRepo.manager as unknown as { transaction: jest.Mock }).transaction,
+      (conversationRepo.manager as unknown as { transaction: jest.Mock })
+        .transaction,
     ).not.toHaveBeenCalled();
   });
 

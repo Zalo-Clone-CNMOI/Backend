@@ -1,7 +1,4 @@
-import type {
-  LlmChatMessage,
-  LlmContentPart,
-} from './llm-provider.interface';
+import type { LlmChatMessage, LlmContentPart } from './llm-provider.interface';
 
 describe('LlmChatMessage multimodal', () => {
   it('accepts plain string content (backward compat)', () => {

@@ -36,16 +36,18 @@ describe('Zai foundation integration', () => {
 
     const fakeRepo = {
       tryBeginMessageProcessing: jest.fn().mockResolvedValue(true),
-      insertMessage: jest.fn(async (m: Record<string, unknown>) => {
+      insertMessage: jest.fn((m: Record<string, unknown>): Promise<void> => {
         inserted.push(m);
+        return Promise.resolve();
       }),
       markMessageStored: jest.fn().mockResolvedValue(undefined),
       clearMessageProcessing: jest.fn().mockResolvedValue(undefined),
     };
 
     const fakePublisher = {
-      emit: jest.fn(async (topic: string, payload: unknown) => {
+      emit: jest.fn((topic: string, payload: unknown): Promise<void> => {
         emittedEvents.push({ topic, payload });
+        return Promise.resolve();
       }),
     };
 
@@ -100,16 +102,18 @@ describe('Zai foundation integration', () => {
 
     const fakeRepo = {
       tryBeginMessageProcessing: jest.fn().mockResolvedValue(true),
-      insertMessage: jest.fn(async (m: Record<string, unknown>) =>
-        inserted.push(m),
-      ),
+      insertMessage: jest.fn((m: Record<string, unknown>): Promise<void> => {
+        inserted.push(m);
+        return Promise.resolve();
+      }),
       markMessageStored: jest.fn().mockResolvedValue(undefined),
       clearMessageProcessing: jest.fn().mockResolvedValue(undefined),
     };
     const fakePublisher = {
-      emit: jest.fn(async (topic: string, payload: unknown) =>
-        emittedEvents.push({ topic, payload }),
-      ),
+      emit: jest.fn((topic: string, payload: unknown): Promise<void> => {
+        emittedEvents.push({ topic, payload });
+        return Promise.resolve();
+      }),
     };
     const fakeCache = {
       invalidateRecentMessages: jest.fn().mockResolvedValue(undefined),

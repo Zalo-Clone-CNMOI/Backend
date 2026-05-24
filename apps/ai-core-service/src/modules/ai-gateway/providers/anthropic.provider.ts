@@ -49,11 +49,11 @@ export class AnthropicProvider implements ILlmProvider {
         max_tokens: options.maxTokens ?? 1024,
         // TODO(Phase-3): multimodal content parts are passed through as-is; provider
         // SDK error path is currently the only signal if an array reaches the API.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
         system: systemMsg?.content as any,
         // TODO(Phase-3): multimodal content parts are passed through as-is; provider
         // SDK error path is currently the only signal if an array reaches the API.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
         messages: chatMessages as any,
       });
 
@@ -102,11 +102,11 @@ export class AnthropicProvider implements ILlmProvider {
         max_tokens: options.maxTokens ?? 1024,
         // TODO(Phase-3): multimodal content parts are passed through as-is; provider
         // SDK error path is currently the only signal if an array reaches the API.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
         system: systemMsg?.content as any,
         // TODO(Phase-3): multimodal content parts are passed through as-is; provider
         // SDK error path is currently the only signal if an array reaches the API.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
         messages: chatMessages as any,
       });
 

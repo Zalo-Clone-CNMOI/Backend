@@ -263,7 +263,9 @@ describe('PromptBuilderService', () => {
 
     it('system prompt mentions updating existing summary', () => {
       const result = builder.buildSummaryUpdatePrompt('Old.', ['New.']);
-      expect(result[0].content.toLowerCase()).toContain('updating');
+      const content = result[0].content;
+      const lower = typeof content === 'string' ? content.toLowerCase() : '';
+      expect(lower).toContain('updating');
     });
 
     it('joins multiple new messages with newline', () => {

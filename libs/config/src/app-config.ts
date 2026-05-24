@@ -65,6 +65,9 @@ export interface AppConfig {
   chatModerationWarnOnly?: boolean;
   chatModerationEnforceMinConfidence?: number;
   chatModerationHighRiskLabels?: string[];
+
+  // Zai AI bot — fixed user ID seeded by migration
+  zaiBotUserId: string;
 }
 
 interface ServiceConfigRequirements {
@@ -312,6 +315,19 @@ export function loadConfig(serviceName: string): AppConfig {
     chatModerationHighRiskLabels: readCsv(
       process.env.CHAT_MODERATION_HIGH_RISK_LABELS,
     ),
+    zaiBotUserId: (() => {
+      const raw =
+        process.env.ZAI_BOT_USER_ID?.trim() ||
+        '00000000-0000-0000-0000-0000000000a1';
+      const uuidRe =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRe.test(raw)) {
+        throw new Error(
+          `ZAI_BOT_USER_ID must be a valid UUID (got: ${raw})`,
+        );
+      }
+      return raw;
+    })(),
   };
 
   assertServiceConfig(config);

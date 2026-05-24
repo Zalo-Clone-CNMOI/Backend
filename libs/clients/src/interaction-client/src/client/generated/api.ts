@@ -1136,6 +1136,124 @@ export interface UpdateMemberSettingsDto {
      */
     'notificationEnabled'?: boolean;
 }
+/**
+ * 
+ * @export
+ * @interface ZaiConversationResponseDto
+ */
+export interface ZaiConversationResponseDto {
+    /**
+     * 
+     * @type {string}
+     * @memberof ZaiConversationResponseDto
+     */
+    'conversationId': string;
+}
+
+/**
+ * AiConversationsApi - axios parameter creator
+ * @export
+ */
+export const AiConversationsApiAxiosParamCreator = function (configuration?: Configuration) {
+    return {
+        /**
+         * 
+         * @summary Get or create the general Zai AI conversation for the current user
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        getOrCreateZaiConversation: async (options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            const localVarPath = `/ai-conversations/general`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication BearerAuth required
+            // http bearer authentication required
+            await setBearerAuthToObject(localVarHeaderParameter, configuration)
+
+
+    
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+    }
+};
+
+/**
+ * AiConversationsApi - functional programming interface
+ * @export
+ */
+export const AiConversationsApiFp = function(configuration?: Configuration) {
+    const localVarAxiosParamCreator = AiConversationsApiAxiosParamCreator(configuration)
+    return {
+        /**
+         * 
+         * @summary Get or create the general Zai AI conversation for the current user
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async getOrCreateZaiConversation(options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ZaiConversationResponseDto>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.getOrCreateZaiConversation(options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['AiConversationsApi.getOrCreateZaiConversation']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+    }
+};
+
+/**
+ * AiConversationsApi - factory interface
+ * @export
+ */
+export const AiConversationsApiFactory = function (configuration?: Configuration, basePath?: string, axios?: AxiosInstance) {
+    const localVarFp = AiConversationsApiFp(configuration)
+    return {
+        /**
+         * 
+         * @summary Get or create the general Zai AI conversation for the current user
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        getOrCreateZaiConversation(options?: RawAxiosRequestConfig): AxiosPromise<ZaiConversationResponseDto> {
+            return localVarFp.getOrCreateZaiConversation(options).then((request) => request(axios, basePath));
+        },
+    };
+};
+
+/**
+ * AiConversationsApi - object-oriented interface
+ * @export
+ * @class AiConversationsApi
+ * @extends {BaseAPI}
+ */
+export class AiConversationsApi extends BaseAPI {
+    /**
+     * 
+     * @summary Get or create the general Zai AI conversation for the current user
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof AiConversationsApi
+     */
+    public getOrCreateZaiConversation(options?: RawAxiosRequestConfig) {
+        return AiConversationsApiFp(this.configuration).getOrCreateZaiConversation(options).then((request) => request(this.axios, this.basePath));
+    }
+}
+
+
 
 /**
  * ConversationsApi - axios parameter creator

@@ -3,6 +3,7 @@ import { AiAssistController } from './ai-assist.controller';
 import { AiAssistService } from './ai-assist.service';
 import type { AuthenticatedUser } from '@app/types';
 import type { CatchUpResponseDto } from './dto/catch-up-response.dto';
+import type { ZaiConversationResponseDto } from './dto/zai-conversation-response.dto';
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -38,6 +39,7 @@ describe('AiAssistController', () => {
           provide: AiAssistService,
           useValue: {
             catchUp: jest.fn(),
+            getOrCreateZaiConversation: jest.fn(),
           },
         },
       ],
@@ -45,6 +47,24 @@ describe('AiAssistController', () => {
 
     controller = module.get<AiAssistController>(AiAssistController);
     service = module.get(AiAssistService);
+  });
+
+  describe('getOrCreateZaiConversation', () => {
+    it('delegates to service.getOrCreateZaiConversation with token and returns DTO', async () => {
+      const expected: ZaiConversationResponseDto = {
+        conversationId: 'conv-zai-1',
+      };
+      (service.getOrCreateZaiConversation as jest.Mock).mockResolvedValue(
+        expected,
+      );
+
+      const result = await controller.getOrCreateZaiConversation('token-xyz');
+
+      expect(service.getOrCreateZaiConversation).toHaveBeenCalledWith(
+        'token-xyz',
+      );
+      expect(result).toEqual(expected);
+    });
   });
 
   describe('getCatchUp', () => {
@@ -80,5 +100,4 @@ describe('AiAssistController', () => {
       expect(service.catchUp).not.toHaveBeenCalled();
     });
   });
-
 });

@@ -23,6 +23,9 @@ export class CacheService {
   private readonly CONVERSATION_LIST_PREFIX = 'cache:conversation:list:';
   private readonly CONVERSATION_DETAIL_PREFIX = 'cache:conversation:detail:';
 
+  // AI conversation marker — permanent flag (no TTL) set on AI_ASSISTANT conversation creation
+  private readonly AI_CONV_MARKER_PREFIX = 'conv:ai:';
+
   // Friend cache prefixes
   private readonly FRIEND_LIST_PREFIX = 'cache:friend:list:';
 
@@ -319,6 +322,39 @@ export class CacheService {
     this.logger.debug(
       `Recent messages cache invalidated for conversation: ${conversationId}`,
     );
+  }
+
+  // ===================================
+  // AI Conversation Markers
+  // ===================================
+
+  async setAiConversationMarker(conversationId: string): Promise<void> {
+    try {
+      await this.redisClient.set(
+        `${this.AI_CONV_MARKER_PREFIX}${conversationId}`,
+        '1',
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to set AI conversation marker for ${conversationId}:`,
+        error,
+      );
+    }
+  }
+
+  async isAiConversation(conversationId: string): Promise<boolean> {
+    try {
+      const count = await this.redisClient.exists(
+        `${this.AI_CONV_MARKER_PREFIX}${conversationId}`,
+      );
+      return count > 0;
+    } catch (error) {
+      this.logger.error(
+        `Failed to check AI conversation marker for ${conversationId}:`,
+        error,
+      );
+      return false;
+    }
   }
 
   // ===================================

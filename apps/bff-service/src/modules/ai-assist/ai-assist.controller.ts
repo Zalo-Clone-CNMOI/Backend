@@ -10,12 +10,30 @@ import { AccessToken, CurrentUser } from '@app/decorator';
 import { AuthenticatedUser, BusinessException } from '@app/types';
 import { AiAssistService } from './ai-assist.service';
 import { CatchUpResponseDto } from './dto/catch-up-response.dto';
+import { ZaiConversationResponseDto } from './dto/zai-conversation-response.dto';
 
 @ApiTags('AI Assist')
 @ApiBearerAuth('BearerAuth')
 @Controller('ai-assist')
 export class AiAssistController {
   constructor(private readonly service: AiAssistService) {}
+
+  @Get('conversations/zai')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({
+    summary:
+      'Get or create the personal Zai AI conversation for the current user',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Conversation id returned (created or existing)',
+    type: ZaiConversationResponseDto,
+  })
+  async getOrCreateZaiConversation(
+    @AccessToken() token: string,
+  ): Promise<ZaiConversationResponseDto> {
+    return this.service.getOrCreateZaiConversation(token);
+  }
 
   @Get('conversations/:conversationId/catch-up')
   @Throttle({ default: { limit: 30, ttl: 60_000 } })

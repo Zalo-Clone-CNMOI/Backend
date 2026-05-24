@@ -3,6 +3,7 @@ import { plainToInstance } from 'class-transformer';
 import { AiCoreClientService } from '@app/clients';
 import { InteractionClientService } from '@app/clients/interaction-client';
 import { CatchUpResponseDto } from './dto/catch-up-response.dto';
+import { ZaiConversationResponseDto } from './dto/zai-conversation-response.dto';
 
 @Injectable()
 export class AiAssistService {
@@ -10,6 +11,16 @@ export class AiAssistService {
     private readonly interactionClient: InteractionClientService,
     private readonly aiCoreClient: AiCoreClientService,
   ) {}
+
+  async getOrCreateZaiConversation(
+    accessToken: string,
+  ): Promise<ZaiConversationResponseDto> {
+    const result =
+      await this.interactionClient.getOrCreateZaiConversation(accessToken);
+    return plainToInstance(ZaiConversationResponseDto, result, {
+      excludeExtraneousValues: true,
+    });
+  }
 
   /**
    * Fetch a "catch-up" summary of unread messages in a conversation for the
@@ -66,5 +77,4 @@ export class AiAssistService {
       excludeExtraneousValues: true,
     });
   }
-
 }

@@ -1,0 +1,286 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { ZaiChatEngine } from './zai-chat.engine';
+import { MessageRepository } from '@libs/scylla';
+import { AiGatewayService } from '../ai-gateway/services/ai-gateway.service';
+import { PromptBuilderService } from '../ai-gateway/services/prompt-builder.service';
+import { AiMetricsService } from '../ai-gateway/services/ai-metrics.service';
+import { APP_CONFIG } from '@libs/config';
+import type { AiZaiChatRequestEvent } from '@libs/contracts';
+import type { PersistedMessage } from '@app/types/interfaces/chat.interface';
+import type { LlmChatMessage } from '../ai-gateway/interfaces';
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+const ZAI_BOT_ID = 'zai-bot-uuid';
+const CONV_ID = 'conv-001';
+const USER_ID = 'user-001';
+
+function makeEvent(
+  overrides: Partial<AiZaiChatRequestEvent> = {},
+): AiZaiChatRequestEvent {
+  return {
+    message_id: 'msg-new',
+    conversation_id: CONV_ID,
+    sender_id: USER_ID,
+    body: 'Hello Zai!',
+    created_at: Date.now(),
+    trace_id: 'trace-001',
+    ...overrides,
+  };
+}
+
+function makeMsg(
+  id: string,
+  senderId: string,
+  body: string,
+  overrides: Partial<PersistedMessage> = {},
+): PersistedMessage {
+  return {
+    message_id: id,
+    conversation_id: CONV_ID,
+    sender_id: senderId,
+    body,
+    created_at: Date.now(),
+    ...overrides,
+  } as PersistedMessage;
+}
+
+function makeGatewayResult(content = 'Sure, I can help!') {
+  return {
+    content,
+    tokensIn: 50,
+    tokensOut: 20,
+    model: 'gpt-4o',
+    provider: 'openai',
+    latencyMs: 300,
+  };
+}
+
+function makeMessageRepo(
+  items: PersistedMessage[] = [],
+): jest.Mocked<MessageRepository> {
+  return {
+    getMessages: jest
+      .fn()
+      .mockResolvedValue({ items, has_more: false, next_cursor: null }),
+  } as unknown as jest.Mocked<MessageRepository>;
+}
+
+function makeGateway(
+  result = makeGatewayResult(),
+): jest.Mocked<AiGatewayService> {
+  return {
+    complete: jest.fn().mockResolvedValue(result),
+  } as unknown as jest.Mocked<AiGatewayService>;
+}
+
+function makePromptBuilder(): jest.Mocked<PromptBuilderService> {
+  return {
+    buildZaiChatPrompt: jest.fn((history: LlmChatMessage[]) => [
+      { role: 'system' as const, content: 'You are Zai' },
+      ...history,
+    ]),
+  } as unknown as jest.Mocked<PromptBuilderService>;
+}
+
+function makeAiMetrics(): jest.Mocked<AiMetricsService> {
+  return {
+    recordRequest: jest.fn(),
+  } as unknown as jest.Mocked<AiMetricsService>;
+}
+
+// ── Test suite ───────────────────────────────────────────────────────────────
+
+describe('ZaiChatEngine', () => {
+  let engine: ZaiChatEngine;
+  let messageRepo: jest.Mocked<MessageRepository>;
+  let gateway: jest.Mocked<AiGatewayService>;
+  let promptBuilder: jest.Mocked<PromptBuilderService>;
+  let aiMetrics: jest.Mocked<AiMetricsService>;
+
+  async function build(
+    repoOverride?: jest.Mocked<MessageRepository>,
+    gatewayOverride?: jest.Mocked<AiGatewayService>,
+  ) {
+    messageRepo = repoOverride ?? makeMessageRepo();
+    gateway = gatewayOverride ?? makeGateway();
+    promptBuilder = makePromptBuilder();
+    aiMetrics = makeAiMetrics();
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        ZaiChatEngine,
+        { provide: MessageRepository, useValue: messageRepo },
+        { provide: AiGatewayService, useValue: gateway },
+        { provide: PromptBuilderService, useValue: promptBuilder },
+        { provide: AiMetricsService, useValue: aiMetrics },
+        { provide: APP_CONFIG, useValue: { zaiBotUserId: ZAI_BOT_ID } },
+      ],
+    }).compile();
+
+    engine = module.get<ZaiChatEngine>(ZaiChatEngine);
+  }
+
+  beforeEach(() => build());
+
+  // ── Loop guard ─────────────────────────────────────────────────────────────
+
+  it('returns null and skips gateway when sender_id is zaiBotUserId (loop guard)', async () => {
+    const event = makeEvent({ sender_id: ZAI_BOT_ID });
+    const result = await engine.respond(event);
+
+    expect(result).toBeNull();
+    expect(gateway.complete).not.toHaveBeenCalled();
+  });
+
+  // ── Happy path ─────────────────────────────────────────────────────────────
+
+  it('happy path: fetches history, calls gateway, returns AiChatSendInput', async () => {
+    const items = [
+      makeMsg('msg-2', ZAI_BOT_ID, 'How can I help?'),
+      makeMsg('msg-1', USER_ID, 'Hi there'),
+    ];
+    const repo = makeMessageRepo(items);
+    await build(repo);
+
+    const event = makeEvent();
+    const result = await engine.respond(event);
+
+    expect(repo.getMessages).toHaveBeenCalledWith(CONV_ID, { limit: 20 });
+    expect(promptBuilder.buildZaiChatPrompt).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ role: 'user', content: 'Hi there' }),
+        expect.objectContaining({
+          role: 'assistant',
+          content: 'How can I help?',
+        }),
+      ]),
+    );
+    expect(gateway.complete).toHaveBeenCalledWith(
+      USER_ID,
+      expect.objectContaining({ maxTokens: 1024, temperature: 0.7 }),
+    );
+    expect(result).not.toBeNull();
+    expect(result!.conversation_id).toBe(CONV_ID);
+    expect(result!.body).toBe('Sure, I can help!');
+    expect(result!.message_id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
+  });
+
+  // ── Cold start ─────────────────────────────────────────────────────────────
+
+  it('cold start: empty history → gateway still called with system-only messages → reply published', async () => {
+    const repo = makeMessageRepo([]);
+    await build(repo);
+
+    const result = await engine.respond(makeEvent());
+
+    expect(gateway.complete).toHaveBeenCalledWith(
+      USER_ID,
+      expect.objectContaining({ maxTokens: 1024, temperature: 0.7 }),
+    );
+    const completeCalls = (gateway.complete as jest.Mock).mock.calls as [
+      string,
+      { messages: LlmChatMessage[] },
+    ][];
+    const msgs = completeCalls[0][1].messages;
+    expect(msgs.some((m) => m.role === 'system')).toBe(true);
+    expect(result).not.toBeNull();
+  });
+
+  // ── Deleted message filter ─────────────────────────────────────────────────
+
+  it('filters out deleted messages from history before building prompt', async () => {
+    const items = [
+      makeMsg('msg-3', USER_ID, 'still here'),
+      makeMsg('msg-2', USER_ID, 'deleted msg', { deleted_at: Date.now() }),
+      makeMsg('msg-1', USER_ID, 'first msg'),
+    ];
+    const repo = makeMessageRepo(items);
+    await build(repo);
+
+    await engine.respond(makeEvent());
+
+    const calls = (promptBuilder.buildZaiChatPrompt as jest.Mock).mock
+      .calls as [LlmChatMessage[]][];
+    const historyArg = calls[0][0];
+    expect(historyArg.every((m) => m.content !== 'deleted msg')).toBe(true);
+    expect(historyArg.length).toBe(2);
+  });
+
+  // ── Role mapping ───────────────────────────────────────────────────────────
+
+  it('maps zaiBotUserId sender → role:assistant, others → role:user', async () => {
+    const items = [
+      makeMsg('msg-2', ZAI_BOT_ID, 'Zai reply'),
+      makeMsg('msg-1', USER_ID, 'user msg'),
+    ];
+    const repo = makeMessageRepo(items);
+    await build(repo);
+
+    await engine.respond(makeEvent());
+
+    const calls2 = (promptBuilder.buildZaiChatPrompt as jest.Mock).mock
+      .calls as [LlmChatMessage[]][];
+    const history = calls2[0][0];
+    // Items are reversed to chronological order
+    expect(history[0]).toMatchObject({ role: 'user', content: 'user msg' });
+    expect(history[1]).toMatchObject({
+      role: 'assistant',
+      content: 'Zai reply',
+    });
+  });
+
+  // ── ScyllaDB fetch failure ─────────────────────────────────────────────────
+
+  it('proceeds with empty history when ScyllaDB fetch throws — gateway still called', async () => {
+    const repo = makeMessageRepo();
+    (repo.getMessages as jest.Mock).mockRejectedValue(
+      new Error('ScyllaDB down'),
+    );
+    await build(repo);
+
+    const result = await engine.respond(makeEvent());
+
+    expect(gateway.complete).toHaveBeenCalled();
+    expect(result).not.toBeNull();
+  });
+
+  // ── Gateway failure ────────────────────────────────────────────────────────
+
+  it('returns null when gateway throws — no rethrow', async () => {
+    const gw = makeGateway();
+    (gw.complete as jest.Mock).mockRejectedValue(new Error('LLM error'));
+    await build(undefined, gw);
+
+    const result = await engine.respond(makeEvent());
+
+    expect(result).toBeNull();
+    expect(aiMetrics.recordRequest).toHaveBeenCalledWith(
+      'zai_chat',
+      'unknown',
+      'unknown',
+      0,
+      0,
+      expect.any(Number),
+      false,
+    );
+  });
+
+  // ── Metrics ────────────────────────────────────────────────────────────────
+
+  it('records success metrics on happy path', async () => {
+    await engine.respond(makeEvent());
+
+    expect(aiMetrics.recordRequest).toHaveBeenCalledWith(
+      'zai_chat',
+      'openai',
+      'gpt-4o',
+      50,
+      20,
+      300,
+      true,
+    );
+  });
+});

@@ -59,6 +59,7 @@ describe('AiAssistService', () => {
           provide: InteractionClientService,
           useValue: {
             getConversationById: jest.fn(),
+            getOrCreateZaiConversation: jest.fn(),
           },
         },
         {
@@ -148,4 +149,42 @@ describe('AiAssistService', () => {
     });
   });
 
+  // ── getOrCreateZaiConversation ─────────────────────────────────────────────
+
+  describe('getOrCreateZaiConversation', () => {
+    it('delegates to interactionClient and returns conversationId DTO', async () => {
+      (
+        interactionClient as unknown as {
+          getOrCreateZaiConversation: jest.Mock;
+        }
+      ).getOrCreateZaiConversation.mockResolvedValue({
+        conversationId: 'conv-zai-1',
+      });
+
+      const result = await service.getOrCreateZaiConversation('bearer-token');
+
+      expect(
+        (
+          interactionClient as unknown as {
+            getOrCreateZaiConversation: jest.Mock;
+          }
+        ).getOrCreateZaiConversation,
+      ).toHaveBeenCalledWith('bearer-token');
+      expect(result.conversationId).toBe('conv-zai-1');
+    });
+
+    it('propagates error when interactionClient throws', async () => {
+      (
+        interactionClient as unknown as {
+          getOrCreateZaiConversation: jest.Mock;
+        }
+      ).getOrCreateZaiConversation.mockRejectedValue(
+        new Error('network error'),
+      );
+
+      await expect(
+        service.getOrCreateZaiConversation('bad-token'),
+      ).rejects.toThrow('network error');
+    });
+  });
 });

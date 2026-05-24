@@ -10,7 +10,8 @@ export type AiFeatureType =
   | 'translation'
   | 'document_analysis'
   | 'entity_detection'
-  | 'entity_info';
+  | 'entity_info'
+  | 'zai_chat';
 
 export type ModerationLabelType =
   | 'clean'
@@ -365,5 +366,14 @@ export interface AiStreamCompleteEvent {
   total_tokens: number;
   provider: AiProviderType;
   completed_at: number;
+  trace_id?: string;
+}
+
+export interface AiZaiChatRequestEvent {
+  message_id: string;
+  conversation_id: string;
+  sender_id: string;
+  body: string;
+  created_at: number;
   trace_id?: string;
 }

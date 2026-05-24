@@ -12,6 +12,7 @@ import {
   UserStatus,
 } from '@app/constant';
 import { BusinessException } from '@app/types';
+import { CacheService } from '@libs/redis';
 import { AiConversationFactoryService } from './ai-conversation-factory.service';
 import type { AiConversationContext } from '@libs/contracts';
 
@@ -26,6 +27,7 @@ describe('AiConversationFactoryService', () => {
   let conversationRepo: jest.Mocked<Repository<Conversation>>;
   let memberRepo: jest.Mocked<Repository<ConversationMember>>;
   let userRepo: jest.Mocked<Repository<User>>;
+  let cacheService: jest.Mocked<CacheService>;
 
   beforeEach(() => {
     entityManager = {
@@ -46,6 +48,7 @@ describe('AiConversationFactoryService', () => {
           ): Promise<unknown> => cb(entityManager),
         ),
       },
+      createQueryBuilder: jest.fn(),
     } as unknown as jest.Mocked<Repository<Conversation>>;
 
     memberRepo = {} as unknown as jest.Mocked<Repository<ConversationMember>>;
@@ -73,11 +76,16 @@ describe('AiConversationFactoryService', () => {
       }),
     } as unknown as jest.Mocked<Repository<User>>;
 
+    cacheService = {
+      setAiConversationMarker: jest.fn().mockResolvedValue(undefined),
+    } as unknown as jest.Mocked<CacheService>;
+
     service = new AiConversationFactoryService(
       conversationRepo,
       memberRepo,
       userRepo,
       { zaiBotUserId: ZAI_ID } as AppConfig,
+      cacheService,
     );
   });
 
@@ -181,5 +189,44 @@ describe('AiConversationFactoryService', () => {
     expect((error as BusinessException).errorCode).toBe(
       ErrorCode.USER_NOT_FOUND,
     );
+  });
+
+  // ── getOrCreateGeneral ───────────────────────────────────────────────────
+
+  describe('getOrCreateGeneral', () => {
+    function makeQueryBuilder(returnValue: Conversation | null) {
+      const qb = {
+        innerJoin: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockResolvedValue(returnValue),
+      };
+      return qb;
+    }
+
+    it('returns existing conversation id without DB write when one exists', async () => {
+      const existing = { id: 'conv-existing' } as Conversation;
+      (conversationRepo.createQueryBuilder as jest.Mock).mockReturnValue(
+        makeQueryBuilder(existing),
+      );
+
+      const result = await service.getOrCreateGeneral('user-1');
+
+      expect(result).toEqual({ conversationId: 'conv-existing' });
+      expect(entityManager.save).not.toHaveBeenCalled();
+      expect(cacheService.setAiConversationMarker).toHaveBeenCalledWith(
+        'conv-existing',
+      );
+    });
+
+    it('creates new conversation when none exists and returns new id', async () => {
+      (conversationRepo.createQueryBuilder as jest.Mock).mockReturnValue(
+        makeQueryBuilder(null),
+      );
+
+      const result = await service.getOrCreateGeneral('user-1');
+
+      expect(result).toEqual({ conversationId: 'conv-new' });
+      expect(entityManager.save).toHaveBeenCalledTimes(2);
+    });
   });
 });

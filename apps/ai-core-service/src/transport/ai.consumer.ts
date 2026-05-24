@@ -10,10 +10,12 @@ import type {
   AiDocumentQueryEvent,
   AiEntityDetectionRequestEvent,
   AiEntityInfoRequestEvent,
+  AiZaiChatRequestEvent,
 } from '@libs/contracts';
 import { APP_CONFIG, AppConfig } from '@libs/config';
 import { S3Service } from '@libs/s3';
 import { AiPublisher } from './ai.publisher';
+import { AiChatPublisher } from './ai-chat.publisher';
 import { ModerationEngine } from '../modules/moderation/moderation.engine';
 import { SmartReplyEngine } from '../modules/smart-reply/smart-reply.engine';
 import { SummaryEngine } from '../modules/summary/summary.engine';
@@ -23,6 +25,7 @@ import { TextExtractorService } from '../modules/document/text-extractor.service
 import { DocumentExtractionError } from '../modules/document/document-extraction.error';
 import { UnsupportedDocumentFormatError } from '../modules/document/unsupported-document-format.error';
 import { EntityDetectionEngine } from '../modules/entity-detection/entity-detection.engine';
+import { ZaiChatEngine } from '../modules/zai-chat/zai-chat.engine';
 
 @Controller()
 export class AiConsumer {
@@ -31,6 +34,7 @@ export class AiConsumer {
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly publisher: AiPublisher,
+    private readonly chatPublisher: AiChatPublisher,
     private readonly moderationEngine: ModerationEngine,
     private readonly smartReplyEngine: SmartReplyEngine,
     private readonly summaryEngine: SummaryEngine,
@@ -38,6 +42,7 @@ export class AiConsumer {
     private readonly documentEngine: DocumentEngine,
     private readonly textExtractor: TextExtractorService,
     private readonly entityDetectionEngine: EntityDetectionEngine,
+    private readonly zaiChatEngine: ZaiChatEngine,
     private readonly s3Service: S3Service,
   ) {}
 
@@ -231,6 +236,25 @@ export class AiConsumer {
     } catch (error) {
       this.logger.error(
         `Entity info handler fatal: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  // ── Zai Chat ───────────────────────────────────────────────────────
+
+  @EventPattern(KafkaTopics.AiZaiChatRequest)
+  async onZaiChatRequest(@Payload() event: AiZaiChatRequestEvent) {
+    this.logger.log(
+      `Zai chat request: ${event.conversation_id} from ${event.sender_id}`,
+    );
+    try {
+      const reply = await this.zaiChatEngine.respond(event);
+      if (reply) {
+        await this.chatPublisher.send(reply);
+      }
+    } catch (error) {
+      this.logger.error(
+        `Zai chat handler fatal: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }

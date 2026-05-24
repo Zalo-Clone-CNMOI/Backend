@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { FriendsApi, ConversationsApi } from './client/generated';
+import { FriendsApi, ConversationsApi, AiConversationsApi } from './client/generated';
 import { BaseHttpClient } from '../../base-http-client';
 import type {
   SendFriendRequestDto,
@@ -46,6 +46,7 @@ export class InteractionClientService extends BaseHttpClient {
   constructor(
     private readonly friendsApi: FriendsApi,
     private readonly conversationsApi: ConversationsApi,
+    private readonly aiConversationsApi: AiConversationsApi,
   ) {
     super();
   }
@@ -741,6 +742,19 @@ export class InteractionClientService extends BaseHttpClient {
       });
     } catch (error) {
       this.handleError('getCallHistory', error);
+    }
+  }
+
+  async getOrCreateZaiConversation(
+    accessToken: string,
+  ): Promise<{ conversationId: string }> {
+    try {
+      const response = await this.aiConversationsApi.getOrCreateZaiConversation(
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      return response.data as { conversationId: string };
+    } catch (error) {
+      this.handleError('getOrCreateZaiConversation', error);
     }
   }
 }

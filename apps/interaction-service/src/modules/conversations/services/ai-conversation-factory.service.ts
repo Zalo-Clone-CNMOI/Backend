@@ -15,6 +15,7 @@ import {
 } from '@app/constant';
 import { BusinessException } from '@app/types';
 import type { AiConversationContext } from '@libs/contracts';
+import { CacheService } from '@libs/redis';
 
 /**
  * Creates a one-to-one AI_ASSISTANT conversation between a user and the Zai
@@ -33,6 +34,7 @@ export class AiConversationFactoryService {
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    private readonly cacheService: CacheService,
   ) {}
 
   async createZaiConversation(
@@ -86,7 +88,38 @@ export class AiConversationFactoryService {
       this.logger.log(
         `Created Zai conversation ${saved.id} for user ${userId} (feature: ${context.feature})`,
       );
+
+      // Set Redis marker so chat-service can route messages without a DB lookup.
+      void this.cacheService.setAiConversationMarker(saved.id);
+
       return saved;
     });
+  }
+
+  async getOrCreateGeneral(
+    userId: string,
+  ): Promise<{ conversationId: string }> {
+    const existing = await this.conversationRepository
+      .createQueryBuilder('c')
+      .innerJoin('c.members', 'm', 'm.userId = :userId AND m.leftAt IS NULL', {
+        userId,
+      })
+      .where("c.type = :type AND c.aiContext->>'feature' = :feature", {
+        type: ConversationType.AI_ASSISTANT,
+        feature: 'general',
+      })
+      .getOne();
+
+    if (existing) {
+      // Ensure marker exists in Redis (idempotent re-set).
+      void this.cacheService.setAiConversationMarker(existing.id);
+      return { conversationId: existing.id };
+    }
+
+    const conv = await this.createZaiConversation(userId, {
+      feature: 'general',
+      created_at: Date.now(),
+    });
+    return { conversationId: conv.id };
   }
 }

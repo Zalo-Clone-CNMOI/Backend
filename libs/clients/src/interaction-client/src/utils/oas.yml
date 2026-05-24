@@ -9,6 +9,21 @@ servers:
   - url: http://interaction-service:5004/api
     description: Docker internal service (default)
 paths:
+  /ai-conversations/general:
+    post:
+      tags:
+        - AiConversations
+      summary: Get or create the general Zai AI conversation for the current user
+      operationId: getOrCreateZaiConversation
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Zai conversation ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ZaiConversationResponseDto'
   /friends:
     get:
       tags:
@@ -1382,3 +1397,11 @@ components:
           type: integer
         totalPages:
           type: integer
+    ZaiConversationResponseDto:
+      type: object
+      required:
+        - conversationId
+      properties:
+        conversationId:
+          type: string
+          format: uuid

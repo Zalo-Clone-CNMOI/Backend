@@ -23,6 +23,7 @@ import { TranslationModule } from './modules/translation/translation.module';
 import { DocumentModule } from './modules/document/document.module';
 import { EntityDetectionModule } from './modules/entity-detection/entity-detection.module';
 import { CatchUpModule } from './modules/catch-up/catch-up.module';
+import { ZaiChatModule } from './modules/zai-chat/zai-chat.module';
 import { AiConsumer } from './transport/ai.consumer';
 import { AiPublisher } from './transport/ai.publisher';
 import { AiChatPublisher } from './transport/ai-chat.publisher';
@@ -67,6 +68,7 @@ import { AiChatPublisher } from './transport/ai-chat.publisher';
     DocumentModule,
     EntityDetectionModule,
     CatchUpModule,
+    ZaiChatModule,
   ],
   controllers: [AiConsumer],
   providers: [AiPublisher, AiChatPublisher],

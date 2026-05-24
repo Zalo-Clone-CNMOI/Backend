@@ -300,4 +300,15 @@ Respond ONLY with the JSON object.`,
       },
     ];
   }
+
+  buildZaiChatPrompt(history: LlmChatMessage[]): LlmChatMessage[] {
+    const system: LlmChatMessage = {
+      role: 'system',
+      content: `You are Zai, a friendly and helpful AI assistant built into this chat application (similar to Zalo).
+${LANGUAGE_RULE}
+Be conversational, concise, and helpful. Keep responses natural and brief unless the user asks for detail.
+Do not repeat yourself or add unnecessary filler phrases.`,
+    };
+    return [system, ...history];
+  }
 }

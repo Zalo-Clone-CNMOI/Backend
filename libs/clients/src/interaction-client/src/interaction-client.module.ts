@@ -1,6 +1,6 @@
 import { DynamicModule, Module } from '@nestjs/common';
 import { HttpModule } from '@nestjs/axios';
-import { FriendsApi, ConversationsApi } from './client/generated';
+import { FriendsApi, ConversationsApi, AiConversationsApi } from './client/generated';
 import { InteractionClientService } from './interaction-client.service';
 import {
   InteractionClientConfig,
@@ -18,6 +18,7 @@ export class InteractionClientModule {
       providers: [
         injectApiProvider(FriendsApi, config),
         injectApiProvider(ConversationsApi, config),
+        injectApiProvider(AiConversationsApi, config),
         InteractionClientService,
       ],
       exports: [InteractionClientService],
@@ -38,6 +39,7 @@ export class InteractionClientModule {
         },
         injectApiProviderAsync(FriendsApi),
         injectApiProviderAsync(ConversationsApi),
+        injectApiProviderAsync(AiConversationsApi),
         InteractionClientService,
       ],
       exports: [InteractionClientService],

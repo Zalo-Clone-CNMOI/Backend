@@ -6,6 +6,7 @@ import {
   type MessageMention,
   AiModerationRequestEvent,
   AiEntityDetectionRequestEvent,
+  type AiZaiChatRequestEvent,
 } from '@libs/contracts';
 import { MessageRepository } from '@libs/scylla';
 import { CacheService } from '@libs/redis';
@@ -399,6 +400,31 @@ export class SendMessageHandler {
         }
       })();
     }
+
+    // ── Zai Chat: route messages to ZaiChatEngine for AI conversations ────────
+    void (async () => {
+      try {
+        if (await this.cacheService.isAiConversation(params.conversationId)) {
+          const zaiEvent: AiZaiChatRequestEvent = {
+            message_id: params.messageId,
+            conversation_id: params.conversationId,
+            sender_id: params.senderId,
+            body: params.body,
+            created_at: params.createdAt,
+            trace_id: params.traceId,
+          };
+          await this.publisher.emit(KafkaTopics.AiZaiChatRequest, zaiEvent);
+          this.shared.logger.debug(
+            `[${params.traceId}] AiZaiChatRequest emitted for message: ${params.messageId}`,
+          );
+        }
+      } catch (err) {
+        this.shared.logger.error(
+          `[${params.traceId}] AiZaiChatRequest emit failed`,
+          err,
+        );
+      }
+    })();
 
     // ── Cache invalidation (fire-and-forget: non-blocking by design so the
     //    message-send critical path is not delayed by a Redis round-trip) ──────

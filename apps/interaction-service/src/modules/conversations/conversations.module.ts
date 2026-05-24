@@ -10,7 +10,9 @@ import {
   ConversationPollVote,
 } from '@libs/database/entities';
 import { KafkaModule, NotificationOutboxModule } from '@libs/kafka';
+import { RedisModule } from '@libs/redis';
 import { ConversationsController } from './conversations.controller';
+import { AiConversationController } from './ai-conversation.controller';
 import { ConversationsService } from './conversations.service';
 import { ConversationCoreService } from './services/conversation-core.service';
 import { ConversationMemberService } from './services/conversation-member.service';
@@ -33,8 +35,9 @@ import { AiConversationFactoryService } from './services/ai-conversation-factory
     ]),
     KafkaModule,
     NotificationOutboxModule,
+    RedisModule,
   ],
-  controllers: [ConversationsController],
+  controllers: [ConversationsController, AiConversationController],
   providers: [
     ConversationsService,
     ConversationCoreService,

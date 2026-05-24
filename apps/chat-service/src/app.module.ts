@@ -31,7 +31,12 @@ import { HealthController } from './health.controller';
     ConversationMembershipModule,
     MessagesModule,
   ],
-  controllers: [AiMessageConsumer, PersistMessageConsumer, PollMessageConsumer, HealthController],
+  controllers: [
+    AiMessageConsumer,
+    PersistMessageConsumer,
+    PollMessageConsumer,
+    HealthController,
+  ],
   providers: [
     ChatPublisher,
     HealthCheckService,

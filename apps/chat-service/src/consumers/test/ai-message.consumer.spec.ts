@@ -132,7 +132,9 @@ describe('AiMessageConsumer', () => {
   it('emits event without body_format when payload omits it', async () => {
     await consumer.onAiMessage(buildPayload());
 
-    const emittedEvent = (publisher.emit.mock.calls[0] as [string, { body_format?: unknown }])[1];
+    const emittedEvent = (
+      publisher.emit.mock.calls[0] as [string, { body_format?: unknown }]
+    )[1];
     expect(emittedEvent.body_format).toBeUndefined();
   });
 

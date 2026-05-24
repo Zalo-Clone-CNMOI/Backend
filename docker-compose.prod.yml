@@ -90,6 +90,7 @@ services:
       DB_USERNAME: ${POSTGRES_USER:-postgres}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       DB_NAME: ${POSTGRES_DB:-postgres}
+      DB_SSL: "true"
     networks:
       - zalo_network
     restart: "no"
@@ -273,6 +274,8 @@ services:
       DB_USERNAME: ${POSTGRES_USER:-postgres}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       DB_NAME: ${POSTGRES_DB:-postgres}
+      # Zai AI bot
+      ZAI_BOT_USER_ID: ${ZAI_BOT_USER_ID:-00000000-0000-0000-0000-0000000000a1}
     networks:
       - zalo_network
     depends_on:
@@ -416,6 +419,8 @@ services:
       SCYLLA_CONTACT_POINTS: scylla
       SCYLLA_LOCAL_DATACENTER: datacenter1
       SCYLLA_KEYSPACE: chat
+      # Zai AI bot
+      ZAI_BOT_USER_ID: ${ZAI_BOT_USER_ID:-00000000-0000-0000-0000-0000000000a1}
     ports:
       - "${CHAT_PORT:-5002}:5002"
     networks:
@@ -550,6 +555,9 @@ services:
       DB_USERNAME: ${POSTGRES_USER:-postgres}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       DB_NAME: ${POSTGRES_DB:-postgres}
+      DB_SSL: "true"
+      # Zai AI bot
+      ZAI_BOT_USER_ID: ${ZAI_BOT_USER_ID:-00000000-0000-0000-0000-0000000000a1}
     networks:
       - zalo_network
     depends_on:

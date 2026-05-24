@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, HttpCode, Post } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { AiTranslateResultEvent } from '@libs/contracts';
 import { BusinessException } from '@app/types';
@@ -14,6 +14,7 @@ export class TranslationController {
   constructor(private readonly engine: TranslationEngine) {}
 
   @Post()
+  @HttpCode(200)
   @ApiOperation({
     summary: 'Translate text synchronously (BFF → ai-core internal)',
   })
@@ -39,7 +40,7 @@ export class TranslationController {
     return this.engine.translate({
       message_id: randomUUID(),
       conversation_id: 'http-translate',
-      user_id: dto.user_id,
+      user_id: dto.user_id.trim(),
       body: text,
       source_language: dto.source_language,
       target_language: dto.target_language.trim(),

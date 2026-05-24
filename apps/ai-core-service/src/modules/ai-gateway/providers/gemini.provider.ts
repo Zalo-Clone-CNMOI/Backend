@@ -42,12 +42,17 @@ export class GeminiProvider implements ILlmProvider {
         .filter((m) => m.role !== 'system')
         .map((m) => ({
           role: m.role === 'assistant' ? 'model' : 'user',
+          // TODO(Phase-3): when m.content is LlmContentPart[], this produces a malformed
+          // Gemini part ({ text: <array> }). Map to multiple parts with image data before
+          // shipping any engine that emits image_url content.
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           parts: [{ text: m.content as any }],
         }));
 
       const chat = genModel.startChat({
         history: chatMessages.slice(0, -1),
+        // TODO(Phase-3): multimodal content parts are passed through as-is; provider
+        // SDK error path is currently the only signal if an array reaches the API.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         systemInstruction: systemMsg?.content as any,
         generationConfig: {
@@ -98,12 +103,17 @@ export class GeminiProvider implements ILlmProvider {
         .filter((m) => m.role !== 'system')
         .map((m) => ({
           role: m.role === 'assistant' ? 'model' : 'user',
+          // TODO(Phase-3): when m.content is LlmContentPart[], this produces a malformed
+          // Gemini part ({ text: <array> }). Map to multiple parts with image data before
+          // shipping any engine that emits image_url content.
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           parts: [{ text: m.content as any }],
         }));
 
       const chat = genModel.startChat({
         history: chatMessages.slice(0, -1),
+        // TODO(Phase-3): multimodal content parts are passed through as-is; provider
+        // SDK error path is currently the only signal if an array reaches the API.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         systemInstruction: systemMsg?.content as any,
         generationConfig: {

@@ -56,7 +56,7 @@ export class AiGatewayService {
           ...m,
           content: typeof m.content === 'string'
               ? this.sanitizer.sanitize(m.content)
-              : (m.content as LlmContentPart[]),
+              : m.content,
         })),
       };
     }
@@ -110,7 +110,7 @@ export class AiGatewayService {
           ...m,
           content: typeof m.content === 'string'
               ? this.sanitizer.sanitize(m.content)
-              : (m.content as LlmContentPart[]),
+              : m.content,
         })),
       };
     }
@@ -210,7 +210,7 @@ export class AiGatewayService {
           ...m,
           content: typeof m.content === 'string'
               ? this.sanitizer.sanitize(m.content)
-              : (m.content as LlmContentPart[]),
+              : m.content,
         })),
       };
     }

@@ -69,6 +69,8 @@ export class LocDoRouterProvider implements ILlmProvider {
 
       const response = await client.chat.completions.create({
         model,
+        // TODO(Phase-3): multimodal content parts are passed through as-is; provider
+        // SDK error path is currently the only signal if an array reaches the API.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         messages: this.transformMessages(options.messages as any),
         max_tokens: options.maxTokens ?? 1024,
@@ -108,6 +110,8 @@ export class LocDoRouterProvider implements ILlmProvider {
 
       const stream = await client.chat.completions.create({
         model,
+        // TODO(Phase-3): multimodal content parts are passed through as-is; provider
+        // SDK error path is currently the only signal if an array reaches the API.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         messages: this.transformMessages(options.messages as any),
         max_tokens: options.maxTokens ?? 1024,

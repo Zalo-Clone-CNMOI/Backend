@@ -107,7 +107,14 @@ export class ZaiChatEngine {
           { messages, maxTokens: 1024, temperature: 0.7 },
           (chunk) => {
             if (chunk.content) {
-              void onChunk(chunk.content);
+              // gateway expects sync onChunk; the consumer's callback is async
+              // (it publishes to Kafka). Detach the promise but catch rejections
+              // so a failed chunk publish does NOT become an unhandled rejection.
+              void onChunk(chunk.content).catch((err) => {
+                this.logger.warn(
+                  `[${event.trace_id}] Stream chunk callback failed: ${err instanceof Error ? err.message : String(err)}`,
+                );
+              });
             }
           },
         );

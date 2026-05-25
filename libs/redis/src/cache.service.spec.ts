@@ -441,10 +441,14 @@ describe('CacheService', () => {
         created_at: 1234,
       });
 
-      expect(redis.set).toHaveBeenCalledWith(
-        'conv:ai:conv-001',
-        JSON.stringify({ version: 1, feature: 'general', created_at: 1234 }),
-      );
+      expect(redis.set).toHaveBeenCalledTimes(1);
+      const [key, value] = redis.set.mock.calls[0] as [string, string];
+      expect(key).toBe('conv:ai:conv-001');
+      expect(JSON.parse(value)).toEqual({
+        version: 1,
+        feature: 'general',
+        created_at: 1234,
+      });
     });
 
     it('does not throw on Redis error', async () => {

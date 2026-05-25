@@ -22,20 +22,6 @@ export class AiAssistService {
     });
   }
 
-  /**
-   * Fetch a "catch-up" summary of unread messages in a conversation for the
-   * calling user.
-   *
-   * The call to `interactionClient.getConversationById` acts as the membership
-   * gate: if the user is not a member the client throws a 403/404 which the
-   * BFF global exception filter maps to the appropriate HTTP status code.
-   *
-   * The response carries the caller's own `mySettings.lastReadAt`, which bounds
-   * the unread window passed to ai-core as `since`. The generated
-   * `ConversationDetailDto` type is stale and omits `mySettings`, so we read it
-   * through a narrow cast; regenerating the interaction client would make this
-   * type-safe (see PR follow-up).
-   */
   async catchUp(
     token: string,
     userId: string,

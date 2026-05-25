@@ -1,34 +1,34 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { FriendsApi, ConversationsApi, AiConversationsApi } from './client/generated';
-import { BaseHttpClient } from '../../base-http-client';
-import type {
-  SendFriendRequestDto,
-  RespondFriendRequestDto,
-  CreateGroupConversationDto,
-  CreateDirectConversationDto,
-  UpdateConversationDto,
-  AddMembersDto,
-  ConversationCallStateResponseDto,
-  UpdateMemberRoleDto,
-  UpdateMemberSettingsDto,
-  EndConversationCallDto,
-  GroupInviteStatus,
-  PaginatedResponseGroupInviteItemDto,
-  SendGroupInvitesDto,
-  SendGroupInvitesResponseDto,
-  ConversationDetailDto,
-  PaginatedResponseFriendResponseDto,
-  PaginatedResponseFriendRequestResponseDto,
-  PaginatedResponseSentFriendRequestResponseDto,
-  PaginatedResponseConversationListItemDto,
-  UpdateGroupSettingsDto,
+import {
+  FriendsApi,
+  ConversationsApi,
+  AiConversationsApi,
+  type SendFriendRequestDto,
+  type RespondFriendRequestDto,
+  type CreateGroupConversationDto,
+  type CreateDirectConversationDto,
+  type UpdateConversationDto,
+  type AddMembersDto,
+  type ConversationCallStateResponseDto,
+  type UpdateMemberRoleDto,
+  type UpdateMemberSettingsDto,
+  type EndConversationCallDto,
+  type GroupInviteStatus,
+  type PaginatedResponseGroupInviteItemDto,
+  type SendGroupInvitesDto,
+  type SendGroupInvitesResponseDto,
+  type ConversationDetailDto,
+  type PaginatedResponseFriendResponseDto,
+  type PaginatedResponseFriendRequestResponseDto,
+  type PaginatedResponseSentFriendRequestResponseDto,
+  type PaginatedResponseConversationListItemDto,
+  type UpdateGroupSettingsDto,
 } from './client/generated';
+import { BaseHttpClient } from '../../base-http-client';
 import type {
   CreatePollPayload,
   EditPollPayload,
   ListPollsQueryPayload,
-  IceServersResponse,
-  CallHistoryResponse,
   ApiInternals,
 } from './interaction-client.types';
 import {
@@ -37,6 +37,12 @@ import {
   closePollViaApi,
   retractPollVoteViaApi,
   getPollDetailViaApi,
+  createPollViaApi,
+  listPollsViaApi,
+  editPollViaApi,
+  castPollVoteViaApi,
+  addPollOptionViaApi,
+  removePollOptionViaApi,
 } from './interaction-client-calls.helper';
 
 @Injectable()
@@ -558,23 +564,16 @@ export class InteractionClientService extends BaseHttpClient {
     return this.conversationsApi as unknown as ApiInternals;
   }
 
-  private authHeaders(accessToken: string) {
-    return { Authorization: `Bearer ${accessToken}` };
-  }
-
   async createPoll(
     accessToken: string,
     conversationId: string,
     dto: CreatePollPayload,
   ): Promise<unknown> {
     try {
-      const { axios, basePath } = this.getInternals();
-      const response = await axios.post(
-        `${basePath}/conversations/${conversationId}/polls`,
+      return await createPollViaApi(this.getInternals(), accessToken, {
+        conversationId,
         dto,
-        { headers: this.authHeaders(accessToken) },
-      );
-      return response.data;
+      });
     } catch (error) {
       this.handleError('createPoll', error);
     }
@@ -586,15 +585,10 @@ export class InteractionClientService extends BaseHttpClient {
     query: ListPollsQueryPayload = {},
   ): Promise<unknown> {
     try {
-      const { axios, basePath } = this.getInternals();
-      const response = await axios.get(
-        `${basePath}/conversations/${conversationId}/polls`,
-        {
-          params: query,
-          headers: this.authHeaders(accessToken),
-        },
-      );
-      return response.data;
+      return await listPollsViaApi(this.getInternals(), accessToken, {
+        conversationId,
+        query,
+      });
     } catch (error) {
       this.handleError('listPolls', error);
     }
@@ -622,13 +616,11 @@ export class InteractionClientService extends BaseHttpClient {
     dto: EditPollPayload,
   ): Promise<unknown> {
     try {
-      const { axios, basePath } = this.getInternals();
-      const response = await axios.patch(
-        `${basePath}/conversations/${conversationId}/polls/${pollId}`,
+      return await editPollViaApi(this.getInternals(), accessToken, {
+        conversationId,
+        pollId,
         dto,
-        { headers: this.authHeaders(accessToken) },
-      );
-      return response.data;
+      });
     } catch (error) {
       this.handleError('editPoll', error);
     }
@@ -641,13 +633,11 @@ export class InteractionClientService extends BaseHttpClient {
     optionIds: string[],
   ): Promise<unknown> {
     try {
-      const { axios, basePath } = this.getInternals();
-      const response = await axios.post(
-        `${basePath}/conversations/${conversationId}/polls/${pollId}/vote`,
-        { option_ids: optionIds },
-        { headers: this.authHeaders(accessToken) },
-      );
-      return response.data;
+      return await castPollVoteViaApi(this.getInternals(), accessToken, {
+        conversationId,
+        pollId,
+        optionIds,
+      });
     } catch (error) {
       this.handleError('castPollVote', error);
     }
@@ -675,13 +665,11 @@ export class InteractionClientService extends BaseHttpClient {
     label: string,
   ): Promise<unknown> {
     try {
-      const { axios, basePath } = this.getInternals();
-      const response = await axios.post(
-        `${basePath}/conversations/${conversationId}/polls/${pollId}/options`,
-        { label },
-        { headers: this.authHeaders(accessToken) },
-      );
-      return response.data;
+      return await addPollOptionViaApi(this.getInternals(), accessToken, {
+        conversationId,
+        pollId,
+        label,
+      });
     } catch (error) {
       this.handleError('addPollOption', error);
     }
@@ -694,12 +682,11 @@ export class InteractionClientService extends BaseHttpClient {
     optionId: string,
   ): Promise<unknown> {
     try {
-      const { axios, basePath } = this.getInternals();
-      const response = await axios.delete(
-        `${basePath}/conversations/${conversationId}/polls/${pollId}/options/${optionId}`,
-        { headers: this.authHeaders(accessToken) },
-      );
-      return response.data;
+      return await removePollOptionViaApi(this.getInternals(), accessToken, {
+        conversationId,
+        pollId,
+        optionId,
+      });
     } catch (error) {
       this.handleError('removePollOption', error);
     }
@@ -720,7 +707,7 @@ export class InteractionClientService extends BaseHttpClient {
     }
   }
 
-  async getIceServers(accessToken: string): Promise<IceServersResponse> {
+  async getIceServers(accessToken: string) {
     try {
       return await getIceServersViaApi(this.getInternals(), accessToken);
     } catch (error) {
@@ -733,7 +720,7 @@ export class InteractionClientService extends BaseHttpClient {
     conversationId: string,
     page?: number,
     limit?: number,
-  ): Promise<CallHistoryResponse> {
+  ) {
     try {
       return await getCallHistoryViaApi(this.getInternals(), accessToken, {
         conversationId,
@@ -744,7 +731,6 @@ export class InteractionClientService extends BaseHttpClient {
       this.handleError('getCallHistory', error);
     }
   }
-
   async getOrCreateZaiConversation(
     accessToken: string,
   ): Promise<{ conversationId: string }> {

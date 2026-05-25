@@ -1,6 +1,10 @@
 import { DynamicModule, Module } from '@nestjs/common';
 import { HttpModule } from '@nestjs/axios';
-import { FriendsApi, ConversationsApi, AiConversationsApi } from './client/generated';
+import {
+  FriendsApi,
+  ConversationsApi,
+  AiConversationsApi,
+} from './client/generated';
 import { InteractionClientService } from './interaction-client.service';
 import {
   InteractionClientConfig,

@@ -13,6 +13,7 @@ import {
   type AiStreamChunkEvent,
   type AiStreamCompleteEvent,
   type AiEntityDetectionResultEvent,
+  type AiZaiTypingEvent,
 } from '@libs/contracts';
 import { ChatGateway } from '../../socket/chat.gateway';
 
@@ -161,6 +162,22 @@ export class AiFanoutConsumer {
       feature: payload.feature,
       total_chunks: payload.total_chunks,
     });
+  }
+
+  /**
+   * Handle Zai typing indicator.
+   * Broadcast to the conversation room so all members see "Zai is typing…".
+   */
+  @EventPattern(KafkaTopics.AiZaiTyping)
+  onAiZaiTyping(@Payload() payload: AiZaiTypingEvent) {
+    this.gateway.broadcastToConversation(
+      payload.conversation_id,
+      WsEvents.AiZaiTyping,
+      {
+        conversation_id: payload.conversation_id,
+        is_typing: payload.is_typing,
+      },
+    );
   }
 
   /**

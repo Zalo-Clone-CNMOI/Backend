@@ -103,6 +103,7 @@ export const KafkaTopics = {
   AiEntityInfoRequest: 'ai.entity.info.request',
   AiEntityInfoResult: 'ai.entity.info.result',
   AiZaiChatRequest: 'ai.zai.chat.request',
+  AiZaiTyping: 'ai.zai.typing',
   ChatAiMessage: 'chat.ai.message',
 } as const;
 

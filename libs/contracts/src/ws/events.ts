@@ -91,6 +91,7 @@ export const WsEvents = {
   AiDocumentQueryResult: 'ai:document:query:result',
   AiStreamChunk: 'ai:stream:chunk',
   AiStreamComplete: 'ai:stream:complete',
+  AiZaiTyping: 'ai:zai:typing',
   MessageEntities: 'message:entities',
 } as const;
 
@@ -683,6 +684,11 @@ export interface WsAiStreamCompletePayload {
   conversation_id: string;
   feature: string;
   total_chunks: number;
+}
+
+export interface WsAiZaiTypingPayload {
+  conversation_id: string;
+  is_typing: boolean;
 }
 
 export interface WsConversationPollCreatedPayload {

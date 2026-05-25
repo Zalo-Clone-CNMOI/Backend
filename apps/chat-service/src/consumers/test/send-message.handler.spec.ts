@@ -19,6 +19,8 @@ import type { NotificationOutboxPublisher } from '@libs/kafka';
 import type { Repository } from 'typeorm';
 import type { User, ConversationMember } from '@libs/database';
 
+const ZAI_BOT_ID = 'zai-bot-uuid';
+
 describe('SendMessageHandler', () => {
   let handler: SendMessageHandler;
   let shared: MessageConsumerSharedService;
@@ -34,7 +36,11 @@ describe('SendMessageHandler', () => {
     getMessage: jest.Mock;
   };
   let publisher: { emit: jest.Mock };
-  let cacheService: { invalidateRecentMessages: jest.Mock };
+  let cacheService: {
+    invalidateRecentMessages: jest.Mock;
+    getAiConversationContext: jest.Mock;
+    acquireZaiMentionCooldown: jest.Mock;
+  };
   let membershipService: { canUserAccessConversation: jest.Mock };
   let notificationPublisher: { publish: jest.Mock };
   let userRepo: { findOne: jest.Mock; find: jest.Mock };
@@ -59,6 +65,7 @@ describe('SendMessageHandler', () => {
       cacheService as unknown as CacheService,
       membershipService as unknown as ConversationMembershipService,
       shared,
+      { zaiBotUserId: ZAI_BOT_ID } as never,
     );
   };
 
@@ -81,6 +88,8 @@ describe('SendMessageHandler', () => {
 
     cacheService = {
       invalidateRecentMessages: jest.fn().mockResolvedValue(undefined),
+      getAiConversationContext: jest.fn().mockResolvedValue(null),
+      acquireZaiMentionCooldown: jest.fn().mockResolvedValue(true),
     };
 
     membershipService = {
@@ -466,6 +475,159 @@ describe('SendMessageHandler', () => {
       } as unknown as Parameters<typeof handler.handle>[0]);
 
       expect(repo.insertMentions).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── Phase 4: Zai triggers ───────────────────────────────────────────────
+
+  describe('handle — Zai routing (Phase 4)', () => {
+    /**
+     * handlePostMessagePersist runs *all* fire-and-forget tasks in parallel via
+     * void IIFEs. We assert by inspecting publisher.emit calls after waiting a
+     * microtask tick for the async work to complete.
+     */
+    const drainMicrotasks = async () => {
+      // Two ticks: one for the IIFE to start, one for getAiConversationContext to resolve.
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+    };
+
+    it('AI conversation: emits AiZaiChatRequest with ai_context + trigger=conversation', async () => {
+      const payload = createMockChatSendCommand();
+      membershipService.canUserAccessConversation.mockResolvedValue(true);
+      repo.tryBeginMessageProcessing.mockResolvedValue(true);
+      repo.insertMessage.mockResolvedValue(undefined);
+      repo.markMessageStored.mockResolvedValue(undefined);
+      cacheService.getAiConversationContext.mockResolvedValue({
+        feature: 'general',
+        created_at: 1,
+      });
+
+      await handler.handle(payload);
+      await drainMicrotasks();
+
+      const aiCalls = (publisher.emit.mock.calls as [string, unknown][]).filter(
+        ([topic]) => topic === 'ai.zai.chat.request',
+      );
+      expect(aiCalls).toHaveLength(1);
+      expect(aiCalls[0][1]).toMatchObject({
+        conversation_id: payload.conversation_id,
+        sender_id: payload.sender_id,
+        ai_context: { feature: 'general' },
+        trigger: 'conversation',
+      });
+    });
+
+    it('Group @Zai mention: emits AiZaiChatRequest with trigger=mention when cooldown free', async () => {
+      const payload = createMockChatSendCommand({
+        mentions: [
+          {
+            user_id: ZAI_BOT_ID,
+            mention_type: 'user',
+            offset: 0,
+            length: 4,
+          },
+        ],
+      } as Partial<Parameters<typeof createMockChatSendCommand>[0]>);
+      membershipService.canUserAccessConversation.mockResolvedValue(true);
+      repo.tryBeginMessageProcessing.mockResolvedValue(true);
+      repo.insertMessage.mockResolvedValue(undefined);
+      repo.markMessageStored.mockResolvedValue(undefined);
+      cacheService.getAiConversationContext.mockResolvedValue(null);
+      cacheService.acquireZaiMentionCooldown.mockResolvedValue(true);
+
+      await handler.handle(payload);
+      await drainMicrotasks();
+
+      const aiCalls = (publisher.emit.mock.calls as [string, unknown][]).filter(
+        ([topic]) => topic === 'ai.zai.chat.request',
+      );
+      expect(aiCalls).toHaveLength(1);
+      expect(aiCalls[0][1]).toMatchObject({
+        trigger: 'mention',
+      });
+      expect(aiCalls[0][1]).not.toHaveProperty('ai_context');
+    });
+
+    it('Group @Zai mention rate-limited: skips emit when cooldown busy', async () => {
+      const payload = createMockChatSendCommand({
+        mentions: [
+          {
+            user_id: ZAI_BOT_ID,
+            mention_type: 'user',
+            offset: 0,
+            length: 4,
+          },
+        ],
+      } as Partial<Parameters<typeof createMockChatSendCommand>[0]>);
+      membershipService.canUserAccessConversation.mockResolvedValue(true);
+      repo.tryBeginMessageProcessing.mockResolvedValue(true);
+      repo.insertMessage.mockResolvedValue(undefined);
+      repo.markMessageStored.mockResolvedValue(undefined);
+      cacheService.getAiConversationContext.mockResolvedValue(null);
+      cacheService.acquireZaiMentionCooldown.mockResolvedValue(false);
+
+      await handler.handle(payload);
+      await drainMicrotasks();
+
+      const aiCalls = (publisher.emit.mock.calls as [string, unknown][]).filter(
+        ([topic]) => topic === 'ai.zai.chat.request',
+      );
+      expect(aiCalls).toHaveLength(0);
+    });
+
+    it('Mutual exclusion: AI conversation AND @Zai mention → only conversation path fires', async () => {
+      const payload = createMockChatSendCommand({
+        mentions: [
+          {
+            user_id: ZAI_BOT_ID,
+            mention_type: 'user',
+            offset: 0,
+            length: 4,
+          },
+        ],
+      } as Partial<Parameters<typeof createMockChatSendCommand>[0]>);
+      membershipService.canUserAccessConversation.mockResolvedValue(true);
+      repo.tryBeginMessageProcessing.mockResolvedValue(true);
+      repo.insertMessage.mockResolvedValue(undefined);
+      repo.markMessageStored.mockResolvedValue(undefined);
+      cacheService.getAiConversationContext.mockResolvedValue({
+        feature: 'document',
+        document_id: 'doc-x',
+        created_at: 1,
+      });
+
+      await handler.handle(payload);
+      await drainMicrotasks();
+
+      const aiCalls = (publisher.emit.mock.calls as [string, unknown][]).filter(
+        ([topic]) => topic === 'ai.zai.chat.request',
+      );
+      expect(aiCalls).toHaveLength(1);
+      expect(aiCalls[0][1]).toMatchObject({ trigger: 'conversation' });
+      expect(cacheService.acquireZaiMentionCooldown).not.toHaveBeenCalled();
+    });
+
+    it('Loop guard: Zai bot sender → no AiZaiChatRequest emitted', async () => {
+      const payload = createMockChatSendCommand({
+        sender_id: ZAI_BOT_ID,
+      } as Partial<Parameters<typeof createMockChatSendCommand>[0]>);
+      membershipService.canUserAccessConversation.mockResolvedValue(true);
+      repo.tryBeginMessageProcessing.mockResolvedValue(true);
+      repo.insertMessage.mockResolvedValue(undefined);
+      repo.markMessageStored.mockResolvedValue(undefined);
+      cacheService.getAiConversationContext.mockResolvedValue({
+        feature: 'general',
+        created_at: 1,
+      });
+
+      await handler.handle(payload);
+      await drainMicrotasks();
+
+      const aiCalls = (publisher.emit.mock.calls as [string, unknown][]).filter(
+        ([topic]) => topic === 'ai.zai.chat.request',
+      );
+      expect(aiCalls).toHaveLength(0);
     });
   });
 });

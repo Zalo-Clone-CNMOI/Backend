@@ -189,4 +189,36 @@ describe('AiFanoutConsumer', () => {
       );
     });
   });
+
+  // ── Phase 4: AiZaiTyping ─────────────────────────────────────────────────
+
+  describe('onAiZaiTyping', () => {
+    it('broadcasts is_typing:true to the conversation room', () => {
+      consumer.onAiZaiTyping({
+        conversation_id: 'conv-9',
+        is_typing: true,
+        user_id: 'user-9',
+      });
+
+      expect(gateway.broadcastToConversation).toHaveBeenCalledWith(
+        'conv-9',
+        WsEvents.AiZaiTyping,
+        { conversation_id: 'conv-9', is_typing: true },
+      );
+    });
+
+    it('broadcasts is_typing:false to the conversation room', () => {
+      consumer.onAiZaiTyping({
+        conversation_id: 'conv-9',
+        is_typing: false,
+        user_id: 'user-9',
+      });
+
+      expect(gateway.broadcastToConversation).toHaveBeenCalledWith(
+        'conv-9',
+        WsEvents.AiZaiTyping,
+        { conversation_id: 'conv-9', is_typing: false },
+      );
+    });
+  });
 });

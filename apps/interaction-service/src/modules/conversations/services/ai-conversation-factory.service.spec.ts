@@ -3,6 +3,7 @@ import { AppConfig } from '@libs/config';
 import {
   Conversation,
   ConversationMember,
+  DocumentMetadata,
   User,
 } from '@libs/database/entities';
 import {
@@ -27,6 +28,7 @@ describe('AiConversationFactoryService', () => {
   let conversationRepo: jest.Mocked<Repository<Conversation>>;
   let memberRepo: jest.Mocked<Repository<ConversationMember>>;
   let userRepo: jest.Mocked<Repository<User>>;
+  let docMetaRepo: jest.Mocked<Repository<DocumentMetadata>>;
   let cacheService: jest.Mocked<CacheService>;
 
   beforeEach(() => {
@@ -76,14 +78,20 @@ describe('AiConversationFactoryService', () => {
       }),
     } as unknown as jest.Mocked<Repository<User>>;
 
+    docMetaRepo = {
+      findOne: jest.fn(),
+    } as unknown as jest.Mocked<Repository<DocumentMetadata>>;
+
     cacheService = {
       setAiConversationMarker: jest.fn().mockResolvedValue(undefined),
+      setAiConversationContext: jest.fn().mockResolvedValue(undefined),
     } as unknown as jest.Mocked<CacheService>;
 
     service = new AiConversationFactoryService(
       conversationRepo,
       memberRepo,
       userRepo,
+      docMetaRepo,
       { zaiBotUserId: ZAI_ID } as AppConfig,
       cacheService,
     );
@@ -91,7 +99,7 @@ describe('AiConversationFactoryService', () => {
 
   afterEach(() => jest.clearAllMocks());
 
-  it('creates an AI_ASSISTANT conversation with user + Zai as members', async () => {
+  it('creates an AI_ASSISTANT conversation with user + Zai as members + stores AI context', async () => {
     const context: AiConversationContext = {
       feature: 'document',
       document_id: 'doc-1',
@@ -99,6 +107,12 @@ describe('AiConversationFactoryService', () => {
     };
 
     const result = await service.createZaiConversation('user-1', context);
+
+    // Phase 4: stores full context as JSON instead of bare '1' marker
+    expect(cacheService.setAiConversationContext).toHaveBeenCalledWith(
+      'conv-new',
+      context,
+    );
 
     // Transaction was started
     expect(
@@ -215,8 +229,9 @@ describe('AiConversationFactoryService', () => {
 
       expect(result).toEqual({ conversationId: 'conv-existing' });
       expect(entityManager.save).not.toHaveBeenCalled();
-      expect(cacheService.setAiConversationMarker).toHaveBeenCalledWith(
+      expect(cacheService.setAiConversationContext).toHaveBeenCalledWith(
         'conv-existing',
+        expect.objectContaining({ feature: 'general' }),
       );
     });
 
@@ -229,6 +244,47 @@ describe('AiConversationFactoryService', () => {
 
       expect(result).toEqual({ conversationId: 'conv-new' });
       expect(entityManager.save).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // ── createDocumentConversation (Phase 4) ─────────────────────────────────
+
+  describe('createDocumentConversation', () => {
+    it('creates a feature=document conversation when document is owned by user', async () => {
+      docMetaRepo.findOne.mockResolvedValueOnce({
+        id: 'doc-1',
+        userId: 'user-1',
+      } as DocumentMetadata);
+
+      const result = await service.createDocumentConversation(
+        'user-1',
+        'doc-1',
+      );
+
+      expect(docMetaRepo.findOne).toHaveBeenCalledWith({
+        where: { id: 'doc-1', userId: 'user-1' },
+      });
+      expect(result).toEqual({ conversationId: 'conv-new' });
+      expect(cacheService.setAiConversationContext).toHaveBeenCalledWith(
+        'conv-new',
+        expect.objectContaining({
+          feature: 'document',
+          document_id: 'doc-1',
+        }),
+      );
+    });
+
+    it('throws BusinessException(NOT_FOUND) when document not owned by user', async () => {
+      docMetaRepo.findOne.mockResolvedValueOnce(null);
+
+      const err = await service
+        .createDocumentConversation('user-1', 'doc-1')
+        .catch((e: unknown) => e);
+
+      expect(err).toBeInstanceOf(BusinessException);
+      expect((err as BusinessException).errorCode).toBe(ErrorCode.NOT_FOUND);
+      // No conversation created
+      expect(entityManager.save).not.toHaveBeenCalled();
     });
   });
 });

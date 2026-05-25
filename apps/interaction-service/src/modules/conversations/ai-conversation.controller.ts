@@ -1,9 +1,10 @@
-import { Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '@app/decorator';
 import { AuthenticatedUser } from '@app/types';
 import { AiConversationFactoryService } from './services/ai-conversation-factory.service';
+import { CreateDocumentConversationDto } from './dto/create-document-conversation.dto';
 
 @ApiTags('AiConversations')
 @ApiBearerAuth('BearerAuth')
@@ -22,5 +23,18 @@ export class AiConversationController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<{ conversationId: string }> {
     return this.factory.getOrCreateGeneral(user.id);
+  }
+
+  @Post('document')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @ApiOperation({
+    summary: 'Create a Zai AI conversation anchored to a specific document',
+  })
+  async createDocumentConversation(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: CreateDocumentConversationDto,
+  ): Promise<{ conversationId: string }> {
+    return this.factory.createDocumentConversation(user.id, dto.documentId);
   }
 }

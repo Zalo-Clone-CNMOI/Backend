@@ -311,4 +311,25 @@ Do not repeat yourself or add unnecessary filler phrases.`,
     };
     return [system, ...history];
   }
+
+  buildZaiMentionReplyPrompt(
+    history: LlmChatMessage[],
+    triggerMessage: string,
+  ): LlmChatMessage[] {
+    const system: LlmChatMessage = {
+      role: 'system',
+      content: `You are Zai, an AI assistant participating in a group chat. A user has @mentioned you and is asking you to respond.
+${LANGUAGE_RULE}
+Rules:
+- Keep your response brief (1-3 sentences unless the question explicitly needs detail)
+- Focus on directly answering the @mention; do not summarize the whole group chat
+- Be conversational and casual, matching the group's tone
+- Do not preface with phrases like "Sure!" or "Of course!" — just answer`,
+    };
+    const user: LlmChatMessage = {
+      role: 'user',
+      content: triggerMessage,
+    };
+    return [system, ...history, user];
+  }
 }

@@ -22,6 +22,19 @@ export class AiAssistService {
     });
   }
 
+  async createDocumentConversation(
+    accessToken: string,
+    documentId: string,
+  ): Promise<ZaiConversationResponseDto> {
+    const result = await this.interactionClient.createDocumentConversation(
+      accessToken,
+      documentId,
+    );
+    return plainToInstance(ZaiConversationResponseDto, result, {
+      excludeExtraneousValues: true,
+    });
+  }
+
   async catchUp(
     token: string,
     userId: string,

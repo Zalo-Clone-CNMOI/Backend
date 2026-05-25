@@ -49,18 +49,19 @@ export class AiAssistController {
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @ApiOperation({
-    summary: 'Create a Zai AI conversation anchored to a specific document',
+    summary:
+      'Get or create a Zai AI conversation anchored to a specific document',
   })
   @ApiResponse({
     status: 200,
-    description: 'Document conversation id returned',
+    description: 'Document conversation id returned (created or existing)',
     type: ZaiConversationResponseDto,
   })
-  async createDocumentConversation(
+  async getOrCreateDocumentConversation(
     @AccessToken() token: string,
     @Body() dto: CreateDocumentConversationDto,
   ): Promise<ZaiConversationResponseDto> {
-    return this.service.createDocumentConversation(token, dto.documentId);
+    return this.service.getOrCreateDocumentConversation(token, dto.documentId);
   }
 
   @Get('conversations/:conversationId/catch-up')

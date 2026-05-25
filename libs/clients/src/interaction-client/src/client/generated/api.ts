@@ -1171,14 +1171,14 @@ export const AiConversationsApiAxiosParamCreator = function (configuration?: Con
     return {
         /**
          * 
-         * @summary Create a Zai AI conversation anchored to a specific document
+         * @summary Get or create a Zai AI conversation anchored to a specific document
          * @param {CreateDocumentConversationDto} createDocumentConversationDto 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        createDocumentConversation: async (createDocumentConversationDto: CreateDocumentConversationDto, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        getOrCreateDocumentConversation: async (createDocumentConversationDto: CreateDocumentConversationDto, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             // verify required parameter 'createDocumentConversationDto' is not null or undefined
-            assertParamExists('createDocumentConversation', 'createDocumentConversationDto', createDocumentConversationDto)
+            assertParamExists('getOrCreateDocumentConversation', 'createDocumentConversationDto', createDocumentConversationDto)
             const localVarPath = `/ai-conversations/document`;
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -1255,15 +1255,15 @@ export const AiConversationsApiFp = function(configuration?: Configuration) {
     return {
         /**
          * 
-         * @summary Create a Zai AI conversation anchored to a specific document
+         * @summary Get or create a Zai AI conversation anchored to a specific document
          * @param {CreateDocumentConversationDto} createDocumentConversationDto 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async createDocumentConversation(createDocumentConversationDto: CreateDocumentConversationDto, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ZaiConversationResponseDto>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.createDocumentConversation(createDocumentConversationDto, options);
+        async getOrCreateDocumentConversation(createDocumentConversationDto: CreateDocumentConversationDto, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ZaiConversationResponseDto>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.getOrCreateDocumentConversation(createDocumentConversationDto, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['AiConversationsApi.createDocumentConversation']?.[localVarOperationServerIndex]?.url;
+            const localVarOperationServerBasePath = operationServerMap['AiConversationsApi.getOrCreateDocumentConversation']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
@@ -1290,13 +1290,13 @@ export const AiConversationsApiFactory = function (configuration?: Configuration
     return {
         /**
          * 
-         * @summary Create a Zai AI conversation anchored to a specific document
-         * @param {AiConversationsApiCreateDocumentConversationRequest} requestParameters Request parameters.
+         * @summary Get or create a Zai AI conversation anchored to a specific document
+         * @param {AiConversationsApiGetOrCreateDocumentConversationRequest} requestParameters Request parameters.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        createDocumentConversation(requestParameters: AiConversationsApiCreateDocumentConversationRequest, options?: RawAxiosRequestConfig): AxiosPromise<ZaiConversationResponseDto> {
-            return localVarFp.createDocumentConversation(requestParameters.createDocumentConversationDto, options).then((request) => request(axios, basePath));
+        getOrCreateDocumentConversation(requestParameters: AiConversationsApiGetOrCreateDocumentConversationRequest, options?: RawAxiosRequestConfig): AxiosPromise<ZaiConversationResponseDto> {
+            return localVarFp.getOrCreateDocumentConversation(requestParameters.createDocumentConversationDto, options).then((request) => request(axios, basePath));
         },
         /**
          * 
@@ -1311,15 +1311,15 @@ export const AiConversationsApiFactory = function (configuration?: Configuration
 };
 
 /**
- * Request parameters for createDocumentConversation operation in AiConversationsApi.
+ * Request parameters for getOrCreateDocumentConversation operation in AiConversationsApi.
  * @export
- * @interface AiConversationsApiCreateDocumentConversationRequest
+ * @interface AiConversationsApiGetOrCreateDocumentConversationRequest
  */
-export interface AiConversationsApiCreateDocumentConversationRequest {
+export interface AiConversationsApiGetOrCreateDocumentConversationRequest {
     /**
      * 
      * @type {CreateDocumentConversationDto}
-     * @memberof AiConversationsApiCreateDocumentConversation
+     * @memberof AiConversationsApiGetOrCreateDocumentConversation
      */
     readonly createDocumentConversationDto: CreateDocumentConversationDto
 }
@@ -1333,14 +1333,14 @@ export interface AiConversationsApiCreateDocumentConversationRequest {
 export class AiConversationsApi extends BaseAPI {
     /**
      * 
-     * @summary Create a Zai AI conversation anchored to a specific document
-     * @param {AiConversationsApiCreateDocumentConversationRequest} requestParameters Request parameters.
+     * @summary Get or create a Zai AI conversation anchored to a specific document
+     * @param {AiConversationsApiGetOrCreateDocumentConversationRequest} requestParameters Request parameters.
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof AiConversationsApi
      */
-    public createDocumentConversation(requestParameters: AiConversationsApiCreateDocumentConversationRequest, options?: RawAxiosRequestConfig) {
-        return AiConversationsApiFp(this.configuration).createDocumentConversation(requestParameters.createDocumentConversationDto, options).then((request) => request(this.axios, this.basePath));
+    public getOrCreateDocumentConversation(requestParameters: AiConversationsApiGetOrCreateDocumentConversationRequest, options?: RawAxiosRequestConfig) {
+        return AiConversationsApiFp(this.configuration).getOrCreateDocumentConversation(requestParameters.createDocumentConversationDto, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**

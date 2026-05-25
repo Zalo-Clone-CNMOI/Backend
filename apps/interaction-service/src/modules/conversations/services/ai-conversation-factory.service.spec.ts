@@ -247,16 +247,27 @@ describe('AiConversationFactoryService', () => {
     });
   });
 
-  // ── createDocumentConversation (Phase 4) ─────────────────────────────────
+  // ── getOrCreateDocumentConversation (Phase 4 + S5 dedup) ─────────────────
 
-  describe('createDocumentConversation', () => {
-    it('creates a feature=document conversation when document is owned by user', async () => {
+  describe('getOrCreateDocumentConversation', () => {
+    function makeDocQueryBuilder(returnValue: Conversation | null) {
+      return {
+        innerJoin: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockResolvedValue(returnValue),
+      };
+    }
+
+    it('creates a feature=document conversation when none exists', async () => {
       docMetaRepo.findOne.mockResolvedValueOnce({
         id: 'doc-1',
         userId: 'user-1',
       } as DocumentMetadata);
+      (conversationRepo.createQueryBuilder as jest.Mock).mockReturnValue(
+        makeDocQueryBuilder(null),
+      );
 
-      const result = await service.createDocumentConversation(
+      const result = await service.getOrCreateDocumentConversation(
         'user-1',
         'doc-1',
       );
@@ -274,16 +285,52 @@ describe('AiConversationFactoryService', () => {
       );
     });
 
+    it('returns existing conversation id without DB write when one exists for (userId, documentId)', async () => {
+      docMetaRepo.findOne.mockResolvedValueOnce({
+        id: 'doc-1',
+        userId: 'user-1',
+      } as DocumentMetadata);
+      const existing = {
+        id: 'conv-doc-existing',
+        aiContext: {
+          feature: 'document',
+          document_id: 'doc-1',
+          created_at: 1,
+        },
+      } as Conversation;
+      (conversationRepo.createQueryBuilder as jest.Mock).mockReturnValue(
+        makeDocQueryBuilder(existing),
+      );
+
+      const result = await service.getOrCreateDocumentConversation(
+        'user-1',
+        'doc-1',
+      );
+
+      expect(result).toEqual({ conversationId: 'conv-doc-existing' });
+      // No new conversation written
+      expect(entityManager.save).not.toHaveBeenCalled();
+      // Redis context re-set for idempotency (carries existing aiContext)
+      expect(cacheService.setAiConversationContext).toHaveBeenCalledWith(
+        'conv-doc-existing',
+        expect.objectContaining({
+          feature: 'document',
+          document_id: 'doc-1',
+        }),
+      );
+    });
+
     it('throws BusinessException(NOT_FOUND) when document not owned by user', async () => {
       docMetaRepo.findOne.mockResolvedValueOnce(null);
 
       const err = await service
-        .createDocumentConversation('user-1', 'doc-1')
+        .getOrCreateDocumentConversation('user-1', 'doc-1')
         .catch((e: unknown) => e);
 
       expect(err).toBeInstanceOf(BusinessException);
       expect((err as BusinessException).errorCode).toBe(ErrorCode.NOT_FOUND);
-      // No conversation created
+      // No conversation created — neither dedup query nor save runs
+      expect(conversationRepo.createQueryBuilder).not.toHaveBeenCalled();
       expect(entityManager.save).not.toHaveBeenCalled();
     });
   });

@@ -28,8 +28,8 @@ paths:
     post:
       tags:
         - AiConversations
-      summary: Create a Zai AI conversation anchored to a specific document
-      operationId: createDocumentConversation
+      summary: Get or create a Zai AI conversation anchored to a specific document
+      operationId: getOrCreateDocumentConversation
       security:
         - BearerAuth: []
       requestBody:

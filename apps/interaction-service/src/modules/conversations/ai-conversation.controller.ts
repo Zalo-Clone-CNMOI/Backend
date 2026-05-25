@@ -29,12 +29,16 @@ export class AiConversationController {
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @ApiOperation({
-    summary: 'Create a Zai AI conversation anchored to a specific document',
+    summary:
+      'Get or create a Zai AI conversation anchored to a specific document',
   })
-  async createDocumentConversation(
+  async getOrCreateDocumentConversation(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreateDocumentConversationDto,
   ): Promise<{ conversationId: string }> {
-    return this.factory.createDocumentConversation(user.id, dto.documentId);
+    return this.factory.getOrCreateDocumentConversation(
+      user.id,
+      dto.documentId,
+    );
   }
 }

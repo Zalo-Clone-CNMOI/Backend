@@ -22,11 +22,11 @@ export class AiAssistService {
     });
   }
 
-  async createDocumentConversation(
+  async getOrCreateDocumentConversation(
     accessToken: string,
     documentId: string,
   ): Promise<ZaiConversationResponseDto> {
-    const result = await this.interactionClient.createDocumentConversation(
+    const result = await this.interactionClient.getOrCreateDocumentConversation(
       accessToken,
       documentId,
     );

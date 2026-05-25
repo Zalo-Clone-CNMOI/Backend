@@ -746,19 +746,20 @@ export class InteractionClientService extends BaseHttpClient {
     }
   }
 
-  async createDocumentConversation(
+  async getOrCreateDocumentConversation(
     accessToken: string,
     documentId: string,
   ): Promise<{ conversationId: string }> {
     try {
       const dto: CreateDocumentConversationDto = { documentId };
-      const response = await this.aiConversationsApi.createDocumentConversation(
-        { createDocumentConversationDto: dto },
-        { headers: { Authorization: `Bearer ${accessToken}` } },
-      );
+      const response =
+        await this.aiConversationsApi.getOrCreateDocumentConversation(
+          { createDocumentConversationDto: dto },
+          { headers: { Authorization: `Bearer ${accessToken}` } },
+        );
       return response.data as { conversationId: string };
     } catch (error) {
-      this.handleError('createDocumentConversation', error);
+      this.handleError('getOrCreateDocumentConversation', error);
     }
   }
 }

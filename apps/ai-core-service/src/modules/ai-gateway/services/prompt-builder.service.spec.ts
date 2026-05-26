@@ -221,10 +221,16 @@ describe('PromptBuilderService', () => {
       expect(result[3].content).toContain('doc text');
     });
 
-    it('system prompt does NOT instruct JSON response (plain text only)', () => {
+    it('system prompt explicitly forbids JSON output (plain text only)', () => {
       const result = builder.buildDocumentChatPrompt([], 'q', []);
-      expect(result[0].content).not.toContain('JSON');
+      // Must NOT carry the HTTP-style "Respond ONLY with the JSON object"
+      // instruction — that wording is what made the original chat path leak
+      // raw JSON into chat bubbles.
+      expect(result[0].content).not.toContain('Respond ONLY');
       expect(result[0].content).not.toContain('source_indices');
+      // Belt-and-suspenders: even without the broken instruction, models
+      // with strong JSON priors might still emit objects. Explicit prohibition.
+      expect(result[0].content).toMatch(/do not respond with json/i);
       expect(result[0].content).toContain('plain text');
     });
 

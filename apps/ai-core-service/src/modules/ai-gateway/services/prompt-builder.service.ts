@@ -329,6 +329,7 @@ Rules:
 - When you use a specific excerpt, cite it inline like (Nguồn 1).
 - If the excerpts do not answer the question, say so clearly instead of guessing.
 - Reply naturally as plain text (short markdown lists are fine).
+- Do NOT respond with JSON, structured objects, or code fences — your reply is shown directly inside a chat bubble.
 - Be concise; expand only if the user explicitly asks for detail.`,
     };
 

@@ -545,6 +545,24 @@ describe('CacheService', () => {
     });
   });
 
+  // ── Phase 5 W4: release mention cooldown on engine failure ─────────────
+
+  describe('releaseMentionCooldown', () => {
+    it('deletes the cooldown key for the given conversation', async () => {
+      await cache.releaseMentionCooldown('conv-001');
+
+      expect(redis.del).toHaveBeenCalledWith('zai:mention:cd:conv-001');
+    });
+
+    it('does not throw when Redis errors (best-effort delete)', async () => {
+      redis.del.mockRejectedValue(new Error('Redis down'));
+
+      await expect(
+        cache.releaseMentionCooldown('conv-001'),
+      ).resolves.toBeUndefined();
+    });
+  });
+
   // ── Phase 5: pre-send moderation fast-path ─────────────────────────────
 
   describe('setModerationFastResult', () => {

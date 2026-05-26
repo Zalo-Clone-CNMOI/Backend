@@ -18,6 +18,7 @@ import type {
 } from '@libs/contracts';
 import { APP_CONFIG, AppConfig } from '@libs/config';
 import { S3Service } from '@libs/s3';
+import { CacheService } from '@libs/redis';
 import { AiPublisher } from './ai.publisher';
 import { AiChatPublisher } from './ai-chat.publisher';
 import { ModerationEngine } from '../modules/moderation/moderation.engine';
@@ -48,6 +49,7 @@ export class AiConsumer {
     private readonly entityDetectionEngine: EntityDetectionEngine,
     private readonly zaiChatEngine: ZaiChatEngine,
     private readonly s3Service: S3Service,
+    private readonly cacheService: CacheService,
   ) {}
 
   // ── Moderation ─────────────────────────────────────────────────────
@@ -327,6 +329,20 @@ export class AiConsumer {
       this.logger.error(
         `Zai chat handler fatal: ${error instanceof Error ? error.message : String(error)}`,
       );
+      // Release the 5s mention cooldown so the user can retry immediately
+      // (Phase 5 audit W4). Only the 'mention' trigger consumes the
+      // cooldown — the 'conversation' trigger (auto-reply on every
+      // message in an AI_ASSISTANT conv) does NOT, so we must NOT release
+      // there or we would clear a cooldown that did not belong to us.
+      if (event.trigger === 'mention') {
+        await this.cacheService
+          .releaseMentionCooldown(event.conversation_id)
+          .catch((e: unknown) =>
+            this.logger.warn(
+              `[${event.trace_id}] Failed to release mention cooldown: ${e instanceof Error ? e.message : String(e)}`,
+            ),
+          );
+      }
     } finally {
       await emitTypingOff();
     }

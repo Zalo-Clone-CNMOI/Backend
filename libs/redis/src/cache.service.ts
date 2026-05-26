@@ -467,6 +467,27 @@ export class CacheService {
     }
   }
 
+  /**
+   * Release the @Zai mention cooldown so the user can retry immediately
+   * after a Zai engine failure (gateway down, LLM timeout, etc.).
+   * Without this, the 5s cooldown sat in Redis even when no reply was
+   * generated — silently dropping the next mention.
+   *
+   * Best-effort: Redis errors are logged but swallowed. The cooldown
+   * will expire naturally in <5s anyway, so a release failure is a
+   * minor UX papercut, not a correctness issue.
+   */
+  async releaseMentionCooldown(conversationId: string): Promise<void> {
+    try {
+      await this.redisClient.del(`zai:mention:cd:${conversationId}`);
+    } catch (error) {
+      this.logger.warn(
+        `Failed to release Zai mention cooldown for ${conversationId}:`,
+        error,
+      );
+    }
+  }
+
   // ===================================
   // Pre-send Moderation Fast-Path Cache
   // ===================================

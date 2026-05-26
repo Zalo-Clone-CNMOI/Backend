@@ -1,10 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ZaiChatEngine } from './zai-chat.engine';
+import { ZAI_EMPTY_RESPONSE_FALLBACK, ZaiChatEngine } from './zai-chat.engine';
+import { DocumentRagService } from './document-rag.service';
 import { MessageRepository } from '@libs/scylla';
 import { AiGatewayService } from '../ai-gateway/services/ai-gateway.service';
 import { PromptBuilderService } from '../ai-gateway/services/prompt-builder.service';
 import { AiMetricsService } from '../ai-gateway/services/ai-metrics.service';
 import { APP_CONFIG } from '@libs/config';
+import { BusinessException } from '@app/types';
+import { ErrorCode } from '@app/constant';
 import type { AiZaiChatRequestEvent } from '@libs/contracts';
 import type { PersistedMessage } from '@app/types/interfaces/chat.interface';
 import type { LlmChatMessage } from '../ai-gateway/interfaces';
@@ -14,6 +17,7 @@ import type { LlmChatMessage } from '../ai-gateway/interfaces';
 const ZAI_BOT_ID = 'zai-bot-uuid';
 const CONV_ID = 'conv-001';
 const USER_ID = 'user-001';
+const DOC_ID = 'doc-001';
 
 function makeEvent(
   overrides: Partial<AiZaiChatRequestEvent> = {},
@@ -71,6 +75,7 @@ function makeGateway(
 ): jest.Mocked<AiGatewayService> {
   return {
     complete: jest.fn().mockResolvedValue(result),
+    completeStream: jest.fn().mockResolvedValue(result),
   } as unknown as jest.Mocked<AiGatewayService>;
 }
 
@@ -80,6 +85,13 @@ function makePromptBuilder(): jest.Mocked<PromptBuilderService> {
       { role: 'system' as const, content: 'You are Zai' },
       ...history,
     ]),
+    buildZaiMentionReplyPrompt: jest.fn(
+      (history: LlmChatMessage[], trigger: string) => [
+        { role: 'system' as const, content: 'You are Zai (mention)' },
+        ...history,
+        { role: 'user' as const, content: trigger },
+      ],
+    ),
   } as unknown as jest.Mocked<PromptBuilderService>;
 }
 
@@ -87,6 +99,16 @@ function makeAiMetrics(): jest.Mocked<AiMetricsService> {
   return {
     recordRequest: jest.fn(),
   } as unknown as jest.Mocked<AiMetricsService>;
+}
+
+function makeDocumentRag(): jest.Mocked<DocumentRagService> {
+  return {
+    validateDocumentAccess: jest.fn().mockResolvedValue({}),
+    buildRagMessages: jest.fn().mockResolvedValue([
+      { role: 'system', content: 'You are doc Zai' },
+      { role: 'user', content: 'doc question' },
+    ]),
+  } as unknown as jest.Mocked<DocumentRagService>;
 }
 
 // ── Test suite ───────────────────────────────────────────────────────────────
@@ -97,15 +119,18 @@ describe('ZaiChatEngine', () => {
   let gateway: jest.Mocked<AiGatewayService>;
   let promptBuilder: jest.Mocked<PromptBuilderService>;
   let aiMetrics: jest.Mocked<AiMetricsService>;
+  let documentRag: jest.Mocked<DocumentRagService>;
 
   async function build(
     repoOverride?: jest.Mocked<MessageRepository>,
     gatewayOverride?: jest.Mocked<AiGatewayService>,
+    ragOverride?: jest.Mocked<DocumentRagService>,
   ) {
     messageRepo = repoOverride ?? makeMessageRepo();
     gateway = gatewayOverride ?? makeGateway();
     promptBuilder = makePromptBuilder();
     aiMetrics = makeAiMetrics();
+    documentRag = ragOverride ?? makeDocumentRag();
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -114,6 +139,7 @@ describe('ZaiChatEngine', () => {
         { provide: AiGatewayService, useValue: gateway },
         { provide: PromptBuilderService, useValue: promptBuilder },
         { provide: AiMetricsService, useValue: aiMetrics },
+        { provide: DocumentRagService, useValue: documentRag },
         { provide: APP_CONFIG, useValue: { zaiBotUserId: ZAI_BOT_ID } },
       ],
     }).compile();
@@ -269,6 +295,39 @@ describe('ZaiChatEngine', () => {
     );
   });
 
+  // ── Empty LLM response fallback (C3) ───────────────────────────────────────
+
+  it('empty LLM content → returns fallback body, NOT null', async () => {
+    const gw = makeGateway(makeGatewayResult(''));
+    await build(undefined, gw);
+
+    const result = await engine.respond(makeEvent());
+
+    expect(result).not.toBeNull();
+    expect(result!.body).toBe(ZAI_EMPTY_RESPONSE_FALLBACK);
+    // Metrics still recorded as success — the LLM responded, the content
+    // just happened to be empty (refusal, etc.).
+    expect(aiMetrics.recordRequest).toHaveBeenCalledWith(
+      'zai_chat',
+      'openai',
+      'gpt-4o',
+      50,
+      20,
+      300,
+      true,
+    );
+  });
+
+  it('whitespace-only LLM content → also returns fallback body', async () => {
+    const gw = makeGateway(makeGatewayResult('   \n\t  '));
+    await build(undefined, gw);
+
+    const result = await engine.respond(makeEvent());
+
+    expect(result).not.toBeNull();
+    expect(result!.body).toBe(ZAI_EMPTY_RESPONSE_FALLBACK);
+  });
+
   // ── Metrics ────────────────────────────────────────────────────────────────
 
   it('records success metrics on happy path', async () => {
@@ -283,5 +342,121 @@ describe('ZaiChatEngine', () => {
       300,
       true,
     );
+  });
+
+  // ── Phase 4: Document RAG ──────────────────────────────────────────────────
+
+  it('feature=document: delegates to DocumentRagService.buildRagMessages with conversation history, skips buildZaiChatPrompt', async () => {
+    // Seed history so we can assert it flows into the RAG call
+    const items = [
+      makeMsg('msg-2', ZAI_BOT_ID, 'Prior Zai answer'),
+      makeMsg('msg-1', USER_ID, 'Prior user question'),
+    ];
+    const repo = makeMessageRepo(items);
+    await build(repo);
+
+    const event = makeEvent({
+      body: 'Summarize this',
+      ai_context: { feature: 'document', document_id: DOC_ID, created_at: 1 },
+    });
+
+    const result = await engine.respond(event);
+
+    expect(documentRag.validateDocumentAccess).toHaveBeenCalledWith(
+      USER_ID,
+      DOC_ID,
+    );
+    expect(documentRag.buildRagMessages).toHaveBeenCalledWith(
+      USER_ID,
+      DOC_ID,
+      'Summarize this',
+      expect.arrayContaining([
+        expect.objectContaining({
+          role: 'user',
+          content: 'Prior user question',
+        }),
+        expect.objectContaining({
+          role: 'assistant',
+          content: 'Prior Zai answer',
+        }),
+      ]),
+    );
+    expect(promptBuilder.buildZaiChatPrompt).not.toHaveBeenCalled();
+    expect(gateway.complete).toHaveBeenCalled();
+    expect(result).not.toBeNull();
+  });
+
+  it('feature=document: returns graceful reply when document is no longer available', async () => {
+    const rag = makeDocumentRag();
+    (rag.validateDocumentAccess as jest.Mock).mockRejectedValue(
+      new BusinessException(ErrorCode.NOT_FOUND, 'Document not found'),
+    );
+    await build(undefined, undefined, rag);
+
+    const event = makeEvent({
+      ai_context: { feature: 'document', document_id: DOC_ID, created_at: 1 },
+    });
+    const result = await engine.respond(event);
+
+    expect(result).not.toBeNull();
+    expect(result!.body).toContain('no longer available');
+    expect(gateway.complete).not.toHaveBeenCalled();
+  });
+
+  // ── Phase 4: Mention routing ───────────────────────────────────────────────
+
+  it('trigger=mention: calls buildZaiMentionReplyPrompt with smaller history limit', async () => {
+    const event = makeEvent({ trigger: 'mention', body: 'hey @zai help' });
+    await engine.respond(event);
+
+    expect(messageRepo.getMessages).toHaveBeenCalledWith(CONV_ID, {
+      limit: 10,
+    });
+    expect(promptBuilder.buildZaiMentionReplyPrompt).toHaveBeenCalledWith(
+      expect.any(Array),
+      'hey @zai help',
+    );
+    expect(promptBuilder.buildZaiChatPrompt).not.toHaveBeenCalled();
+  });
+
+  // ── Phase 4: Streaming ─────────────────────────────────────────────────────
+
+  it('onChunk provided: calls gateway.completeStream, not gateway.complete', async () => {
+    const onChunk = jest.fn().mockResolvedValue(undefined);
+    await engine.respond(makeEvent(), onChunk);
+
+    expect(gateway.completeStream).toHaveBeenCalled();
+    expect(gateway.complete).not.toHaveBeenCalled();
+  });
+
+  it('onChunk undefined: calls gateway.complete (non-streaming fallback)', async () => {
+    await engine.respond(makeEvent());
+
+    expect(gateway.complete).toHaveBeenCalled();
+    expect(gateway.completeStream).not.toHaveBeenCalled();
+  });
+
+  it('streaming: forwards chunk content to onChunk callback', async () => {
+    const gw = makeGateway();
+    type StreamCb = (chunk: {
+      content: string;
+      index: number;
+      isFinal: boolean;
+    }) => void;
+    (gw.completeStream as jest.Mock).mockImplementation(
+      (_userId: string, _opts: unknown, cb: StreamCb) => {
+        cb({ content: 'hello', index: 0, isFinal: false });
+        cb({ content: ' world', index: 1, isFinal: false });
+        return Promise.resolve(makeGatewayResult('hello world'));
+      },
+    );
+    await build(undefined, gw);
+
+    const onChunk = jest.fn().mockResolvedValue(undefined);
+    await engine.respond(makeEvent(), onChunk);
+
+    expect(onChunk).toHaveBeenCalledTimes(2);
+    expect(onChunk).toHaveBeenNthCalledWith(1, 'hello');
+    expect(onChunk).toHaveBeenNthCalledWith(2, ' world');
   });
 });

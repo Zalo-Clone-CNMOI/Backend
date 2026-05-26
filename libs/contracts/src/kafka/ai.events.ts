@@ -1,5 +1,7 @@
 // ── AI Core Service – Kafka Event Payloads ──────────────────────────────────
 
+import type { AiConversationContext } from '../types/ai-conversation';
+
 // ── Enums (re-exported from @app/constant for contract consumers) ──────────
 
 export type AiFeatureType =
@@ -366,6 +368,7 @@ export interface AiStreamCompleteEvent {
   total_tokens: number;
   provider: AiProviderType;
   completed_at: number;
+  message_id?: string;
   trace_id?: string;
 }
 
@@ -375,5 +378,14 @@ export interface AiZaiChatRequestEvent {
   sender_id: string;
   body: string;
   created_at: number;
+  ai_context?: AiConversationContext;
+  trigger?: 'conversation' | 'mention';
+  trace_id?: string;
+}
+
+export interface AiZaiTypingEvent {
+  conversation_id: string;
+  is_typing: boolean;
+  user_id: string;
   trace_id?: string;
 }

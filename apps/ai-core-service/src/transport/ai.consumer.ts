@@ -1,5 +1,6 @@
 import { Controller, Inject, Logger } from '@nestjs/common';
 import { EventPattern, Payload } from '@nestjs/microservices';
+import { randomUUID } from 'crypto';
 import { KafkaTopics } from '@libs/contracts';
 import type {
   AiModerationRequestEvent,
@@ -11,6 +12,9 @@ import type {
   AiEntityDetectionRequestEvent,
   AiEntityInfoRequestEvent,
   AiZaiChatRequestEvent,
+  AiStreamChunkEvent,
+  AiStreamCompleteEvent,
+  AiZaiTypingEvent,
 } from '@libs/contracts';
 import { APP_CONFIG, AppConfig } from '@libs/config';
 import { S3Service } from '@libs/s3';
@@ -245,17 +249,86 @@ export class AiConsumer {
   @EventPattern(KafkaTopics.AiZaiChatRequest)
   async onZaiChatRequest(@Payload() event: AiZaiChatRequestEvent) {
     this.logger.log(
-      `Zai chat request: ${event.conversation_id} from ${event.sender_id}`,
+      `Zai chat request: ${event.conversation_id} from ${event.sender_id} (trigger: ${event.trigger ?? 'conversation'})`,
     );
+
+    const streamId = randomUUID();
+    const userId = event.sender_id;
+    let chunkIndex = 0;
+    let typingOffEmitted = false;
+
+    const emitTypingOff = async () => {
+      if (typingOffEmitted) return;
+      typingOffEmitted = true;
+      try {
+        const payload: AiZaiTypingEvent = {
+          conversation_id: event.conversation_id,
+          is_typing: false,
+          user_id: userId,
+          trace_id: event.trace_id,
+        };
+        await this.publisher.emit(KafkaTopics.AiZaiTyping, payload);
+      } catch (err) {
+        this.logger.warn(
+          `Failed to emit typing-OFF for ${event.conversation_id}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    };
+
     try {
-      const reply = await this.zaiChatEngine.respond(event);
+      // Typing-ON
+      const typingOnPayload: AiZaiTypingEvent = {
+        conversation_id: event.conversation_id,
+        is_typing: true,
+        user_id: userId,
+        trace_id: event.trace_id,
+      };
+      await this.publisher.emit(KafkaTopics.AiZaiTyping, typingOnPayload);
+
+      const onChunk = async (content: string) => {
+        await emitTypingOff();
+        const index = chunkIndex++;
+        const chunkPayload: AiStreamChunkEvent = {
+          stream_id: streamId,
+          user_id: userId,
+          conversation_id: event.conversation_id,
+          feature: 'zai_chat',
+          chunk_index: index,
+          content,
+          is_final: false,
+          trace_id: event.trace_id,
+        };
+        await this.publisher.emit(KafkaTopics.AiStreamChunk, chunkPayload);
+      };
+
+      const reply = await this.zaiChatEngine.respond(event, onChunk);
+
       if (reply) {
+        const completePayload: AiStreamCompleteEvent = {
+          stream_id: streamId,
+          user_id: userId,
+          conversation_id: event.conversation_id,
+          feature: 'zai_chat',
+          total_chunks: chunkIndex,
+          total_tokens: 0,
+          provider: 'unknown',
+          completed_at: Date.now(),
+          message_id: reply.message_id,
+          trace_id: event.trace_id,
+        };
+        await this.publisher.emit(
+          KafkaTopics.AiStreamComplete,
+          completePayload,
+        );
+
         await this.chatPublisher.send(reply);
       }
     } catch (error) {
       this.logger.error(
         `Zai chat handler fatal: ${error instanceof Error ? error.message : String(error)}`,
       );
+    } finally {
+      await emitTypingOff();
     }
   }
 }

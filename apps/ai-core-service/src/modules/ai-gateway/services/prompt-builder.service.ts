@@ -301,6 +301,46 @@ Respond ONLY with the JSON object.`,
     ];
   }
 
+  /**
+   * Chat-flavored variant of buildDocumentQueryPrompt. Includes conversation
+   * history so the LLM can resolve follow-up references ("and chapter 2?")
+   * and returns PLAIN TEXT — the chat pipeline sends this directly to the
+   * user as a message body, so structured JSON would surface raw braces in
+   * the chat bubble.
+   */
+  buildDocumentChatPrompt(
+    history: LlmChatMessage[],
+    query: string,
+    relevantChunks: Array<{ content: string; chunkIndex: number }>,
+  ): LlmChatMessage[] {
+    const contextBlock = relevantChunks.length
+      ? relevantChunks
+          .map((c, i) => `[Nguồn ${i + 1}] ${c.content}`)
+          .join('\n\n')
+      : '(Không tìm thấy đoạn nào trong tài liệu phù hợp với câu hỏi.)';
+
+    const system: LlmChatMessage = {
+      role: 'system',
+      content: `You are Zai, a friendly AI assistant helping the user analyze a document inside this chat application.
+${LANGUAGE_RULE}
+
+Rules:
+- Ground your answer in the document excerpts below AND the prior conversation context.
+- When you use a specific excerpt, cite it inline like (Nguồn 1).
+- If the excerpts do not answer the question, say so clearly instead of guessing.
+- Reply naturally as plain text (short markdown lists are fine).
+- Do NOT respond with JSON, structured objects, or code fences — your reply is shown directly inside a chat bubble.
+- Be concise; expand only if the user explicitly asks for detail.`,
+    };
+
+    const user: LlmChatMessage = {
+      role: 'user',
+      content: `Nội dung tài liệu:\n${contextBlock}\n\nCâu hỏi: ${query}`,
+    };
+
+    return [system, ...history, user];
+  }
+
   buildZaiChatPrompt(history: LlmChatMessage[]): LlmChatMessage[] {
     const system: LlmChatMessage = {
       role: 'system',
@@ -310,5 +350,26 @@ Be conversational, concise, and helpful. Keep responses natural and brief unless
 Do not repeat yourself or add unnecessary filler phrases.`,
     };
     return [system, ...history];
+  }
+
+  buildZaiMentionReplyPrompt(
+    history: LlmChatMessage[],
+    triggerMessage: string,
+  ): LlmChatMessage[] {
+    const system: LlmChatMessage = {
+      role: 'system',
+      content: `You are Zai, an AI assistant participating in a group chat. A user has @mentioned you and is asking you to respond.
+${LANGUAGE_RULE}
+Rules:
+- Keep your response brief (1-3 sentences unless the question explicitly needs detail)
+- Focus on directly answering the @mention; do not summarize the whole group chat
+- Be conversational and casual, matching the group's tone
+- Do not preface with phrases like "Sure!" or "Of course!" — just answer`,
+    };
+    const user: LlmChatMessage = {
+      role: 'user',
+      content: triggerMessage,
+    };
+    return [system, ...history, user];
   }
 }

@@ -1,4 +1,5 @@
 import {
+  Body,
   Controller,
   Get,
   HttpCode,
@@ -18,6 +19,7 @@ import { AuthenticatedUser, BusinessException } from '@app/types';
 import { AiAssistService } from './ai-assist.service';
 import { CatchUpResponseDto } from './dto/catch-up-response.dto';
 import { ZaiConversationResponseDto } from './dto/zai-conversation-response.dto';
+import { CreateDocumentConversationDto } from './dto/create-document-conversation.dto';
 
 @ApiTags('AI Assist')
 @ApiBearerAuth('BearerAuth')
@@ -41,6 +43,25 @@ export class AiAssistController {
     @AccessToken() token: string,
   ): Promise<ZaiConversationResponseDto> {
     return this.service.getOrCreateZaiConversation(token);
+  }
+
+  @Post('conversations/document')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @ApiOperation({
+    summary:
+      'Get or create a Zai AI conversation anchored to a specific document',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Document conversation id returned (created or existing)',
+    type: ZaiConversationResponseDto,
+  })
+  async getOrCreateDocumentConversation(
+    @AccessToken() token: string,
+    @Body() dto: CreateDocumentConversationDto,
+  ): Promise<ZaiConversationResponseDto> {
+    return this.service.getOrCreateDocumentConversation(token, dto.documentId);
   }
 
   @Get('conversations/:conversationId/catch-up')

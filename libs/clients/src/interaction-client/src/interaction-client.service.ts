@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { Injectable, Logger } from '@nestjs/common';
 import {
   FriendsApi,
@@ -23,6 +24,7 @@ import {
   type PaginatedResponseSentFriendRequestResponseDto,
   type PaginatedResponseConversationListItemDto,
   type UpdateGroupSettingsDto,
+  type CreateDocumentConversationDto,
 } from './client/generated';
 import { BaseHttpClient } from '../../base-http-client';
 import type {
@@ -741,6 +743,23 @@ export class InteractionClientService extends BaseHttpClient {
       return response.data as { conversationId: string };
     } catch (error) {
       this.handleError('getOrCreateZaiConversation', error);
+    }
+  }
+
+  async getOrCreateDocumentConversation(
+    accessToken: string,
+    documentId: string,
+  ): Promise<{ conversationId: string }> {
+    try {
+      const dto: CreateDocumentConversationDto = { documentId };
+      const response =
+        await this.aiConversationsApi.getOrCreateDocumentConversation(
+          { createDocumentConversationDto: dto },
+          { headers: { Authorization: `Bearer ${accessToken}` } },
+        );
+      return response.data as { conversationId: string };
+    } catch (error) {
+      this.handleError('getOrCreateDocumentConversation', error);
     }
   }
 }

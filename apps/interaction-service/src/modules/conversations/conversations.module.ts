@@ -8,6 +8,7 @@ import {
   ConversationPoll,
   ConversationPollOption,
   ConversationPollVote,
+  DocumentMetadata,
 } from '@libs/database/entities';
 import { KafkaModule, NotificationOutboxModule } from '@libs/kafka';
 import { RedisModule } from '@libs/redis';
@@ -32,6 +33,7 @@ import { AiConversationFactoryService } from './services/ai-conversation-factory
       ConversationPoll,
       ConversationPollOption,
       ConversationPollVote,
+      DocumentMetadata,
     ]),
     KafkaModule,
     NotificationOutboxModule,

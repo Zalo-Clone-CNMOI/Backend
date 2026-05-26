@@ -77,6 +77,7 @@ describe('PersistMessageConsumer', () => {
       cacheService as unknown as CacheService,
       membershipService as unknown as ConversationMembershipService,
       shared,
+      appConfig,
     );
 
     const moderationHandler = new ModerationResultHandler(

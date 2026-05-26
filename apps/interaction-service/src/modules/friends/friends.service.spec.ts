@@ -19,7 +19,11 @@ const FriendshipStatus = {
   ACCEPTED: 'accepted',
   BLOCKED: 'blocked',
 };
-const UserStatus = { ACTIVE: 'active', INACTIVE: 'inactive' };
+const UserStatus = {
+  ACTIVE: 'active',
+  INACTIVE: 'inactive',
+  SYSTEM: 'system',
+};
 
 const uuid = (n: number) => `00000000-0000-0000-0000-00000000000${n}`;
 
@@ -210,6 +214,17 @@ describe('FriendsService', () => {
       userRepository.findOne.mockResolvedValueOnce({
         id: uuid(2),
         status: UserStatus.INACTIVE,
+      });
+
+      await expect(
+        service.sendFriendRequest(uuid(1), { userId: uuid(2) }),
+      ).rejects.toThrow();
+    });
+
+    it('should throw when target user has SYSTEM status (e.g. Zai bot)', async () => {
+      userRepository.findOne.mockResolvedValueOnce({
+        id: uuid(2),
+        status: UserStatus.SYSTEM,
       });
 
       await expect(

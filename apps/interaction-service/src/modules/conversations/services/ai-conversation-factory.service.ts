@@ -5,6 +5,7 @@ import { APP_CONFIG, AppConfig } from '@libs/config';
 import {
   Conversation,
   ConversationMember,
+  DocumentMetadata,
   User,
 } from '@libs/database/entities';
 import {
@@ -33,6 +34,8 @@ export class AiConversationFactoryService {
     private readonly memberRepository: Repository<ConversationMember>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(DocumentMetadata)
+    private readonly documentMetadataRepository: Repository<DocumentMetadata>,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly cacheService: CacheService,
   ) {}
@@ -89,10 +92,10 @@ export class AiConversationFactoryService {
         `Created Zai conversation ${saved.id} for user ${userId} (feature: ${context.feature})`,
       );
 
-      // Set Redis marker so chat-service can route messages without a DB lookup.
+      // Store AI context in Redis so chat-service can route messages without a DB lookup.
       // Awaited here: if the marker is missing, chat-service won't route AI messages
       // for this conversation until the user calls getOrCreateGeneral again.
-      await this.cacheService.setAiConversationMarker(saved.id);
+      await this.cacheService.setAiConversationContext(saved.id, context);
 
       return saved;
     });
@@ -116,13 +119,74 @@ export class AiConversationFactoryService {
       .getOne();
 
     if (existing) {
-      // Ensure marker exists in Redis (idempotent re-set).
-      void this.cacheService.setAiConversationMarker(existing.id);
+      // Ensure context exists in Redis (idempotent re-set).
+      void this.cacheService.setAiConversationContext(
+        existing.id,
+        existing.aiContext ?? { feature: 'general', created_at: 0 },
+      );
       return { conversationId: existing.id };
     }
 
     const conv = await this.createZaiConversation(userId, {
       feature: 'general',
+      created_at: Date.now(),
+    });
+    return { conversationId: conv.id };
+  }
+
+  // TODO(Phase-5-follow-up): add a partial unique index on conversations
+  // (created_by_id, ai_context->>'document_id') WHERE type='AI_ASSISTANT'
+  // AND ai_context->>'feature'='document' to close the 2-concurrent-request
+  // race window. The dedup query below covers the common single-request case.
+  async getOrCreateDocumentConversation(
+    userId: string,
+    documentId: string,
+  ): Promise<{ conversationId: string }> {
+    // 1. Verify document exists AND is owned by the requesting user.
+    const doc = await this.documentMetadataRepository.findOne({
+      where: { id: documentId, userId },
+    });
+    if (!doc) {
+      throw new BusinessException(
+        ErrorCode.NOT_FOUND,
+        'Document not found or access denied',
+      );
+    }
+
+    // 2. Look up existing AI_ASSISTANT conversation for (userId, documentId).
+    //    Idempotent — repeated "Analyze document" clicks return the same id.
+    const existing = await this.conversationRepository
+      .createQueryBuilder('c')
+      .innerJoin('c.members', 'm', 'm.userId = :userId AND m.leftAt IS NULL', {
+        userId,
+      })
+      .where(
+        "c.type = :type AND c.aiContext->>'feature' = :feature AND c.aiContext->>'document_id' = :documentId",
+        {
+          type: ConversationType.AI_ASSISTANT,
+          feature: 'document',
+          documentId,
+        },
+      )
+      .getOne();
+
+    if (existing) {
+      // Ensure context exists in Redis (idempotent re-set).
+      void this.cacheService.setAiConversationContext(
+        existing.id,
+        existing.aiContext ?? {
+          feature: 'document',
+          document_id: documentId,
+          created_at: 0,
+        },
+      );
+      return { conversationId: existing.id };
+    }
+
+    // 3. Otherwise create a new conversation anchored to this document.
+    const conv = await this.createZaiConversation(userId, {
+      feature: 'document',
+      document_id: documentId,
       created_at: Date.now(),
     });
     return { conversationId: conv.id };

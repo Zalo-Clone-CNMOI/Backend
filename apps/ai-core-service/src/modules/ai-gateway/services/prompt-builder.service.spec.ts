@@ -202,6 +202,58 @@ describe('PromptBuilderService', () => {
     });
   });
 
+  describe('buildDocumentChatPrompt', () => {
+    it('returns system + history + user message in that order', () => {
+      const history: { role: 'user' | 'assistant'; content: string }[] = [
+        { role: 'user', content: 'hi' },
+        { role: 'assistant', content: 'hello' },
+      ];
+      const chunks = [{ content: 'doc text', chunkIndex: 0 }];
+
+      const result = builder.buildDocumentChatPrompt(history, 'q?', chunks);
+
+      expect(result).toHaveLength(4);
+      expect(result[0].role).toBe('system');
+      expect(result[1]).toEqual(history[0]);
+      expect(result[2]).toEqual(history[1]);
+      expect(result[3].role).toBe('user');
+      expect(result[3].content).toContain('q?');
+      expect(result[3].content).toContain('doc text');
+    });
+
+    it('system prompt explicitly forbids JSON output (plain text only)', () => {
+      const result = builder.buildDocumentChatPrompt([], 'q', []);
+      // Must NOT carry the HTTP-style "Respond ONLY with the JSON object"
+      // instruction — that wording is what made the original chat path leak
+      // raw JSON into chat bubbles.
+      expect(result[0].content).not.toContain('Respond ONLY');
+      expect(result[0].content).not.toContain('source_indices');
+      // Belt-and-suspenders: even without the broken instruction, models
+      // with strong JSON priors might still emit objects. Explicit prohibition.
+      expect(result[0].content).toMatch(/do not respond with json/i);
+      expect(result[0].content).toContain('plain text');
+    });
+
+    it('handles empty chunks gracefully with a placeholder note', () => {
+      const result = builder.buildDocumentChatPrompt([], 'lonely query', []);
+      // user message still references the query, plus a fallback note
+      const userMsg = result[result.length - 1];
+      expect(userMsg.content).toContain('lonely query');
+      expect(userMsg.content).toContain('Không tìm thấy');
+    });
+
+    it('labels chunks as [Nguồn N] (1-based) in user content', () => {
+      const chunks = [
+        { content: 'Alpha', chunkIndex: 0 },
+        { content: 'Beta', chunkIndex: 1 },
+      ];
+      const result = builder.buildDocumentChatPrompt([], '?', chunks);
+      const userMsg = result[result.length - 1];
+      expect(userMsg.content).toContain('[Nguồn 1] Alpha');
+      expect(userMsg.content).toContain('[Nguồn 2] Beta');
+    });
+  });
+
   describe('buildEntityDetectionPrompt', () => {
     it('returns exactly 2 messages: system + user', () => {
       const result = builder.buildEntityDetectionPrompt(

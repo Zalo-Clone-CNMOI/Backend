@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AiConsumer } from './ai.consumer';
 import { AiPublisher } from './ai.publisher';
+import { AiChatPublisher } from './ai-chat.publisher';
 import { ModerationEngine } from '../modules/moderation/moderation.engine';
 import { SmartReplyEngine } from '../modules/smart-reply/smart-reply.engine';
 import { SummaryEngine } from '../modules/summary/summary.engine';
@@ -8,6 +9,7 @@ import { TranslationEngine } from '../modules/translation/translation.engine';
 import { DocumentEngine } from '../modules/document/document.engine';
 import { TextExtractorService } from '../modules/document/text-extractor.service';
 import { EntityDetectionEngine } from '../modules/entity-detection/entity-detection.engine';
+import { ZaiChatEngine } from '../modules/zai-chat/zai-chat.engine';
 import { APP_CONFIG } from '@libs/config';
 import { S3Service } from '@libs/s3';
 import { KafkaTopics } from '@libs/contracts';
@@ -20,6 +22,7 @@ import type {
   AiDocumentQueryEvent,
   AiEntityDetectionRequestEvent,
   AiEntityInfoRequestEvent,
+  AiZaiChatRequestEvent,
 } from '@libs/contracts';
 
 function makePublisher() {
@@ -66,9 +69,18 @@ function makeEntityDetection() {
   return { detect: jest.fn(), generateInfo: jest.fn() };
 }
 
+function makeChatPublisher() {
+  return { send: jest.fn().mockResolvedValue(undefined) };
+}
+
+function makeZaiChatEngine() {
+  return { respond: jest.fn() };
+}
+
 describe('AiConsumer', () => {
   let consumer: AiConsumer;
   let publisher: ReturnType<typeof makePublisher>;
+  let chatPublisher: ReturnType<typeof makeChatPublisher>;
   let moderationEngine: ReturnType<typeof makeModeration>;
   let smartReplyEngine: ReturnType<typeof makeSmartReply>;
   let summaryEngine: ReturnType<typeof makeSummary>;
@@ -76,10 +88,12 @@ describe('AiConsumer', () => {
   let documentEngine: ReturnType<typeof makeDocument>;
   let textExtractor: ReturnType<typeof makeTextExtractor>;
   let entityDetectionEngine: ReturnType<typeof makeEntityDetection>;
+  let zaiChatEngine: ReturnType<typeof makeZaiChatEngine>;
   let s3Service: ReturnType<typeof makeS3>;
 
   beforeEach(async () => {
     publisher = makePublisher();
+    chatPublisher = makeChatPublisher();
     moderationEngine = makeModeration();
     smartReplyEngine = makeSmartReply();
     summaryEngine = makeSummary();
@@ -87,12 +101,14 @@ describe('AiConsumer', () => {
     documentEngine = makeDocument();
     textExtractor = makeTextExtractor();
     entityDetectionEngine = makeEntityDetection();
+    zaiChatEngine = makeZaiChatEngine();
     s3Service = makeS3();
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AiConsumer],
       providers: [
         { provide: AiPublisher, useValue: publisher },
+        { provide: AiChatPublisher, useValue: chatPublisher },
         { provide: ModerationEngine, useValue: moderationEngine },
         { provide: SmartReplyEngine, useValue: smartReplyEngine },
         { provide: SummaryEngine, useValue: summaryEngine },
@@ -100,8 +116,12 @@ describe('AiConsumer', () => {
         { provide: DocumentEngine, useValue: documentEngine },
         { provide: TextExtractorService, useValue: textExtractor },
         { provide: EntityDetectionEngine, useValue: entityDetectionEngine },
+        { provide: ZaiChatEngine, useValue: zaiChatEngine },
         { provide: S3Service, useValue: s3Service },
-        { provide: APP_CONFIG, useValue: { aiMaxDocumentSizeMb: 10 } },
+        {
+          provide: APP_CONFIG,
+          useValue: { aiMaxDocumentSizeMb: 10, zaiBotUserId: 'zai-bot-uuid' },
+        },
       ],
     }).compile();
 
@@ -404,6 +424,122 @@ describe('AiConsumer', () => {
         KafkaTopics.AiEntityInfoResult,
         mockResult,
       );
+    });
+  });
+
+  // ─── Phase 4: Zai chat streaming + typing ──────────────────────────────────
+
+  describe('onZaiChatRequest()', () => {
+    const makeZaiEvent = (
+      overrides: Partial<AiZaiChatRequestEvent> = {},
+    ): AiZaiChatRequestEvent => ({
+      message_id: 'msg-zai-1',
+      conversation_id: 'conv-z',
+      sender_id: 'user-z',
+      body: 'hello zai',
+      created_at: Date.now(),
+      trace_id: 'trace-z',
+      ...overrides,
+    });
+
+    it('emits typing-ON then calls engine then publishes chatMessage on success', async () => {
+      const event = makeZaiEvent();
+      zaiChatEngine.respond.mockResolvedValue({
+        message_id: 'reply-msg-1',
+        conversation_id: 'conv-z',
+        body: 'hello back',
+        trace_id: 'trace-z',
+      });
+
+      await consumer.onZaiChatRequest(event);
+
+      const emitCalls = publisher.emit.mock.calls as [string, unknown][];
+      const typingCalls = emitCalls.filter(
+        ([topic]) => topic === KafkaTopics.AiZaiTyping,
+      );
+      expect(typingCalls).toHaveLength(2);
+      expect(typingCalls[0][1]).toMatchObject({ is_typing: true });
+      expect(typingCalls[1][1]).toMatchObject({ is_typing: false });
+
+      expect(zaiChatEngine.respond).toHaveBeenCalled();
+      expect(chatPublisher.send).toHaveBeenCalledWith(
+        expect.objectContaining({ message_id: 'reply-msg-1' }),
+      );
+    });
+
+    it('emits AiStreamChunk for each onChunk callback', async () => {
+      const event = makeZaiEvent();
+      type ZaiCb = (s: string) => Promise<void>;
+      zaiChatEngine.respond.mockImplementation(
+        async (_evt: AiZaiChatRequestEvent, onChunk?: ZaiCb) => {
+          if (onChunk) {
+            await onChunk('hello');
+            await onChunk(' world');
+          }
+          return {
+            message_id: 'reply-msg-2',
+            conversation_id: 'conv-z',
+            body: 'hello world',
+            trace_id: 'trace-z',
+          };
+        },
+      );
+
+      await consumer.onZaiChatRequest(event);
+
+      const emitCalls = publisher.emit.mock.calls as [string, unknown][];
+      const chunkCalls = emitCalls.filter(
+        ([topic]) => topic === KafkaTopics.AiStreamChunk,
+      );
+      expect(chunkCalls).toHaveLength(2);
+      expect(chunkCalls[0][1]).toMatchObject({
+        chunk_index: 0,
+        content: 'hello',
+      });
+      expect(chunkCalls[1][1]).toMatchObject({
+        chunk_index: 1,
+        content: ' world',
+      });
+
+      // AiStreamComplete with message_id matching the reply
+      const completeCalls = emitCalls.filter(
+        ([topic]) => topic === KafkaTopics.AiStreamComplete,
+      );
+      expect(completeCalls).toHaveLength(1);
+      expect(completeCalls[0][1]).toMatchObject({
+        total_chunks: 2,
+        message_id: 'reply-msg-2',
+      });
+    });
+
+    it('emits typing-OFF in finally even when engine returns null (no reply)', async () => {
+      zaiChatEngine.respond.mockResolvedValue(null);
+
+      await consumer.onZaiChatRequest(makeZaiEvent());
+
+      const emitCalls = publisher.emit.mock.calls as [string, unknown][];
+      const typingCalls = emitCalls.filter(
+        ([topic]) => topic === KafkaTopics.AiZaiTyping,
+      );
+      expect(typingCalls[typingCalls.length - 1][1]).toMatchObject({
+        is_typing: false,
+      });
+      expect(chatPublisher.send).not.toHaveBeenCalled();
+    });
+
+    it('emits typing-OFF in finally even when engine throws', async () => {
+      zaiChatEngine.respond.mockRejectedValue(new Error('LLM down'));
+
+      await consumer.onZaiChatRequest(makeZaiEvent());
+
+      const emitCalls = publisher.emit.mock.calls as [string, unknown][];
+      const typingCalls = emitCalls.filter(
+        ([topic]) => topic === KafkaTopics.AiZaiTyping,
+      );
+      expect(typingCalls[typingCalls.length - 1][1]).toMatchObject({
+        is_typing: false,
+      });
+      expect(chatPublisher.send).not.toHaveBeenCalled();
     });
   });
 });

@@ -431,4 +431,117 @@ describe('CacheService', () => {
       expect(await cache.isHealthy()).toBe(false);
     });
   });
+
+  // ── Phase 4: AI Conversation Context (versioned JSON marker) ─────────────
+
+  describe('setAiConversationContext', () => {
+    it('stores JSON with version:1 (no TTL)', async () => {
+      await cache.setAiConversationContext('conv-001', {
+        feature: 'general',
+        created_at: 1234,
+      });
+
+      expect(redis.set).toHaveBeenCalledTimes(1);
+      const [key, value] = redis.set.mock.calls[0] as [string, string];
+      expect(key).toBe('conv:ai:conv-001');
+      expect(JSON.parse(value)).toEqual({
+        version: 1,
+        feature: 'general',
+        created_at: 1234,
+      });
+    });
+
+    it('does not throw on Redis error', async () => {
+      redis.set.mockRejectedValue(new Error('Redis full'));
+
+      await expect(
+        cache.setAiConversationContext('conv-001', {
+          feature: 'general',
+          created_at: 0,
+        }),
+      ).resolves.toBeUndefined();
+    });
+  });
+
+  describe('getAiConversationContext', () => {
+    it('returns parsed object for valid JSON', async () => {
+      redis.get.mockResolvedValue(
+        JSON.stringify({
+          version: 1,
+          feature: 'document',
+          document_id: 'doc-001',
+          created_at: 5,
+        }),
+      );
+
+      const result = await cache.getAiConversationContext('conv-001');
+
+      expect(result).toMatchObject({
+        feature: 'document',
+        document_id: 'doc-001',
+      });
+    });
+
+    it("backward compat: returns general fallback when value is '1'", async () => {
+      redis.get.mockResolvedValue('1');
+
+      const result = await cache.getAiConversationContext('conv-001');
+
+      expect(result).toEqual({ feature: 'general', created_at: 0 });
+    });
+
+    it('returns null when key missing', async () => {
+      redis.get.mockResolvedValue(null);
+
+      const result = await cache.getAiConversationContext('conv-001');
+
+      expect(result).toBeNull();
+    });
+
+    it('returns null on invalid JSON (no throw, logs structured error)', async () => {
+      redis.get.mockResolvedValue('not-valid-json{{{');
+
+      const result = await cache.getAiConversationContext('conv-001');
+
+      expect(result).toBeNull();
+    });
+
+    it('returns null on Redis error', async () => {
+      redis.get.mockRejectedValue(new Error('Redis down'));
+
+      const result = await cache.getAiConversationContext('conv-001');
+
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('acquireZaiMentionCooldown', () => {
+    it('returns true when NX SET succeeds (first call)', async () => {
+      redis.set.mockResolvedValue('OK');
+
+      const acquired = await cache.acquireZaiMentionCooldown('conv-001');
+
+      expect(acquired).toBe(true);
+      expect(redis.set).toHaveBeenCalledWith('zai:mention:cd:conv-001', '1', {
+        NX: true,
+        EX: 5,
+      });
+    });
+
+    it('returns false when NX SET fails (cooldown active)', async () => {
+      redis.set.mockResolvedValue(null);
+
+      const acquired = await cache.acquireZaiMentionCooldown('conv-001');
+
+      expect(acquired).toBe(false);
+    });
+
+    it('returns true (fail-open) on Redis error', async () => {
+      redis.set.mockRejectedValue(new Error('Redis down'));
+
+      const acquired = await cache.acquireZaiMentionCooldown('conv-001');
+
+      expect(acquired).toBe(true);
+    });
+  });
 });

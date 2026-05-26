@@ -24,6 +24,27 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ZaiConversationResponseDto'
+  /ai-conversations/document:
+    post:
+      tags:
+        - AiConversations
+      summary: Get or create a Zai AI conversation anchored to a specific document
+      operationId: getOrCreateDocumentConversation
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDocumentConversationDto'
+      responses:
+        '200':
+          description: Zai document conversation ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ZaiConversationResponseDto'
   /friends:
     get:
       tags:
@@ -1403,5 +1424,13 @@ components:
         - conversationId
       properties:
         conversationId:
+          type: string
+          format: uuid
+    CreateDocumentConversationDto:
+      type: object
+      required:
+        - documentId
+      properties:
+        documentId:
           type: string
           format: uuid

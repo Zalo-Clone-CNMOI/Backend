@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { RedisClientType } from 'redis';
+import type { AiConversationContext } from '@libs/contracts';
 import { REDIS_CLIENT } from './redis.tokens';
 
 export enum CacheLockRenewStatus {
@@ -328,6 +329,13 @@ export class CacheService {
   // AI Conversation Markers
   // ===================================
 
+  /**
+   * @deprecated Phase 4 replaces this with {@link setAiConversationContext},
+   * which stores the full AI context (feature, document_id, etc.) as JSON.
+   * Kept only for rollback safety with older chat-service builds. Do NOT
+   * call from new code — it would downgrade an existing JSON marker to '1'
+   * and erase the feature/document_id metadata.
+   */
   async setAiConversationMarker(conversationId: string): Promise<void> {
     try {
       await this.redisClient.set(
@@ -342,6 +350,12 @@ export class CacheService {
     }
   }
 
+  /**
+   * @deprecated Phase 4 replaces this with {@link getAiConversationContext},
+   * which returns the routing context (feature, document_id) instead of just
+   * a boolean. Kept for rollback safety — older chat-service builds may still
+   * use this EXISTS check.
+   */
   async isAiConversation(conversationId: string): Promise<boolean> {
     try {
       const count = await this.redisClient.exists(
@@ -354,6 +368,89 @@ export class CacheService {
         error,
       );
       return false;
+    }
+  }
+
+  async setAiConversationContext(
+    conversationId: string,
+    context: AiConversationContext,
+  ): Promise<void> {
+    try {
+      await this.redisClient.set(
+        `${this.AI_CONV_MARKER_PREFIX}${conversationId}`,
+        // Spread context first, then pin version: 1 last — ensures the
+        // version stamp cannot be overridden by a stray version field on
+        // the caller's context object.
+        JSON.stringify({ ...context, version: 1 }),
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to set AI conversation context for ${conversationId}:`,
+        error,
+      );
+    }
+  }
+
+  async getAiConversationContext(
+    conversationId: string,
+  ): Promise<AiConversationContext | null> {
+    try {
+      const raw = await this.redisClient.get(
+        `${this.AI_CONV_MARKER_PREFIX}${conversationId}`,
+      );
+      if (raw === null) return null;
+      if (raw === '1') {
+        return { feature: 'general', created_at: 0 } as AiConversationContext;
+      }
+      try {
+        return JSON.parse(raw) as AiConversationContext;
+      } catch (parseErr) {
+        this.logger.error(
+          `Failed to parse AI conversation context for ${conversationId}`,
+          {
+            conversationId,
+            rawValueLength: raw.length,
+            error:
+              parseErr instanceof Error ? parseErr.message : String(parseErr),
+          },
+        );
+        return null;
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to get AI conversation context for ${conversationId}:`,
+        error,
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Conversation-wide @Zai mention rate limit. One concurrent Zai reply
+   * per conversation per 5s window — intentionally NOT per-user.
+   *
+   * Why: prevents thundering-herd in active group chats where multiple
+   * users could @Zai simultaneously and each spawn an LLM call. A future
+   * phase may switch to per-user (`{conversationId}:{senderId}`) if
+   * telemetry shows the conversation-wide cap is too aggressive.
+   *
+   * Fail-open: returns `true` on Redis error so a transient Redis blip
+   * does NOT silently swallow every @Zai mention.
+   */
+  async acquireZaiMentionCooldown(conversationId: string): Promise<boolean> {
+    try {
+      const result = await this.redisClient.set(
+        `zai:mention:cd:${conversationId}`,
+        '1',
+        { NX: true, EX: 5 },
+      );
+      return result === 'OK';
+    } catch (error) {
+      this.logger.error(
+        `Failed to acquire Zai mention cooldown for ${conversationId}:`,
+        error,
+      );
+      return true;
     }
   }
 

@@ -135,33 +135,64 @@ export class AiFanoutConsumer {
   }
 
   /**
-   * Handle AI Stream Chunk
-   * Forward streaming chunk to user in real-time
+   * Handle AI Stream Chunk.
+   *
+   * For Zai chat (feature='zai_chat'), broadcast to the whole conversation
+   * room so all members of a group see Zai's reply stream in real time.
+   * Previously only the user who triggered Zai saw the chunks, which felt
+   * jarring for everyone else — typing indicator on, then full message
+   * appears at once (Phase 4 audit C4).
+   *
+   * For all other features (smart_reply suggestions, document_analysis
+   * answers, summary streams, etc.), keep the original unicast — those
+   * are personal results and other group members should never see them.
    */
   @EventPattern(KafkaTopics.AiStreamChunk)
   onAiStreamChunk(@Payload() payload: AiStreamChunkEvent) {
-    this.gateway.emitToUser(payload.user_id, WsEvents.AiStreamChunk, {
+    const dto = {
       stream_id: payload.stream_id,
       conversation_id: payload.conversation_id,
       feature: payload.feature,
       chunk_index: payload.chunk_index,
       content: payload.content,
       is_final: payload.is_final,
-    });
+    };
+    if (payload.feature === 'zai_chat') {
+      this.gateway.broadcastToConversation(
+        payload.conversation_id,
+        WsEvents.AiStreamChunk,
+        dto,
+      );
+    } else {
+      this.gateway.emitToUser(payload.user_id, WsEvents.AiStreamChunk, dto);
+    }
   }
 
   /**
-   * Handle AI Stream Complete
-   * Notify user that streaming is finished
+   * Handle AI Stream Complete.
+   *
+   * Mirrors onAiStreamChunk: broadcast Zai's "stream finished" signal to
+   * the conversation room so all group members exit the streaming state
+   * at the same time as the user who triggered Zai. Other features stay
+   * unicast.
    */
   @EventPattern(KafkaTopics.AiStreamComplete)
   onAiStreamComplete(@Payload() payload: AiStreamCompleteEvent) {
-    this.gateway.emitToUser(payload.user_id, WsEvents.AiStreamComplete, {
+    const dto = {
       stream_id: payload.stream_id,
       conversation_id: payload.conversation_id,
       feature: payload.feature,
       total_chunks: payload.total_chunks,
-    });
+    };
+    if (payload.feature === 'zai_chat') {
+      this.gateway.broadcastToConversation(
+        payload.conversation_id,
+        WsEvents.AiStreamComplete,
+        dto,
+      );
+    } else {
+      this.gateway.emitToUser(payload.user_id, WsEvents.AiStreamComplete, dto);
+    }
   }
 
   /**

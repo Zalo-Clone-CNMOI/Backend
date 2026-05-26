@@ -139,7 +139,7 @@ describe('AiFanoutConsumer', () => {
   });
 
   describe('onAiStreamComplete', () => {
-    it('forwards stream complete event to the user', () => {
+    it('forwards stream complete event UNICAST for non-zai features', () => {
       consumer.onAiStreamComplete({
         stream_id: 'stream-1',
         user_id: 'user-1',
@@ -160,11 +160,36 @@ describe('AiFanoutConsumer', () => {
           total_chunks: 3,
         }),
       );
+      expect(gateway.broadcastToConversation).not.toHaveBeenCalled();
+    });
+
+    it('BROADCASTS stream complete to the whole conversation for zai_chat (C4)', () => {
+      consumer.onAiStreamComplete({
+        stream_id: 'stream-zai-1',
+        user_id: 'user-trigger',
+        conversation_id: 'conv-group',
+        feature: 'zai_chat',
+        total_chunks: 5,
+        total_tokens: 200,
+        provider: 'openai',
+        completed_at: Date.now(),
+      });
+
+      expect(gateway.broadcastToConversation).toHaveBeenCalledWith(
+        'conv-group',
+        WsEvents.AiStreamComplete,
+        expect.objectContaining({
+          stream_id: 'stream-zai-1',
+          feature: 'zai_chat',
+          total_chunks: 5,
+        }),
+      );
+      expect(gateway.emitToUser).not.toHaveBeenCalled();
     });
   });
 
   describe('onAiStreamChunk', () => {
-    it('forwards stream chunk event to the user', () => {
+    it('forwards stream chunk event UNICAST for non-zai features', () => {
       consumer.onAiStreamChunk({
         stream_id: 'stream-2',
         user_id: 'user-2',
@@ -187,6 +212,56 @@ describe('AiFanoutConsumer', () => {
           is_final: false,
         }),
       );
+      expect(gateway.broadcastToConversation).not.toHaveBeenCalled();
+    });
+
+    it('BROADCASTS stream chunk to the conversation room for zai_chat (C4)', () => {
+      consumer.onAiStreamChunk({
+        stream_id: 'stream-zai-2',
+        user_id: 'user-trigger',
+        conversation_id: 'conv-group',
+        feature: 'zai_chat',
+        chunk_index: 0,
+        content: 'Hi everyone,',
+        is_final: false,
+      });
+
+      expect(gateway.broadcastToConversation).toHaveBeenCalledWith(
+        'conv-group',
+        WsEvents.AiStreamChunk,
+        expect.objectContaining({
+          stream_id: 'stream-zai-2',
+          conversation_id: 'conv-group',
+          feature: 'zai_chat',
+          chunk_index: 0,
+          content: 'Hi everyone,',
+        }),
+      );
+      expect(gateway.emitToUser).not.toHaveBeenCalled();
+    });
+
+    it('regression guard: smart_reply and document_analysis stay unicast', () => {
+      consumer.onAiStreamChunk({
+        stream_id: 'stream-smart',
+        user_id: 'user-3',
+        conversation_id: 'conv-3',
+        feature: 'smart_reply',
+        chunk_index: 0,
+        content: 'Sure!',
+        is_final: false,
+      });
+      consumer.onAiStreamChunk({
+        stream_id: 'stream-doc',
+        user_id: 'user-4',
+        conversation_id: 'conv-4',
+        feature: 'document_analysis',
+        chunk_index: 0,
+        content: 'According to the document...',
+        is_final: false,
+      });
+
+      expect(gateway.broadcastToConversation).not.toHaveBeenCalled();
+      expect(gateway.emitToUser).toHaveBeenCalledTimes(2);
     });
   });
 

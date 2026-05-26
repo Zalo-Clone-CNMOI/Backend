@@ -1,3 +1,5 @@
+import { ConversationType } from '@app/constant';
+
 export interface AppConfig {
   nodeEnv: string;
   serviceName: string;
@@ -65,6 +67,20 @@ export interface AppConfig {
   chatModerationWarnOnly?: boolean;
   chatModerationEnforceMinConfidence?: number;
   chatModerationHighRiskLabels?: string[];
+
+  // Chat Service pre-send moderation gate (Phase 5)
+  /** Master flag — default true. */
+  chatPreSendModerationEnabled?: boolean;
+  /** Conversation types that skip the gate. Default [DIRECT, AI_ASSISTANT]. */
+  chatPreSendModerationSkipConvTypes?: ConversationType[];
+  /** Hard timeout (ms) for the HTTP call to ai-core. Caller treats timeout as fail-open. */
+  chatPreSendModerationTimeoutMs?: number;
+  /** Block threshold — a flagged result below this confidence is treated as ALLOW. */
+  chatPreSendModerationConfidenceThreshold?: number;
+  /** Clean-result cache TTL (24h default). */
+  chatPreSendModerationCacheTtlSeconds?: number;
+  /** Block-result cache TTL (15min default) — short so model/threshold changes re-evaluate quickly. */
+  chatPreSendModerationBlockCacheTtlSeconds?: number;
 
   // Zai AI bot — fixed user ID seeded by migration
   zaiBotUserId: string;
@@ -224,6 +240,33 @@ function readCsv(value: string | undefined): string[] {
     .filter(Boolean);
 }
 
+/**
+ * Parse a CSV of ConversationType values (case-insensitive) into a typed
+ * array. Throws on unknown values to fail loud — silent fallback would
+ * defeat the whole point of using the enum (locdx audit concern: silent
+ * casing bypass on the skip-list comparison).
+ */
+function parseConversationTypeCsv(
+  value: string | undefined,
+  defaultValue: ConversationType[],
+): ConversationType[] {
+  const raw = readCsv(value);
+  if (raw.length === 0) {
+    return defaultValue;
+  }
+  const valid = new Set<string>(Object.values(ConversationType));
+  return raw.map((item) => {
+    const lower = item.toLowerCase();
+    if (!valid.has(lower)) {
+      throw new Error(
+        `Invalid CHAT_PRE_SEND_MODERATION_SKIP_CONV_TYPES value "${item}". ` +
+          `Allowed: ${Array.from(valid).join(', ')}.`,
+      );
+    }
+    return lower as ConversationType;
+  });
+}
+
 function assertEnvPresent(name: string, value: string | undefined): void {
   if (!value?.trim()) {
     throw new Error(`${name} environment variable is required.`);
@@ -315,6 +358,36 @@ export function loadConfig(serviceName: string): AppConfig {
     chatModerationHighRiskLabels: readCsv(
       process.env.CHAT_MODERATION_HIGH_RISK_LABELS,
     ),
+    chatPreSendModerationEnabled:
+      readBoolean(process.env.CHAT_PRE_SEND_MODERATION_ENABLED) ?? true,
+    chatPreSendModerationSkipConvTypes: parseConversationTypeCsv(
+      process.env.CHAT_PRE_SEND_MODERATION_SKIP_CONV_TYPES,
+      [ConversationType.DIRECT, ConversationType.AI_ASSISTANT],
+    ),
+    chatPreSendModerationTimeoutMs:
+      readPositiveInteger(
+        process.env.CHAT_PRE_SEND_MODERATION_TIMEOUT_MS,
+        100,
+        30_000,
+      ) ?? 2000,
+    chatPreSendModerationConfidenceThreshold:
+      readClampedNumber(
+        process.env.CHAT_PRE_SEND_MODERATION_CONFIDENCE_THRESHOLD,
+        0,
+        1,
+      ) ?? 0.85,
+    chatPreSendModerationCacheTtlSeconds:
+      readPositiveInteger(
+        process.env.CHAT_PRE_SEND_MODERATION_CACHE_TTL_SECONDS,
+        60,
+        7 * 24 * 3600,
+      ) ?? 86400,
+    chatPreSendModerationBlockCacheTtlSeconds:
+      readPositiveInteger(
+        process.env.CHAT_PRE_SEND_MODERATION_BLOCK_CACHE_TTL_SECONDS,
+        60,
+        24 * 3600,
+      ) ?? 900,
     zaiBotUserId: (() => {
       const raw =
         process.env.ZAI_BOT_USER_ID?.trim() ||

@@ -3,6 +3,7 @@ import {
   KafkaTopics,
   type ChatMessageSendCommand,
   type ChatMessageCreatedEvent,
+  type ChatMessageRejectedEvent,
   type MessageMention,
   AiModerationRequestEvent,
   AiEntityDetectionRequestEvent,
@@ -13,6 +14,7 @@ import { CacheService } from '@libs/redis';
 import { ConversationMembershipService } from '@libs/mvp-access';
 import { APP_CONFIG, AppConfig } from '@libs/config';
 import { ChatPublisher } from '../services/chat.publisher';
+import { PreSendModerationService } from '../services/pre-send-moderation.service';
 import { ensureConversationAccess } from '../utils/access.helper';
 import { MessageConsumerSharedService } from './message-consumer-shared.service';
 
@@ -24,6 +26,7 @@ export class SendMessageHandler {
     private readonly cacheService: CacheService,
     private readonly membershipService: ConversationMembershipService,
     private readonly shared: MessageConsumerSharedService,
+    private readonly preSendModerationService: PreSendModerationService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
@@ -53,6 +56,60 @@ export class SendMessageHandler {
       });
       if (!hasAccess) {
         return;
+      }
+
+      // ── Pre-send moderation gate (Phase 5) ───────────────────────────
+      // Body-truthy check mirrors the existing entity-detection guard:
+      // media-only messages cannot be moderated and would waste an LLM
+      // call. convType comes from the same accessCache populated by
+      // hasAccess — no extra DB roundtrip on the critical path.
+      if (payload.body?.trim()) {
+        const convType = await this.membershipService.getCachedConversationType(
+          payload.sender_id,
+          payload.conversation_id,
+        );
+
+        const blocked = await this.preSendModerationService.checkOrAllow({
+          senderId: payload.sender_id,
+          conversationId: payload.conversation_id,
+          body: payload.body,
+          conversationType: convType,
+          traceId,
+        });
+
+        if (blocked) {
+          const rejectedEvent: ChatMessageRejectedEvent = {
+            message_id: payload.message_id,
+            conversation_id: payload.conversation_id,
+            sender_id: payload.sender_id,
+            reason: blocked.reason,
+            labels: blocked.labels,
+            confidence: blocked.confidence,
+            rejected_at: Date.now(),
+            trace_id: traceId,
+          };
+          await this.publisher.emit(
+            KafkaTopics.ChatMessageRejected,
+            rejectedEvent,
+          );
+          // Rich audit log — sender, conv, labels, confidence, bodyHash for
+          // correlation with cache logs. NEVER includes payload.body
+          // (privacy).
+          this.shared.logger.log(
+            `[${traceId}] Pre-send moderation blocked message`,
+            {
+              messageId: payload.message_id,
+              senderId: payload.sender_id,
+              conversationId: payload.conversation_id,
+              convType: convType ?? 'unknown',
+              labels: blocked.labels,
+              confidence: blocked.confidence,
+              bodyHash: blocked.bodyHash,
+            },
+          );
+          // No insertMessage, no idempotency lock claimed.
+          return;
+        }
       }
 
       const acquired = await this.repo.tryBeginMessageProcessing(

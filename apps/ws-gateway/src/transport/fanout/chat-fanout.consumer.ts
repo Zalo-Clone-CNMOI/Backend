@@ -5,6 +5,7 @@ import {
   KafkaTopics,
   WsEvents,
   type ChatMessageCreatedEvent,
+  type ChatMessageRejectedEvent,
   type ChatMessageUpdatedEvent,
   type ChatMessageDeletedEvent,
   type ChatMessagePinnedEvent,
@@ -204,5 +205,22 @@ export class ChatFanoutConsumer {
         unpinned_at: payload.unpinned_at,
       },
     );
+  }
+
+  /**
+   * Pre-send moderation gate (Phase 5) rejected this message before it was
+   * ever persisted. Forward to the original sender so the FE can remove
+   * its optimistic bubble and show a "Message blocked" toast. Sent only
+   * to the sender — other conversation members never see this event since
+   * the message never existed for them.
+   */
+  @EventPattern(KafkaTopics.ChatMessageRejected)
+  onMessageRejected(@Payload() payload: ChatMessageRejectedEvent) {
+    this.gateway.emitToUser(payload.sender_id, WsEvents.ChatMessageRejected, {
+      message_id: payload.message_id,
+      conversation_id: payload.conversation_id,
+      reason: payload.reason,
+      labels: payload.labels,
+    });
   }
 }

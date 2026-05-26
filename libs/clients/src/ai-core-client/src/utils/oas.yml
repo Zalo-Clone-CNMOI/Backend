@@ -45,6 +45,31 @@ paths:
                 $ref: '#/components/schemas/AiEntityInfoResultDto'
         '400':
           description: Validation error
+  /moderation/check:
+    post:
+      tags:
+        - Moderation
+      summary: Synchronous pre-send moderation check
+      description: |
+        Returns the model verdict verbatim. Caller (chat-service) applies its
+        own confidence threshold to decide allow vs block. Internal endpoint —
+        ai-core port must be firewalled; no auth header expected.
+      operationId: checkPreSendModeration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PreSendModerationCheckRequestDto'
+      responses:
+        '201':
+          description: Moderation verdict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreSendModerationCheckResponseDto'
+        '400':
+          description: Validation error
   /catch-up:
     get:
       tags:
@@ -85,6 +110,61 @@ paths:
           description: Validation error
 components:
   schemas:
+    PreSendModerationCheckRequestDto:
+      type: object
+      required:
+        - body
+        - sender_id
+      properties:
+        body:
+          type: string
+          minLength: 1
+          maxLength: 8000
+          description: Message body to moderate (text only).
+        sender_id:
+          type: string
+          format: uuid
+          description: UUID of the user attempting to send the message.
+        conversation_id:
+          type: string
+          format: uuid
+          description: Optional — target conversation, used for audit logs.
+    ModerationLabel:
+      type: string
+      enum:
+        - clean
+        - spam
+        - toxic
+        - harassment
+        - hate_speech
+        - sexual
+        - violence
+        - self_harm
+    ModerationDecisionSource:
+      type: string
+      enum:
+        - model
+        - fallback_provider_failure
+        - fallback_parse_failure
+    PreSendModerationCheckResponseDto:
+      type: object
+      required:
+        - is_flagged
+        - labels
+        - confidence
+        - decision_source
+      properties:
+        is_flagged:
+          type: boolean
+        labels:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModerationLabel'
+        confidence:
+          type: number
+          description: Confidence in [0,1] the model assigned to the labels.
+        decision_source:
+          $ref: '#/components/schemas/ModerationDecisionSource'
     EntityType:
       type: string
       enum:

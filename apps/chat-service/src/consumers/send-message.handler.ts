@@ -404,70 +404,76 @@ export class SendMessageHandler {
     }
 
     // ── Zai Chat: route messages to ZaiChatEngine for AI conversations or @Zai mentions ────────
-    void (async () => {
-      try {
-        // Don't trigger Zai for messages sent by Zai itself (loop guard).
-        if (params.senderId === this.config.zaiBotUserId) return;
+    // Skip media-only messages (no text body): the LLM has nothing to respond
+    // to and embedding an empty string in the document RAG path fails. Mirrors
+    // the entity-detection guard above. Same logic must hold for both
+    // AI_ASSISTANT conversations and @Zai mentions.
+    if (params.body?.trim()) {
+      void (async () => {
+        try {
+          // Don't trigger Zai for messages sent by Zai itself (loop guard).
+          if (params.senderId === this.config.zaiBotUserId) return;
 
-        const aiContext = await this.cacheService.getAiConversationContext(
-          params.conversationId,
-        );
+          const aiContext = await this.cacheService.getAiConversationContext(
+            params.conversationId,
+          );
 
-        if (aiContext) {
-          // AI_ASSISTANT conversation — always route to Zai with conversation trigger.
+          if (aiContext) {
+            // AI_ASSISTANT conversation — always route to Zai with conversation trigger.
+            const zaiEvent: AiZaiChatRequestEvent = {
+              message_id: params.messageId,
+              conversation_id: params.conversationId,
+              sender_id: params.senderId,
+              body: params.body,
+              created_at: params.createdAt,
+              ai_context: aiContext,
+              trigger: 'conversation',
+              trace_id: params.traceId,
+            };
+            await this.publisher.emit(KafkaTopics.AiZaiChatRequest, zaiEvent);
+            this.shared.logger.debug(
+              `[${params.traceId}] AiZaiChatRequest (conversation) emitted for message: ${params.messageId}`,
+            );
+            return;
+          }
+
+          // Group @Zai mention path — mutually exclusive with AI_ASSISTANT path.
+          const mentionedZai = params.mentions?.some(
+            (m) => m.user_id === this.config.zaiBotUserId,
+          );
+          if (!mentionedZai) return;
+
+          const acquired = await this.cacheService.acquireZaiMentionCooldown(
+            params.conversationId,
+          );
+          if (!acquired) {
+            this.shared.logger.debug(
+              `[${params.traceId}] @Zai mention rate-limited for conversation: ${params.conversationId}`,
+            );
+            return;
+          }
+
           const zaiEvent: AiZaiChatRequestEvent = {
             message_id: params.messageId,
             conversation_id: params.conversationId,
             sender_id: params.senderId,
             body: params.body,
             created_at: params.createdAt,
-            ai_context: aiContext,
-            trigger: 'conversation',
+            trigger: 'mention',
             trace_id: params.traceId,
           };
           await this.publisher.emit(KafkaTopics.AiZaiChatRequest, zaiEvent);
           this.shared.logger.debug(
-            `[${params.traceId}] AiZaiChatRequest (conversation) emitted for message: ${params.messageId}`,
+            `[${params.traceId}] AiZaiChatRequest (mention) emitted for message: ${params.messageId}`,
           );
-          return;
-        }
-
-        // Group @Zai mention path — mutually exclusive with AI_ASSISTANT path.
-        const mentionedZai = params.mentions?.some(
-          (m) => m.user_id === this.config.zaiBotUserId,
-        );
-        if (!mentionedZai) return;
-
-        const acquired = await this.cacheService.acquireZaiMentionCooldown(
-          params.conversationId,
-        );
-        if (!acquired) {
-          this.shared.logger.debug(
-            `[${params.traceId}] @Zai mention rate-limited for conversation: ${params.conversationId}`,
+        } catch (err) {
+          this.shared.logger.error(
+            `[${params.traceId}] AiZaiChatRequest emit failed`,
+            err,
           );
-          return;
         }
-
-        const zaiEvent: AiZaiChatRequestEvent = {
-          message_id: params.messageId,
-          conversation_id: params.conversationId,
-          sender_id: params.senderId,
-          body: params.body,
-          created_at: params.createdAt,
-          trigger: 'mention',
-          trace_id: params.traceId,
-        };
-        await this.publisher.emit(KafkaTopics.AiZaiChatRequest, zaiEvent);
-        this.shared.logger.debug(
-          `[${params.traceId}] AiZaiChatRequest (mention) emitted for message: ${params.messageId}`,
-        );
-      } catch (err) {
-        this.shared.logger.error(
-          `[${params.traceId}] AiZaiChatRequest emit failed`,
-          err,
-        );
-      }
-    })();
+      })();
+    }
 
     // ── Cache invalidation (fire-and-forget: non-blocking by design so the
     //    message-send critical path is not delayed by a Redis round-trip) ──────

@@ -629,5 +629,80 @@ describe('SendMessageHandler', () => {
       );
       expect(aiCalls).toHaveLength(0);
     });
+
+    it('Empty body in AI conversation → no AiZaiChatRequest emit + getAiConversationContext skipped', async () => {
+      const payload = createMockChatSendCommand({
+        body: '',
+      } as Partial<Parameters<typeof createMockChatSendCommand>[0]>);
+      membershipService.canUserAccessConversation.mockResolvedValue(true);
+      repo.tryBeginMessageProcessing.mockResolvedValue(true);
+      repo.insertMessage.mockResolvedValue(undefined);
+      repo.markMessageStored.mockResolvedValue(undefined);
+      // Even though context check WOULD return AI conv, the guard short-circuits
+      // before the lookup runs.
+      cacheService.getAiConversationContext.mockResolvedValue({
+        feature: 'general',
+        created_at: 1,
+      });
+
+      await handler.handle(payload);
+      await drainMicrotasks();
+
+      const aiCalls = (publisher.emit.mock.calls as [string, unknown][]).filter(
+        ([topic]) => topic === 'ai.zai.chat.request',
+      );
+      expect(aiCalls).toHaveLength(0);
+      expect(cacheService.getAiConversationContext).not.toHaveBeenCalled();
+    });
+
+    it('Whitespace-only body in AI conversation → no AiZaiChatRequest emit', async () => {
+      const payload = createMockChatSendCommand({
+        body: '   \n\t  ',
+      } as Partial<Parameters<typeof createMockChatSendCommand>[0]>);
+      membershipService.canUserAccessConversation.mockResolvedValue(true);
+      repo.tryBeginMessageProcessing.mockResolvedValue(true);
+      repo.insertMessage.mockResolvedValue(undefined);
+      repo.markMessageStored.mockResolvedValue(undefined);
+      cacheService.getAiConversationContext.mockResolvedValue({
+        feature: 'general',
+        created_at: 1,
+      });
+
+      await handler.handle(payload);
+      await drainMicrotasks();
+
+      const aiCalls = (publisher.emit.mock.calls as [string, unknown][]).filter(
+        ([topic]) => topic === 'ai.zai.chat.request',
+      );
+      expect(aiCalls).toHaveLength(0);
+    });
+
+    it('Empty body + @Zai mention → no AiZaiChatRequest emit + cooldown not consumed', async () => {
+      const payload = createMockChatSendCommand({
+        body: '',
+        mentions: [
+          {
+            user_id: ZAI_BOT_ID,
+            mention_type: 'user',
+            offset: 0,
+            length: 4,
+          },
+        ],
+      } as Partial<Parameters<typeof createMockChatSendCommand>[0]>);
+      membershipService.canUserAccessConversation.mockResolvedValue(true);
+      repo.tryBeginMessageProcessing.mockResolvedValue(true);
+      repo.insertMessage.mockResolvedValue(undefined);
+      repo.markMessageStored.mockResolvedValue(undefined);
+      cacheService.getAiConversationContext.mockResolvedValue(null);
+
+      await handler.handle(payload);
+      await drainMicrotasks();
+
+      const aiCalls = (publisher.emit.mock.calls as [string, unknown][]).filter(
+        ([topic]) => topic === 'ai.zai.chat.request',
+      );
+      expect(aiCalls).toHaveLength(0);
+      expect(cacheService.acquireZaiMentionCooldown).not.toHaveBeenCalled();
+    });
   });
 });

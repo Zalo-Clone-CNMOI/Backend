@@ -544,4 +544,83 @@ describe('CacheService', () => {
       expect(acquired).toBe(true);
     });
   });
+
+  // ── Phase 5: pre-send moderation fast-path ─────────────────────────────
+
+  describe('setModerationFastResult', () => {
+    it('stores JSON with caller-supplied TTL under the mod:fast: prefix', async () => {
+      await cache.setModerationFastResult(
+        'abc123',
+        { is_flagged: false, labels: ['clean'], confidence: 0.97 },
+        86400,
+      );
+
+      expect(redis.setEx).toHaveBeenCalledWith(
+        'mod:fast:abc123',
+        86400,
+        JSON.stringify({
+          is_flagged: false,
+          labels: ['clean'],
+          confidence: 0.97,
+        }),
+      );
+    });
+
+    it('does not throw on Redis error', async () => {
+      redis.setEx.mockRejectedValue(new Error('Redis full'));
+
+      await expect(
+        cache.setModerationFastResult(
+          'abc123',
+          { is_flagged: true, labels: ['toxic'], confidence: 0.96 },
+          900,
+        ),
+      ).resolves.toBeUndefined();
+    });
+  });
+
+  describe('getModerationFastResult', () => {
+    it('returns parsed entry on hit', async () => {
+      redis.get.mockResolvedValue(
+        JSON.stringify({
+          is_flagged: true,
+          labels: ['toxic'],
+          confidence: 0.96,
+        }),
+      );
+
+      const result = await cache.getModerationFastResult('abc123');
+
+      expect(redis.get).toHaveBeenCalledWith('mod:fast:abc123');
+      expect(result).toEqual({
+        is_flagged: true,
+        labels: ['toxic'],
+        confidence: 0.96,
+      });
+    });
+
+    it('returns null on cache miss', async () => {
+      redis.get.mockResolvedValue(null);
+
+      const result = await cache.getModerationFastResult('missing-hash');
+
+      expect(result).toBeNull();
+    });
+
+    it('returns null on corrupted JSON (treats as miss, logs warn)', async () => {
+      redis.get.mockResolvedValue('not-valid-json{{{');
+
+      const result = await cache.getModerationFastResult('abc123');
+
+      expect(result).toBeNull();
+    });
+
+    it('returns null on Redis error', async () => {
+      redis.get.mockRejectedValue(new Error('Redis down'));
+
+      const result = await cache.getModerationFastResult('abc123');
+
+      expect(result).toBeNull();
+    });
+  });
 });

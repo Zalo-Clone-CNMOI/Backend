@@ -116,10 +116,14 @@ export class PreSendModerationService {
           bodyHash,
         };
       }
-      // Cached as flagged but below threshold — treat as allow + fall
-      // through to a fresh check would be wasteful; the cache reflects
-      // the engine's last verdict for this exact body, so honour it.
-      this.metrics.recordOutcome('allow_llm', convTypeLabel);
+      // Cached as flagged but below threshold — the gate's decision is
+      // ALLOW, and no LLM was called. Reaching this branch requires the
+      // threshold to have been RAISED since the cache write (cache only
+      // populates flagged entries with confidence >= 0.95; default
+      // threshold is 0.85). Use `cache_hit_clean` to keep metric semantics
+      // consistent: the label means "cache served an allow decision",
+      // regardless of how the engine originally classified it.
+      this.metrics.recordOutcome('cache_hit_clean', convTypeLabel);
       return null;
     }
 

@@ -313,7 +313,15 @@ describe('ZaiChatEngine', () => {
 
   // ── Phase 4: Document RAG ──────────────────────────────────────────────────
 
-  it('feature=document: delegates to DocumentRagService.buildRagMessages, skips buildZaiChatPrompt', async () => {
+  it('feature=document: delegates to DocumentRagService.buildRagMessages with conversation history, skips buildZaiChatPrompt', async () => {
+    // Seed history so we can assert it flows into the RAG call
+    const items = [
+      makeMsg('msg-2', ZAI_BOT_ID, 'Prior Zai answer'),
+      makeMsg('msg-1', USER_ID, 'Prior user question'),
+    ];
+    const repo = makeMessageRepo(items);
+    await build(repo);
+
     const event = makeEvent({
       body: 'Summarize this',
       ai_context: { feature: 'document', document_id: DOC_ID, created_at: 1 },
@@ -329,6 +337,16 @@ describe('ZaiChatEngine', () => {
       USER_ID,
       DOC_ID,
       'Summarize this',
+      expect.arrayContaining([
+        expect.objectContaining({
+          role: 'user',
+          content: 'Prior user question',
+        }),
+        expect.objectContaining({
+          role: 'assistant',
+          content: 'Prior Zai answer',
+        }),
+      ]),
     );
     expect(promptBuilder.buildZaiChatPrompt).not.toHaveBeenCalled();
     expect(gateway.complete).toHaveBeenCalled();

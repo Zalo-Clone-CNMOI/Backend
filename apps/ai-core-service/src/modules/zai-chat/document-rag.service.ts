@@ -50,6 +50,7 @@ export class DocumentRagService {
     userId: string,
     documentId: string,
     query: string,
+    history: LlmChatMessage[],
   ): Promise<LlmChatMessage[]> {
     const queryEmbedding = await this.gateway.embed(
       userId,
@@ -83,6 +84,6 @@ export class DocumentRagService {
       `RAG query for doc ${documentId}: ${chunks.length} chunks above threshold`,
     );
 
-    return this.promptBuilder.buildDocumentQueryPrompt(query, chunks);
+    return this.promptBuilder.buildDocumentChatPrompt(history, query, chunks);
   }
 }

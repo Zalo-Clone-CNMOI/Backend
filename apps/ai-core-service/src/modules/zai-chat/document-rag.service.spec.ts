@@ -60,9 +60,9 @@ function makeGateway(): jest.Mocked<AiGatewayService> {
 
 function makePromptBuilder(): jest.Mocked<PromptBuilderService> {
   return {
-    buildDocumentQueryPrompt: jest
+    buildDocumentChatPrompt: jest
       .fn()
-      .mockReturnValue([{ role: 'system', content: 'doc prompt' }]),
+      .mockReturnValue([{ role: 'system', content: 'doc chat prompt' }]),
   } as unknown as jest.Mocked<PromptBuilderService>;
 }
 
@@ -133,11 +133,17 @@ describe('DocumentRagService', () => {
   });
 
   describe('buildRagMessages', () => {
-    it('happy path: embeds query, runs vector search, calls promptBuilder with chunks', async () => {
+    it('happy path: embeds query, runs vector search, calls buildDocumentChatPrompt with history + chunks', async () => {
+      const history: { role: 'user' | 'assistant'; content: string }[] = [
+        { role: 'user', content: 'prior question' },
+        { role: 'assistant', content: 'prior answer' },
+      ];
+
       const messages = await service.buildRagMessages(
         USER_ID,
         DOC_ID,
         'What is the main point?',
+        history,
       );
 
       expect(gateway.embed).toHaveBeenCalledWith(
@@ -146,17 +152,20 @@ describe('DocumentRagService', () => {
         'text-embedding-3-small',
       );
       expect(chunkRepo.createQueryBuilder).toHaveBeenCalled();
-      expect(promptBuilder.buildDocumentQueryPrompt).toHaveBeenCalledWith(
+      expect(promptBuilder.buildDocumentChatPrompt).toHaveBeenCalledWith(
+        history,
         'What is the main point?',
         [
           { content: 'chunk content 0', chunkIndex: 0 },
           { content: 'chunk content 1', chunkIndex: 1 },
         ],
       );
-      expect(messages).toEqual([{ role: 'system', content: 'doc prompt' }]);
+      expect(messages).toEqual([
+        { role: 'system', content: 'doc chat prompt' },
+      ]);
     });
 
-    it('empty vector search → calls promptBuilder with empty chunks (no throw)', async () => {
+    it('empty vector search → calls buildDocumentChatPrompt with empty chunks (no throw)', async () => {
       chunkRepo._qb.getRawAndEntities.mockResolvedValueOnce({
         raw: [],
         entities: [],
@@ -166,13 +175,17 @@ describe('DocumentRagService', () => {
         USER_ID,
         DOC_ID,
         'no matches',
+        [],
       );
 
-      expect(promptBuilder.buildDocumentQueryPrompt).toHaveBeenCalledWith(
+      expect(promptBuilder.buildDocumentChatPrompt).toHaveBeenCalledWith(
+        [],
         'no matches',
         [],
       );
-      expect(messages).toEqual([{ role: 'system', content: 'doc prompt' }]);
+      expect(messages).toEqual([
+        { role: 'system', content: 'doc chat prompt' },
+      ]);
     });
 
     it('propagates errors from gateway.embed (not swallowed)', async () => {
@@ -181,12 +194,12 @@ describe('DocumentRagService', () => {
       );
 
       await expect(
-        service.buildRagMessages(USER_ID, DOC_ID, 'q'),
+        service.buildRagMessages(USER_ID, DOC_ID, 'q', []),
       ).rejects.toThrow('embedding failed');
     });
 
     it('applies similarity threshold filter and limit in query builder', async () => {
-      await service.buildRagMessages(USER_ID, DOC_ID, 'q');
+      await service.buildRagMessages(USER_ID, DOC_ID, 'q', []);
 
       expect(chunkRepo._qb.setParameter).toHaveBeenCalledWith('threshold', 0.7);
       expect(chunkRepo._qb.limit).toHaveBeenCalledWith(5);

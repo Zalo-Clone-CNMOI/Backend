@@ -75,6 +75,7 @@ export class ZaiChatEngine {
           event.sender_id,
           documentId,
           event.body,
+          history,
         );
       } catch (err) {
         if (err instanceof BusinessException) {

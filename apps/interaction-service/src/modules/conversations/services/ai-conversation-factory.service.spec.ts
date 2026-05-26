@@ -73,7 +73,14 @@ describe('AiConversationFactoryService', () => {
       ),
       findOneBy: jest.fn(({ id }: { id: string }): Promise<User | null> => {
         if (id === ZAI_ID)
-          return Promise.resolve({ id: ZAI_ID, fullName: 'Zai' } as User);
+          // Zai bot now seeded with UserStatus.SYSTEM (see migration
+          // 1782200000000-set-zai-user-status-system.ts). The factory must
+          // still locate it because it doesn't filter findOneBy by status.
+          return Promise.resolve({
+            id: ZAI_ID,
+            fullName: 'Zai',
+            status: UserStatus.SYSTEM,
+          } as User);
         return Promise.resolve(null);
       }),
     } as unknown as jest.Mocked<Repository<User>>;

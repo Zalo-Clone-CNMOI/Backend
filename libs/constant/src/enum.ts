@@ -3,6 +3,8 @@ export enum UserStatus {
   INACTIVE = 'inactive',
   SUSPENDED = 'suspended',
   DELETED = 'deleted',
+  /** Reserved for bots and automated agents (e.g., the Zai assistant). */
+  SYSTEM = 'system',
 }
 
 export enum Gender {

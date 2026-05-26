@@ -448,6 +448,33 @@ describe('SSO UsersService', () => {
       expect(result.items[0].friendshipStatus).toBe('friends');
     });
 
+    it('should filter by status=ACTIVE so SYSTEM users (e.g. Zai bot) are excluded', async () => {
+      userRepository.findAndCount.mockResolvedValue([[], 0]);
+      const mockQb = {
+        where: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue([]),
+      };
+      friendshipRepository.createQueryBuilder.mockReturnValue(mockQb);
+
+      await service.searchUsers(
+        { q: 'Zai', page: 1, limit: 20 },
+        'current-user',
+      );
+
+      // Each OR-branch of the where clause must pin status to ACTIVE.
+      // SYSTEM-status users (bots) are therefore unreachable via search.
+      const calls = userRepository.findAndCount.mock.calls as Array<
+        [{ where: Array<{ status?: string }> }]
+      >;
+      const firstCallArg = calls[0][0];
+      expect(firstCallArg.where).toEqual(
+        expect.arrayContaining([expect.objectContaining({ status: 'active' })]),
+      );
+      expect(
+        firstCallArg.where.every((branch) => branch.status === 'active'),
+      ).toBe(true);
+    });
+
     it('should correctly set pagination meta hasNext/hasPrev', async () => {
       userRepository.findAndCount.mockResolvedValue([[], 100]);
 

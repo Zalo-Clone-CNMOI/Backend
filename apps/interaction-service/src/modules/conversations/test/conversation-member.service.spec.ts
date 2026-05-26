@@ -26,7 +26,11 @@ import { KAFKA_CLIENT, NotificationOutboxPublisher } from '@libs/kafka';
 import { UpdateMemberRoleDtoRoleEnum } from '@app/constant';
 
 // ─── Mock Enums ──────────────────────────────────────────
-const ConversationType = { DIRECT: 'direct', GROUP: 'group' };
+const ConversationType = {
+  DIRECT: 'direct',
+  GROUP: 'group',
+  AI_ASSISTANT: 'ai_assistant',
+};
 // ─── Helpers ─────────────────────────────────────────────
 const uuid = (n: number) => `00000000-0000-0000-0000-00000000000${n}`;
 
@@ -615,6 +619,20 @@ describe('ConversationsService', () => {
         type: ConversationType.DIRECT,
       });
       installLeaveTxMock(directConv);
+
+      await expect(
+        service.leaveConversation(uuid(2), uuid(1)),
+      ).rejects.toThrow();
+    });
+
+    it('should reject leaving AI_ASSISTANT conversation (Phase 5 W3)', async () => {
+      // Lifecycle is owned by AiConversationFactoryService; leaving would
+      // orphan the conv with only the Zai bot active. Users must use a
+      // dedicated disband endpoint (Phase 6 follow-up).
+      const aiConv = createMockConversation({
+        type: ConversationType.AI_ASSISTANT,
+      });
+      installLeaveTxMock(aiConv);
 
       await expect(
         service.leaveConversation(uuid(2), uuid(1)),

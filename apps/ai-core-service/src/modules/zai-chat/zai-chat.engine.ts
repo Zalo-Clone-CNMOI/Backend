@@ -17,6 +17,14 @@ import { DocumentRagService } from './document-rag.service';
 const HISTORY_LIMIT = 20;
 const MENTION_HISTORY_LIMIT = 10;
 
+/**
+ * Shown to the user when the LLM returns empty/whitespace content
+ * (refusal, provider glitch, truncation). Bilingual single line so we
+ * don't need language detection in the engine.
+ */
+export const ZAI_EMPTY_RESPONSE_FALLBACK =
+  'Xin lỗi, tôi chưa thể trả lời câu này. Vui lòng thử lại. / Sorry, I could not generate a response. Please try again.';
+
 @Injectable()
 export class ZaiChatEngine {
   private readonly logger = new Logger(ZaiChatEngine.name);
@@ -127,6 +135,9 @@ export class ZaiChatEngine {
         });
       }
 
+      // The LLM responded — record the call as a success regardless of
+      // whether the content was usable. Empty/whitespace content gets
+      // swapped for a fallback below so we never persist a blank bubble.
       this.aiMetrics.recordRequest(
         'zai_chat',
         result.provider,
@@ -137,10 +148,18 @@ export class ZaiChatEngine {
         true,
       );
 
+      const trimmed = result.content?.trim();
+      const body = trimmed ? result.content : ZAI_EMPTY_RESPONSE_FALLBACK;
+      if (!trimmed) {
+        this.logger.warn(
+          `[${event.trace_id}] Empty LLM response for ${event.conversation_id} (provider: ${result.provider}); using fallback`,
+        );
+      }
+
       return {
         message_id: randomUUID(),
         conversation_id: event.conversation_id,
-        body: result.content,
+        body,
         trace_id: event.trace_id ?? `zai-${Date.now()}`,
       };
     } catch (err) {

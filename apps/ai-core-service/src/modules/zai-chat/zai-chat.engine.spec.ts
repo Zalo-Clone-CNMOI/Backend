@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ZaiChatEngine } from './zai-chat.engine';
+import { ZAI_EMPTY_RESPONSE_FALLBACK, ZaiChatEngine } from './zai-chat.engine';
 import { DocumentRagService } from './document-rag.service';
 import { MessageRepository } from '@libs/scylla';
 import { AiGatewayService } from '../ai-gateway/services/ai-gateway.service';
@@ -293,6 +293,39 @@ describe('ZaiChatEngine', () => {
       expect.any(Number),
       false,
     );
+  });
+
+  // ── Empty LLM response fallback (C3) ───────────────────────────────────────
+
+  it('empty LLM content → returns fallback body, NOT null', async () => {
+    const gw = makeGateway(makeGatewayResult(''));
+    await build(undefined, gw);
+
+    const result = await engine.respond(makeEvent());
+
+    expect(result).not.toBeNull();
+    expect(result!.body).toBe(ZAI_EMPTY_RESPONSE_FALLBACK);
+    // Metrics still recorded as success — the LLM responded, the content
+    // just happened to be empty (refusal, etc.).
+    expect(aiMetrics.recordRequest).toHaveBeenCalledWith(
+      'zai_chat',
+      'openai',
+      'gpt-4o',
+      50,
+      20,
+      300,
+      true,
+    );
+  });
+
+  it('whitespace-only LLM content → also returns fallback body', async () => {
+    const gw = makeGateway(makeGatewayResult('   \n\t  '));
+    await build(undefined, gw);
+
+    const result = await engine.respond(makeEvent());
+
+    expect(result).not.toBeNull();
+    expect(result!.body).toBe(ZAI_EMPTY_RESPONSE_FALLBACK);
   });
 
   // ── Metrics ────────────────────────────────────────────────────────────────

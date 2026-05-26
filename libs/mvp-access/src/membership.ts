@@ -6,6 +6,13 @@ import { ConversationType, UpdateMemberRoleDtoRoleEnum } from '@app/constant';
 
 interface MembershipCacheEntry {
   allowed: boolean;
+  /**
+   * Conversation type co-located with the membership decision so callers
+   * (e.g., chat-service pre-send moderation gate in Phase 5) can read both
+   * from a single 2s-TTL cache entry without a second DB roundtrip.
+   * Null = user has no access OR the conversation no longer exists.
+   */
+  conversationType: ConversationType | null;
   expiresAt: number;
 }
 
@@ -214,10 +221,11 @@ export class ConversationMembershipService {
 
     if (missing.length > 0) {
       const queryResult = await this.queryAccessMap(userId, missing);
-      for (const [conversationId, allowed] of queryResult.entries()) {
-        result.set(conversationId, allowed);
+      for (const [conversationId, entry] of queryResult.entries()) {
+        result.set(conversationId, entry.allowed);
         this.accessCache.set(this.getAccessCacheKey(userId, conversationId), {
-          allowed,
+          allowed: entry.allowed,
+          conversationType: entry.conversationType,
           expiresAt: Date.now() + this.ACCESS_CACHE_TTL_MS,
         });
       }
@@ -231,25 +239,65 @@ export class ConversationMembershipService {
     );
   }
 
+  /**
+   * Return the conversation type co-cached with the membership check.
+   * Null = user has no access OR the conversation does not exist.
+   *
+   * Intended for callers that have ALREADY (or are about to) call
+   * canUserAccessConversation in the same request — the underlying query
+   * joins membership + type so both reads come from one DB roundtrip.
+   * Calling this without a prior access check still works; it just queues
+   * the same batch on its own.
+   */
+  async getCachedConversationType(
+    userId: string,
+    conversationId: string,
+  ): Promise<ConversationType | null> {
+    const cacheKey = this.getAccessCacheKey(userId, conversationId);
+    const cached = this.accessCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.conversationType;
+    }
+    // Trigger the batch path; it populates accessCache with both fields.
+    await this.queueMembershipCheck(userId, conversationId);
+    return this.accessCache.get(cacheKey)?.conversationType ?? null;
+  }
+
   private async queryAccessMap(
     userId: string,
     conversationIds: string[],
-  ): Promise<Map<string, boolean>> {
+  ): Promise<
+    Map<string, { allowed: boolean; conversationType: ConversationType | null }>
+  > {
     const memberships = await this.memberRepository.find({
       where: {
         userId,
         conversationId: In(conversationIds),
         leftAt: IsNull(),
       },
-      select: ['conversationId'],
+      relations: ['conversation'],
+      select: {
+        conversationId: true,
+        conversation: { id: true, type: true },
+      },
     });
 
-    const accessibleConversations = new Set(
-      memberships.map((m) => m.conversationId),
-    );
+    const lookup = new Map<
+      string,
+      { allowed: boolean; conversationType: ConversationType | null }
+    >();
+    for (const m of memberships) {
+      lookup.set(m.conversationId, {
+        allowed: true,
+        conversationType: m.conversation?.type ?? null,
+      });
+    }
 
     return new Map(
-      conversationIds.map((id) => [id, accessibleConversations.has(id)]),
+      conversationIds.map((id) => [
+        id,
+        lookup.get(id) ?? { allowed: false, conversationType: null },
+      ]),
     );
   }
 

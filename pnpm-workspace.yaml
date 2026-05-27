@@ -10,6 +10,8 @@ allowBuilds:
   bcrypt: true
   protobufjs: true
   sharp: true
+minimumReleaseAgeExclude:
+  - tmp@0.2.6
 overrides:
   # ── CVE / audit remediations ─────────────────────────────────────────────
   # Each entry pins the minimum safe version for a given vulnerable range.
@@ -59,3 +61,6 @@ overrides:
   path-to-regexp@>=8.0.0 <8.4.0: '>=8.4.0'
 
   '@nestjs/core@<=11.1.17': '>=11.1.18'
+
+  # tmp — path traversal via unsanitized prefix/postfix (transitive via exceljs); GHSA-ph9p-34f9-6g65
+  tmp@<0.2.6: '>=0.2.6'

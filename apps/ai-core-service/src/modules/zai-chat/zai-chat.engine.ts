@@ -14,6 +14,7 @@ import type {
   LlmCompletionResult,
 } from '../ai-gateway/interfaces';
 import { DocumentRagService } from './document-rag.service';
+import { ZaiMemoryService } from './zai-memory.service';
 import {
   type ChatStrategy,
   DocumentChatStrategy,
@@ -50,6 +51,7 @@ export class ZaiChatEngine {
     private readonly promptBuilder: PromptBuilderService,
     private readonly aiMetrics: AiMetricsService,
     private readonly documentRag: DocumentRagService,
+    private readonly zaiMemory: ZaiMemoryService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {
     this.documentStrategy = new DocumentChatStrategy(this.documentRag);
@@ -104,6 +106,15 @@ export class ZaiChatEngine {
         fetchErr,
       );
     }
+
+    // L2 rolling-summary memory (C8). No-op + zero I/O when the flag is OFF
+    // (default), so this preserves the pure-L1 behaviour in production.
+    history = await this.zaiMemory.withRollingSummary(
+      event.conversation_id,
+      event.sender_id,
+      history,
+      event.trace_id,
+    );
 
     const strategy = this.resolveStrategy(event);
     const outcome = await strategy.buildMessages(event, history);

@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ZAI_EMPTY_RESPONSE_FALLBACK, ZaiChatEngine } from './zai-chat.engine';
 import { DocumentRagService } from './document-rag.service';
+import { ZaiMemoryService } from './zai-memory.service';
 import { MessageRepository } from '@libs/scylla';
 import { AiGatewayService } from '../ai-gateway/services/ai-gateway.service';
 import { PromptBuilderService } from '../ai-gateway/services/prompt-builder.service';
@@ -120,6 +121,7 @@ describe('ZaiChatEngine', () => {
   let promptBuilder: jest.Mocked<PromptBuilderService>;
   let aiMetrics: jest.Mocked<AiMetricsService>;
   let documentRag: jest.Mocked<DocumentRagService>;
+  let zaiMemory: jest.Mocked<ZaiMemoryService>;
 
   async function build(
     repoOverride?: jest.Mocked<MessageRepository>,
@@ -131,6 +133,12 @@ describe('ZaiChatEngine', () => {
     promptBuilder = makePromptBuilder();
     aiMetrics = makeAiMetrics();
     documentRag = ragOverride ?? makeDocumentRag();
+    // L2 disabled by default: pass the L1 history straight through.
+    zaiMemory = {
+      withRollingSummary: jest.fn((_c, _u, history: LlmChatMessage[]) =>
+        Promise.resolve(history),
+      ),
+    } as unknown as jest.Mocked<ZaiMemoryService>;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -140,6 +148,7 @@ describe('ZaiChatEngine', () => {
         { provide: PromptBuilderService, useValue: promptBuilder },
         { provide: AiMetricsService, useValue: aiMetrics },
         { provide: DocumentRagService, useValue: documentRag },
+        { provide: ZaiMemoryService, useValue: zaiMemory },
         { provide: APP_CONFIG, useValue: { zaiBotUserId: ZAI_BOT_ID } },
       ],
     }).compile();
@@ -522,5 +531,34 @@ describe('ZaiChatEngine', () => {
     const result = await engine.respond(event);
 
     expect(result!.reply.body_format).toBeUndefined();
+  });
+
+  // ── Phase 6 C8: L2 rolling-summary memory hook ──────────────────────────────
+
+  it('passes the L1 history through ZaiMemoryService and feeds the result to the prompt', async () => {
+    const items = [makeMsg('msg-1', USER_ID, 'recent question')];
+    const repo = makeMessageRepo(items);
+    await build(repo);
+
+    // Simulate L2 enabled: prepend a rolling-summary system message.
+    const summaryMsg: LlmChatMessage = {
+      role: 'system',
+      content: 'Summary of earlier conversation: prior topics.',
+    };
+    zaiMemory.withRollingSummary.mockImplementation((_c, _u, history) =>
+      Promise.resolve([summaryMsg, ...history]),
+    );
+
+    await engine.respond(makeEvent());
+
+    expect(zaiMemory.withRollingSummary).toHaveBeenCalledWith(
+      CONV_ID,
+      USER_ID,
+      expect.any(Array),
+      'trace-001',
+    );
+    const calls = (promptBuilder.buildZaiChatPrompt as jest.Mock).mock
+      .calls as [LlmChatMessage[]][];
+    expect(calls[0][0]).toContainEqual(summaryMsg);
   });
 });

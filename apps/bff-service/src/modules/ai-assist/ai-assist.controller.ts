@@ -5,6 +5,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  ParseUUIDPipe,
   Post,
 } from '@nestjs/common';
 import {
@@ -78,11 +79,8 @@ export class AiAssistController {
   @ApiResponse({ status: 404, description: 'Conversation not found' })
   async disbandAiConversation(
     @AccessToken() token: string,
-    @Param('conversationId') conversationId: string,
+    @Param('conversationId', ParseUUIDPipe) conversationId: string,
   ): Promise<{ message: string }> {
-    if (!conversationId?.trim()) {
-      throw BusinessException.badRequest('conversationId is required');
-    }
     return this.service.disbandAiConversation(token, conversationId);
   }
 

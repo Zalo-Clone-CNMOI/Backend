@@ -455,10 +455,15 @@ describe('AiConsumer', () => {
     it('emits typing-ON then calls engine then publishes chatMessage on success', async () => {
       const event = makeZaiEvent();
       zaiChatEngine.respond.mockResolvedValue({
-        message_id: 'reply-msg-1',
-        conversation_id: 'conv-z',
-        body: 'hello back',
-        trace_id: 'trace-z',
+        reply: {
+          message_id: 'reply-msg-1',
+          conversation_id: 'conv-z',
+          body: 'hello back',
+          trace_id: 'trace-z',
+        },
+        provider: 'openai',
+        tokensIn: 12,
+        tokensOut: 8,
       });
 
       await consumer.onZaiChatRequest(event);
@@ -475,6 +480,15 @@ describe('AiConsumer', () => {
       expect(chatPublisher.send).toHaveBeenCalledWith(
         expect.objectContaining({ message_id: 'reply-msg-1' }),
       );
+
+      // S1: AiStreamComplete carries real provider + summed tokens.
+      const completeCalls = emitCalls.filter(
+        ([topic]) => topic === KafkaTopics.AiStreamComplete,
+      );
+      expect(completeCalls[0][1]).toMatchObject({
+        provider: 'openai',
+        total_tokens: 20,
+      });
     });
 
     it('emits AiStreamChunk for each onChunk callback', async () => {
@@ -487,17 +501,26 @@ describe('AiConsumer', () => {
             await onChunk(' world');
           }
           return {
-            message_id: 'reply-msg-2',
-            conversation_id: 'conv-z',
-            body: 'hello world',
-            trace_id: 'trace-z',
+            reply: {
+              message_id: 'reply-msg-2',
+              conversation_id: 'conv-z',
+              body: 'hello world',
+              trace_id: 'trace-z',
+            },
+            provider: 'openai',
+            tokensIn: 5,
+            tokensOut: 7,
           };
         },
       );
 
       await consumer.onZaiChatRequest(event);
 
-      const emitCalls = publisher.emit.mock.calls as [string, unknown][];
+      const emitCalls = publisher.emit.mock.calls as [
+        string,
+        unknown,
+        string?,
+      ][];
       const chunkCalls = emitCalls.filter(
         ([topic]) => topic === KafkaTopics.AiStreamChunk,
       );
@@ -510,6 +533,11 @@ describe('AiConsumer', () => {
         chunk_index: 1,
         content: ' world',
       });
+      // W6: chunks keyed by stream_id for partition-ordered delivery.
+      const chunkStreamId = (chunkCalls[0][1] as { stream_id: string })
+        .stream_id;
+      expect(chunkCalls[0][2]).toBe(chunkStreamId);
+      expect(chunkCalls[1][2]).toBe(chunkStreamId);
 
       // AiStreamComplete with message_id matching the reply
       const completeCalls = emitCalls.filter(
@@ -563,6 +591,7 @@ describe('AiConsumer', () => {
 
       expect(cacheService.releaseMentionCooldown).toHaveBeenCalledWith(
         'conv-z',
+        'user-z',
       );
       expect(cacheService.releaseMentionCooldown).toHaveBeenCalledTimes(1);
     });
@@ -587,10 +616,15 @@ describe('AiConsumer', () => {
 
     it('does NOT release the cooldown on successful reply', async () => {
       zaiChatEngine.respond.mockResolvedValue({
-        message_id: 'reply-1',
-        conversation_id: 'conv-z',
-        body: 'ok',
-        trace_id: 'trace-z',
+        reply: {
+          message_id: 'reply-1',
+          conversation_id: 'conv-z',
+          body: 'ok',
+          trace_id: 'trace-z',
+        },
+        provider: 'openai',
+        tokensIn: 1,
+        tokensOut: 1,
       });
 
       await consumer.onZaiChatRequest(
@@ -598,6 +632,41 @@ describe('AiConsumer', () => {
       );
 
       expect(cacheService.releaseMentionCooldown).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── Phase 6 C12: stream abort ──────────────────────────────────────────────
+
+  describe('onAiStreamAbort', () => {
+    function getActiveStreams(): Map<string, AbortController> {
+      return (
+        consumer as unknown as { activeStreams: Map<string, AbortController> }
+      ).activeStreams;
+    }
+
+    it('aborts the matching in-flight stream controller', () => {
+      const controller = new AbortController();
+      getActiveStreams().set('stream-x', controller);
+
+      consumer.onAiStreamAbort({
+        stream_id: 'stream-x',
+        conversation_id: 'conv-z',
+        reason: 'client_disconnect',
+        aborted_at: Date.now(),
+      });
+
+      expect(controller.signal.aborted).toBe(true);
+    });
+
+    it('is a no-op for an unknown stream (e.g. owned by another instance)', () => {
+      expect(() =>
+        consumer.onAiStreamAbort({
+          stream_id: 'unknown-stream',
+          conversation_id: 'conv-z',
+          reason: 'client_disconnect',
+          aborted_at: Date.now(),
+        }),
+      ).not.toThrow();
     });
   });
 });

@@ -225,4 +225,83 @@ describe('OpenAiProvider.embedBatch', () => {
       );
     });
   });
+
+  // ── Phase 6 C12: stream abort ──────────────────────────────────────────────
+
+  describe('completeStream abort', () => {
+    function makeStream() {
+      return {
+        // eslint-disable-next-line @typescript-eslint/require-await
+        async *[Symbol.asyncIterator]() {
+          yield {
+            choices: [{ delta: { content: 'hello' }, finish_reason: null }],
+          };
+          yield {
+            choices: [{ delta: { content: ' world' }, finish_reason: 'stop' }],
+          };
+        },
+      };
+    }
+
+    it('forwards the abort signal to the SDK request', async () => {
+      const provider = await buildProvider();
+      const create = jest.fn().mockResolvedValue(makeStream());
+      (provider as unknown as Record<string, unknown>).client = {
+        chat: { completions: { create } },
+      };
+      const controller = new AbortController();
+
+      await provider.completeStream(
+        { messages: [{ role: 'user', content: 'hi' }] },
+        jest.fn(),
+        controller.signal,
+      );
+
+      expect(create).toHaveBeenCalledWith(expect.anything(), {
+        signal: controller.signal,
+      });
+    });
+
+    it('stops emitting and returns the partial when the signal is already aborted', async () => {
+      const provider = await buildProvider();
+      const create = jest.fn().mockResolvedValue(makeStream());
+      (provider as unknown as Record<string, unknown>).client = {
+        chat: { completions: { create } },
+      };
+      const controller = new AbortController();
+      controller.abort();
+      const onChunk = jest.fn();
+
+      const result = await provider.completeStream(
+        { messages: [{ role: 'user', content: 'hi' }] },
+        onChunk,
+        controller.signal,
+      );
+
+      // Pre-aborted → loop breaks on the first iteration, nothing emitted.
+      expect(onChunk).not.toHaveBeenCalled();
+      expect(result.content).toBe('');
+    });
+
+    it('returns the partial (does not throw) when the SDK throws after abort', async () => {
+      const provider = await buildProvider();
+      const controller = new AbortController();
+      controller.abort();
+      const create = jest
+        .fn()
+        .mockRejectedValue(new Error('Request was aborted'));
+      (provider as unknown as Record<string, unknown>).client = {
+        chat: { completions: { create } },
+      };
+
+      const result = await provider.completeStream(
+        { messages: [{ role: 'user', content: 'hi' }] },
+        jest.fn(),
+        controller.signal,
+      );
+
+      expect(result.content).toBe('');
+      expect(result.provider).toBe(provider.name);
+    });
+  });
 });

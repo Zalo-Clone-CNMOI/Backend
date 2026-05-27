@@ -99,6 +99,7 @@ export const KafkaTopics = {
   AiDocumentQueryResult: 'ai.document.query.result',
   AiStreamChunk: 'ai.stream.chunk',
   AiStreamComplete: 'ai.stream.complete',
+  AiStreamAbort: 'ai.stream.abort',
   AiEntityDetectionRequest: 'ai.entity.detection.request',
   AiEntityDetectionResult: 'ai.entity.detection.result',
   AiEntityInfoRequest: 'ai.entity.info.request',

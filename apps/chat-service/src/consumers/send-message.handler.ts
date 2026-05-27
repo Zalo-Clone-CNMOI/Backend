@@ -502,10 +502,11 @@ export class SendMessageHandler {
 
           const acquired = await this.cacheService.acquireZaiMentionCooldown(
             params.conversationId,
+            params.senderId,
           );
           if (!acquired) {
             this.shared.logger.debug(
-              `[${params.traceId}] @Zai mention rate-limited for conversation: ${params.conversationId}`,
+              `[${params.traceId}] @Zai mention rate-limited for conversation: ${params.conversationId} user: ${params.senderId}`,
             );
             return;
           }

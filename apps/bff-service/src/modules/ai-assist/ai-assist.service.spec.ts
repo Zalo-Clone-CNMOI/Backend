@@ -60,6 +60,7 @@ describe('AiAssistService', () => {
           useValue: {
             getConversationById: jest.fn(),
             getOrCreateZaiConversation: jest.fn(),
+            disbandAiConversation: jest.fn(),
           },
         },
         {
@@ -185,6 +186,39 @@ describe('AiAssistService', () => {
       await expect(
         service.getOrCreateZaiConversation('bad-token'),
       ).rejects.toThrow('network error');
+    });
+  });
+
+  // ── disbandAiConversation (Phase 6 C11) ────────────────────────────────────
+
+  describe('disbandAiConversation', () => {
+    it('delegates to interactionClient and returns the message', async () => {
+      (
+        interactionClient as unknown as { disbandAiConversation: jest.Mock }
+      ).disbandAiConversation.mockResolvedValue({
+        message: 'AI conversation disbanded successfully',
+      });
+
+      const result = await service.disbandAiConversation(
+        'bearer-token',
+        'conv-ai-1',
+      );
+
+      expect(
+        (interactionClient as unknown as { disbandAiConversation: jest.Mock })
+          .disbandAiConversation,
+      ).toHaveBeenCalledWith('bearer-token', 'conv-ai-1');
+      expect(result.message).toBe('AI conversation disbanded successfully');
+    });
+
+    it('propagates error when interactionClient throws', async () => {
+      (
+        interactionClient as unknown as { disbandAiConversation: jest.Mock }
+      ).disbandAiConversation.mockRejectedValue(new Error('forbidden'));
+
+      await expect(
+        service.disbandAiConversation('bad-token', 'conv-ai-1'),
+      ).rejects.toThrow('forbidden');
     });
   });
 });

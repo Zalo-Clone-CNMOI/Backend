@@ -35,6 +35,16 @@ export class AiAssistService {
     });
   }
 
+  async disbandAiConversation(
+    accessToken: string,
+    conversationId: string,
+  ): Promise<{ message: string }> {
+    return this.interactionClient.disbandAiConversation(
+      accessToken,
+      conversationId,
+    );
+  }
+
   async catchUp(
     token: string,
     userId: string,

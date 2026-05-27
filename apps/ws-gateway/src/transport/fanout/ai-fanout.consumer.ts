@@ -16,10 +16,14 @@ import {
   type AiZaiTypingEvent,
 } from '@libs/contracts';
 import { ChatGateway } from '../../socket/chat.gateway';
+import { ActiveStreamTracker } from '../../socket/active-stream.tracker';
 
 @Controller()
 export class AiFanoutConsumer {
-  constructor(private readonly gateway: ChatGateway) {}
+  constructor(
+    private readonly gateway: ChatGateway,
+    private readonly streamTracker: ActiveStreamTracker,
+  ) {}
 
   /**
    * Handle AI Moderation Result
@@ -158,6 +162,9 @@ export class AiFanoutConsumer {
       is_final: payload.is_final,
     };
     if (payload.feature === 'zai_chat') {
+      // Track the stream against its conversation so the gateway can abort it
+      // if the last recipient disconnects (Phase 6 C12).
+      this.streamTracker.track(payload.stream_id, payload.conversation_id);
       this.gateway.broadcastToConversation(
         payload.conversation_id,
         WsEvents.AiStreamChunk,
@@ -185,6 +192,8 @@ export class AiFanoutConsumer {
       total_chunks: payload.total_chunks,
     };
     if (payload.feature === 'zai_chat') {
+      // Stream finished — stop tracking it (Phase 6 C12).
+      this.streamTracker.complete(payload.stream_id);
       this.gateway.broadcastToConversation(
         payload.conversation_id,
         WsEvents.AiStreamComplete,

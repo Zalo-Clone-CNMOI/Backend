@@ -443,3 +443,100 @@ export async function disbandConversationCore(
 
   return { message: 'Conversation disbanded successfully' };
 }
+
+/**
+ * Disband (delete) an AI_ASSISTANT conversation. Companion to the Phase 5 W3
+ * guard that blocks *leaving* AI conversations — the creator can dispose of a
+ * Zai chat through this dedicated path.
+ *
+ * Differs from {@link disbandConversationCore}:
+ *  - Type guard is AI_ASSISTANT, not GROUP.
+ *  - Ownership is the creator link (`createdById`), since AI conversations have
+ *    no OWNER role — both the user and Zai are MEMBER.
+ *  - No group-invite teardown (AI conversations have none).
+ *  - Deletes the Redis AI-routing marker so chat-service stops routing to Zai.
+ *  - No system message / push notification: the only other member is the Zai
+ *    bot, and the creator initiated the disband themselves.
+ */
+export async function disbandAiConversationCore(
+  deps: {
+    conversationRepository: Repository<Conversation>;
+    kafkaClient: ClientKafka;
+    cacheService: CacheService;
+  },
+  userId: string,
+  conversationId: string,
+): Promise<{ message: string }> {
+  const { activeMemberIds, disbandAt } =
+    await deps.conversationRepository.manager.transaction(async (manager) => {
+      const conversationRepository = manager.getRepository(Conversation);
+      const memberRepository = manager.getRepository(ConversationMember);
+
+      const conversation = await conversationRepository
+        .createQueryBuilder('conversation')
+        .setLock('pessimistic_write')
+        .where('conversation.id = :conversationId', { conversationId })
+        .getOne();
+
+      if (!conversation) {
+        throw BusinessException.notFound(ErrorCode.CONVERSATION_NOT_FOUND);
+      }
+
+      if (conversation.type !== ConversationType.AI_ASSISTANT) {
+        throw BusinessException.badRequest(ErrorCode.CONVERSATION_INVALID_TYPE);
+      }
+
+      // AI conversations have no OWNER role, so ownership is the creator link.
+      if (conversation.createdById !== userId) {
+        throw BusinessException.forbidden(
+          ErrorCode.CONVERSATION_PERMISSION_DENIED,
+        );
+      }
+
+      const disbandAt = new Date();
+      conversation.createdById = null;
+      await conversationRepository.save(conversation);
+
+      const activeMembers = await memberRepository.find({
+        where: {
+          conversationId,
+          leftAt: IsNull(),
+        },
+      });
+      for (const member of activeMembers) {
+        member.leftAt = disbandAt;
+      }
+      if (activeMembers.length > 0) {
+        await memberRepository.save(activeMembers);
+      }
+
+      return {
+        activeMemberIds: activeMembers.map((member) => member.userId),
+        disbandAt,
+      };
+    });
+
+  // Stop chat-service from routing further messages to Zai for this id.
+  await deps.cacheService.deleteAiConversationContext(conversationId);
+
+  const disbandedEvent: ConversationDisbandedEvent = {
+    conversation_id: conversationId,
+    disbanded_by: userId,
+    member_ids: activeMemberIds,
+    disbanded_at: disbandAt.getTime(),
+    trace_id: `ai-conversation-disbanded:${conversationId}`,
+  };
+  deps.kafkaClient.emit(KafkaTopics.ConversationDisbanded, disbandedEvent);
+
+  await deps.cacheService.invalidateConversation(
+    conversationId,
+    activeMemberIds,
+  );
+  await Promise.all(
+    activeMemberIds.map((memberId) =>
+      deps.cacheService.invalidateConversationList(memberId),
+    ),
+  );
+
+  return { message: 'AI conversation disbanded successfully' };
+}

@@ -1,5 +1,7 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import type { RedisClientType } from 'redis';
+import type { Counter } from 'prom-client';
+import { MetricsService } from '@libs/metrics';
 import type {
   AiConversationContext,
   ModerationLabelType,
@@ -54,10 +56,29 @@ export class CacheService {
   private readonly FRIEND_LIST_TTL = 600; // 10 minutes
   private readonly MESSAGES_RECENT_TTL = 300; // 5 minutes
 
+  /**
+   * Counter for ABNORMAL AI-conversation context reads — Redis threw or
+   * the stored JSON was corrupt, both of which silently disable AI routing
+   * for that conversation (fail-safe returns null). A plain key-miss is
+   * NORMAL and does NOT increment. Lazily created only when MetricsService
+   * is available (it's optional so services without MetricsModule still
+   * construct CacheService).
+   */
+  private readonly aiConvCacheErrorCounter?: Counter;
+
   constructor(
     @Inject(REDIS_CLIENT)
     private readonly redisClient: RedisClientType,
-  ) {}
+    @Optional() private readonly metrics?: MetricsService,
+  ) {
+    if (this.metrics) {
+      this.aiConvCacheErrorCounter = this.metrics.getCounter(
+        'ai_conv_cache_error_total',
+        'AI conversation context cache failures (Redis error or corrupt JSON) that degraded AI routing',
+        ['reason'],
+      );
+    }
+  }
 
   async get<T>(key: string): Promise<T | null> {
     try {
@@ -342,48 +363,6 @@ export class CacheService {
   // AI Conversation Markers
   // ===================================
 
-  /**
-   * @deprecated Phase 4 replaces this with {@link setAiConversationContext},
-   * which stores the full AI context (feature, document_id, etc.) as JSON.
-   * Kept only for rollback safety with older chat-service builds. Do NOT
-   * call from new code — it would downgrade an existing JSON marker to '1'
-   * and erase the feature/document_id metadata.
-   */
-  async setAiConversationMarker(conversationId: string): Promise<void> {
-    try {
-      await this.redisClient.set(
-        `${this.AI_CONV_MARKER_PREFIX}${conversationId}`,
-        '1',
-      );
-    } catch (error) {
-      this.logger.error(
-        `Failed to set AI conversation marker for ${conversationId}:`,
-        error,
-      );
-    }
-  }
-
-  /**
-   * @deprecated Phase 4 replaces this with {@link getAiConversationContext},
-   * which returns the routing context (feature, document_id) instead of just
-   * a boolean. Kept for rollback safety — older chat-service builds may still
-   * use this EXISTS check.
-   */
-  async isAiConversation(conversationId: string): Promise<boolean> {
-    try {
-      const count = await this.redisClient.exists(
-        `${this.AI_CONV_MARKER_PREFIX}${conversationId}`,
-      );
-      return count > 0;
-    } catch (error) {
-      this.logger.error(
-        `Failed to check AI conversation marker for ${conversationId}:`,
-        error,
-      );
-      return false;
-    }
-  }
-
   async setAiConversationContext(
     conversationId: string,
     context: AiConversationContext,
@@ -404,6 +383,25 @@ export class CacheService {
     }
   }
 
+  /**
+   * Remove the AI-routing marker so chat-service stops routing messages to
+   * Zai for this conversation (used when an AI conversation is disbanded).
+   * Best-effort: a delete failure leaves a stale marker that simply lets the
+   * already-removed members never reach the gone conversation — no harm.
+   */
+  async deleteAiConversationContext(conversationId: string): Promise<void> {
+    try {
+      await this.redisClient.del(
+        `${this.AI_CONV_MARKER_PREFIX}${conversationId}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to delete AI conversation context for ${conversationId}:`,
+        error,
+      );
+    }
+  }
+
   async getAiConversationContext(
     conversationId: string,
   ): Promise<AiConversationContext | null> {
@@ -418,6 +416,7 @@ export class CacheService {
       try {
         return JSON.parse(raw) as AiConversationContext;
       } catch (parseErr) {
+        this.aiConvCacheErrorCounter?.labels('corrupt_json').inc();
         this.logger.error(
           `Failed to parse AI conversation context for ${conversationId}`,
           {
@@ -430,6 +429,9 @@ export class CacheService {
         return null;
       }
     } catch (error) {
+      // Redis threw — abnormal. A plain key-miss returns null ABOVE without
+      // reaching this block, so this counter only reflects real failures.
+      this.aiConvCacheErrorCounter?.labels('redis_error').inc();
       this.logger.error(
         `Failed to get AI conversation context for ${conversationId}:`,
         error,
@@ -438,29 +440,38 @@ export class CacheService {
     }
   }
 
+  private zaiMentionCooldownKey(
+    conversationId: string,
+    userId: string,
+  ): string {
+    return `zai:mention:cd:${conversationId}:${userId}`;
+  }
+
   /**
-   * Conversation-wide @Zai mention rate limit. One concurrent Zai reply
-   * per conversation per 5s window — intentionally NOT per-user.
+   * Per-user @Zai mention rate limit. One concurrent Zai reply per
+   * (conversation, user) per 5s window.
    *
-   * Why: prevents thundering-herd in active group chats where multiple
-   * users could @Zai simultaneously and each spawn an LLM call. A future
-   * phase may switch to per-user (`{conversationId}:{senderId}`) if
-   * telemetry shows the conversation-wide cap is too aggressive.
+   * Phase 6: changed from conversation-wide to per-user so one member's
+   * @Zai mention does not rate-limit a different member in the same group.
+   * Key: `zai:mention:cd:{conversationId}:{userId}`.
    *
    * Fail-open: returns `true` on Redis error so a transient Redis blip
    * does NOT silently swallow every @Zai mention.
    */
-  async acquireZaiMentionCooldown(conversationId: string): Promise<boolean> {
+  async acquireZaiMentionCooldown(
+    conversationId: string,
+    userId: string,
+  ): Promise<boolean> {
     try {
       const result = await this.redisClient.set(
-        `zai:mention:cd:${conversationId}`,
+        this.zaiMentionCooldownKey(conversationId, userId),
         '1',
         { NX: true, EX: 5 },
       );
       return result === 'OK';
     } catch (error) {
       this.logger.error(
-        `Failed to acquire Zai mention cooldown for ${conversationId}:`,
+        `Failed to acquire Zai mention cooldown for ${conversationId}/${userId}:`,
         error,
       );
       return true;
@@ -477,12 +488,17 @@ export class CacheService {
    * will expire naturally in <5s anyway, so a release failure is a
    * minor UX papercut, not a correctness issue.
    */
-  async releaseMentionCooldown(conversationId: string): Promise<void> {
+  async releaseMentionCooldown(
+    conversationId: string,
+    userId: string,
+  ): Promise<void> {
     try {
-      await this.redisClient.del(`zai:mention:cd:${conversationId}`);
+      await this.redisClient.del(
+        this.zaiMentionCooldownKey(conversationId, userId),
+      );
     } catch (error) {
       this.logger.warn(
-        `Failed to release Zai mention cooldown for ${conversationId}:`,
+        `Failed to release Zai mention cooldown for ${conversationId}/${userId}:`,
         error,
       );
     }

@@ -40,6 +40,7 @@ describe('AiAssistController', () => {
           useValue: {
             catchUp: jest.fn(),
             getOrCreateZaiConversation: jest.fn(),
+            disbandAiConversation: jest.fn(),
           },
         },
       ],
@@ -65,6 +66,27 @@ describe('AiAssistController', () => {
       );
       expect(result).toEqual(expected);
     });
+  });
+
+  describe('disbandAiConversation', () => {
+    it('delegates to service.disbandAiConversation with (token, conversationId)', async () => {
+      (service.disbandAiConversation as jest.Mock).mockResolvedValue({
+        message: 'AI conversation disbanded successfully',
+      });
+
+      const result = await controller.disbandAiConversation(
+        'token-xyz',
+        'conv-ai-1',
+      );
+
+      expect(service.disbandAiConversation).toHaveBeenCalledWith(
+        'token-xyz',
+        'conv-ai-1',
+      );
+      expect(result.message).toBe('AI conversation disbanded successfully');
+    });
+    // conversationId validation is enforced by ParseUUIDPipe at the route layer
+    // (framework-tested), so there is no in-method whitespace guard to unit test.
   });
 
   describe('getCatchUp', () => {

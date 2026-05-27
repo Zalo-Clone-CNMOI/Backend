@@ -5,7 +5,10 @@ import { WsException } from '@nestjs/websockets';
 describe('ChatGateway', () => {
   type QrBindSocket = Parameters<ChatGateway['handleQrBindRequest']>[0];
 
-  const kafka = { connect: jest.fn().mockResolvedValue(undefined) };
+  const kafka = {
+    connect: jest.fn().mockResolvedValue(undefined),
+    emit: jest.fn(),
+  };
   const jwtService = { verifyToken: jest.fn() };
   const redisService = {
     setQrSocketBinding: jest.fn().mockResolvedValue(undefined),
@@ -44,6 +47,11 @@ describe('ChatGateway', () => {
     clearTyping: jest.fn(),
     handleTyping: jest.fn(),
   };
+  const streamTracker = {
+    track: jest.fn(),
+    complete: jest.fn(),
+    getActiveStreams: jest.fn().mockReturnValue([]),
+  };
 
   let gateway: ChatGateway;
 
@@ -58,6 +66,7 @@ describe('ChatGateway', () => {
       presenceHandler as never,
       aiHandler as never,
       typingHandler as never,
+      streamTracker as never,
     );
   });
 
@@ -73,6 +82,7 @@ describe('ChatGateway', () => {
         },
         data: {},
         join,
+        on: jest.fn(),
       } as never;
 
       gateway.handleConnection(socket);
@@ -104,6 +114,97 @@ describe('ChatGateway', () => {
 
       expect(join).not.toHaveBeenCalledWith('auth:clients');
       expect(presenceHandler.handleConnect).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── Phase 6 C12: abort Zai streams on last-recipient disconnect ────────────
+
+  describe('disconnect → AiStreamAbort', () => {
+    function makeSocket(socketId: string, rooms: string[]) {
+      return { id: socketId, rooms: new Set(rooms) } as never;
+    }
+
+    /** Invoke the private disconnect-abort routine directly. */
+    function abortFor(socket: never): Promise<void> {
+      return (
+        gateway as unknown as {
+          abortStreamsForDepartingSocket: (s: never) => Promise<void>;
+        }
+      ).abortStreamsForDepartingSocket(socket);
+    }
+
+    function setServer(fetchResult?: { id: string }[]) {
+      const fetchSockets = jest.fn().mockResolvedValue(fetchResult ?? []);
+      (gateway as unknown as { server: unknown }).server = {
+        in: jest.fn().mockReturnValue({ fetchSockets }),
+      };
+    }
+
+    it('handleConnection wires a "disconnecting" listener', () => {
+      jwtService.verifyToken.mockReturnValue({ userId: 'user-1' });
+      const on = jest.fn();
+      const socket = {
+        id: 'socket-1',
+        handshake: {
+          headers: { authorization: 'Bearer valid-token' },
+          auth: {},
+        },
+        data: {},
+        join: jest.fn(),
+        on,
+      } as never;
+
+      gateway.handleConnection(socket);
+
+      expect(on).toHaveBeenCalledWith('disconnecting', expect.any(Function));
+    });
+
+    it('publishes AiStreamAbort when the last recipient of a conversation leaves', async () => {
+      streamTracker.getActiveStreams.mockReturnValue(['stream-1']);
+      // Only the departing socket remains in the room.
+      setServer([{ id: 'socket-1' }]);
+
+      await abortFor(makeSocket('socket-1', ['conv:conv-1', 'user:user-1']));
+
+      const abortCall = (kafka.emit.mock.calls as [string, unknown][]).find(
+        ([topic]) => topic === 'ai.stream.abort',
+      );
+      expect(abortCall).toBeDefined();
+      const envelope = abortCall![1] as {
+        key: string;
+        value: Record<string, unknown>;
+      };
+      expect(envelope.key).toBe('stream-1');
+      expect(envelope.value).toMatchObject({
+        stream_id: 'stream-1',
+        conversation_id: 'conv-1',
+        reason: 'client_disconnect',
+      });
+      expect(streamTracker.complete).toHaveBeenCalledWith('stream-1');
+    });
+
+    it('does NOT abort when another recipient remains in the conversation', async () => {
+      streamTracker.getActiveStreams.mockReturnValue(['stream-1']);
+      setServer([{ id: 'socket-1' }, { id: 'socket-2' }]);
+
+      await abortFor(makeSocket('socket-1', ['conv:conv-1']));
+
+      expect(kafka.emit).not.toHaveBeenCalledWith(
+        'ai.stream.abort',
+        expect.anything(),
+      );
+    });
+
+    it('does nothing when the conversation has no active streams', async () => {
+      streamTracker.getActiveStreams.mockReturnValue([]);
+      setServer([]);
+
+      await abortFor(makeSocket('socket-1', ['conv:conv-1']));
+
+      expect(kafka.emit).not.toHaveBeenCalledWith(
+        'ai.stream.abort',
+        expect.anything(),
+      );
     });
   });
 

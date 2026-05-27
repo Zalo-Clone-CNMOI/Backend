@@ -562,6 +562,11 @@ describe('SendMessageHandler', () => {
         trigger: 'mention',
       });
       expect(aiCalls[0][1]).not.toHaveProperty('ai_context');
+      // C9: cooldown is acquired per-(conversation, user), not conversation-wide.
+      expect(cacheService.acquireZaiMentionCooldown).toHaveBeenCalledWith(
+        payload.conversation_id,
+        payload.sender_id,
+      );
     });
 
     it('Group @Zai mention rate-limited: skips emit when cooldown busy', async () => {

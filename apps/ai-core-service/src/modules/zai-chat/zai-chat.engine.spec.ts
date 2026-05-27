@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ZAI_EMPTY_RESPONSE_FALLBACK, ZaiChatEngine } from './zai-chat.engine';
 import { DocumentRagService } from './document-rag.service';
+import { ZaiMemoryService } from './zai-memory.service';
 import { MessageRepository } from '@libs/scylla';
 import { AiGatewayService } from '../ai-gateway/services/ai-gateway.service';
 import { PromptBuilderService } from '../ai-gateway/services/prompt-builder.service';
@@ -120,6 +121,7 @@ describe('ZaiChatEngine', () => {
   let promptBuilder: jest.Mocked<PromptBuilderService>;
   let aiMetrics: jest.Mocked<AiMetricsService>;
   let documentRag: jest.Mocked<DocumentRagService>;
+  let zaiMemory: jest.Mocked<ZaiMemoryService>;
 
   async function build(
     repoOverride?: jest.Mocked<MessageRepository>,
@@ -131,6 +133,12 @@ describe('ZaiChatEngine', () => {
     promptBuilder = makePromptBuilder();
     aiMetrics = makeAiMetrics();
     documentRag = ragOverride ?? makeDocumentRag();
+    // L2 disabled by default: pass the L1 history straight through.
+    zaiMemory = {
+      withRollingSummary: jest.fn((_c, _u, history: LlmChatMessage[]) =>
+        Promise.resolve(history),
+      ),
+    } as unknown as jest.Mocked<ZaiMemoryService>;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -140,6 +148,7 @@ describe('ZaiChatEngine', () => {
         { provide: PromptBuilderService, useValue: promptBuilder },
         { provide: AiMetricsService, useValue: aiMetrics },
         { provide: DocumentRagService, useValue: documentRag },
+        { provide: ZaiMemoryService, useValue: zaiMemory },
         { provide: APP_CONFIG, useValue: { zaiBotUserId: ZAI_BOT_ID } },
       ],
     }).compile();
@@ -188,11 +197,15 @@ describe('ZaiChatEngine', () => {
       expect.objectContaining({ maxTokens: 1024, temperature: 0.7 }),
     );
     expect(result).not.toBeNull();
-    expect(result!.conversation_id).toBe(CONV_ID);
-    expect(result!.body).toBe('Sure, I can help!');
-    expect(result!.message_id).toMatch(
+    expect(result!.reply.conversation_id).toBe(CONV_ID);
+    expect(result!.reply.body).toBe('Sure, I can help!');
+    expect(result!.reply.message_id).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
     );
+    // S1: engine now surfaces provider + tokens for AiStreamComplete.
+    expect(result!.provider).toBe('openai');
+    expect(result!.tokensIn).toBe(50);
+    expect(result!.tokensOut).toBe(20);
   });
 
   // ── Cold start ─────────────────────────────────────────────────────────────
@@ -304,7 +317,7 @@ describe('ZaiChatEngine', () => {
     const result = await engine.respond(makeEvent());
 
     expect(result).not.toBeNull();
-    expect(result!.body).toBe(ZAI_EMPTY_RESPONSE_FALLBACK);
+    expect(result!.reply.body).toBe(ZAI_EMPTY_RESPONSE_FALLBACK);
     // Metrics still recorded as success — the LLM responded, the content
     // just happened to be empty (refusal, etc.).
     expect(aiMetrics.recordRequest).toHaveBeenCalledWith(
@@ -325,7 +338,7 @@ describe('ZaiChatEngine', () => {
     const result = await engine.respond(makeEvent());
 
     expect(result).not.toBeNull();
-    expect(result!.body).toBe(ZAI_EMPTY_RESPONSE_FALLBACK);
+    expect(result!.reply.body).toBe(ZAI_EMPTY_RESPONSE_FALLBACK);
   });
 
   // ── Metrics ────────────────────────────────────────────────────────────────
@@ -399,7 +412,7 @@ describe('ZaiChatEngine', () => {
     const result = await engine.respond(event);
 
     expect(result).not.toBeNull();
-    expect(result!.body).toContain('no longer available');
+    expect(result!.reply.body).toContain('no longer available');
     expect(gateway.complete).not.toHaveBeenCalled();
   });
 
@@ -458,5 +471,129 @@ describe('ZaiChatEngine', () => {
     expect(onChunk).toHaveBeenCalledTimes(2);
     expect(onChunk).toHaveBeenNthCalledWith(1, 'hello');
     expect(onChunk).toHaveBeenNthCalledWith(2, ' world');
+  });
+
+  // ── Phase 6 C12: abort discards the partial reply ──────────────────────────
+
+  it('aborted signal: returns null, records no metrics (partial discarded)', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const onChunk = jest.fn().mockResolvedValue(undefined);
+
+    const result = await engine.respond(
+      makeEvent(),
+      onChunk,
+      controller.signal,
+    );
+
+    expect(result).toBeNull();
+    expect(gateway.completeStream).toHaveBeenCalled();
+    // No success metric and no reply built when the stream was aborted.
+    expect(aiMetrics.recordRequest).not.toHaveBeenCalled();
+  });
+
+  it('passes the abort signal through to gateway.completeStream', async () => {
+    const controller = new AbortController();
+    const onChunk = jest.fn().mockResolvedValue(undefined);
+
+    await engine.respond(makeEvent(), onChunk, controller.signal);
+
+    // signal is the 4th positional arg (userId, options, onChunk, signal).
+    const args = (gateway.completeStream as jest.Mock).mock.calls[0] as [
+      string,
+      unknown,
+      unknown,
+      AbortSignal | undefined,
+    ];
+    expect(args[3]).toBe(controller.signal);
+  });
+
+  // ── Phase 6 C6: strategy registry fallback ─────────────────────────────────
+
+  it('unknown feature (no document_id, no mention) falls back to the general strategy', async () => {
+    const event = makeEvent({
+      ai_context: { feature: 'translation', created_at: 1 } as never,
+    });
+
+    const result = await engine.respond(event);
+
+    expect(promptBuilder.buildZaiChatPrompt).toHaveBeenCalled();
+    expect(promptBuilder.buildZaiMentionReplyPrompt).not.toHaveBeenCalled();
+    expect(documentRag.buildRagMessages).not.toHaveBeenCalled();
+    expect(result).not.toBeNull();
+  });
+
+  // ── Phase 6 C7: markdown body_format for document replies ───────────────────
+
+  it('document reply carries body_format:"markdown"', async () => {
+    const event = makeEvent({
+      body: 'Summarize this',
+      ai_context: { feature: 'document', document_id: DOC_ID, created_at: 1 },
+    });
+
+    const result = await engine.respond(event);
+
+    expect(result).not.toBeNull();
+    expect(result!.reply.body_format).toBe('markdown');
+  });
+
+  it('general reply omits body_format (text default)', async () => {
+    const result = await engine.respond(makeEvent());
+
+    expect(result).not.toBeNull();
+    expect(result!.reply.body_format).toBeUndefined();
+  });
+
+  it('mention reply omits body_format (text default)', async () => {
+    const result = await engine.respond(
+      makeEvent({ trigger: 'mention', body: 'hey @zai' }),
+    );
+
+    expect(result).not.toBeNull();
+    expect(result!.reply.body_format).toBeUndefined();
+  });
+
+  it('document-unavailable short-circuit reply stays plain text (no markdown)', async () => {
+    const rag = makeDocumentRag();
+    (rag.validateDocumentAccess as jest.Mock).mockRejectedValue(
+      new BusinessException(ErrorCode.NOT_FOUND, 'Document not found'),
+    );
+    await build(undefined, undefined, rag);
+
+    const event = makeEvent({
+      ai_context: { feature: 'document', document_id: DOC_ID, created_at: 1 },
+    });
+    const result = await engine.respond(event);
+
+    expect(result!.reply.body_format).toBeUndefined();
+  });
+
+  // ── Phase 6 C8: L2 rolling-summary memory hook ──────────────────────────────
+
+  it('passes the L1 history through ZaiMemoryService and feeds the result to the prompt', async () => {
+    const items = [makeMsg('msg-1', USER_ID, 'recent question')];
+    const repo = makeMessageRepo(items);
+    await build(repo);
+
+    // Simulate L2 enabled: prepend a rolling-summary system message.
+    const summaryMsg: LlmChatMessage = {
+      role: 'system',
+      content: 'Summary of earlier conversation: prior topics.',
+    };
+    zaiMemory.withRollingSummary.mockImplementation((_c, _u, history) =>
+      Promise.resolve([summaryMsg, ...history]),
+    );
+
+    await engine.respond(makeEvent());
+
+    expect(zaiMemory.withRollingSummary).toHaveBeenCalledWith(
+      CONV_ID,
+      USER_ID,
+      expect.any(Array),
+      'trace-001',
+    );
+    const calls = (promptBuilder.buildZaiChatPrompt as jest.Mock).mock
+      .calls as [LlmChatMessage[]][];
+    expect(calls[0][0]).toContainEqual(summaryMsg);
   });
 });

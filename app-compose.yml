@@ -131,6 +131,7 @@ services:
       KAFKA_BROKERS: kafka:29092
       KAFKA_CLIENT_ID: interaction-service
       KAFKA_GROUP_ID: interaction-service-group
+      ZAI_BOT_USER_ID: ${ZAI_BOT_USER_ID:-00000000-0000-0000-0000-0000000000a1}
       REDIS_URL: redis://redis:6379
       DB_SSL: "true"
       SCYLLA_CONTACT_POINTS: scylla
@@ -245,6 +246,8 @@ services:
       KAFKA_BROKERS: kafka:29092
       KAFKA_CLIENT_ID: chat-service
       KAFKA_GROUP_ID: chat-service-persist
+      AI_CORE_SERVICE_URL: http://ai-core-service:5005/api
+      ZAI_BOT_USER_ID: ${ZAI_BOT_USER_ID:-00000000-0000-0000-0000-0000000000a1}
       S3_BUCKET: ${S3_BUCKET-zalo-bucket-clone}
       S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
       S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
@@ -468,6 +471,7 @@ services:
       LCDO_ROUTER_URL: ${LCDO_ROUTER_URL}
       LCDO_ROUTER_KEY: ${LCDO_ROUTER_KEY}
       LCDO_ROUTER_MODEL: ${LCDO_ROUTER_MODEL}
+      ZAI_BOT_USER_ID: ${ZAI_BOT_USER_ID:-00000000-0000-0000-0000-0000000000a1}
       SCYLLA_CONTACT_POINTS: scylla
       SCYLLA_LOCAL_DATACENTER: datacenter1
       SCYLLA_KEYSPACE: chat
@@ -475,7 +479,7 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       AWS_REGION: ${AWS_REGION:-ap-southeast-1}
-      S3_BUCKET: ${S3_BUCKET}
+      S3_BUCKET: ${S3_BUCKET-zalo-bucket-clone}
       S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
       S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
       S3_FORCE_PATH_STYLE: "false"

@@ -14,10 +14,24 @@ import {
 } from '@app/constant';
 import { BusinessException } from '@app/types';
 import { CacheService } from '@libs/redis';
+import { ClientKafka } from '@nestjs/microservices';
 import { AiConversationFactoryService } from './ai-conversation-factory.service';
-import type { AiConversationContext } from '@libs/contracts';
+import { KafkaTopics, type AiConversationContext } from '@libs/contracts';
 
 const ZAI_ID = '00000000-0000-0000-0000-0000000000a1';
+
+/**
+ * Shared mock for the existing-conversation lookup QueryBuilder used by
+ * both getOrCreateGeneral and getOrCreateDocumentConversation. Returns a
+ * chainable stub whose getOne resolves to the supplied conversation.
+ */
+function makeLookupQueryBuilder(returnValue: Conversation | null) {
+  return {
+    innerJoin: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    getOne: jest.fn().mockResolvedValue(returnValue),
+  };
+}
 
 describe('AiConversationFactoryService', () => {
   let service: AiConversationFactoryService;
@@ -30,6 +44,7 @@ describe('AiConversationFactoryService', () => {
   let userRepo: jest.Mocked<Repository<User>>;
   let docMetaRepo: jest.Mocked<Repository<DocumentMetadata>>;
   let cacheService: jest.Mocked<CacheService>;
+  let kafkaClient: jest.Mocked<ClientKafka>;
 
   beforeEach(() => {
     entityManager = {
@@ -90,9 +105,15 @@ describe('AiConversationFactoryService', () => {
     } as unknown as jest.Mocked<Repository<DocumentMetadata>>;
 
     cacheService = {
-      setAiConversationMarker: jest.fn().mockResolvedValue(undefined),
       setAiConversationContext: jest.fn().mockResolvedValue(undefined),
+      deleteAiConversationContext: jest.fn().mockResolvedValue(undefined),
+      invalidateConversation: jest.fn().mockResolvedValue(undefined),
+      invalidateConversationList: jest.fn().mockResolvedValue(undefined),
     } as unknown as jest.Mocked<CacheService>;
+
+    kafkaClient = {
+      emit: jest.fn(),
+    } as unknown as jest.Mocked<ClientKafka>;
 
     service = new AiConversationFactoryService(
       conversationRepo,
@@ -101,6 +122,7 @@ describe('AiConversationFactoryService', () => {
       docMetaRepo,
       { zaiBotUserId: ZAI_ID } as AppConfig,
       cacheService,
+      kafkaClient,
     );
   });
 
@@ -217,19 +239,10 @@ describe('AiConversationFactoryService', () => {
   // ── getOrCreateGeneral ───────────────────────────────────────────────────
 
   describe('getOrCreateGeneral', () => {
-    function makeQueryBuilder(returnValue: Conversation | null) {
-      const qb = {
-        innerJoin: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        getOne: jest.fn().mockResolvedValue(returnValue),
-      };
-      return qb;
-    }
-
     it('returns existing conversation id without DB write when one exists', async () => {
       const existing = { id: 'conv-existing' } as Conversation;
       (conversationRepo.createQueryBuilder as jest.Mock).mockReturnValue(
-        makeQueryBuilder(existing),
+        makeLookupQueryBuilder(existing),
       );
 
       const result = await service.getOrCreateGeneral('user-1');
@@ -244,7 +257,7 @@ describe('AiConversationFactoryService', () => {
 
     it('creates new conversation when none exists and returns new id', async () => {
       (conversationRepo.createQueryBuilder as jest.Mock).mockReturnValue(
-        makeQueryBuilder(null),
+        makeLookupQueryBuilder(null),
       );
 
       const result = await service.getOrCreateGeneral('user-1');
@@ -257,21 +270,13 @@ describe('AiConversationFactoryService', () => {
   // ── getOrCreateDocumentConversation (Phase 4 + S5 dedup) ─────────────────
 
   describe('getOrCreateDocumentConversation', () => {
-    function makeDocQueryBuilder(returnValue: Conversation | null) {
-      return {
-        innerJoin: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        getOne: jest.fn().mockResolvedValue(returnValue),
-      };
-    }
-
     it('creates a feature=document conversation when none exists', async () => {
       docMetaRepo.findOne.mockResolvedValueOnce({
         id: 'doc-1',
         userId: 'user-1',
       } as DocumentMetadata);
       (conversationRepo.createQueryBuilder as jest.Mock).mockReturnValue(
-        makeDocQueryBuilder(null),
+        makeLookupQueryBuilder(null),
       );
 
       const result = await service.getOrCreateDocumentConversation(
@@ -306,7 +311,7 @@ describe('AiConversationFactoryService', () => {
         },
       } as Conversation;
       (conversationRepo.createQueryBuilder as jest.Mock).mockReturnValue(
-        makeDocQueryBuilder(existing),
+        makeLookupQueryBuilder(existing),
       );
 
       const result = await service.getOrCreateDocumentConversation(
@@ -339,6 +344,130 @@ describe('AiConversationFactoryService', () => {
       // No conversation created — neither dedup query nor save runs
       expect(conversationRepo.createQueryBuilder).not.toHaveBeenCalled();
       expect(entityManager.save).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── disbandAiConversation (Phase 6 C11) ──────────────────────────────────
+
+  describe('disbandAiConversation', () => {
+    function setupTransaction(
+      conversation: Conversation | null,
+      activeMembers: ConversationMember[],
+    ) {
+      const convTxRepo = {
+        createQueryBuilder: jest.fn().mockReturnValue({
+          setLock: jest.fn().mockReturnThis(),
+          where: jest.fn().mockReturnThis(),
+          getOne: jest.fn().mockResolvedValue(conversation),
+        }),
+        save: jest.fn().mockImplementation((c: unknown) => Promise.resolve(c)),
+      };
+      const memberTxRepo = {
+        find: jest.fn().mockResolvedValue(activeMembers),
+        save: jest.fn().mockResolvedValue(activeMembers),
+      };
+      const manager = {
+        getRepository: jest.fn((entity: unknown) =>
+          entity === Conversation ? convTxRepo : memberTxRepo,
+        ),
+      };
+      (
+        conversationRepo.manager as unknown as { transaction: jest.Mock }
+      ).transaction.mockImplementation(
+        (cb: (m: typeof manager) => Promise<unknown>) => cb(manager),
+      );
+      return { convTxRepo, memberTxRepo };
+    }
+
+    it('soft-deletes members, deletes the Redis marker, emits ConversationDisbanded, invalidates caches', async () => {
+      const conversation = {
+        id: 'conv-ai',
+        type: ConversationType.AI_ASSISTANT,
+        createdById: 'user-1',
+      } as Conversation;
+      const members = [
+        {
+          conversationId: 'conv-ai',
+          userId: 'user-1',
+          leftAt: null,
+        } as ConversationMember,
+        {
+          conversationId: 'conv-ai',
+          userId: ZAI_ID,
+          leftAt: null,
+        } as ConversationMember,
+      ];
+      const { memberTxRepo } = setupTransaction(conversation, members);
+
+      const result = await service.disbandAiConversation('user-1', 'conv-ai');
+
+      expect(result).toEqual({
+        message: 'AI conversation disbanded successfully',
+      });
+      expect(members[0].leftAt).toBeInstanceOf(Date);
+      expect(members[1].leftAt).toBeInstanceOf(Date);
+      expect(memberTxRepo.save).toHaveBeenCalled();
+      expect(cacheService.deleteAiConversationContext).toHaveBeenCalledWith(
+        'conv-ai',
+      );
+      expect(kafkaClient.emit).toHaveBeenCalledWith(
+        KafkaTopics.ConversationDisbanded,
+        expect.objectContaining({
+          conversation_id: 'conv-ai',
+          disbanded_by: 'user-1',
+          member_ids: ['user-1', ZAI_ID],
+        }),
+      );
+      expect(cacheService.invalidateConversation).toHaveBeenCalledWith(
+        'conv-ai',
+        ['user-1', ZAI_ID],
+      );
+    });
+
+    it('rejects a non-AI conversation with CONVERSATION_INVALID_TYPE', async () => {
+      const conversation = {
+        id: 'conv-grp',
+        type: ConversationType.GROUP,
+        createdById: 'user-1',
+      } as Conversation;
+      setupTransaction(conversation, []);
+
+      const err = await service
+        .disbandAiConversation('user-1', 'conv-grp')
+        .catch((e: unknown) => e);
+
+      expect(err).toBeInstanceOf(BusinessException);
+      // disbandAiConversationCore uses BusinessException.badRequest, which maps
+      // to the generic BAD_REQUEST code (mirrors the GROUP disband path).
+      expect((err as BusinessException).errorCode).toBe(ErrorCode.BAD_REQUEST);
+      expect(cacheService.deleteAiConversationContext).not.toHaveBeenCalled();
+      expect(kafkaClient.emit).not.toHaveBeenCalled();
+    });
+
+    it('rejects a non-creator with CONVERSATION_PERMISSION_DENIED', async () => {
+      const conversation = {
+        id: 'conv-ai',
+        type: ConversationType.AI_ASSISTANT,
+        createdById: 'someone-else',
+      } as Conversation;
+      setupTransaction(conversation, []);
+
+      const err = await service
+        .disbandAiConversation('user-1', 'conv-ai')
+        .catch((e: unknown) => e);
+
+      expect((err as BusinessException).errorCode).toBe(ErrorCode.FORBIDDEN);
+      expect(cacheService.deleteAiConversationContext).not.toHaveBeenCalled();
+    });
+
+    it('throws NOT_FOUND when the conversation does not exist', async () => {
+      setupTransaction(null, []);
+
+      const err = await service
+        .disbandAiConversation('user-1', 'missing')
+        .catch((e: unknown) => e);
+
+      expect((err as BusinessException).errorCode).toBe(ErrorCode.NOT_FOUND);
     });
   });
 });

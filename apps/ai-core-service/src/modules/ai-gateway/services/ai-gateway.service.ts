@@ -104,6 +104,7 @@ export class AiGatewayService {
     userId: string,
     options: LlmCompletionOptions,
     onChunk: (chunk: LlmStreamChunk) => void,
+    signal?: AbortSignal,
     opts?: { skipBudgetCheck?: boolean; skipSanitize?: boolean },
   ): Promise<LlmCompletionResult> {
     if (!opts?.skipSanitize) {
@@ -131,10 +132,12 @@ export class AiGatewayService {
 
     const errors: string[] = [];
     for (const provider of this.getAvailableProviders()) {
+      // Already aborted before this provider ran — don't start a new request.
+      if (signal?.aborted) break;
       if (!this.isCircuitAllowed(provider.name)) continue;
 
       try {
-        const result = await provider.completeStream(options, onChunk);
+        const result = await provider.completeStream(options, onChunk, signal);
         this.onSuccess(provider.name);
         await this.tokenBudget.consume(
           userId,
@@ -146,7 +149,24 @@ export class AiGatewayService {
         this.logger.error(`Stream provider ${provider.name} failed: ${msg}`);
         this.onFailure(provider.name);
         errors.push(`${provider.name}: ${msg}`);
+        // An aborted stream is an intentional cancel, not a provider fault —
+        // do not fail over to another provider (providers normally return the
+        // partial on abort; this guards the rare throw-on-abort case).
+        if (signal?.aborted) break;
       }
+    }
+
+    if (signal?.aborted) {
+      // Cancelled before any provider produced a result. Surface a benign
+      // partial so the engine's abort-discard path handles it uniformly.
+      return {
+        content: '',
+        tokensIn: 0,
+        tokensOut: 0,
+        model: 'aborted',
+        provider: 'unknown',
+        latencyMs: 0,
+      };
     }
 
     throw new Error(`All LLM stream providers failed: ${errors.join('; ')}`);

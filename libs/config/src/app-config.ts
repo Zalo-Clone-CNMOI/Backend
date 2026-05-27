@@ -84,6 +84,13 @@ export interface AppConfig {
 
   // Zai AI bot — fixed user ID seeded by migration
   zaiBotUserId: string;
+
+  // Zai L2 rolling-summary memory (Phase 6 C8) — OFF by default. Stays off in
+  // prod until telemetry shows >trigger-turn conversations are common.
+  /** Master flag for L2 rolling summary — default false. */
+  zaiL2MemoryEnabled?: boolean;
+  /** Summarize older turns once total history exceeds this many turns. Default 30. */
+  zaiL2SummaryTriggerTurns?: number;
 }
 
 interface ServiceConfigRequirements {
@@ -399,6 +406,11 @@ export function loadConfig(serviceName: string): AppConfig {
       }
       return raw;
     })(),
+    zaiL2MemoryEnabled:
+      readBoolean(process.env.ZAI_L2_MEMORY_ENABLED) ?? false,
+    zaiL2SummaryTriggerTurns:
+      readPositiveInteger(process.env.ZAI_L2_SUMMARY_TRIGGER_TURNS, 5, 500) ??
+      30,
   };
 
   assertServiceConfig(config);

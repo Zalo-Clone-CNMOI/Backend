@@ -82,9 +82,14 @@ export class AnthropicProvider implements ILlmProvider {
   async completeStream(
     options: LlmCompletionOptions,
     onChunk: (chunk: LlmStreamChunk) => void,
+    signal?: AbortSignal,
   ): Promise<LlmCompletionResult> {
     const start = Date.now();
     const model = options.model ?? 'claude-3-haiku-20240307';
+
+    // Hoisted so the abort path can return the partial collected so far.
+    let fullContent = '';
+    let index = 0;
 
     try {
       const client = await this.getClient();
@@ -97,40 +102,64 @@ export class AnthropicProvider implements ILlmProvider {
           content: m.content,
         }));
 
-      const stream = client.messages.stream({
-        model,
-        max_tokens: options.maxTokens ?? 1024,
-        // TODO(Phase-3): multimodal content parts are passed through as-is; provider
-        // SDK error path is currently the only signal if an array reaches the API.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
-        system: systemMsg?.content as any,
-        // TODO(Phase-3): multimodal content parts are passed through as-is; provider
-        // SDK error path is currently the only signal if an array reaches the API.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
-        messages: chatMessages as any,
-      });
+      const stream = client.messages.stream(
+        {
+          model,
+          max_tokens: options.maxTokens ?? 1024,
+          // TODO(Phase-3): multimodal content parts are passed through as-is; provider
+          // SDK error path is currently the only signal if an array reaches the API.
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
+          system: systemMsg?.content as any,
+          // TODO(Phase-3): multimodal content parts are passed through as-is; provider
+          // SDK error path is currently the only signal if an array reaches the API.
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
+          messages: chatMessages as any,
+        },
+        { signal },
+      );
 
-      let fullContent = '';
-      let index = 0;
+      // Abort the in-flight request when the signal fires (Phase 6 C12).
+      const onAbort = () => stream.abort();
+      if (signal?.aborted) stream.abort();
+      else signal?.addEventListener('abort', onAbort, { once: true });
 
       stream.on('text', (text: string) => {
+        if (signal?.aborted) return; // stop emitting on abort
         fullContent += text;
         onChunk({ content: text, index: index++, isFinal: false });
       });
 
-      const finalMessage = await stream.finalMessage();
+      try {
+        const finalMessage = await stream.finalMessage();
 
-      onChunk({ content: '', index: index++, isFinal: true });
+        // Only emit the terminal chunk if we were not aborted.
+        if (!signal?.aborted) {
+          onChunk({ content: '', index: index++, isFinal: true });
+        }
 
-      return {
-        content: fullContent,
-        tokensIn: finalMessage.usage?.input_tokens ?? 0,
-        tokensOut: finalMessage.usage?.output_tokens ?? 0,
-        model,
-        provider: this.name,
-        latencyMs: Date.now() - start,
-      };
+        return {
+          content: fullContent,
+          tokensIn: finalMessage.usage?.input_tokens ?? 0,
+          tokensOut: finalMessage.usage?.output_tokens ?? 0,
+          model,
+          provider: this.name,
+          latencyMs: Date.now() - start,
+        };
+      } finally {
+        signal?.removeEventListener('abort', onAbort);
+      }
     } catch (error) {
+      // Intentional abort — return the partial rather than failing over.
+      if (signal?.aborted) {
+        return {
+          content: fullContent,
+          tokensIn: 0,
+          tokensOut: 0,
+          model,
+          provider: this.name,
+          latencyMs: Date.now() - start,
+        };
+      }
       this.logger.error(
         `Anthropic completeStream() failed - Model: ${model}, Error: ${error instanceof Error ? error.message : String(error)}`,
         error instanceof Error ? error.stack : undefined,

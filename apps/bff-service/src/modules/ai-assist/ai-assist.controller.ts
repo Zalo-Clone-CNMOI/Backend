@@ -5,6 +5,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  ParseUUIDPipe,
   Post,
 } from '@nestjs/common';
 import {
@@ -62,6 +63,25 @@ export class AiAssistController {
     @Body() dto: CreateDocumentConversationDto,
   ): Promise<ZaiConversationResponseDto> {
     return this.service.getOrCreateDocumentConversation(token, dto.documentId);
+  }
+
+  @Post('conversations/:conversationId/disband')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({
+    summary: 'Disband (delete) an AI conversation — creator only',
+  })
+  @ApiResponse({ status: 200, description: 'AI conversation disbanded' })
+  @ApiResponse({
+    status: 403,
+    description: 'Not the creator of this conversation',
+  })
+  @ApiResponse({ status: 404, description: 'Conversation not found' })
+  async disbandAiConversation(
+    @AccessToken() token: string,
+    @Param('conversationId', ParseUUIDPipe) conversationId: string,
+  ): Promise<{ message: string }> {
+    return this.service.disbandAiConversation(token, conversationId);
   }
 
   @Get('conversations/:conversationId/catch-up')

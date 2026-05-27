@@ -1,9 +1,7 @@
-/* eslint-disable max-lines */
 import { Injectable, Logger } from '@nestjs/common';
 import {
   FriendsApi,
   ConversationsApi,
-  AiConversationsApi,
   type SendFriendRequestDto,
   type RespondFriendRequestDto,
   type CreateGroupConversationDto,
@@ -24,7 +22,6 @@ import {
   type PaginatedResponseSentFriendRequestResponseDto,
   type PaginatedResponseConversationListItemDto,
   type UpdateGroupSettingsDto,
-  type CreateDocumentConversationDto,
 } from './client/generated';
 import { BaseHttpClient } from '../../base-http-client';
 import type {
@@ -46,7 +43,14 @@ import {
   addPollOptionViaApi,
   removePollOptionViaApi,
 } from './interaction-client-calls.helper';
+import { ConversationClientService } from './services/conversation-client.service';
 
+/**
+ * Facade over the interaction-service HTTP API. Friend, poll, and call methods
+ * live here; conversation + AI-conversation calls are delegated to
+ * {@link ConversationClientService} (Phase 6 C13 split). Every public method
+ * signature is preserved so BFF call sites are unaffected.
+ */
 @Injectable()
 export class InteractionClientService extends BaseHttpClient {
   protected readonly logger = new Logger(InteractionClientService.name);
@@ -54,10 +58,12 @@ export class InteractionClientService extends BaseHttpClient {
   constructor(
     private readonly friendsApi: FriendsApi,
     private readonly conversationsApi: ConversationsApi,
-    private readonly aiConversationsApi: AiConversationsApi,
+    private readonly conversationClient: ConversationClientService,
   ) {
     super();
   }
+
+  // ── Friends ────────────────────────────────────────────────────────────
 
   async getFriends(
     accessToken: string,
@@ -198,369 +204,285 @@ export class InteractionClientService extends BaseHttpClient {
     }
   }
 
-  async getConversations(
+  // ── Conversations (delegated to ConversationClientService) ───────────────
+
+  getConversations(
     accessToken: string,
     page?: number,
     limit?: number,
   ): Promise<PaginatedResponseConversationListItemDto> {
-    try {
-      const response = await this.conversationsApi.getConversations(
-        { page, limit },
-        { headers: { Authorization: `Bearer ${accessToken}` } },
-      );
-      return response.data;
-    } catch (error) {
-      this.handleError('getConversations', error);
-    }
+    return this.conversationClient.getConversations(accessToken, page, limit);
   }
 
-  async getConversationById(
+  getConversationById(
     accessToken: string,
     conversationId: string,
   ): Promise<ConversationDetailDto> {
-    try {
-      const response = await this.conversationsApi.getConversationById(
-        { conversationId },
-        { headers: { Authorization: `Bearer ${accessToken}` } },
-      );
-      return response.data;
-    } catch (error) {
-      this.handleError('getConversationById', error);
-    }
+    return this.conversationClient.getConversationById(
+      accessToken,
+      conversationId,
+    );
   }
 
-  async createGroupConversation(
+  createGroupConversation(
     accessToken: string,
     dto: CreateGroupConversationDto,
   ): Promise<ConversationDetailDto> {
-    try {
-      const response = await this.conversationsApi.createGroupConversation(
-        { createGroupConversationDto: dto },
-        { headers: { Authorization: `Bearer ${accessToken}` } },
-      );
-      return response.data;
-    } catch (error) {
-      this.handleError('createGroupConversation', error);
-    }
+    return this.conversationClient.createGroupConversation(accessToken, dto);
   }
 
-  async createDirectConversation(
+  createDirectConversation(
     accessToken: string,
     dto: CreateDirectConversationDto,
   ): Promise<ConversationDetailDto> {
-    try {
-      const response = await this.conversationsApi.createDirectConversation(
-        { createDirectConversationDto: dto },
-        { headers: { Authorization: `Bearer ${accessToken}` } },
-      );
-      return response.data;
-    } catch (error) {
-      this.handleError('createDirectConversation', error);
-    }
+    return this.conversationClient.createDirectConversation(accessToken, dto);
   }
 
-  async updateConversation(
+  updateConversation(
     accessToken: string,
     conversationId: string,
     dto: UpdateConversationDto,
   ): Promise<ConversationDetailDto> {
-    try {
-      const response = await this.conversationsApi.updateConversation(
-        { conversationId, updateConversationDto: dto },
-        { headers: { Authorization: `Bearer ${accessToken}` } },
-      );
-      return response.data;
-    } catch (error) {
-      this.handleError('updateConversation', error);
-    }
+    return this.conversationClient.updateConversation(
+      accessToken,
+      conversationId,
+      dto,
+    );
   }
 
-  async addMembers(
+  addMembers(
     accessToken: string,
     conversationId: string,
     dto: AddMembersDto,
   ): Promise<ConversationDetailDto> {
-    try {
-      const response = await this.conversationsApi.addMembers(
-        { conversationId, addMembersDto: dto },
-        { headers: { Authorization: `Bearer ${accessToken}` } },
-      );
-      return response.data;
-    } catch (error) {
-      this.handleError('addMembers', error);
-    }
+    return this.conversationClient.addMembers(accessToken, conversationId, dto);
   }
 
-  async removeMember(
+  removeMember(
     accessToken: string,
     conversationId: string,
     memberId: string,
   ): Promise<{ message: string }> {
-    try {
-      const response = await this.conversationsApi.removeMember(
-        { conversationId, memberId },
-        { headers: { Authorization: `Bearer ${accessToken}` } },
-      );
-      return response.data as { message: string };
-    } catch (error) {
-      this.handleError('removeMember', error);
-    }
+    return this.conversationClient.removeMember(
+      accessToken,
+      conversationId,
+      memberId,
+    );
   }
 
-  async leaveConversation(
+  leaveConversation(
     accessToken: string,
     conversationId: string,
   ): Promise<{ message: string }> {
-    try {
-      const response = await this.conversationsApi.leaveConversation(
-        { conversationId },
-        { headers: { Authorization: `Bearer ${accessToken}` } },
-      );
-      return response.data as { message: string };
-    } catch (error) {
-      this.handleError('leaveConversation', error);
-    }
+    return this.conversationClient.leaveConversation(
+      accessToken,
+      conversationId,
+    );
   }
 
-  async disbandConversation(
+  disbandConversation(
     accessToken: string,
     conversationId: string,
   ): Promise<{ message: string }> {
-    try {
-      const response = await this.conversationsApi.disbandConversation(
-        { conversationId },
-        { headers: { Authorization: `Bearer ${accessToken}` } },
-      );
-      return response.data as { message: string };
-    } catch (error) {
-      this.handleError('disbandConversation', error);
-    }
+    return this.conversationClient.disbandConversation(
+      accessToken,
+      conversationId,
+    );
   }
 
-  async sendGroupInvites(
+  sendGroupInvites(
     accessToken: string,
     conversationId: string,
     dto: SendGroupInvitesDto,
   ): Promise<SendGroupInvitesResponseDto> {
-    try {
-      const response = await this.conversationsApi.sendGroupInvites(
-        { conversationId, sendGroupInvitesDto: dto },
-        { headers: { Authorization: `Bearer ${accessToken}` } },
-      );
-      return response.data;
-    } catch (error) {
-      this.handleError('sendGroupInvites', error);
-    }
+    return this.conversationClient.sendGroupInvites(
+      accessToken,
+      conversationId,
+      dto,
+    );
   }
 
-  async getPendingGroupInvites(
+  getPendingGroupInvites(
     accessToken: string,
     page?: number,
     limit?: number,
     status?: GroupInviteStatus,
   ): Promise<PaginatedResponseGroupInviteItemDto> {
-    try {
-      const response = await this.conversationsApi.getPendingGroupInvites(
-        { page, limit, status },
-        { headers: { Authorization: `Bearer ${accessToken}` } },
-      );
-      return response.data;
-    } catch (error) {
-      this.handleError('getPendingGroupInvites', error);
-    }
+    return this.conversationClient.getPendingGroupInvites(
+      accessToken,
+      page,
+      limit,
+      status,
+    );
   }
 
-  async getConversationInvites(
+  getConversationInvites(
     accessToken: string,
     conversationId: string,
     page?: number,
     limit?: number,
     status?: GroupInviteStatus,
   ): Promise<PaginatedResponseGroupInviteItemDto> {
-    try {
-      const response = await this.conversationsApi.getConversationInvites(
-        { conversationId, page, limit, status },
-        { headers: { Authorization: `Bearer ${accessToken}` } },
-      );
-      return response.data;
-    } catch (error) {
-      this.handleError('getConversationInvites', error);
-    }
+    return this.conversationClient.getConversationInvites(
+      accessToken,
+      conversationId,
+      page,
+      limit,
+      status,
+    );
   }
 
-  async acceptGroupInvite(
+  acceptGroupInvite(
     accessToken: string,
     conversationId: string,
     inviteId: string,
   ): Promise<{ message: string }> {
-    try {
-      const response = await this.conversationsApi.acceptGroupInvite(
-        { conversationId, inviteId },
-        { headers: { Authorization: `Bearer ${accessToken}` } },
-      );
-      return response.data as { message: string };
-    } catch (error) {
-      this.handleError('acceptGroupInvite', error);
-    }
+    return this.conversationClient.acceptGroupInvite(
+      accessToken,
+      conversationId,
+      inviteId,
+    );
   }
 
-  async rejectGroupInvite(
+  rejectGroupInvite(
     accessToken: string,
     conversationId: string,
     inviteId: string,
   ): Promise<{ message: string }> {
-    try {
-      const response = await this.conversationsApi.rejectGroupInvite(
-        { conversationId, inviteId },
-        { headers: { Authorization: `Bearer ${accessToken}` } },
-      );
-      return response.data as { message: string };
-    } catch (error) {
-      this.handleError('rejectGroupInvite', error);
-    }
+    return this.conversationClient.rejectGroupInvite(
+      accessToken,
+      conversationId,
+      inviteId,
+    );
   }
 
-  async cancelGroupInvite(
+  cancelGroupInvite(
     accessToken: string,
     conversationId: string,
     inviteId: string,
   ): Promise<{ message: string }> {
-    try {
-      const response = await this.conversationsApi.cancelGroupInvite(
-        { conversationId, inviteId },
-        { headers: { Authorization: `Bearer ${accessToken}` } },
-      );
-      return response.data as { message: string };
-    } catch (error) {
-      this.handleError('cancelGroupInvite', error);
-    }
+    return this.conversationClient.cancelGroupInvite(
+      accessToken,
+      conversationId,
+      inviteId,
+    );
   }
 
-  async updateMemberRole(
+  updateMemberRole(
     accessToken: string,
     conversationId: string,
     memberId: string,
     dto: UpdateMemberRoleDto,
   ): Promise<{ message: string }> {
-    try {
-      const response = await this.conversationsApi.updateMemberRole(
-        { conversationId, memberId, updateMemberRoleDto: dto },
-        { headers: { Authorization: `Bearer ${accessToken}` } },
-      );
-      return response.data as { message: string };
-    } catch (error) {
-      this.handleError('updateMemberRole', error);
-    }
+    return this.conversationClient.updateMemberRole(
+      accessToken,
+      conversationId,
+      memberId,
+      dto,
+    );
   }
 
-  async updateGroupSettings(
+  updateGroupSettings(
     accessToken: string,
     conversationId: string,
     dto: UpdateGroupSettingsDto,
   ): Promise<ConversationDetailDto> {
-    try {
-      const response = await this.conversationsApi.updateGroupSettings(
-        { conversationId, updateGroupSettingsDto: dto },
-        { headers: { Authorization: `Bearer ${accessToken}` } },
-      );
-      return response.data;
-    } catch (error) {
-      this.handleError('updateGroupSettings', error);
-    }
+    return this.conversationClient.updateGroupSettings(
+      accessToken,
+      conversationId,
+      dto,
+    );
   }
 
-  async updateMySettings(
+  updateMySettings(
     accessToken: string,
     conversationId: string,
     dto: UpdateMemberSettingsDto,
   ): Promise<{ message: string }> {
-    try {
-      const response = await this.conversationsApi.updateMySettings(
-        { conversationId, updateMemberSettingsDto: dto },
-        { headers: { Authorization: `Bearer ${accessToken}` } },
-      );
-      return response.data as { message: string };
-    } catch (error) {
-      this.handleError('updateMySettings', error);
-    }
+    return this.conversationClient.updateMySettings(
+      accessToken,
+      conversationId,
+      dto,
+    );
   }
 
-  async markAsRead(
+  markAsRead(
     accessToken: string,
     conversationId: string,
   ): Promise<{ message: string }> {
-    try {
-      const response = await this.conversationsApi.markAsRead(
-        { conversationId },
-        { headers: { Authorization: `Bearer ${accessToken}` } },
-      );
-      return response.data as { message: string };
-    } catch (error) {
-      this.handleError('markAsRead', error);
-    }
+    return this.conversationClient.markAsRead(accessToken, conversationId);
   }
 
-  async pinConversation(
+  pinConversation(
     accessToken: string,
     conversationId: string,
   ): Promise<{ message: string }> {
-    try {
-      const response = await this.conversationsApi.pinConversation(
-        { conversationId },
-        { headers: { Authorization: `Bearer ${accessToken}` } },
-      );
-      return response.data as { message: string };
-    } catch (error) {
-      this.handleError('pinConversation', error);
-    }
+    return this.conversationClient.pinConversation(accessToken, conversationId);
   }
 
-  async unpinConversation(
+  unpinConversation(
     accessToken: string,
     conversationId: string,
   ): Promise<{ message: string }> {
-    try {
-      const response = await this.conversationsApi.unpinConversation(
-        { conversationId },
-        { headers: { Authorization: `Bearer ${accessToken}` } },
-      );
-      return response.data as { message: string };
-    } catch (error) {
-      this.handleError('unpinConversation', error);
-    }
+    return this.conversationClient.unpinConversation(
+      accessToken,
+      conversationId,
+    );
   }
 
-  async getConversationCallState(
+  getConversationCallState(
     accessToken: string,
     conversationId: string,
   ): Promise<ConversationCallStateResponseDto> {
-    try {
-      const response = await this.conversationsApi.getConversationCallState(
-        { conversationId },
-        { headers: { Authorization: `Bearer ${accessToken}` } },
-      );
-      return response.data;
-    } catch (error) {
-      this.handleError('getConversationCallState', error);
-    }
+    return this.conversationClient.getConversationCallState(
+      accessToken,
+      conversationId,
+    );
   }
 
-  async endConversationCall(
+  endConversationCall(
     accessToken: string,
     conversationId: string,
     callId: string,
     dto: EndConversationCallDto,
   ): Promise<{ message: string }> {
-    try {
-      const response = await this.conversationsApi.endConversationCall(
-        { conversationId, callId, endConversationCallDto: dto },
-        { headers: { Authorization: `Bearer ${accessToken}` } },
-      );
-      return response.data as { message: string };
-    } catch (error) {
-      this.handleError('endConversationCall', error);
-    }
+    return this.conversationClient.endConversationCall(
+      accessToken,
+      conversationId,
+      callId,
+      dto,
+    );
   }
+
+  // ── AI conversations (delegated) ─────────────────────────────────────────
+
+  getOrCreateZaiConversation(
+    accessToken: string,
+  ): Promise<{ conversationId: string }> {
+    return this.conversationClient.getOrCreateZaiConversation(accessToken);
+  }
+
+  getOrCreateDocumentConversation(
+    accessToken: string,
+    documentId: string,
+  ): Promise<{ conversationId: string }> {
+    return this.conversationClient.getOrCreateDocumentConversation(
+      accessToken,
+      documentId,
+    );
+  }
+
+  disbandAiConversation(
+    accessToken: string,
+    conversationId: string,
+  ): Promise<{ message: string }> {
+    return this.conversationClient.disbandAiConversation(
+      accessToken,
+      conversationId,
+    );
+  }
+
+  // ── Polls + calls (use the shared call helpers via getInternals) ─────────
 
   private getInternals(): ApiInternals {
     return this.conversationsApi as unknown as ApiInternals;
@@ -731,35 +653,6 @@ export class InteractionClientService extends BaseHttpClient {
       });
     } catch (error) {
       this.handleError('getCallHistory', error);
-    }
-  }
-  async getOrCreateZaiConversation(
-    accessToken: string,
-  ): Promise<{ conversationId: string }> {
-    try {
-      const response = await this.aiConversationsApi.getOrCreateZaiConversation(
-        { headers: { Authorization: `Bearer ${accessToken}` } },
-      );
-      return response.data as { conversationId: string };
-    } catch (error) {
-      this.handleError('getOrCreateZaiConversation', error);
-    }
-  }
-
-  async getOrCreateDocumentConversation(
-    accessToken: string,
-    documentId: string,
-  ): Promise<{ conversationId: string }> {
-    try {
-      const dto: CreateDocumentConversationDto = { documentId };
-      const response =
-        await this.aiConversationsApi.getOrCreateDocumentConversation(
-          { createDocumentConversationDto: dto },
-          { headers: { Authorization: `Bearer ${accessToken}` } },
-        );
-      return response.data as { conversationId: string };
-    } catch (error) {
-      this.handleError('getOrCreateDocumentConversation', error);
     }
   }
 }

@@ -4,7 +4,11 @@ import { MessageRepository } from '@libs/scylla';
 import { AiGatewayService } from '../ai-gateway/services/ai-gateway.service';
 import { PromptBuilderService } from '../ai-gateway/services/prompt-builder.service';
 import { AiMetricsService } from '../ai-gateway/services/ai-metrics.service';
-import { parseJsonResponse } from '../ai-gateway/services/parse-json.util';
+import {
+  filterMessagesForSummarization,
+  parseAiSummaryJson,
+  recordSummarizationMetrics,
+} from '../ai-gateway/services/text-summarizer.util';
 import type { AiCatchUpResultEvent } from '@libs/contracts';
 import { toAiProviderType } from '@libs/contracts';
 import { BusinessException } from '@app/types';
@@ -74,13 +78,12 @@ export class CatchUpEngine {
     }
 
     // ── 2. Determine the unread window ──────────────────────────────────────
-    // getAllMessages returns DESC (newest first). Filter out deleted messages and
-    // messages older than `since`.
-    let windowDesc: PersistedMessage[] = allMessages.filter((m) => {
-      if (m.deleted_at) return false;
-      if (since !== undefined && m.created_at <= since) return false;
-      return true;
-    });
+    // getAllMessages returns DESC (newest first). Drop deleted messages and
+    // messages at/older than `since`. Body filtering happens at step 6.
+    let windowDesc: PersistedMessage[] = filterMessagesForSummarization(
+      allMessages,
+      { since },
+    );
 
     // ── 3. Edge case: no unread messages ───────────────────────────────────
     if (windowDesc.length === 0) {
@@ -142,9 +145,9 @@ export class CatchUpEngine {
 
     // ── 6. Build prompt lines ───────────────────────────────────────────────
     // I2: Only messages that have a text body are fed to the LLM.
-    const lines: string[] = windowAsc
-      .filter((m): m is PersistedMessage & { body: string } => Boolean(m.body))
-      .map((m) => m.body);
+    const lines: string[] = filterMessagesForSummarization(windowAsc, {
+      requireBody: true,
+    }).map((m) => m.body);
 
     // I2: Short-circuit when all unread messages are media-only (no body text).
     if (lines.length === 0) {
@@ -174,18 +177,10 @@ export class CatchUpEngine {
         temperature: 0.3,
       });
 
-      const summary = this.parseResponse(result.content);
+      const { summary } = parseAiSummaryJson(result.content);
 
       // I3: Record metrics on success path.
-      this.aiMetrics.recordRequest(
-        'catch_up',
-        result.provider,
-        result.model,
-        result.tokensIn,
-        result.tokensOut,
-        result.latencyMs,
-        true,
-      );
+      recordSummarizationMetrics(this.aiMetrics, 'catch_up', result);
 
       // ── 8. Build result ─────────────────────────────────────────────────────
       const catchUpResult: AiCatchUpResultEvent = {
@@ -226,15 +221,7 @@ export class CatchUpEngine {
       );
 
       // I3: Record metrics on failure path.
-      this.aiMetrics.recordRequest(
-        'catch_up',
-        'unknown',
-        'unknown',
-        0,
-        0,
-        0,
-        false,
-      );
+      recordSummarizationMetrics(this.aiMetrics, 'catch_up', null);
 
       return {
         conversation_id,
@@ -253,15 +240,6 @@ export class CatchUpEngine {
         generated_at: Date.now(),
         trace_id,
       };
-    }
-  }
-
-  private parseResponse(content: string): string {
-    try {
-      const json = parseJsonResponse(content) as Record<string, unknown>;
-      return typeof json.summary === 'string' ? json.summary : content;
-    } catch {
-      return content;
     }
   }
 }

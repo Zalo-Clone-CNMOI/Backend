@@ -9,6 +9,7 @@ Scope: required variables only (fail-fast at startup via config validation).
 - KAFKA_GROUP_ID
 - REDIS_URL
 - ZAI_BOT_USER_ID (UUID; defaults to `00000000-0000-0000-0000-0000000000a1` in dev — set explicitly in prod to match the seeded Zai user)
+- _Optional:_ ZAI_L2_MEMORY_ENABLED (default `false`), ZAI_L2_SUMMARY_TRIGGER_TURNS (default `30`) — Phase 6 L2 rolling-summary memory; leave off until telemetry warrants it.
 
 ## bff-service
 

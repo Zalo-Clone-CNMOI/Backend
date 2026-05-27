@@ -6,12 +6,17 @@ describe('AiFanoutConsumer', () => {
     emitToUser: jest.fn(),
     broadcastToConversation: jest.fn(),
   };
+  const streamTracker = {
+    track: jest.fn(),
+    complete: jest.fn(),
+    getActiveStreams: jest.fn(),
+  };
 
   let consumer: AiFanoutConsumer;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    consumer = new AiFanoutConsumer(gateway as never);
+    consumer = new AiFanoutConsumer(gateway as never, streamTracker as never);
   });
 
   describe('onAiModerationResult', () => {
@@ -185,6 +190,23 @@ describe('AiFanoutConsumer', () => {
         }),
       );
       expect(gateway.emitToUser).not.toHaveBeenCalled();
+      // C12: stop tracking the finished stream.
+      expect(streamTracker.complete).toHaveBeenCalledWith('stream-zai-1');
+    });
+
+    it('does NOT track/complete for non-zai stream complete', () => {
+      consumer.onAiStreamComplete({
+        stream_id: 'stream-1',
+        user_id: 'user-1',
+        conversation_id: 'conv-1',
+        feature: 'summary',
+        total_chunks: 2,
+        total_tokens: 50,
+        provider: 'openai',
+        completed_at: Date.now(),
+      });
+
+      expect(streamTracker.complete).not.toHaveBeenCalled();
     });
   });
 
@@ -238,6 +260,24 @@ describe('AiFanoutConsumer', () => {
         }),
       );
       expect(gateway.emitToUser).not.toHaveBeenCalled();
+      // C12: track the stream against its conversation for disconnect-abort.
+      expect(streamTracker.track).toHaveBeenCalledWith(
+        'stream-zai-2',
+        'conv-group',
+      );
+    });
+
+    it('does NOT track non-zai stream chunks', () => {
+      consumer.onAiStreamChunk({
+        stream_id: 'stream-9',
+        user_id: 'user-9',
+        conversation_id: 'conv-9',
+        feature: 'summary',
+        chunk_index: 0,
+        content: 'x',
+        is_final: false,
+      });
+      expect(streamTracker.track).not.toHaveBeenCalled();
     });
 
     it('regression guard: smart_reply and document_analysis stay unicast', () => {

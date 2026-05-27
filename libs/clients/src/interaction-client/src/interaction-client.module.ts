@@ -6,6 +6,7 @@ import {
   AiConversationsApi,
 } from './client/generated';
 import { InteractionClientService } from './interaction-client.service';
+import { ConversationClientService } from './services/conversation-client.service';
 import {
   InteractionClientConfig,
   InteractionClientAsyncConfig,
@@ -23,6 +24,7 @@ export class InteractionClientModule {
         injectApiProvider(FriendsApi, config),
         injectApiProvider(ConversationsApi, config),
         injectApiProvider(AiConversationsApi, config),
+        ConversationClientService,
         InteractionClientService,
       ],
       exports: [InteractionClientService],
@@ -44,6 +46,7 @@ export class InteractionClientModule {
         injectApiProviderAsync(FriendsApi),
         injectApiProviderAsync(ConversationsApi),
         injectApiProviderAsync(AiConversationsApi),
+        ConversationClientService,
         InteractionClientService,
       ],
       exports: [InteractionClientService],

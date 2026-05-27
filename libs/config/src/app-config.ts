@@ -97,6 +97,18 @@ export interface AppConfig {
   zaiL2MemoryEnabled?: boolean;
   /** Summarize older turns once total history exceeds this many turns. Default 30. */
   zaiL2SummaryTriggerTurns?: number;
+
+  // Zai vision (images-only) — let Zai "see" image attachments.
+  /** Master flag — default true. Kill-switch for the vision capability. */
+  zaiVisionEnabled?: boolean;
+  /** Max images attached to one Zai turn (cost cap). Default 4. */
+  zaiVisionMaxImages?: number;
+  /**
+   * Inline images as base64 data URLs instead of presigned S3 URLs. Default
+   * false (presigned URL — the LLM router fetches it directly). Set true when
+   * the object store is NOT reachable by the router (e.g. LocalStack in dev).
+   */
+  zaiVisionInlineBase64?: boolean;
 }
 
 interface ServiceConfigRequirements {
@@ -420,6 +432,11 @@ export function loadConfig(serviceName: string): AppConfig {
     zaiL2SummaryTriggerTurns:
       readPositiveInteger(process.env.ZAI_L2_SUMMARY_TRIGGER_TURNS, 5, 500) ??
       30,
+    zaiVisionEnabled: readBoolean(process.env.ZAI_VISION_ENABLED) ?? true,
+    zaiVisionMaxImages:
+      readPositiveInteger(process.env.ZAI_VISION_MAX_IMAGES, 1, 10) ?? 4,
+    zaiVisionInlineBase64:
+      readBoolean(process.env.ZAI_VISION_INLINE_BASE64) ?? false,
   };
 
   assertServiceConfig(config);

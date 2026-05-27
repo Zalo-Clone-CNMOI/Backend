@@ -7,6 +7,8 @@ import {
   LlmCompletionResult,
   LlmStreamChunk,
   LlmEmbeddingResult,
+  type LlmChatMessage,
+  type LlmContentPart,
 } from '../interfaces';
 
 @Injectable()
@@ -43,12 +45,33 @@ export class LocDoRouterProvider implements ILlmProvider {
     return this.config.lcdoRouterModel ?? 'claude-sonnet-4-6';
   }
 
+  /**
+   * Map our LlmContentPart[] to OpenAI content parts. Image parts become the
+   * OpenAI `{ type:'image_url', image_url:{ url } }` shape the AIRouter expects
+   * (vision). Plain string content passes through unchanged.
+   */
+  private toOpenAiContent(
+    content: string | LlmContentPart[],
+  ): string | OpenAI.ChatCompletionContentPart[] {
+    if (typeof content === 'string') return content;
+    return content.map((part) =>
+      part.type === 'image_url'
+        ? { type: 'image_url' as const, image_url: { url: part.url } }
+        : { type: 'text' as const, text: part.text },
+    );
+  }
+
   private transformMessages(
-    messages: import('openai').default.ChatCompletionMessageParam[],
+    messages: LlmChatMessage[],
   ): import('openai').default.ChatCompletionMessageParam[] {
-    const systemMsg = messages.find((m) => m.role === 'system');
-    const rest = messages.filter((m) => m.role !== 'system');
-    if (!systemMsg) return messages;
+    const mapped = messages.map((m) => ({
+      role: m.role,
+      content: this.toOpenAiContent(m.content),
+    })) as import('openai').default.ChatCompletionMessageParam[];
+
+    const systemMsg = mapped.find((m) => m.role === 'system');
+    const rest = mapped.filter((m) => m.role !== 'system');
+    if (!systemMsg) return mapped;
     return [
       { role: 'user', content: systemMsg.content as string },
       {
@@ -69,10 +92,7 @@ export class LocDoRouterProvider implements ILlmProvider {
 
       const response = await client.chat.completions.create({
         model,
-        // TODO(Phase-3): multimodal content parts are passed through as-is; provider
-        // SDK error path is currently the only signal if an array reaches the API.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
-        messages: this.transformMessages(options.messages as any),
+        messages: this.transformMessages(options.messages),
         max_tokens: options.maxTokens ?? 1024,
         temperature: options.temperature ?? 0.7,
       });
@@ -118,10 +138,7 @@ export class LocDoRouterProvider implements ILlmProvider {
       const stream = await client.chat.completions.create(
         {
           model,
-          // TODO(Phase-3): multimodal content parts are passed through as-is; provider
-          // SDK error path is currently the only signal if an array reaches the API.
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
-          messages: this.transformMessages(options.messages as any),
+          messages: this.transformMessages(options.messages),
           max_tokens: options.maxTokens ?? 1024,
           temperature: options.temperature ?? 0.7,
           stream: true,

@@ -590,6 +590,7 @@ export class PersistMessageConsumer {
         messageId: payload.message_id,
         createdAt,
         traceId,
+        attachments: payload.attachments,
       });
     } catch (error) {
       await this.repo.clearMessageProcessing(payload.message_id).catch(() => {

@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ZAI_EMPTY_RESPONSE_FALLBACK, ZaiChatEngine } from './zai-chat.engine';
 import { DocumentRagService } from './document-rag.service';
 import { ZaiMemoryService } from './zai-memory.service';
+import { ZaiImageResolverService } from './zai-image-resolver.service';
 import { MessageRepository } from '@libs/scylla';
 import { AiGatewayService } from '../ai-gateway/services/ai-gateway.service';
 import { PromptBuilderService } from '../ai-gateway/services/prompt-builder.service';
@@ -122,11 +123,13 @@ describe('ZaiChatEngine', () => {
   let aiMetrics: jest.Mocked<AiMetricsService>;
   let documentRag: jest.Mocked<DocumentRagService>;
   let zaiMemory: jest.Mocked<ZaiMemoryService>;
+  let imageResolver: jest.Mocked<ZaiImageResolverService>;
 
   async function build(
     repoOverride?: jest.Mocked<MessageRepository>,
     gatewayOverride?: jest.Mocked<AiGatewayService>,
     ragOverride?: jest.Mocked<DocumentRagService>,
+    configOverride?: Record<string, unknown>,
   ) {
     messageRepo = repoOverride ?? makeMessageRepo();
     gateway = gatewayOverride ?? makeGateway();
@@ -139,6 +142,10 @@ describe('ZaiChatEngine', () => {
         Promise.resolve(history),
       ),
     } as unknown as jest.Mocked<ZaiMemoryService>;
+    // Vision resolver: no images by default (tests override resolve()).
+    imageResolver = {
+      resolve: jest.fn().mockResolvedValue([]),
+    } as unknown as jest.Mocked<ZaiImageResolverService>;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -149,7 +156,11 @@ describe('ZaiChatEngine', () => {
         { provide: AiMetricsService, useValue: aiMetrics },
         { provide: DocumentRagService, useValue: documentRag },
         { provide: ZaiMemoryService, useValue: zaiMemory },
-        { provide: APP_CONFIG, useValue: { zaiBotUserId: ZAI_BOT_ID } },
+        { provide: ZaiImageResolverService, useValue: imageResolver },
+        {
+          provide: APP_CONFIG,
+          useValue: { zaiBotUserId: ZAI_BOT_ID, ...configOverride },
+        },
       ],
     }).compile();
 
@@ -595,5 +606,84 @@ describe('ZaiChatEngine', () => {
     const calls = (promptBuilder.buildZaiChatPrompt as jest.Mock).mock
       .calls as [LlmChatMessage[]][];
     expect(calls[0][0]).toContainEqual(summaryMsg);
+  });
+
+  // ── Zai vision (images-only) ────────────────────────────────────────────────
+
+  const IMG_PART = {
+    type: 'image_url' as const,
+    url: 'https://s3/img.png',
+    mime_type: 'image/png',
+  };
+
+  function lastUserContent(): unknown {
+    const msgs = (gateway.complete as jest.Mock).mock.calls[0][1]
+      .messages as LlmChatMessage[];
+    const userMsgs = msgs.filter((m) => m.role === 'user');
+    return userMsgs[userMsgs.length - 1].content;
+  }
+
+  it('text + image: augments the current user turn with the image part', async () => {
+    const items = [makeMsg('msg-1', USER_ID, 'what is this?')];
+    await build(makeMessageRepo(items));
+    imageResolver.resolve.mockResolvedValue([IMG_PART]);
+
+    await engine.respond(
+      makeEvent({
+        body: 'what is this?',
+        images: [{ key: 'k1', content_type: 'image/png' }],
+      }),
+    );
+
+    expect(imageResolver.resolve).toHaveBeenCalled();
+    const content = lastUserContent();
+    expect(Array.isArray(content)).toBe(true);
+    expect(content).toContainEqual(IMG_PART);
+    expect(content).toContainEqual({ type: 'text', text: 'what is this?' });
+  });
+
+  it('image-only (no body): appends a user turn with default prompt + image', async () => {
+    await build(makeMessageRepo([]));
+    imageResolver.resolve.mockResolvedValue([IMG_PART]);
+
+    await engine.respond(
+      makeEvent({ body: '', images: [{ key: 'k1', content_type: 'image/png' }] }),
+    );
+
+    const content = lastUserContent() as { type: string; text?: string }[];
+    expect(Array.isArray(content)).toBe(true);
+    expect(content).toContainEqual(IMG_PART);
+    // text part is the default vision prompt (non-empty).
+    const textPart = content.find((p) => p.type === 'text');
+    expect(textPart?.text).toBeTruthy();
+  });
+
+  it('vision disabled: does not resolve images, content stays plain text', async () => {
+    await build(makeMessageRepo([makeMsg('m1', USER_ID, 'hi')]), undefined, undefined, {
+      zaiVisionEnabled: false,
+    });
+
+    await engine.respond(
+      makeEvent({ body: 'hi', images: [{ key: 'k1', content_type: 'image/png' }] }),
+    );
+
+    expect(imageResolver.resolve).not.toHaveBeenCalled();
+  });
+
+  it('no images on event: resolver not invoked (regression guard)', async () => {
+    await engine.respond(makeEvent());
+    expect(imageResolver.resolve).not.toHaveBeenCalled();
+  });
+
+  it('images present but none resolve: messages left unchanged (plain text)', async () => {
+    await build(makeMessageRepo([makeMsg('m1', USER_ID, 'hi')]));
+    imageResolver.resolve.mockResolvedValue([]); // all failed / filtered
+
+    await engine.respond(
+      makeEvent({ body: 'hi', images: [{ key: 'k1', content_type: 'image/png' }] }),
+    );
+
+    const content = lastUserContent();
+    expect(typeof content).toBe('string');
   });
 });

@@ -311,4 +311,81 @@ describe('LocDoRouterProvider', () => {
       await expect(provider.complete(makeOptions())).resolves.toBeDefined();
     });
   });
+
+  describe('multimodal (vision)', () => {
+    function captureMessages(mockCreate: jest.Mock): unknown[] {
+      return (mockCreate.mock.calls[0][0] as { messages: unknown[] }).messages;
+    }
+
+    it('maps image_url content parts to the OpenAI { image_url: { url } } shape', async () => {
+      const provider = await buildProvider();
+      const mockCreate = jest.fn().mockResolvedValue(makeChatResponse('ok'));
+      (provider as unknown as Record<string, unknown>).client = {
+        chat: { completions: { create: mockCreate } },
+      };
+
+      await provider.complete(
+        makeOptions({
+          messages: [
+            { role: 'system', content: 'You are Zai.' },
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: 'what is this?' },
+                { type: 'image_url', url: 'https://s3/img.png' },
+              ],
+            },
+          ],
+        }),
+      );
+
+      const messages = captureMessages(mockCreate) as {
+        role: string;
+        content: unknown;
+      }[];
+      // The user turn (last) carries OpenAI-shaped content parts.
+      const userTurn = messages[messages.length - 1];
+      expect(userTurn.content).toEqual([
+        { type: 'text', text: 'what is this?' },
+        { type: 'image_url', image_url: { url: 'https://s3/img.png' } },
+      ]);
+    });
+
+    it('streaming path also maps image parts', async () => {
+      const provider = await buildProvider();
+      const mockCreate = jest.fn().mockResolvedValue({
+        // eslint-disable-next-line @typescript-eslint/require-await
+        async *[Symbol.asyncIterator]() {
+          yield {
+            choices: [{ delta: { content: 'hi' }, finish_reason: 'stop' }],
+          };
+        },
+      });
+      (provider as unknown as Record<string, unknown>).client = {
+        chat: { completions: { create: mockCreate } },
+      };
+
+      await provider.completeStream(
+        makeOptions({
+          messages: [
+            { role: 'system', content: 'You are Zai.' },
+            {
+              role: 'user',
+              content: [{ type: 'image_url', url: 'https://s3/x.png' }],
+            },
+          ],
+        }),
+        jest.fn(),
+      );
+
+      const messages = captureMessages(mockCreate) as {
+        role: string;
+        content: unknown;
+      }[];
+      const userTurn = messages[messages.length - 1];
+      expect(userTurn.content).toEqual([
+        { type: 'image_url', image_url: { url: 'https://s3/x.png' } },
+      ]);
+    });
+  });
 });

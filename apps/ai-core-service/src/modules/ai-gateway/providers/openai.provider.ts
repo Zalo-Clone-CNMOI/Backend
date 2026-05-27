@@ -8,6 +8,7 @@ import {
   LlmStreamChunk,
   LlmEmbeddingResult,
 } from '../interfaces';
+import { flattenMessages } from './content.util';
 
 @Injectable()
 export class OpenAiProvider implements ILlmProvider {
@@ -38,10 +39,9 @@ export class OpenAiProvider implements ILlmProvider {
 
       const response = await client.chat.completions.create({
         model,
-        // TODO(Phase-3): multimodal content parts are passed through as-is; provider
-        // SDK error path is currently the only signal if an array reaches the API.
+        // Text-only provider: flatten any image parts (LocDo is the vision path).
         // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
-        messages: options.messages as any,
+        messages: flattenMessages(options.messages) as any,
         max_tokens: options.maxTokens ?? 1024,
         temperature: options.temperature ?? 0.7,
       });
@@ -87,10 +87,9 @@ export class OpenAiProvider implements ILlmProvider {
       const stream = await client.chat.completions.create(
         {
           model,
-          // TODO(Phase-3): multimodal content parts are passed through as-is; provider
-          // SDK error path is currently the only signal if an array reaches the API.
+          // Text-only provider: flatten any image parts (LocDo is the vision path).
           // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
-          messages: options.messages as any,
+          messages: flattenMessages(options.messages) as any,
           max_tokens: options.maxTokens ?? 1024,
           temperature: options.temperature ?? 0.7,
           stream: true,

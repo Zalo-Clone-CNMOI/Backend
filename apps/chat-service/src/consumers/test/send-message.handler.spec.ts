@@ -533,6 +533,106 @@ describe('SendMessageHandler', () => {
       });
     });
 
+    it('AI conversation + image attachment: forwards images[] to Zai (vision)', async () => {
+      const payload = createMockChatSendCommand({
+        body: 'what is this?',
+        attachments: [
+          {
+            key: 'uploads/abc.png',
+            type: 'image',
+            name: 'abc.png',
+            size: 1234,
+            content_type: 'image/png',
+          },
+        ],
+      } as Partial<Parameters<typeof createMockChatSendCommand>[0]>);
+      membershipService.canUserAccessConversation.mockResolvedValue(true);
+      repo.tryBeginMessageProcessing.mockResolvedValue(true);
+      repo.insertMessage.mockResolvedValue(undefined);
+      repo.markMessageStored.mockResolvedValue(undefined);
+      cacheService.getAiConversationContext.mockResolvedValue({
+        feature: 'general',
+        created_at: 1,
+      });
+
+      await handler.handle(payload);
+      await drainMicrotasks();
+
+      const aiCalls = (publisher.emit.mock.calls as [string, unknown][]).filter(
+        ([topic]) => topic === 'ai.zai.chat.request',
+      );
+      expect(aiCalls).toHaveLength(1);
+      expect(aiCalls[0][1]).toMatchObject({
+        trigger: 'conversation',
+        images: [{ key: 'uploads/abc.png', content_type: 'image/png' }],
+      });
+    });
+
+    it('Image-only message (no body) in AI conversation: still triggers Zai', async () => {
+      const payload = createMockChatSendCommand({
+        body: '',
+        attachments: [
+          {
+            key: 'uploads/x.png',
+            type: 'image',
+            name: 'x.png',
+            size: 10,
+            content_type: 'image/png',
+          },
+        ],
+      } as Partial<Parameters<typeof createMockChatSendCommand>[0]>);
+      membershipService.canUserAccessConversation.mockResolvedValue(true);
+      repo.tryBeginMessageProcessing.mockResolvedValue(true);
+      repo.insertMessage.mockResolvedValue(undefined);
+      repo.markMessageStored.mockResolvedValue(undefined);
+      cacheService.getAiConversationContext.mockResolvedValue({
+        feature: 'general',
+        created_at: 1,
+      });
+
+      await handler.handle(payload);
+      await drainMicrotasks();
+
+      const aiCalls = (publisher.emit.mock.calls as [string, unknown][]).filter(
+        ([topic]) => topic === 'ai.zai.chat.request',
+      );
+      expect(aiCalls).toHaveLength(1);
+      expect(aiCalls[0][1]).toMatchObject({
+        images: [{ key: 'uploads/x.png', content_type: 'image/png' }],
+      });
+    });
+
+    it('Non-image media only (no body): does NOT trigger Zai', async () => {
+      const payload = createMockChatSendCommand({
+        body: '',
+        attachments: [
+          {
+            key: 'uploads/clip.mp4',
+            type: 'video',
+            name: 'clip.mp4',
+            size: 99,
+            content_type: 'video/mp4',
+          },
+        ],
+      } as Partial<Parameters<typeof createMockChatSendCommand>[0]>);
+      membershipService.canUserAccessConversation.mockResolvedValue(true);
+      repo.tryBeginMessageProcessing.mockResolvedValue(true);
+      repo.insertMessage.mockResolvedValue(undefined);
+      repo.markMessageStored.mockResolvedValue(undefined);
+      cacheService.getAiConversationContext.mockResolvedValue({
+        feature: 'general',
+        created_at: 1,
+      });
+
+      await handler.handle(payload);
+      await drainMicrotasks();
+
+      const aiCalls = (publisher.emit.mock.calls as [string, unknown][]).filter(
+        ([topic]) => topic === 'ai.zai.chat.request',
+      );
+      expect(aiCalls).toHaveLength(0);
+    });
+
     it('Group @Zai mention: emits AiZaiChatRequest with trigger=mention when cooldown free', async () => {
       const payload = createMockChatSendCommand({
         mentions: [

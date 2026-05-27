@@ -386,6 +386,14 @@ export interface AiStreamAbortEvent {
   trace_id?: string;
 }
 
+/** A single image attachment forwarded to Zai for vision (Phase: Zai vision). */
+export interface AiZaiImageRef {
+  /** S3 object key (ai-core resolves it to a URL or inline base64). */
+  key: string;
+  /** MIME type, e.g. "image/png". Non-image types are ignored by ai-core. */
+  content_type: string;
+}
+
 export interface AiZaiChatRequestEvent {
   message_id: string;
   conversation_id: string;
@@ -394,6 +402,8 @@ export interface AiZaiChatRequestEvent {
   created_at: number;
   ai_context?: AiConversationContext;
   trigger?: 'conversation' | 'mention';
+  /** Image attachments on the triggering message (vision). Images-only for now. */
+  images?: AiZaiImageRef[];
   trace_id?: string;
 }
 

@@ -67,15 +67,12 @@ describe('ConversationClientService', () => {
 describe('InteractionClientService delegation', () => {
   it('delegates conversation + AI methods to ConversationClientService', async () => {
     // Lazy import to avoid pulling generated API types into the spec scope.
-    const { InteractionClientService } = await import(
-      '../interaction-client.service'
-    );
+    const { InteractionClientService } =
+      await import('../interaction-client.service');
 
     const conversationClient = {
       getConversations: jest.fn().mockResolvedValue({ items: [] }),
-      disbandAiConversation: jest
-        .fn()
-        .mockResolvedValue({ message: 'ok' }),
+      disbandAiConversation: jest.fn().mockResolvedValue({ message: 'ok' }),
     };
 
     const facade = new InteractionClientService(

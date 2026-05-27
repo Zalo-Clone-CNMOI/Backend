@@ -19,6 +19,19 @@ import type { AiConversationContext } from '@libs/contracts';
 
 const ZAI_ID = '00000000-0000-0000-0000-0000000000a1';
 
+/**
+ * Shared mock for the existing-conversation lookup QueryBuilder used by
+ * both getOrCreateGeneral and getOrCreateDocumentConversation. Returns a
+ * chainable stub whose getOne resolves to the supplied conversation.
+ */
+function makeLookupQueryBuilder(returnValue: Conversation | null) {
+  return {
+    innerJoin: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    getOne: jest.fn().mockResolvedValue(returnValue),
+  };
+}
+
 describe('AiConversationFactoryService', () => {
   let service: AiConversationFactoryService;
   let entityManager: {
@@ -90,7 +103,6 @@ describe('AiConversationFactoryService', () => {
     } as unknown as jest.Mocked<Repository<DocumentMetadata>>;
 
     cacheService = {
-      setAiConversationMarker: jest.fn().mockResolvedValue(undefined),
       setAiConversationContext: jest.fn().mockResolvedValue(undefined),
     } as unknown as jest.Mocked<CacheService>;
 
@@ -217,19 +229,10 @@ describe('AiConversationFactoryService', () => {
   // ── getOrCreateGeneral ───────────────────────────────────────────────────
 
   describe('getOrCreateGeneral', () => {
-    function makeQueryBuilder(returnValue: Conversation | null) {
-      const qb = {
-        innerJoin: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        getOne: jest.fn().mockResolvedValue(returnValue),
-      };
-      return qb;
-    }
-
     it('returns existing conversation id without DB write when one exists', async () => {
       const existing = { id: 'conv-existing' } as Conversation;
       (conversationRepo.createQueryBuilder as jest.Mock).mockReturnValue(
-        makeQueryBuilder(existing),
+        makeLookupQueryBuilder(existing),
       );
 
       const result = await service.getOrCreateGeneral('user-1');
@@ -244,7 +247,7 @@ describe('AiConversationFactoryService', () => {
 
     it('creates new conversation when none exists and returns new id', async () => {
       (conversationRepo.createQueryBuilder as jest.Mock).mockReturnValue(
-        makeQueryBuilder(null),
+        makeLookupQueryBuilder(null),
       );
 
       const result = await service.getOrCreateGeneral('user-1');
@@ -257,21 +260,13 @@ describe('AiConversationFactoryService', () => {
   // ── getOrCreateDocumentConversation (Phase 4 + S5 dedup) ─────────────────
 
   describe('getOrCreateDocumentConversation', () => {
-    function makeDocQueryBuilder(returnValue: Conversation | null) {
-      return {
-        innerJoin: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        getOne: jest.fn().mockResolvedValue(returnValue),
-      };
-    }
-
     it('creates a feature=document conversation when none exists', async () => {
       docMetaRepo.findOne.mockResolvedValueOnce({
         id: 'doc-1',
         userId: 'user-1',
       } as DocumentMetadata);
       (conversationRepo.createQueryBuilder as jest.Mock).mockReturnValue(
-        makeDocQueryBuilder(null),
+        makeLookupQueryBuilder(null),
       );
 
       const result = await service.getOrCreateDocumentConversation(
@@ -306,7 +301,7 @@ describe('AiConversationFactoryService', () => {
         },
       } as Conversation;
       (conversationRepo.createQueryBuilder as jest.Mock).mockReturnValue(
-        makeDocQueryBuilder(existing),
+        makeLookupQueryBuilder(existing),
       );
 
       const result = await service.getOrCreateDocumentConversation(

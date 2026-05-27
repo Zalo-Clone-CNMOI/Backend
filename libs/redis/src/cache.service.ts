@@ -342,48 +342,6 @@ export class CacheService {
   // AI Conversation Markers
   // ===================================
 
-  /**
-   * @deprecated Phase 4 replaces this with {@link setAiConversationContext},
-   * which stores the full AI context (feature, document_id, etc.) as JSON.
-   * Kept only for rollback safety with older chat-service builds. Do NOT
-   * call from new code — it would downgrade an existing JSON marker to '1'
-   * and erase the feature/document_id metadata.
-   */
-  async setAiConversationMarker(conversationId: string): Promise<void> {
-    try {
-      await this.redisClient.set(
-        `${this.AI_CONV_MARKER_PREFIX}${conversationId}`,
-        '1',
-      );
-    } catch (error) {
-      this.logger.error(
-        `Failed to set AI conversation marker for ${conversationId}:`,
-        error,
-      );
-    }
-  }
-
-  /**
-   * @deprecated Phase 4 replaces this with {@link getAiConversationContext},
-   * which returns the routing context (feature, document_id) instead of just
-   * a boolean. Kept for rollback safety — older chat-service builds may still
-   * use this EXISTS check.
-   */
-  async isAiConversation(conversationId: string): Promise<boolean> {
-    try {
-      const count = await this.redisClient.exists(
-        `${this.AI_CONV_MARKER_PREFIX}${conversationId}`,
-      );
-      return count > 0;
-    } catch (error) {
-      this.logger.error(
-        `Failed to check AI conversation marker for ${conversationId}:`,
-        error,
-      );
-      return false;
-    }
-  }
-
   async setAiConversationContext(
     conversationId: string,
     context: AiConversationContext,

@@ -91,7 +91,7 @@ export class ZaiChatEngine {
             message_id: randomUUID(),
             conversation_id: event.conversation_id,
             body: 'This document is no longer available.',
-            trace_id: event.trace_id ?? `zai-${Date.now()}`,
+            trace_id: event.trace_id ?? `zai-${randomUUID()}`,
           };
         }
         throw err;
@@ -160,7 +160,7 @@ export class ZaiChatEngine {
         message_id: randomUUID(),
         conversation_id: event.conversation_id,
         body,
-        trace_id: event.trace_id ?? `zai-${Date.now()}`,
+        trace_id: event.trace_id ?? `zai-${randomUUID()}`,
       };
     } catch (err) {
       this.aiMetrics.recordRequest(

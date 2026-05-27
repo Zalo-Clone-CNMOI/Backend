@@ -45,6 +45,31 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ZaiConversationResponseDto'
+  /ai-conversations/{conversationId}/disband:
+    post:
+      tags:
+        - AiConversations
+      summary: Disband (delete) an AI conversation — creator only
+      operationId: disbandAiConversation
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: AI conversation disbanded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
   /friends:
     get:
       tags:

@@ -430,6 +430,19 @@ export interface CreateGroupConversationDto {
 /**
  * 
  * @export
+ * @interface DisbandAiConversation200Response
+ */
+export interface DisbandAiConversation200Response {
+    /**
+     * 
+     * @type {string}
+     * @memberof DisbandAiConversation200Response
+     */
+    'message'?: string;
+}
+/**
+ * 
+ * @export
  * @interface EndConversationCallDto
  */
 export interface EndConversationCallDto {
@@ -934,19 +947,6 @@ export enum RespondFriendRequestDtoActionEnum {
 /**
  * 
  * @export
- * @interface RespondToRequest200Response
- */
-export interface RespondToRequest200Response {
-    /**
-     * 
-     * @type {string}
-     * @memberof RespondToRequest200Response
-     */
-    'message'?: string;
-}
-/**
- * 
- * @export
  * @interface SendFriendRequest201Response
  */
 export interface SendFriendRequest201Response {
@@ -1171,6 +1171,44 @@ export const AiConversationsApiAxiosParamCreator = function (configuration?: Con
     return {
         /**
          * 
+         * @summary Disband (delete) an AI conversation — creator only
+         * @param {string} conversationId 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        disbandAiConversation: async (conversationId: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'conversationId' is not null or undefined
+            assertParamExists('disbandAiConversation', 'conversationId', conversationId)
+            const localVarPath = `/ai-conversations/{conversationId}/disband`
+                .replace(`{${"conversationId"}}`, encodeURIComponent(String(conversationId)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication BearerAuth required
+            // http bearer authentication required
+            await setBearerAuthToObject(localVarHeaderParameter, configuration)
+
+
+    
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
          * @summary Get or create a Zai AI conversation anchored to a specific document
          * @param {CreateDocumentConversationDto} createDocumentConversationDto 
          * @param {*} [options] Override http request option.
@@ -1255,6 +1293,19 @@ export const AiConversationsApiFp = function(configuration?: Configuration) {
     return {
         /**
          * 
+         * @summary Disband (delete) an AI conversation — creator only
+         * @param {string} conversationId 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async disbandAiConversation(conversationId: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<DisbandAiConversation200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.disbandAiConversation(conversationId, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['AiConversationsApi.disbandAiConversation']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
          * @summary Get or create a Zai AI conversation anchored to a specific document
          * @param {CreateDocumentConversationDto} createDocumentConversationDto 
          * @param {*} [options] Override http request option.
@@ -1290,6 +1341,16 @@ export const AiConversationsApiFactory = function (configuration?: Configuration
     return {
         /**
          * 
+         * @summary Disband (delete) an AI conversation — creator only
+         * @param {AiConversationsApiDisbandAiConversationRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        disbandAiConversation(requestParameters: AiConversationsApiDisbandAiConversationRequest, options?: RawAxiosRequestConfig): AxiosPromise<DisbandAiConversation200Response> {
+            return localVarFp.disbandAiConversation(requestParameters.conversationId, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
          * @summary Get or create a Zai AI conversation anchored to a specific document
          * @param {AiConversationsApiGetOrCreateDocumentConversationRequest} requestParameters Request parameters.
          * @param {*} [options] Override http request option.
@@ -1309,6 +1370,20 @@ export const AiConversationsApiFactory = function (configuration?: Configuration
         },
     };
 };
+
+/**
+ * Request parameters for disbandAiConversation operation in AiConversationsApi.
+ * @export
+ * @interface AiConversationsApiDisbandAiConversationRequest
+ */
+export interface AiConversationsApiDisbandAiConversationRequest {
+    /**
+     * 
+     * @type {string}
+     * @memberof AiConversationsApiDisbandAiConversation
+     */
+    readonly conversationId: string
+}
 
 /**
  * Request parameters for getOrCreateDocumentConversation operation in AiConversationsApi.
@@ -1331,6 +1406,18 @@ export interface AiConversationsApiGetOrCreateDocumentConversationRequest {
  * @extends {BaseAPI}
  */
 export class AiConversationsApi extends BaseAPI {
+    /**
+     * 
+     * @summary Disband (delete) an AI conversation — creator only
+     * @param {AiConversationsApiDisbandAiConversationRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof AiConversationsApi
+     */
+    public disbandAiConversation(requestParameters: AiConversationsApiDisbandAiConversationRequest, options?: RawAxiosRequestConfig) {
+        return AiConversationsApiFp(this.configuration).disbandAiConversation(requestParameters.conversationId, options).then((request) => request(this.axios, this.basePath));
+    }
+
     /**
      * 
      * @summary Get or create a Zai AI conversation anchored to a specific document
@@ -2355,7 +2442,7 @@ export const ConversationsApiFp = function(configuration?: Configuration) {
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async acceptGroupInvite(conversationId: string, inviteId: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RespondToRequest200Response>> {
+        async acceptGroupInvite(conversationId: string, inviteId: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<DisbandAiConversation200Response>> {
             const localVarAxiosArgs = await localVarAxiosParamCreator.acceptGroupInvite(conversationId, inviteId, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['ConversationsApi.acceptGroupInvite']?.[localVarOperationServerIndex]?.url;
@@ -2383,7 +2470,7 @@ export const ConversationsApiFp = function(configuration?: Configuration) {
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async cancelGroupInvite(conversationId: string, inviteId: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RespondToRequest200Response>> {
+        async cancelGroupInvite(conversationId: string, inviteId: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<DisbandAiConversation200Response>> {
             const localVarAxiosArgs = await localVarAxiosParamCreator.cancelGroupInvite(conversationId, inviteId, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['ConversationsApi.cancelGroupInvite']?.[localVarOperationServerIndex]?.url;
@@ -2422,7 +2509,7 @@ export const ConversationsApiFp = function(configuration?: Configuration) {
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async disbandConversation(conversationId: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RespondToRequest200Response>> {
+        async disbandConversation(conversationId: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<DisbandAiConversation200Response>> {
             const localVarAxiosArgs = await localVarAxiosParamCreator.disbandConversation(conversationId, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['ConversationsApi.disbandConversation']?.[localVarOperationServerIndex]?.url;
@@ -2437,7 +2524,7 @@ export const ConversationsApiFp = function(configuration?: Configuration) {
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async endConversationCall(conversationId: string, callId: string, endConversationCallDto?: EndConversationCallDto, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RespondToRequest200Response>> {
+        async endConversationCall(conversationId: string, callId: string, endConversationCallDto?: EndConversationCallDto, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<DisbandAiConversation200Response>> {
             const localVarAxiosArgs = await localVarAxiosParamCreator.endConversationCall(conversationId, callId, endConversationCallDto, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['ConversationsApi.endConversationCall']?.[localVarOperationServerIndex]?.url;
@@ -2521,7 +2608,7 @@ export const ConversationsApiFp = function(configuration?: Configuration) {
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async leaveConversation(conversationId: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RespondToRequest200Response>> {
+        async leaveConversation(conversationId: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<DisbandAiConversation200Response>> {
             const localVarAxiosArgs = await localVarAxiosParamCreator.leaveConversation(conversationId, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['ConversationsApi.leaveConversation']?.[localVarOperationServerIndex]?.url;
@@ -2534,7 +2621,7 @@ export const ConversationsApiFp = function(configuration?: Configuration) {
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async markAsRead(conversationId: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RespondToRequest200Response>> {
+        async markAsRead(conversationId: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<DisbandAiConversation200Response>> {
             const localVarAxiosArgs = await localVarAxiosParamCreator.markAsRead(conversationId, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['ConversationsApi.markAsRead']?.[localVarOperationServerIndex]?.url;
@@ -2547,7 +2634,7 @@ export const ConversationsApiFp = function(configuration?: Configuration) {
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async pinConversation(conversationId: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RespondToRequest200Response>> {
+        async pinConversation(conversationId: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<DisbandAiConversation200Response>> {
             const localVarAxiosArgs = await localVarAxiosParamCreator.pinConversation(conversationId, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['ConversationsApi.pinConversation']?.[localVarOperationServerIndex]?.url;
@@ -2561,7 +2648,7 @@ export const ConversationsApiFp = function(configuration?: Configuration) {
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async rejectGroupInvite(conversationId: string, inviteId: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RespondToRequest200Response>> {
+        async rejectGroupInvite(conversationId: string, inviteId: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<DisbandAiConversation200Response>> {
             const localVarAxiosArgs = await localVarAxiosParamCreator.rejectGroupInvite(conversationId, inviteId, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['ConversationsApi.rejectGroupInvite']?.[localVarOperationServerIndex]?.url;
@@ -2575,7 +2662,7 @@ export const ConversationsApiFp = function(configuration?: Configuration) {
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async removeMember(conversationId: string, memberId: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RespondToRequest200Response>> {
+        async removeMember(conversationId: string, memberId: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<DisbandAiConversation200Response>> {
             const localVarAxiosArgs = await localVarAxiosParamCreator.removeMember(conversationId, memberId, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['ConversationsApi.removeMember']?.[localVarOperationServerIndex]?.url;
@@ -2602,7 +2689,7 @@ export const ConversationsApiFp = function(configuration?: Configuration) {
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async unpinConversation(conversationId: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RespondToRequest200Response>> {
+        async unpinConversation(conversationId: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<DisbandAiConversation200Response>> {
             const localVarAxiosArgs = await localVarAxiosParamCreator.unpinConversation(conversationId, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['ConversationsApi.unpinConversation']?.[localVarOperationServerIndex]?.url;
@@ -2645,7 +2732,7 @@ export const ConversationsApiFp = function(configuration?: Configuration) {
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async updateMemberRole(conversationId: string, memberId: string, updateMemberRoleDto: UpdateMemberRoleDto, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RespondToRequest200Response>> {
+        async updateMemberRole(conversationId: string, memberId: string, updateMemberRoleDto: UpdateMemberRoleDto, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<DisbandAiConversation200Response>> {
             const localVarAxiosArgs = await localVarAxiosParamCreator.updateMemberRole(conversationId, memberId, updateMemberRoleDto, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['ConversationsApi.updateMemberRole']?.[localVarOperationServerIndex]?.url;
@@ -2659,7 +2746,7 @@ export const ConversationsApiFp = function(configuration?: Configuration) {
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async updateMySettings(conversationId: string, updateMemberSettingsDto: UpdateMemberSettingsDto, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RespondToRequest200Response>> {
+        async updateMySettings(conversationId: string, updateMemberSettingsDto: UpdateMemberSettingsDto, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<DisbandAiConversation200Response>> {
             const localVarAxiosArgs = await localVarAxiosParamCreator.updateMySettings(conversationId, updateMemberSettingsDto, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['ConversationsApi.updateMySettings']?.[localVarOperationServerIndex]?.url;
@@ -2682,7 +2769,7 @@ export const ConversationsApiFactory = function (configuration?: Configuration, 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        acceptGroupInvite(requestParameters: ConversationsApiAcceptGroupInviteRequest, options?: RawAxiosRequestConfig): AxiosPromise<RespondToRequest200Response> {
+        acceptGroupInvite(requestParameters: ConversationsApiAcceptGroupInviteRequest, options?: RawAxiosRequestConfig): AxiosPromise<DisbandAiConversation200Response> {
             return localVarFp.acceptGroupInvite(requestParameters.conversationId, requestParameters.inviteId, options).then((request) => request(axios, basePath));
         },
         /**
@@ -2702,7 +2789,7 @@ export const ConversationsApiFactory = function (configuration?: Configuration, 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        cancelGroupInvite(requestParameters: ConversationsApiCancelGroupInviteRequest, options?: RawAxiosRequestConfig): AxiosPromise<RespondToRequest200Response> {
+        cancelGroupInvite(requestParameters: ConversationsApiCancelGroupInviteRequest, options?: RawAxiosRequestConfig): AxiosPromise<DisbandAiConversation200Response> {
             return localVarFp.cancelGroupInvite(requestParameters.conversationId, requestParameters.inviteId, options).then((request) => request(axios, basePath));
         },
         /**
@@ -2732,7 +2819,7 @@ export const ConversationsApiFactory = function (configuration?: Configuration, 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        disbandConversation(requestParameters: ConversationsApiDisbandConversationRequest, options?: RawAxiosRequestConfig): AxiosPromise<RespondToRequest200Response> {
+        disbandConversation(requestParameters: ConversationsApiDisbandConversationRequest, options?: RawAxiosRequestConfig): AxiosPromise<DisbandAiConversation200Response> {
             return localVarFp.disbandConversation(requestParameters.conversationId, options).then((request) => request(axios, basePath));
         },
         /**
@@ -2742,7 +2829,7 @@ export const ConversationsApiFactory = function (configuration?: Configuration, 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        endConversationCall(requestParameters: ConversationsApiEndConversationCallRequest, options?: RawAxiosRequestConfig): AxiosPromise<RespondToRequest200Response> {
+        endConversationCall(requestParameters: ConversationsApiEndConversationCallRequest, options?: RawAxiosRequestConfig): AxiosPromise<DisbandAiConversation200Response> {
             return localVarFp.endConversationCall(requestParameters.conversationId, requestParameters.callId, requestParameters.endConversationCallDto, options).then((request) => request(axios, basePath));
         },
         /**
@@ -2802,7 +2889,7 @@ export const ConversationsApiFactory = function (configuration?: Configuration, 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        leaveConversation(requestParameters: ConversationsApiLeaveConversationRequest, options?: RawAxiosRequestConfig): AxiosPromise<RespondToRequest200Response> {
+        leaveConversation(requestParameters: ConversationsApiLeaveConversationRequest, options?: RawAxiosRequestConfig): AxiosPromise<DisbandAiConversation200Response> {
             return localVarFp.leaveConversation(requestParameters.conversationId, options).then((request) => request(axios, basePath));
         },
         /**
@@ -2812,7 +2899,7 @@ export const ConversationsApiFactory = function (configuration?: Configuration, 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        markAsRead(requestParameters: ConversationsApiMarkAsReadRequest, options?: RawAxiosRequestConfig): AxiosPromise<RespondToRequest200Response> {
+        markAsRead(requestParameters: ConversationsApiMarkAsReadRequest, options?: RawAxiosRequestConfig): AxiosPromise<DisbandAiConversation200Response> {
             return localVarFp.markAsRead(requestParameters.conversationId, options).then((request) => request(axios, basePath));
         },
         /**
@@ -2822,7 +2909,7 @@ export const ConversationsApiFactory = function (configuration?: Configuration, 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        pinConversation(requestParameters: ConversationsApiPinConversationRequest, options?: RawAxiosRequestConfig): AxiosPromise<RespondToRequest200Response> {
+        pinConversation(requestParameters: ConversationsApiPinConversationRequest, options?: RawAxiosRequestConfig): AxiosPromise<DisbandAiConversation200Response> {
             return localVarFp.pinConversation(requestParameters.conversationId, options).then((request) => request(axios, basePath));
         },
         /**
@@ -2832,7 +2919,7 @@ export const ConversationsApiFactory = function (configuration?: Configuration, 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        rejectGroupInvite(requestParameters: ConversationsApiRejectGroupInviteRequest, options?: RawAxiosRequestConfig): AxiosPromise<RespondToRequest200Response> {
+        rejectGroupInvite(requestParameters: ConversationsApiRejectGroupInviteRequest, options?: RawAxiosRequestConfig): AxiosPromise<DisbandAiConversation200Response> {
             return localVarFp.rejectGroupInvite(requestParameters.conversationId, requestParameters.inviteId, options).then((request) => request(axios, basePath));
         },
         /**
@@ -2842,7 +2929,7 @@ export const ConversationsApiFactory = function (configuration?: Configuration, 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        removeMember(requestParameters: ConversationsApiRemoveMemberRequest, options?: RawAxiosRequestConfig): AxiosPromise<RespondToRequest200Response> {
+        removeMember(requestParameters: ConversationsApiRemoveMemberRequest, options?: RawAxiosRequestConfig): AxiosPromise<DisbandAiConversation200Response> {
             return localVarFp.removeMember(requestParameters.conversationId, requestParameters.memberId, options).then((request) => request(axios, basePath));
         },
         /**
@@ -2862,7 +2949,7 @@ export const ConversationsApiFactory = function (configuration?: Configuration, 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        unpinConversation(requestParameters: ConversationsApiUnpinConversationRequest, options?: RawAxiosRequestConfig): AxiosPromise<RespondToRequest200Response> {
+        unpinConversation(requestParameters: ConversationsApiUnpinConversationRequest, options?: RawAxiosRequestConfig): AxiosPromise<DisbandAiConversation200Response> {
             return localVarFp.unpinConversation(requestParameters.conversationId, options).then((request) => request(axios, basePath));
         },
         /**
@@ -2892,7 +2979,7 @@ export const ConversationsApiFactory = function (configuration?: Configuration, 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        updateMemberRole(requestParameters: ConversationsApiUpdateMemberRoleRequest, options?: RawAxiosRequestConfig): AxiosPromise<RespondToRequest200Response> {
+        updateMemberRole(requestParameters: ConversationsApiUpdateMemberRoleRequest, options?: RawAxiosRequestConfig): AxiosPromise<DisbandAiConversation200Response> {
             return localVarFp.updateMemberRole(requestParameters.conversationId, requestParameters.memberId, requestParameters.updateMemberRoleDto, options).then((request) => request(axios, basePath));
         },
         /**
@@ -2902,7 +2989,7 @@ export const ConversationsApiFactory = function (configuration?: Configuration, 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        updateMySettings(requestParameters: ConversationsApiUpdateMySettingsRequest, options?: RawAxiosRequestConfig): AxiosPromise<RespondToRequest200Response> {
+        updateMySettings(requestParameters: ConversationsApiUpdateMySettingsRequest, options?: RawAxiosRequestConfig): AxiosPromise<DisbandAiConversation200Response> {
             return localVarFp.updateMySettings(requestParameters.conversationId, requestParameters.updateMemberSettingsDto, options).then((request) => request(axios, basePath));
         },
     };
@@ -4040,7 +4127,7 @@ export const FriendsApiFp = function(configuration?: Configuration) {
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async blockUser(userId: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RespondToRequest200Response>> {
+        async blockUser(userId: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<DisbandAiConversation200Response>> {
             const localVarAxiosArgs = await localVarAxiosParamCreator.blockUser(userId, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['FriendsApi.blockUser']?.[localVarOperationServerIndex]?.url;
@@ -4053,7 +4140,7 @@ export const FriendsApiFp = function(configuration?: Configuration) {
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async cancelRequest(requestId: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RespondToRequest200Response>> {
+        async cancelRequest(requestId: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<DisbandAiConversation200Response>> {
             const localVarAxiosArgs = await localVarAxiosParamCreator.cancelRequest(requestId, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['FriendsApi.cancelRequest']?.[localVarOperationServerIndex]?.url;
@@ -4108,7 +4195,7 @@ export const FriendsApiFp = function(configuration?: Configuration) {
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async removeFriend(friendId: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RespondToRequest200Response>> {
+        async removeFriend(friendId: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<DisbandAiConversation200Response>> {
             const localVarAxiosArgs = await localVarAxiosParamCreator.removeFriend(friendId, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['FriendsApi.removeFriend']?.[localVarOperationServerIndex]?.url;
@@ -4122,7 +4209,7 @@ export const FriendsApiFp = function(configuration?: Configuration) {
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async respondToRequest(requestId: string, respondFriendRequestDto: RespondFriendRequestDto, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RespondToRequest200Response>> {
+        async respondToRequest(requestId: string, respondFriendRequestDto: RespondFriendRequestDto, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<DisbandAiConversation200Response>> {
             const localVarAxiosArgs = await localVarAxiosParamCreator.respondToRequest(requestId, respondFriendRequestDto, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['FriendsApi.respondToRequest']?.[localVarOperationServerIndex]?.url;
@@ -4148,7 +4235,7 @@ export const FriendsApiFp = function(configuration?: Configuration) {
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async unblockUser(userId: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RespondToRequest200Response>> {
+        async unblockUser(userId: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<DisbandAiConversation200Response>> {
             const localVarAxiosArgs = await localVarAxiosParamCreator.unblockUser(userId, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['FriendsApi.unblockUser']?.[localVarOperationServerIndex]?.url;
@@ -4171,7 +4258,7 @@ export const FriendsApiFactory = function (configuration?: Configuration, basePa
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        blockUser(requestParameters: FriendsApiBlockUserRequest, options?: RawAxiosRequestConfig): AxiosPromise<RespondToRequest200Response> {
+        blockUser(requestParameters: FriendsApiBlockUserRequest, options?: RawAxiosRequestConfig): AxiosPromise<DisbandAiConversation200Response> {
             return localVarFp.blockUser(requestParameters.userId, options).then((request) => request(axios, basePath));
         },
         /**
@@ -4181,7 +4268,7 @@ export const FriendsApiFactory = function (configuration?: Configuration, basePa
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        cancelRequest(requestParameters: FriendsApiCancelRequestRequest, options?: RawAxiosRequestConfig): AxiosPromise<RespondToRequest200Response> {
+        cancelRequest(requestParameters: FriendsApiCancelRequestRequest, options?: RawAxiosRequestConfig): AxiosPromise<DisbandAiConversation200Response> {
             return localVarFp.cancelRequest(requestParameters.requestId, options).then((request) => request(axios, basePath));
         },
         /**
@@ -4221,7 +4308,7 @@ export const FriendsApiFactory = function (configuration?: Configuration, basePa
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        removeFriend(requestParameters: FriendsApiRemoveFriendRequest, options?: RawAxiosRequestConfig): AxiosPromise<RespondToRequest200Response> {
+        removeFriend(requestParameters: FriendsApiRemoveFriendRequest, options?: RawAxiosRequestConfig): AxiosPromise<DisbandAiConversation200Response> {
             return localVarFp.removeFriend(requestParameters.friendId, options).then((request) => request(axios, basePath));
         },
         /**
@@ -4231,7 +4318,7 @@ export const FriendsApiFactory = function (configuration?: Configuration, basePa
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        respondToRequest(requestParameters: FriendsApiRespondToRequestRequest, options?: RawAxiosRequestConfig): AxiosPromise<RespondToRequest200Response> {
+        respondToRequest(requestParameters: FriendsApiRespondToRequestRequest, options?: RawAxiosRequestConfig): AxiosPromise<DisbandAiConversation200Response> {
             return localVarFp.respondToRequest(requestParameters.requestId, requestParameters.respondFriendRequestDto, options).then((request) => request(axios, basePath));
         },
         /**
@@ -4251,7 +4338,7 @@ export const FriendsApiFactory = function (configuration?: Configuration, basePa
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        unblockUser(requestParameters: FriendsApiUnblockUserRequest, options?: RawAxiosRequestConfig): AxiosPromise<RespondToRequest200Response> {
+        unblockUser(requestParameters: FriendsApiUnblockUserRequest, options?: RawAxiosRequestConfig): AxiosPromise<DisbandAiConversation200Response> {
             return localVarFp.unblockUser(requestParameters.userId, options).then((request) => request(axios, basePath));
         },
     };

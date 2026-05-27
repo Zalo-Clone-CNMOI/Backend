@@ -1,4 +1,12 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Post,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '@app/decorator';
@@ -40,5 +48,18 @@ export class AiConversationController {
       user.id,
       dto.documentId,
     );
+  }
+
+  @Post(':conversationId/disband')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({
+    summary: 'Disband (delete) an AI conversation — creator only',
+  })
+  async disbandAiConversation(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('conversationId', ParseUUIDPipe) conversationId: string,
+  ): Promise<{ message: string }> {
+    return this.factory.disbandAiConversation(user.id, conversationId);
   }
 }

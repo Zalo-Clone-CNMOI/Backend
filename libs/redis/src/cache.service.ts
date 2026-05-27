@@ -383,6 +383,25 @@ export class CacheService {
     }
   }
 
+  /**
+   * Remove the AI-routing marker so chat-service stops routing messages to
+   * Zai for this conversation (used when an AI conversation is disbanded).
+   * Best-effort: a delete failure leaves a stale marker that simply lets the
+   * already-removed members never reach the gone conversation — no harm.
+   */
+  async deleteAiConversationContext(conversationId: string): Promise<void> {
+    try {
+      await this.redisClient.del(
+        `${this.AI_CONV_MARKER_PREFIX}${conversationId}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to delete AI conversation context for ${conversationId}:`,
+        error,
+      );
+    }
+  }
+
   async getAiConversationContext(
     conversationId: string,
   ): Promise<AiConversationContext | null> {

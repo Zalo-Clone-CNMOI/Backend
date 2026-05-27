@@ -463,6 +463,22 @@ describe('CacheService', () => {
     });
   });
 
+  describe('deleteAiConversationContext', () => {
+    it('deletes the AI marker key', async () => {
+      await cache.deleteAiConversationContext('conv-001');
+
+      expect(redis.del).toHaveBeenCalledWith('conv:ai:conv-001');
+    });
+
+    it('does not throw on Redis error (best-effort delete)', async () => {
+      redis.del.mockRejectedValue(new Error('Redis down'));
+
+      await expect(
+        cache.deleteAiConversationContext('conv-001'),
+      ).resolves.toBeUndefined();
+    });
+  });
+
   describe('getAiConversationContext', () => {
     it('returns parsed object for valid JSON', async () => {
       redis.get.mockResolvedValue(

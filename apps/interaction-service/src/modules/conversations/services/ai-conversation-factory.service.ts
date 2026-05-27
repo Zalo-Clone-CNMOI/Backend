@@ -1,7 +1,9 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { ClientKafka } from '@nestjs/microservices';
 import { APP_CONFIG, AppConfig } from '@libs/config';
+import { KAFKA_CLIENT } from '@libs/kafka';
 import {
   Conversation,
   ConversationMember,
@@ -17,6 +19,7 @@ import {
 import { BusinessException } from '@app/types';
 import type { AiConversationContext } from '@libs/contracts';
 import { CacheService } from '@libs/redis';
+import { disbandAiConversationCore } from './conversation-member.helpers';
 
 /**
  * Creates a one-to-one AI_ASSISTANT conversation between a user and the Zai
@@ -38,7 +41,28 @@ export class AiConversationFactoryService {
     private readonly documentMetadataRepository: Repository<DocumentMetadata>,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly cacheService: CacheService,
+    @Inject(KAFKA_CLIENT) private readonly kafkaClient: ClientKafka,
   ) {}
+
+  /**
+   * Disband (delete) an AI_ASSISTANT conversation owned by `userId`. Rejects
+   * non-AI conversations and non-creators. Soft-deletes the user + Zai
+   * memberships, drops the Redis routing marker, and emits ConversationDisbanded.
+   */
+  async disbandAiConversation(
+    userId: string,
+    conversationId: string,
+  ): Promise<{ message: string }> {
+    return disbandAiConversationCore(
+      {
+        conversationRepository: this.conversationRepository,
+        kafkaClient: this.kafkaClient,
+        cacheService: this.cacheService,
+      },
+      userId,
+      conversationId,
+    );
+  }
 
   async createZaiConversation(
     userId: string,

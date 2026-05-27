@@ -762,4 +762,19 @@ export class InteractionClientService extends BaseHttpClient {
       this.handleError('getOrCreateDocumentConversation', error);
     }
   }
+
+  async disbandAiConversation(
+    accessToken: string,
+    conversationId: string,
+  ): Promise<{ message: string }> {
+    try {
+      const response = await this.aiConversationsApi.disbandAiConversation(
+        { conversationId },
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      return response.data as { message: string };
+    } catch (error) {
+      this.handleError('disbandAiConversation', error);
+    }
+  }
 }

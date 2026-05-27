@@ -40,6 +40,7 @@ describe('AiAssistController', () => {
           useValue: {
             catchUp: jest.fn(),
             getOrCreateZaiConversation: jest.fn(),
+            disbandAiConversation: jest.fn(),
           },
         },
       ],
@@ -64,6 +65,32 @@ describe('AiAssistController', () => {
         'token-xyz',
       );
       expect(result).toEqual(expected);
+    });
+  });
+
+  describe('disbandAiConversation', () => {
+    it('delegates to service.disbandAiConversation with (token, conversationId)', async () => {
+      (service.disbandAiConversation as jest.Mock).mockResolvedValue({
+        message: 'AI conversation disbanded successfully',
+      });
+
+      const result = await controller.disbandAiConversation(
+        'token-xyz',
+        'conv-ai-1',
+      );
+
+      expect(service.disbandAiConversation).toHaveBeenCalledWith(
+        'token-xyz',
+        'conv-ai-1',
+      );
+      expect(result.message).toBe('AI conversation disbanded successfully');
+    });
+
+    it('throws BusinessException when conversationId is whitespace only', async () => {
+      await expect(
+        controller.disbandAiConversation('token-xyz', '   '),
+      ).rejects.toThrow();
+      expect(service.disbandAiConversation).not.toHaveBeenCalled();
     });
   });
 

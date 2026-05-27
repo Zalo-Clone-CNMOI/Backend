@@ -591,6 +591,7 @@ describe('AiConsumer', () => {
 
       expect(cacheService.releaseMentionCooldown).toHaveBeenCalledWith(
         'conv-z',
+        'user-z',
       );
       expect(cacheService.releaseMentionCooldown).toHaveBeenCalledTimes(1);
     });

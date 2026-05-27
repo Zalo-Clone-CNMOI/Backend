@@ -421,29 +421,38 @@ export class CacheService {
     }
   }
 
+  private zaiMentionCooldownKey(
+    conversationId: string,
+    userId: string,
+  ): string {
+    return `zai:mention:cd:${conversationId}:${userId}`;
+  }
+
   /**
-   * Conversation-wide @Zai mention rate limit. One concurrent Zai reply
-   * per conversation per 5s window — intentionally NOT per-user.
+   * Per-user @Zai mention rate limit. One concurrent Zai reply per
+   * (conversation, user) per 5s window.
    *
-   * Why: prevents thundering-herd in active group chats where multiple
-   * users could @Zai simultaneously and each spawn an LLM call. A future
-   * phase may switch to per-user (`{conversationId}:{senderId}`) if
-   * telemetry shows the conversation-wide cap is too aggressive.
+   * Phase 6: changed from conversation-wide to per-user so one member's
+   * @Zai mention does not rate-limit a different member in the same group.
+   * Key: `zai:mention:cd:{conversationId}:{userId}`.
    *
    * Fail-open: returns `true` on Redis error so a transient Redis blip
    * does NOT silently swallow every @Zai mention.
    */
-  async acquireZaiMentionCooldown(conversationId: string): Promise<boolean> {
+  async acquireZaiMentionCooldown(
+    conversationId: string,
+    userId: string,
+  ): Promise<boolean> {
     try {
       const result = await this.redisClient.set(
-        `zai:mention:cd:${conversationId}`,
+        this.zaiMentionCooldownKey(conversationId, userId),
         '1',
         { NX: true, EX: 5 },
       );
       return result === 'OK';
     } catch (error) {
       this.logger.error(
-        `Failed to acquire Zai mention cooldown for ${conversationId}:`,
+        `Failed to acquire Zai mention cooldown for ${conversationId}/${userId}:`,
         error,
       );
       return true;
@@ -460,12 +469,17 @@ export class CacheService {
    * will expire naturally in <5s anyway, so a release failure is a
    * minor UX papercut, not a correctness issue.
    */
-  async releaseMentionCooldown(conversationId: string): Promise<void> {
+  async releaseMentionCooldown(
+    conversationId: string,
+    userId: string,
+  ): Promise<void> {
     try {
-      await this.redisClient.del(`zai:mention:cd:${conversationId}`);
+      await this.redisClient.del(
+        this.zaiMentionCooldownKey(conversationId, userId),
+      );
     } catch (error) {
       this.logger.warn(
-        `Failed to release Zai mention cooldown for ${conversationId}:`,
+        `Failed to release Zai mention cooldown for ${conversationId}/${userId}:`,
         error,
       );
     }

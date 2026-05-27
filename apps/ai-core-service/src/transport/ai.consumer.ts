@@ -345,7 +345,7 @@ export class AiConsumer {
       // there or we would clear a cooldown that did not belong to us.
       if (event.trigger === 'mention') {
         await this.cacheService
-          .releaseMentionCooldown(event.conversation_id)
+          .releaseMentionCooldown(event.conversation_id, event.sender_id)
           .catch((e: unknown) =>
             this.logger.warn(
               `[${event.trace_id}] Failed to release mention cooldown: ${e instanceof Error ? e.message : String(e)}`,

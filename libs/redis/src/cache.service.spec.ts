@@ -580,22 +580,30 @@ describe('CacheService', () => {
   });
 
   describe('acquireZaiMentionCooldown', () => {
-    it('returns true when NX SET succeeds (first call)', async () => {
+    it('returns true when NX SET succeeds (first call) — per-user key', async () => {
       redis.set.mockResolvedValue('OK');
 
-      const acquired = await cache.acquireZaiMentionCooldown('conv-001');
+      const acquired = await cache.acquireZaiMentionCooldown(
+        'conv-001',
+        'user-7',
+      );
 
       expect(acquired).toBe(true);
-      expect(redis.set).toHaveBeenCalledWith('zai:mention:cd:conv-001', '1', {
-        NX: true,
-        EX: 5,
-      });
+      // Phase 6: key is per (conversation, user).
+      expect(redis.set).toHaveBeenCalledWith(
+        'zai:mention:cd:conv-001:user-7',
+        '1',
+        { NX: true, EX: 5 },
+      );
     });
 
     it('returns false when NX SET fails (cooldown active)', async () => {
       redis.set.mockResolvedValue(null);
 
-      const acquired = await cache.acquireZaiMentionCooldown('conv-001');
+      const acquired = await cache.acquireZaiMentionCooldown(
+        'conv-001',
+        'user-7',
+      );
 
       expect(acquired).toBe(false);
     });
@@ -603,26 +611,42 @@ describe('CacheService', () => {
     it('returns true (fail-open) on Redis error', async () => {
       redis.set.mockRejectedValue(new Error('Redis down'));
 
-      const acquired = await cache.acquireZaiMentionCooldown('conv-001');
+      const acquired = await cache.acquireZaiMentionCooldown(
+        'conv-001',
+        'user-7',
+      );
 
       expect(acquired).toBe(true);
     });
+
+    it('different users in the same conversation get independent keys', async () => {
+      redis.set.mockResolvedValue('OK');
+
+      await cache.acquireZaiMentionCooldown('conv-001', 'user-A');
+      await cache.acquireZaiMentionCooldown('conv-001', 'user-B');
+
+      const keys = (redis.set.mock.calls as [string, string, unknown][]).map(
+        ([k]) => k,
+      );
+      expect(keys).toContain('zai:mention:cd:conv-001:user-A');
+      expect(keys).toContain('zai:mention:cd:conv-001:user-B');
+    });
   });
 
-  // ── Phase 5 W4: release mention cooldown on engine failure ─────────────
+  // ── Phase 5 W4 / Phase 6: release mention cooldown (per-user) ──────────
 
   describe('releaseMentionCooldown', () => {
-    it('deletes the cooldown key for the given conversation', async () => {
-      await cache.releaseMentionCooldown('conv-001');
+    it('deletes the per-user cooldown key', async () => {
+      await cache.releaseMentionCooldown('conv-001', 'user-7');
 
-      expect(redis.del).toHaveBeenCalledWith('zai:mention:cd:conv-001');
+      expect(redis.del).toHaveBeenCalledWith('zai:mention:cd:conv-001:user-7');
     });
 
     it('does not throw when Redis errors (best-effort delete)', async () => {
       redis.del.mockRejectedValue(new Error('Redis down'));
 
       await expect(
-        cache.releaseMentionCooldown('conv-001'),
+        cache.releaseMentionCooldown('conv-001', 'user-7'),
       ).resolves.toBeUndefined();
     });
   });

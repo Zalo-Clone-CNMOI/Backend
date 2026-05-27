@@ -82,6 +82,12 @@ export interface AppConfig {
   /** Block-result cache TTL (15min default) — short so model/threshold changes re-evaluate quickly. */
   chatPreSendModerationBlockCacheTtlSeconds?: number;
 
+  /**
+   * Base URL of ai-core-service for synchronous HTTP calls (Phase 5 pre-send
+   * moderation gate from chat-service). Defaults to the Docker service name.
+   */
+  aiCoreServiceUrl?: string;
+
   // Zai AI bot — fixed user ID seeded by migration
   zaiBotUserId: string;
 
@@ -395,6 +401,9 @@ export function loadConfig(serviceName: string): AppConfig {
         60,
         24 * 3600,
       ) ?? 900,
+    aiCoreServiceUrl:
+      process.env.AI_CORE_SERVICE_URL?.trim() ||
+      'http://ai-core-service:5005/api',
     zaiBotUserId: (() => {
       const raw =
         process.env.ZAI_BOT_USER_ID?.trim() ||

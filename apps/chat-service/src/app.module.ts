@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ConfigService } from '@nestjs/config';
-import { ConfigModule } from '@libs/config';
+import { APP_CONFIG, ConfigModule, type AppConfig } from '@libs/config';
 import { LoggerModule } from '@libs/logger';
 import { KafkaModule, NotificationOutboxModule } from '@libs/kafka';
 import { ScyllaModule } from '@libs/scylla';
@@ -35,12 +34,12 @@ import { HealthController } from './health.controller';
     RedisModule.forRootAsync(),
     MetricsModule,
     AiCoreClientModule.registerAsync({
-      useFactory: (configService: ConfigService) => ({
-        baseUrl:
-          configService.get<string>('AI_CORE_SERVICE_URL') ??
-          'http://ai-core-service:5005/api',
+      // Use the project's @libs/config (APP_CONFIG) — chat-service does NOT set
+      // up @nestjs/config, so injecting ConfigService here crashed boot.
+      useFactory: (config: AppConfig) => ({
+        baseUrl: config.aiCoreServiceUrl ?? 'http://ai-core-service:5005/api',
       }),
-      inject: [ConfigService],
+      inject: [APP_CONFIG],
     }),
     ConversationMembershipModule,
     MessagesModule,

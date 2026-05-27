@@ -5,7 +5,11 @@ import { MessageRepository } from '@libs/scylla';
 import { AiGatewayService } from '../ai-gateway/services/ai-gateway.service';
 import { PromptBuilderService } from '../ai-gateway/services/prompt-builder.service';
 import { AiMetricsService } from '../ai-gateway/services/ai-metrics.service';
-import { parseJsonResponse } from '../ai-gateway/services/parse-json.util';
+import {
+  filterMessagesForSummarization,
+  parseAiSummaryJson,
+  recordSummarizationMetrics,
+} from '../ai-gateway/services/text-summarizer.util';
 import type {
   AiSummaryRequestEvent,
   AiSummaryResultEvent,
@@ -111,8 +115,9 @@ export class SummaryEngine {
           };
         }
 
-        const summaryLines = allDbMessages
-          .filter((m) => !m.deleted_at && m.body)
+        const summaryLines = filterMessagesForSummarization(allDbMessages, {
+          requireBody: true,
+        })
           .reverse()
           .map((m) => m.body);
 
@@ -134,9 +139,9 @@ export class SummaryEngine {
         this.logger.warn(
           `Cache anchor ${toId} not found in last ${MESSAGES_FETCH_LIMIT} messages for ${event.conversation_id} — falling back to full summarization`,
         );
-        const dbMsgIds = allDbMessages
-          .filter((m) => !m.deleted_at && m.body)
-          .map((m) => m.message_id);
+        const dbMsgIds = filterMessagesForSummarization(allDbMessages, {
+          requireBody: true,
+        }).map((m) => m.message_id);
         const fromId = dbMsgIds[dbMsgIds.length - 1] ?? 'unknown';
         const newToId = dbMsgIds[0] ?? 'unknown';
         return this.runFullSummary(
@@ -151,8 +156,9 @@ export class SummaryEngine {
       // Messages at indices 0..cutIdx-1 are newer than the cached summary (DESC order)
       const newRawMessages = allDbMessages.slice(0, cutIdx);
 
-      const newMessages = newRawMessages
-        .filter((m) => !m.deleted_at && m.body)
+      const newMessages = filterMessagesForSummarization(newRawMessages, {
+        requireBody: true,
+      })
         .reverse() // chronological order
         .map((m) => m.body);
 
@@ -182,8 +188,9 @@ export class SummaryEngine {
     const summaryLines: string[] =
       messages.length > 0
         ? messages
-        : (allDbMessages ?? [])
-            .filter((m) => !m.deleted_at && m.body)
+        : filterMessagesForSummarization(allDbMessages ?? [], {
+            requireBody: true,
+          })
             .reverse()
             .map((m) => m.body);
 
@@ -191,10 +198,11 @@ export class SummaryEngine {
       return this.emptySummaryResult(event);
     }
 
-    const dbMsgIds =
-      allDbMessages
-        ?.filter((m) => !m.deleted_at && m.body)
-        .map((m) => m.message_id) ?? [];
+    const dbMsgIds = allDbMessages
+      ? filterMessagesForSummarization(allDbMessages, { requireBody: true }).map(
+          (m) => m.message_id,
+        )
+      : [];
 
     if (
       messages.length > 0 &&
@@ -232,17 +240,9 @@ export class SummaryEngine {
         temperature: 0.3,
       });
 
-      const { summary } = this.parseResponse(result.content);
+      const { summary } = parseAiSummaryJson(result.content);
 
-      this.aiMetrics.recordRequest(
-        'summary',
-        result.provider,
-        result.model,
-        result.tokensIn,
-        result.tokensOut,
-        result.latencyMs,
-        true,
-      );
+      recordSummarizationMetrics(this.aiMetrics, 'summary', result);
 
       const summaryResult: AiSummaryResultEvent = {
         conversation_id: event.conversation_id,
@@ -279,15 +279,7 @@ export class SummaryEngine {
       this.logger.error(
         `Summary failed: ${error instanceof Error ? error.message : String(error)}`,
       );
-      this.aiMetrics.recordRequest(
-        'summary',
-        'unknown',
-        'unknown',
-        0,
-        0,
-        0,
-        false,
-      );
+      recordSummarizationMetrics(this.aiMetrics, 'summary', null);
       return this.errorSummaryResult(event);
     }
   }
@@ -311,17 +303,9 @@ export class SummaryEngine {
         temperature: 0.3,
       });
 
-      const { summary } = this.parseResponse(result.content);
+      const { summary } = parseAiSummaryJson(result.content);
 
-      this.aiMetrics.recordRequest(
-        'summary',
-        result.provider,
-        result.model,
-        result.tokensIn,
-        result.tokensOut,
-        result.latencyMs,
-        true,
-      );
+      recordSummarizationMetrics(this.aiMetrics, 'summary', result);
 
       // New toId = newest non-deleted message (index 0 in DESC array)
       const newToId =
@@ -363,15 +347,7 @@ export class SummaryEngine {
       this.logger.error(
         `Incremental summary failed: ${error instanceof Error ? error.message : String(error)}`,
       );
-      this.aiMetrics.recordRequest(
-        'summary',
-        'unknown',
-        'unknown',
-        0,
-        0,
-        0,
-        false,
-      );
+      recordSummarizationMetrics(this.aiMetrics, 'summary', null);
       return {
         ...cached,
         provider: toAiProviderType(cached.provider),
@@ -413,16 +389,5 @@ export class SummaryEngine {
       processed_at: Date.now(),
       trace_id: event.trace_id,
     };
-  }
-
-  private parseResponse(content: string): { summary: string } {
-    try {
-      const json = parseJsonResponse(content) as Record<string, unknown>;
-      return {
-        summary: typeof json.summary === 'string' ? json.summary : content,
-      };
-    } catch {
-      return { summary: content };
-    }
   }
 }

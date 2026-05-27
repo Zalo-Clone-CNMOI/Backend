@@ -71,12 +71,21 @@ describe('PersistMessageConsumer', () => {
     jest.spyOn(shared.logger, 'warn').mockImplementation(() => undefined);
     jest.spyOn(shared.logger, 'error').mockImplementation(() => undefined);
 
+    // Pre-send moderation gate not exercised by persist-message tests —
+    // stub it as a passthrough so the handler constructor signature
+    // matches and the gate never blocks. Pre-send-specific behaviors
+    // live in send-message.handler.spec.ts.
+    const stubPreSendModerationService = {
+      checkOrAllow: jest.fn().mockResolvedValue(null),
+    };
+
     const sendHandler = new SendMessageHandler(
       repo as unknown as MessageRepository,
       publisher as unknown as ChatPublisher,
       cacheService as unknown as CacheService,
       membershipService as unknown as ConversationMembershipService,
       shared,
+      stubPreSendModerationService as never,
       appConfig,
     );
 

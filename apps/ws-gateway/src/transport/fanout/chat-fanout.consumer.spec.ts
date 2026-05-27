@@ -251,4 +251,54 @@ describe('ChatFanoutConsumer', () => {
       },
     );
   });
+
+  // ── Phase 5: pre-send moderation rejection fanout ─────────────────────
+
+  describe('onMessageRejected', () => {
+    it('emits to the original sender only (other members never saw the message)', () => {
+      consumer.onMessageRejected({
+        message_id: 'msg-blocked',
+        conversation_id: 'conv-9',
+        sender_id: 'sender-bad',
+        reason: 'moderation',
+        labels: ['toxic'],
+        confidence: 0.92,
+        rejected_at: 1706163000000,
+        trace_id: 'trace-rejected-1',
+      });
+
+      expect(gateway.emitToUser).toHaveBeenCalledWith(
+        'sender-bad',
+        WsEvents.ChatMessageRejected,
+        {
+          message_id: 'msg-blocked',
+          conversation_id: 'conv-9',
+          reason: 'moderation',
+          labels: ['toxic'],
+        },
+      );
+      expect(gateway.broadcastToConversation).not.toHaveBeenCalled();
+    });
+
+    it('forwards without labels when reason is not moderation', () => {
+      consumer.onMessageRejected({
+        message_id: 'msg-blocked-2',
+        conversation_id: 'conv-9',
+        sender_id: 'sender-1',
+        reason: 'rate_limit',
+        rejected_at: 1706163000000,
+      });
+
+      expect(gateway.emitToUser).toHaveBeenCalledWith(
+        'sender-1',
+        WsEvents.ChatMessageRejected,
+        {
+          message_id: 'msg-blocked-2',
+          conversation_id: 'conv-9',
+          reason: 'rate_limit',
+          labels: undefined,
+        },
+      );
+    });
+  });
 });

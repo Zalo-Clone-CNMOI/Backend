@@ -1,7 +1,20 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { RedisClientType } from 'redis';
-import type { AiConversationContext } from '@libs/contracts';
+import type {
+  AiConversationContext,
+  ModerationLabelType,
+} from '@libs/contracts';
 import { REDIS_CLIENT } from './redis.tokens';
+
+/**
+ * Wire format for the pre-send moderation fast-path cache. Minimal so the
+ * key flips quickly on engine output shape changes (acceptable cache miss).
+ */
+export interface ModerationFastEntry {
+  is_flagged: boolean;
+  labels: ModerationLabelType[];
+  confidence: number;
+}
 
 export enum CacheLockRenewStatus {
   Renewed = 'renewed',
@@ -451,6 +464,94 @@ export class CacheService {
         error,
       );
       return true;
+    }
+  }
+
+  /**
+   * Release the @Zai mention cooldown so the user can retry immediately
+   * after a Zai engine failure (gateway down, LLM timeout, etc.).
+   * Without this, the 5s cooldown sat in Redis even when no reply was
+   * generated — silently dropping the next mention.
+   *
+   * Best-effort: Redis errors are logged but swallowed. The cooldown
+   * will expire naturally in <5s anyway, so a release failure is a
+   * minor UX papercut, not a correctness issue.
+   */
+  async releaseMentionCooldown(conversationId: string): Promise<void> {
+    try {
+      await this.redisClient.del(`zai:mention:cd:${conversationId}`);
+    } catch (error) {
+      this.logger.warn(
+        `Failed to release Zai mention cooldown for ${conversationId}:`,
+        error,
+      );
+    }
+  }
+
+  // ===================================
+  // Pre-send Moderation Fast-Path Cache
+  // ===================================
+  //
+  // Keyed by SHA-256 hash of the normalized message body. The pre-send
+  // moderation gate (chat-service Phase 5) uses this to skip the LLM call
+  // for repeated identical messages — both clean ("ok", "thanks") AND
+  // recently-flagged toxic strings (spam-retry dedupe).
+  //
+  // Population rules live on the CALLER (PreSendModerationService); this
+  // service only stores/retrieves with a caller-supplied TTL.
+
+  private readonly MOD_FAST_PREFIX = 'mod:fast:';
+
+  async getModerationFastResult(
+    bodyHash: string,
+  ): Promise<ModerationFastEntry | null> {
+    try {
+      const raw = await this.redisClient.get(
+        `${this.MOD_FAST_PREFIX}${bodyHash}`,
+      );
+      if (raw === null) return null;
+      try {
+        return JSON.parse(raw) as ModerationFastEntry;
+      } catch (parseErr) {
+        // Defensive: if the wire format changes mid-deploy, just treat as
+        // a miss and let the caller re-check via LLM. Log structured so
+        // the bad payload can be inspected.
+        this.logger.warn(
+          `Corrupted moderation fast-cache entry for ${bodyHash.slice(0, 8)}…`,
+          {
+            bodyHashPrefix: bodyHash.slice(0, 8),
+            rawValueLength: raw.length,
+            error:
+              parseErr instanceof Error ? parseErr.message : String(parseErr),
+          },
+        );
+        return null;
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to read moderation fast-cache for ${bodyHash.slice(0, 8)}…:`,
+        error,
+      );
+      return null;
+    }
+  }
+
+  async setModerationFastResult(
+    bodyHash: string,
+    result: ModerationFastEntry,
+    ttlSeconds: number,
+  ): Promise<void> {
+    try {
+      await this.redisClient.setEx(
+        `${this.MOD_FAST_PREFIX}${bodyHash}`,
+        ttlSeconds,
+        JSON.stringify(result),
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to write moderation fast-cache for ${bodyHash.slice(0, 8)}…:`,
+        error,
+      );
     }
   }
 

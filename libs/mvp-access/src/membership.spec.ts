@@ -58,7 +58,12 @@ describe('ConversationMembershipService', () => {
 
   describe('canUserAccessConversation', () => {
     it('should return true when user is an active member', async () => {
-      repo.find.mockResolvedValue([{ conversationId: 'conv-1' }]);
+      repo.find.mockResolvedValue([
+        {
+          conversationId: 'conv-1',
+          conversation: { id: 'conv-1', type: ConversationType.GROUP },
+        },
+      ]);
 
       const result = await service.canUserAccessConversation(
         'user-1',
@@ -66,13 +71,21 @@ describe('ConversationMembershipService', () => {
       );
 
       expect(result).toBe(true);
+      // Query now joins the conversations table to co-cache the type for
+      // the pre-send moderation gate (commit 4). Shape: relations +
+      // nested select. The plain `select: ['conversationId']` array is no
+      // longer used.
       expect(repo.find).toHaveBeenCalledWith({
         where: {
           userId: 'user-1',
           conversationId: expect.anything(),
           leftAt: expect.anything(), // IsNull()
         },
-        select: ['conversationId'],
+        relations: ['conversation'],
+        select: {
+          conversationId: true,
+          conversation: { id: true, type: true },
+        },
       });
     });
 
@@ -115,7 +128,12 @@ describe('ConversationMembershipService', () => {
     });
 
     it('should batch concurrent checks for same user into one repository query', async () => {
-      repo.find.mockResolvedValue([{ conversationId: 'conv-1' }]);
+      repo.find.mockResolvedValue([
+        {
+          conversationId: 'conv-1',
+          conversation: { id: 'conv-1', type: ConversationType.GROUP },
+        },
+      ]);
 
       const [conv1, conv2] = await Promise.all([
         service.canUserAccessConversation('user-1', 'conv-1'),
@@ -139,7 +157,12 @@ describe('ConversationMembershipService', () => {
     });
 
     it('should reuse short-lived cache for repeated access checks', async () => {
-      repo.find.mockResolvedValue([{ conversationId: 'conv-1' }]);
+      repo.find.mockResolvedValue([
+        {
+          conversationId: 'conv-1',
+          conversation: { id: 'conv-1', type: ConversationType.GROUP },
+        },
+      ]);
 
       const first = await service.canUserAccessConversation('user-1', 'conv-1');
       const second = await service.canUserAccessConversation(
@@ -158,6 +181,52 @@ describe('ConversationMembershipService', () => {
       await expect(
         service.canUserAccessConversation('user-1', 'conv-1'),
       ).rejects.toThrow('db unavailable');
+    });
+  });
+
+  // ── getCachedConversationType (Phase 5 commit 0) ────────────────────────
+
+  describe('getCachedConversationType', () => {
+    it('returns the type co-cached with the access check (single DB query)', async () => {
+      repo.find.mockResolvedValue([
+        {
+          conversationId: 'conv-1',
+          conversation: { id: 'conv-1', type: ConversationType.GROUP },
+        },
+      ]);
+
+      // First call populates accessCache with both fields.
+      await service.canUserAccessConversation('user-1', 'conv-1');
+      // Second call reads type from the same cache entry — no extra DB hit.
+      const type = await service.getCachedConversationType('user-1', 'conv-1');
+
+      expect(type).toBe(ConversationType.GROUP);
+      expect(repo.find).toHaveBeenCalledTimes(1);
+    });
+
+    it('returns null when the user has no access', async () => {
+      repo.find.mockResolvedValue([]); // not a member
+
+      const type = await service.getCachedConversationType('user-1', 'conv-1');
+
+      expect(type).toBeNull();
+    });
+
+    it('queues its own membership check when called without a prior access check', async () => {
+      repo.find.mockResolvedValue([
+        {
+          conversationId: 'conv-1',
+          conversation: {
+            id: 'conv-1',
+            type: ConversationType.AI_ASSISTANT,
+          },
+        },
+      ]);
+
+      const type = await service.getCachedConversationType('user-1', 'conv-1');
+
+      expect(type).toBe(ConversationType.AI_ASSISTANT);
+      expect(repo.find).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -227,8 +296,14 @@ describe('ConversationMembershipService', () => {
   describe('canUserAccessConversations', () => {
     it('should return a Map with access status for each conversation', async () => {
       repo.find.mockResolvedValue([
-        { conversationId: 'conv-1' },
-        { conversationId: 'conv-3' },
+        {
+          conversationId: 'conv-1',
+          conversation: { id: 'conv-1', type: ConversationType.GROUP },
+        },
+        {
+          conversationId: 'conv-3',
+          conversation: { id: 'conv-3', type: ConversationType.DIRECT },
+        },
       ]);
 
       const result = await service.canUserAccessConversations('user-1', [
@@ -250,7 +325,12 @@ describe('ConversationMembershipService', () => {
     });
 
     it('should handle single conversation', async () => {
-      repo.find.mockResolvedValue([{ conversationId: 'conv-only' }]);
+      repo.find.mockResolvedValue([
+        {
+          conversationId: 'conv-only',
+          conversation: { id: 'conv-only', type: ConversationType.GROUP },
+        },
+      ]);
 
       const result = await service.canUserAccessConversations('user-1', [
         'conv-only',

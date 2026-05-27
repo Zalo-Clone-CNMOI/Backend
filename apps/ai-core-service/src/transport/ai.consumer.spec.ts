@@ -12,6 +12,7 @@ import { EntityDetectionEngine } from '../modules/entity-detection/entity-detect
 import { ZaiChatEngine } from '../modules/zai-chat/zai-chat.engine';
 import { APP_CONFIG } from '@libs/config';
 import { S3Service } from '@libs/s3';
+import { CacheService } from '@libs/redis';
 import { KafkaTopics } from '@libs/contracts';
 import type {
   AiModerationRequestEvent,
@@ -77,6 +78,12 @@ function makeZaiChatEngine() {
   return { respond: jest.fn() };
 }
 
+function makeCacheService() {
+  return {
+    releaseMentionCooldown: jest.fn().mockResolvedValue(undefined),
+  };
+}
+
 describe('AiConsumer', () => {
   let consumer: AiConsumer;
   let publisher: ReturnType<typeof makePublisher>;
@@ -90,6 +97,7 @@ describe('AiConsumer', () => {
   let entityDetectionEngine: ReturnType<typeof makeEntityDetection>;
   let zaiChatEngine: ReturnType<typeof makeZaiChatEngine>;
   let s3Service: ReturnType<typeof makeS3>;
+  let cacheService: ReturnType<typeof makeCacheService>;
 
   beforeEach(async () => {
     publisher = makePublisher();
@@ -103,6 +111,7 @@ describe('AiConsumer', () => {
     entityDetectionEngine = makeEntityDetection();
     zaiChatEngine = makeZaiChatEngine();
     s3Service = makeS3();
+    cacheService = makeCacheService();
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AiConsumer],
@@ -118,6 +127,7 @@ describe('AiConsumer', () => {
         { provide: EntityDetectionEngine, useValue: entityDetectionEngine },
         { provide: ZaiChatEngine, useValue: zaiChatEngine },
         { provide: S3Service, useValue: s3Service },
+        { provide: CacheService, useValue: cacheService },
         {
           provide: APP_CONFIG,
           useValue: { aiMaxDocumentSizeMb: 10, zaiBotUserId: 'zai-bot-uuid' },
@@ -540,6 +550,54 @@ describe('AiConsumer', () => {
         is_typing: false,
       });
       expect(chatPublisher.send).not.toHaveBeenCalled();
+    });
+
+    // ── Phase 5 W4: mention cooldown release on engine failure ─────────
+
+    it('releases the mention cooldown when engine throws AND trigger=mention', async () => {
+      zaiChatEngine.respond.mockRejectedValue(new Error('LLM down'));
+
+      await consumer.onZaiChatRequest(
+        makeZaiEvent({ trigger: 'mention' }),
+      );
+
+      expect(cacheService.releaseMentionCooldown).toHaveBeenCalledWith(
+        'conv-z',
+      );
+      expect(cacheService.releaseMentionCooldown).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT release the cooldown for trigger=conversation (conv path does not consume it)', async () => {
+      zaiChatEngine.respond.mockRejectedValue(new Error('LLM down'));
+
+      await consumer.onZaiChatRequest(
+        makeZaiEvent({ trigger: 'conversation' }),
+      );
+
+      expect(cacheService.releaseMentionCooldown).not.toHaveBeenCalled();
+    });
+
+    it('does NOT release the cooldown when trigger is undefined (legacy events)', async () => {
+      zaiChatEngine.respond.mockRejectedValue(new Error('LLM down'));
+
+      await consumer.onZaiChatRequest(makeZaiEvent({ trigger: undefined }));
+
+      expect(cacheService.releaseMentionCooldown).not.toHaveBeenCalled();
+    });
+
+    it('does NOT release the cooldown on successful reply', async () => {
+      zaiChatEngine.respond.mockResolvedValue({
+        message_id: 'reply-1',
+        conversation_id: 'conv-z',
+        body: 'ok',
+        trace_id: 'trace-z',
+      });
+
+      await consumer.onZaiChatRequest(
+        makeZaiEvent({ trigger: 'mention' }),
+      );
+
+      expect(cacheService.releaseMentionCooldown).not.toHaveBeenCalled();
     });
   });
 });

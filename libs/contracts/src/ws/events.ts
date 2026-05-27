@@ -1,5 +1,6 @@
 import { WsCallSignalTypes, WsCallTypes, WsReactionTypes } from './limits';
 import { CallConversationType } from '../kafka/call.events';
+import type { ModerationLabelType } from '../kafka/ai.events';
 
 export const WsEvents = {
   ChatJoin: 'chat:join',
@@ -13,6 +14,7 @@ export const WsEvents = {
   ChatRecall: 'chat:delete',
   ChatMessageDeleted: 'chat:message:deleted',
   ChatMessageRecalled: 'chat:message:deleted',
+  ChatMessageRejected: 'chat:message:rejected',
   ChatReact: 'chat:react',
   ChatUnreact: 'chat:unreact',
   ChatReactionAdded: 'chat:reaction:added',
@@ -196,6 +198,19 @@ export interface WsChatMessageDeletedPayload {
 }
 
 export type WsChatMessageRecalledPayload = WsChatMessageDeletedPayload;
+
+/**
+ * Sent to the original sender's socket when their message is blocked by
+ * server-side checks BEFORE persistence (Phase 5 pre-send moderation gate).
+ * FE removes the optimistic bubble keyed by `message_id` and shows a
+ * "Message blocked" toast; labels can populate a "why" tooltip.
+ */
+export interface WsChatMessageRejectedPayload {
+  message_id: string;
+  conversation_id: string;
+  reason: 'moderation' | 'rate_limit' | 'unauthorized';
+  labels?: ModerationLabelType[];
+}
 
 export interface WsChatReactPayload {
   message_id: string;

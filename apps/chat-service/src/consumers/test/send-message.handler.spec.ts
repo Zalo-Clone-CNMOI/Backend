@@ -18,6 +18,7 @@ import type { ConversationMembershipService } from '@libs/mvp-access';
 import type { NotificationOutboxPublisher } from '@libs/kafka';
 import type { Repository } from 'typeorm';
 import type { User, ConversationMember } from '@libs/database';
+import type { PreSendModerationService } from '../../services/pre-send-moderation.service';
 
 const ZAI_BOT_ID = 'zai-bot-uuid';
 
@@ -41,7 +42,11 @@ describe('SendMessageHandler', () => {
     getAiConversationContext: jest.Mock;
     acquireZaiMentionCooldown: jest.Mock;
   };
-  let membershipService: { canUserAccessConversation: jest.Mock };
+  let membershipService: {
+    canUserAccessConversation: jest.Mock;
+    getCachedConversationType: jest.Mock;
+  };
+  let preSendModerationService: { checkOrAllow: jest.Mock };
   let notificationPublisher: { publish: jest.Mock };
   let userRepo: { findOne: jest.Mock; find: jest.Mock };
   let conversationMemberRepo: { findOne: jest.Mock; find: jest.Mock };
@@ -65,6 +70,7 @@ describe('SendMessageHandler', () => {
       cacheService as unknown as CacheService,
       membershipService as unknown as ConversationMembershipService,
       shared,
+      preSendModerationService as unknown as PreSendModerationService,
       { zaiBotUserId: ZAI_BOT_ID } as never,
     );
   };
@@ -94,6 +100,15 @@ describe('SendMessageHandler', () => {
 
     membershipService = {
       canUserAccessConversation: jest.fn(),
+      // Default: pre-send gate sees a non-skip type so test paths that
+      // don't explicitly mock it still run the gate; individual tests
+      // override per scenario.
+      getCachedConversationType: jest.fn().mockResolvedValue('group'),
+    };
+
+    preSendModerationService = {
+      // Default: gate allows. Tests that need to block override per case.
+      checkOrAllow: jest.fn().mockResolvedValue(null),
     };
 
     notificationPublisher = {
@@ -703,6 +718,125 @@ describe('SendMessageHandler', () => {
       );
       expect(aiCalls).toHaveLength(0);
       expect(cacheService.acquireZaiMentionCooldown).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── Phase 5: pre-send moderation gate wire ─────────────────────────────
+
+  describe('handle — pre-send moderation gate (Phase 5)', () => {
+    it('blocks message → emits ChatMessageRejected, no insertMessage', async () => {
+      const payload = createMockChatSendCommand();
+      membershipService.canUserAccessConversation.mockResolvedValue(true);
+      preSendModerationService.checkOrAllow.mockResolvedValueOnce({
+        reason: 'moderation',
+        labels: ['toxic'],
+        confidence: 0.93,
+        bodyHash: 'abc123',
+      });
+
+      await handler.handle(payload);
+
+      const rejectCalls = (
+        publisher.emit.mock.calls as [string, unknown][]
+      ).filter(([topic]) => topic === 'chat.message.rejected');
+      expect(rejectCalls).toHaveLength(1);
+      expect(rejectCalls[0][1]).toMatchObject({
+        message_id: payload.message_id,
+        conversation_id: payload.conversation_id,
+        sender_id: payload.sender_id,
+        reason: 'moderation',
+        labels: ['toxic'],
+        confidence: 0.93,
+      });
+      expect(repo.insertMessage).not.toHaveBeenCalled();
+      expect(repo.tryBeginMessageProcessing).not.toHaveBeenCalled();
+    });
+
+    it('blocked path NEVER includes the message body in the audit log', async () => {
+      const payload = createMockChatSendCommand({
+        body: 'sensitive private content',
+      } as Partial<Parameters<typeof createMockChatSendCommand>[0]>);
+      membershipService.canUserAccessConversation.mockResolvedValue(true);
+      preSendModerationService.checkOrAllow.mockResolvedValueOnce({
+        reason: 'moderation',
+        labels: ['toxic'],
+        confidence: 0.91,
+        bodyHash: 'hash-deadbeef',
+      });
+
+      const logSpy = jest.spyOn(shared.logger, 'log');
+
+      await handler.handle(payload);
+
+      // Find the audit log call.
+      const auditCall = logSpy.mock.calls.find(([msg]) =>
+        String(msg).includes('Pre-send moderation blocked'),
+      );
+      expect(auditCall).toBeDefined();
+      // The structured-log metadata is the second argument.
+      const meta = auditCall![1] as Record<string, unknown>;
+      expect(meta).toMatchObject({
+        messageId: payload.message_id,
+        senderId: payload.sender_id,
+        labels: ['toxic'],
+        bodyHash: 'hash-deadbeef',
+      });
+      // Privacy guard — body MUST NOT leak into structured logs even via
+      // a property named differently.
+      const serialized = JSON.stringify(meta);
+      expect(serialized).not.toContain('sensitive private content');
+    });
+
+    it('allowed path continues to normal persistence flow', async () => {
+      const payload = createMockChatSendCommand();
+      membershipService.canUserAccessConversation.mockResolvedValue(true);
+      preSendModerationService.checkOrAllow.mockResolvedValueOnce(null);
+      repo.tryBeginMessageProcessing.mockResolvedValue(true);
+      repo.insertMessage.mockResolvedValue(undefined);
+      repo.markMessageStored.mockResolvedValue(undefined);
+
+      await handler.handle(payload);
+
+      expect(repo.insertMessage).toHaveBeenCalled();
+      const rejectCalls = publisher.emit.mock.calls.filter(
+        ([topic]) => topic === 'chat.message.rejected',
+      );
+      expect(rejectCalls).toHaveLength(0);
+    });
+
+    it('empty body bypasses the gate (mirrors entity-detection guard)', async () => {
+      const payload = createMockChatSendCommand({
+        body: '   ',
+      } as Partial<Parameters<typeof createMockChatSendCommand>[0]>);
+      membershipService.canUserAccessConversation.mockResolvedValue(true);
+      repo.tryBeginMessageProcessing.mockResolvedValue(true);
+      repo.insertMessage.mockResolvedValue(undefined);
+      repo.markMessageStored.mockResolvedValue(undefined);
+
+      await handler.handle(payload);
+
+      expect(preSendModerationService.checkOrAllow).not.toHaveBeenCalled();
+      expect(repo.insertMessage).toHaveBeenCalled();
+    });
+
+    it('reads conversation type from membership cache (no extra DB roundtrip)', async () => {
+      const payload = createMockChatSendCommand();
+      membershipService.canUserAccessConversation.mockResolvedValue(true);
+      membershipService.getCachedConversationType.mockResolvedValue('group');
+      preSendModerationService.checkOrAllow.mockResolvedValueOnce(null);
+      repo.tryBeginMessageProcessing.mockResolvedValue(true);
+      repo.insertMessage.mockResolvedValue(undefined);
+      repo.markMessageStored.mockResolvedValue(undefined);
+
+      await handler.handle(payload);
+
+      expect(membershipService.getCachedConversationType).toHaveBeenCalledWith(
+        payload.sender_id,
+        payload.conversation_id,
+      );
+      expect(preSendModerationService.checkOrAllow).toHaveBeenCalledWith(
+        expect.objectContaining({ conversationType: 'group' }),
+      );
     });
   });
 });

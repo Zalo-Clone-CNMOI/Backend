@@ -1,7 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { AxiosError } from 'axios';
 import { AiCoreClientService } from './ai-core-client.service';
-import { EntityInfoApi, ZaiAssistApi } from './client';
+import { EntityInfoApi, ModerationApi, ZaiAssistApi } from './client';
 import type {
   AiEntityInfoResultEvent,
   AiCatchUpResultEvent,
@@ -47,6 +47,10 @@ const mockZaiAssistApi = {
   getCatchUpSummary: jest.fn(),
 };
 
+const mockModerationApi = {
+  checkPreSendModeration: jest.fn(),
+};
+
 // ── Test suite ─────────────────────────────────────────────────────────────────
 
 describe('AiCoreClientService', () => {
@@ -60,6 +64,7 @@ describe('AiCoreClientService', () => {
         AiCoreClientService,
         { provide: EntityInfoApi, useValue: mockEntityInfoApi },
         { provide: ZaiAssistApi, useValue: mockZaiAssistApi },
+        { provide: ModerationApi, useValue: mockModerationApi },
       ],
     }).compile();
 
@@ -155,6 +160,111 @@ describe('AiCoreClientService', () => {
         service.getCatchUpSummary({
           conversationId: 'conv-1',
           userId: 'user-1',
+        }),
+      ).rejects.toThrow();
+    });
+  });
+
+  // ── checkPreSendModeration ───────────────────────────────────────────────
+
+  describe('checkPreSendModeration', () => {
+    const VERDICT = {
+      is_flagged: false,
+      labels: ['clean'],
+      confidence: 0.97,
+      decision_source: 'model',
+    };
+
+    it('passes body + sender_id + conversation_id to the generated client', async () => {
+      mockModerationApi.checkPreSendModeration.mockResolvedValue({
+        data: VERDICT,
+      });
+
+      const result = await service.checkPreSendModeration({
+        body: 'hello team',
+        senderId: 'sender-1',
+        conversationId: 'conv-9',
+      });
+
+      expect(mockModerationApi.checkPreSendModeration).toHaveBeenCalledWith(
+        {
+          preSendModerationCheckRequestDto: {
+            body: 'hello team',
+            sender_id: 'sender-1',
+            conversation_id: 'conv-9',
+          },
+        },
+        expect.objectContaining({}),
+      );
+      expect(result).toEqual(VERDICT);
+    });
+
+    it('forwards traceId via X-Trace-Id header so ai-core logs correlate', async () => {
+      mockModerationApi.checkPreSendModeration.mockResolvedValue({
+        data: VERDICT,
+      });
+
+      await service.checkPreSendModeration({
+        body: 'hi',
+        senderId: 'sender-1',
+        traceId: 'trace-correlate-42',
+      });
+
+      const calls = mockModerationApi.checkPreSendModeration.mock
+        .calls as Array<
+        [unknown, { headers?: Record<string, string>; timeout?: number }]
+      >;
+      const requestOptions = calls[0][1];
+      expect(requestOptions).toMatchObject({
+        headers: { 'X-Trace-Id': 'trace-correlate-42' },
+      });
+    });
+
+    it('forwards timeoutMs as axios timeout', async () => {
+      mockModerationApi.checkPreSendModeration.mockResolvedValue({
+        data: VERDICT,
+      });
+
+      await service.checkPreSendModeration({
+        body: 'hi',
+        senderId: 'sender-1',
+        timeoutMs: 1500,
+      });
+
+      const calls = mockModerationApi.checkPreSendModeration.mock
+        .calls as Array<
+        [unknown, { headers?: Record<string, string>; timeout?: number }]
+      >;
+      const requestOptions = calls[0][1];
+      expect(requestOptions).toMatchObject({ timeout: 1500 });
+    });
+
+    it('omits header and timeout when neither is provided', async () => {
+      mockModerationApi.checkPreSendModeration.mockResolvedValue({
+        data: VERDICT,
+      });
+
+      await service.checkPreSendModeration({
+        body: 'hi',
+        senderId: 'sender-1',
+      });
+
+      const calls = mockModerationApi.checkPreSendModeration.mock
+        .calls as Array<
+        [unknown, { headers?: Record<string, string>; timeout?: number }]
+      >;
+      const requestOptions = calls[0][1];
+      expect(requestOptions).toEqual({});
+    });
+
+    it('calls handleError and throws when the api rejects', async () => {
+      const axiosErr = new AxiosError('ai-core moderation timeout');
+      mockModerationApi.checkPreSendModeration.mockRejectedValue(axiosErr);
+
+      await expect(
+        service.checkPreSendModeration({
+          body: 'hi',
+          senderId: 'sender-1',
         }),
       ).rejects.toThrow();
     });

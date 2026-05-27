@@ -129,7 +129,16 @@ export async function leaveConversationCore(
         throw BusinessException.notFound(ErrorCode.CONVERSATION_NOT_FOUND);
       }
 
-      if (conversation.type === ConversationType.DIRECT) {
+      if (
+        conversation.type === ConversationType.DIRECT ||
+        conversation.type === ConversationType.AI_ASSISTANT
+      ) {
+        // AI_ASSISTANT lifecycle is owned by AiConversationFactoryService —
+        // "leaving" it would orphan the conversation with only the Zai bot
+        // active. Users who want to drop a Zai chat need a dedicated
+        // disband endpoint (Phase 6). Until then this is immutable, same
+        // as DIRECT. removeMember (conversation-member.service.ts:305)
+        // already rejects non-GROUP types so the abstraction is closed.
         throw BusinessException.badRequest(ErrorCode.CONVERSATION_CANNOT_LEAVE);
       }
 

@@ -203,6 +203,95 @@ export enum EntityType {
 }
 
 
+/**
+ * 
+ * @export
+ * @enum {string}
+ */
+
+export enum ModerationDecisionSource {
+    model = 'model',
+    fallback_provider_failure = 'fallback_provider_failure',
+    fallback_parse_failure = 'fallback_parse_failure'
+}
+
+
+/**
+ * 
+ * @export
+ * @enum {string}
+ */
+
+export enum ModerationLabel {
+    clean = 'clean',
+    spam = 'spam',
+    toxic = 'toxic',
+    harassment = 'harassment',
+    hate_speech = 'hate_speech',
+    sexual = 'sexual',
+    violence = 'violence',
+    self_harm = 'self_harm'
+}
+
+
+/**
+ * 
+ * @export
+ * @interface PreSendModerationCheckRequestDto
+ */
+export interface PreSendModerationCheckRequestDto {
+    /**
+     * Message body to moderate (text only).
+     * @type {string}
+     * @memberof PreSendModerationCheckRequestDto
+     */
+    'body': string;
+    /**
+     * UUID of the user attempting to send the message.
+     * @type {string}
+     * @memberof PreSendModerationCheckRequestDto
+     */
+    'sender_id': string;
+    /**
+     * Optional — target conversation, used for audit logs.
+     * @type {string}
+     * @memberof PreSendModerationCheckRequestDto
+     */
+    'conversation_id'?: string;
+}
+/**
+ * 
+ * @export
+ * @interface PreSendModerationCheckResponseDto
+ */
+export interface PreSendModerationCheckResponseDto {
+    /**
+     * 
+     * @type {boolean}
+     * @memberof PreSendModerationCheckResponseDto
+     */
+    'is_flagged': boolean;
+    /**
+     * 
+     * @type {Array<ModerationLabel>}
+     * @memberof PreSendModerationCheckResponseDto
+     */
+    'labels': Array<ModerationLabel>;
+    /**
+     * Confidence in [0,1] the model assigned to the labels.
+     * @type {number}
+     * @memberof PreSendModerationCheckResponseDto
+     */
+    'confidence': number;
+    /**
+     * 
+     * @type {ModerationDecisionSource}
+     * @memberof PreSendModerationCheckResponseDto
+     */
+    'decision_source': ModerationDecisionSource;
+}
+
+
 
 /**
  * EntityInfoApi - axios parameter creator
@@ -369,6 +458,130 @@ export class EntityInfoApi extends BaseAPI {
      */
     public getEntityInfo(requestParameters: EntityInfoApiGetEntityInfoRequest, options?: RawAxiosRequestConfig) {
         return EntityInfoApiFp(this.configuration).getEntityInfo(requestParameters.text, requestParameters.type, requestParameters.lang, requestParameters.userId, options).then((request) => request(this.axios, this.basePath));
+    }
+}
+
+
+
+/**
+ * ModerationApi - axios parameter creator
+ * @export
+ */
+export const ModerationApiAxiosParamCreator = function (configuration?: Configuration) {
+    return {
+        /**
+         * Returns the model verdict verbatim. Caller (chat-service) applies its own confidence threshold to decide allow vs block. Internal endpoint — ai-core port must be firewalled; no auth header expected. 
+         * @summary Synchronous pre-send moderation check
+         * @param {PreSendModerationCheckRequestDto} preSendModerationCheckRequestDto 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        checkPreSendModeration: async (preSendModerationCheckRequestDto: PreSendModerationCheckRequestDto, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'preSendModerationCheckRequestDto' is not null or undefined
+            assertParamExists('checkPreSendModeration', 'preSendModerationCheckRequestDto', preSendModerationCheckRequestDto)
+            const localVarPath = `/moderation/check`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+
+    
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(preSendModerationCheckRequestDto, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+    }
+};
+
+/**
+ * ModerationApi - functional programming interface
+ * @export
+ */
+export const ModerationApiFp = function(configuration?: Configuration) {
+    const localVarAxiosParamCreator = ModerationApiAxiosParamCreator(configuration)
+    return {
+        /**
+         * Returns the model verdict verbatim. Caller (chat-service) applies its own confidence threshold to decide allow vs block. Internal endpoint — ai-core port must be firewalled; no auth header expected. 
+         * @summary Synchronous pre-send moderation check
+         * @param {PreSendModerationCheckRequestDto} preSendModerationCheckRequestDto 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async checkPreSendModeration(preSendModerationCheckRequestDto: PreSendModerationCheckRequestDto, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<PreSendModerationCheckResponseDto>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.checkPreSendModeration(preSendModerationCheckRequestDto, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['ModerationApi.checkPreSendModeration']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+    }
+};
+
+/**
+ * ModerationApi - factory interface
+ * @export
+ */
+export const ModerationApiFactory = function (configuration?: Configuration, basePath?: string, axios?: AxiosInstance) {
+    const localVarFp = ModerationApiFp(configuration)
+    return {
+        /**
+         * Returns the model verdict verbatim. Caller (chat-service) applies its own confidence threshold to decide allow vs block. Internal endpoint — ai-core port must be firewalled; no auth header expected. 
+         * @summary Synchronous pre-send moderation check
+         * @param {ModerationApiCheckPreSendModerationRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        checkPreSendModeration(requestParameters: ModerationApiCheckPreSendModerationRequest, options?: RawAxiosRequestConfig): AxiosPromise<PreSendModerationCheckResponseDto> {
+            return localVarFp.checkPreSendModeration(requestParameters.preSendModerationCheckRequestDto, options).then((request) => request(axios, basePath));
+        },
+    };
+};
+
+/**
+ * Request parameters for checkPreSendModeration operation in ModerationApi.
+ * @export
+ * @interface ModerationApiCheckPreSendModerationRequest
+ */
+export interface ModerationApiCheckPreSendModerationRequest {
+    /**
+     * 
+     * @type {PreSendModerationCheckRequestDto}
+     * @memberof ModerationApiCheckPreSendModeration
+     */
+    readonly preSendModerationCheckRequestDto: PreSendModerationCheckRequestDto
+}
+
+/**
+ * ModerationApi - object-oriented interface
+ * @export
+ * @class ModerationApi
+ * @extends {BaseAPI}
+ */
+export class ModerationApi extends BaseAPI {
+    /**
+     * Returns the model verdict verbatim. Caller (chat-service) applies its own confidence threshold to decide allow vs block. Internal endpoint — ai-core port must be firewalled; no auth header expected. 
+     * @summary Synchronous pre-send moderation check
+     * @param {ModerationApiCheckPreSendModerationRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ModerationApi
+     */
+    public checkPreSendModeration(requestParameters: ModerationApiCheckPreSendModerationRequest, options?: RawAxiosRequestConfig) {
+        return ModerationApiFp(this.configuration).checkPreSendModeration(requestParameters.preSendModerationCheckRequestDto, options).then((request) => request(this.axios, this.basePath));
     }
 }
 

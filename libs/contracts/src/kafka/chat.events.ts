@@ -1,5 +1,6 @@
 import { MessageType } from '@app/constant';
 import type { CallType } from './call.events';
+import type { ModerationLabelType } from './ai.events';
 import type {
   AiMessageFeature,
   MessageBodyFormat,
@@ -146,6 +147,27 @@ export interface ChatMessageSendCommand {
   reply_to_message_id?: string;
   trace_id?: string;
   mentions?: MessageMention[];
+}
+
+/**
+ * Emitted by chat-service when a message-send is rejected BEFORE persistence
+ * (Phase 5 pre-send moderation gate, or future rate-limit / auth checks).
+ * Consumed by ws-gateway → forwarded to the original sender's socket as
+ * `WsEvents.ChatMessageRejected` so the client can unhook its optimistic
+ * bubble. Never persisted; the conversation has no row for this message_id.
+ */
+export interface ChatMessageRejectedEvent {
+  /** Client-supplied id, used by FE to locate and remove the optimistic bubble. */
+  message_id: string;
+  conversation_id: string;
+  sender_id: string;
+  reason: 'moderation' | 'rate_limit' | 'unauthorized';
+  /** Moderation labels (e.g. 'toxic', 'spam') when reason === 'moderation'. */
+  labels?: ModerationLabelType[];
+  /** Confidence in [0,1] the model assigned to the labels. */
+  confidence?: number;
+  rejected_at: number;
+  trace_id?: string;
 }
 
 export interface ChatMessageCreatedEvent {

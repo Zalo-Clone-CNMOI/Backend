@@ -303,17 +303,18 @@ export class AiConsumer {
         await this.publisher.emit(KafkaTopics.AiStreamChunk, chunkPayload);
       };
 
-      const reply = await this.zaiChatEngine.respond(event, onChunk);
+      const result = await this.zaiChatEngine.respond(event, onChunk);
 
-      if (reply) {
+      if (result) {
+        const { reply, provider, tokensIn, tokensOut } = result;
         const completePayload: AiStreamCompleteEvent = {
           stream_id: streamId,
           user_id: userId,
           conversation_id: event.conversation_id,
           feature: 'zai_chat',
           total_chunks: chunkIndex,
-          total_tokens: 0,
-          provider: 'unknown',
+          total_tokens: tokensIn + tokensOut,
+          provider,
           completed_at: Date.now(),
           message_id: reply.message_id,
           trace_id: event.trace_id,

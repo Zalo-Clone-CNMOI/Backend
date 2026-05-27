@@ -455,10 +455,15 @@ describe('AiConsumer', () => {
     it('emits typing-ON then calls engine then publishes chatMessage on success', async () => {
       const event = makeZaiEvent();
       zaiChatEngine.respond.mockResolvedValue({
-        message_id: 'reply-msg-1',
-        conversation_id: 'conv-z',
-        body: 'hello back',
-        trace_id: 'trace-z',
+        reply: {
+          message_id: 'reply-msg-1',
+          conversation_id: 'conv-z',
+          body: 'hello back',
+          trace_id: 'trace-z',
+        },
+        provider: 'openai',
+        tokensIn: 12,
+        tokensOut: 8,
       });
 
       await consumer.onZaiChatRequest(event);
@@ -475,6 +480,15 @@ describe('AiConsumer', () => {
       expect(chatPublisher.send).toHaveBeenCalledWith(
         expect.objectContaining({ message_id: 'reply-msg-1' }),
       );
+
+      // S1: AiStreamComplete carries real provider + summed tokens.
+      const completeCalls = emitCalls.filter(
+        ([topic]) => topic === KafkaTopics.AiStreamComplete,
+      );
+      expect(completeCalls[0][1]).toMatchObject({
+        provider: 'openai',
+        total_tokens: 20,
+      });
     });
 
     it('emits AiStreamChunk for each onChunk callback', async () => {
@@ -487,10 +501,15 @@ describe('AiConsumer', () => {
             await onChunk(' world');
           }
           return {
-            message_id: 'reply-msg-2',
-            conversation_id: 'conv-z',
-            body: 'hello world',
-            trace_id: 'trace-z',
+            reply: {
+              message_id: 'reply-msg-2',
+              conversation_id: 'conv-z',
+              body: 'hello world',
+              trace_id: 'trace-z',
+            },
+            provider: 'openai',
+            tokensIn: 5,
+            tokensOut: 7,
           };
         },
       );
@@ -587,10 +606,15 @@ describe('AiConsumer', () => {
 
     it('does NOT release the cooldown on successful reply', async () => {
       zaiChatEngine.respond.mockResolvedValue({
-        message_id: 'reply-1',
-        conversation_id: 'conv-z',
-        body: 'ok',
-        trace_id: 'trace-z',
+        reply: {
+          message_id: 'reply-1',
+          conversation_id: 'conv-z',
+          body: 'ok',
+          trace_id: 'trace-z',
+        },
+        provider: 'openai',
+        tokensIn: 1,
+        tokensOut: 1,
       });
 
       await consumer.onZaiChatRequest(

@@ -188,11 +188,15 @@ describe('ZaiChatEngine', () => {
       expect.objectContaining({ maxTokens: 1024, temperature: 0.7 }),
     );
     expect(result).not.toBeNull();
-    expect(result!.conversation_id).toBe(CONV_ID);
-    expect(result!.body).toBe('Sure, I can help!');
-    expect(result!.message_id).toMatch(
+    expect(result!.reply.conversation_id).toBe(CONV_ID);
+    expect(result!.reply.body).toBe('Sure, I can help!');
+    expect(result!.reply.message_id).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
     );
+    // S1: engine now surfaces provider + tokens for AiStreamComplete.
+    expect(result!.provider).toBe('openai');
+    expect(result!.tokensIn).toBe(50);
+    expect(result!.tokensOut).toBe(20);
   });
 
   // ── Cold start ─────────────────────────────────────────────────────────────
@@ -304,7 +308,7 @@ describe('ZaiChatEngine', () => {
     const result = await engine.respond(makeEvent());
 
     expect(result).not.toBeNull();
-    expect(result!.body).toBe(ZAI_EMPTY_RESPONSE_FALLBACK);
+    expect(result!.reply.body).toBe(ZAI_EMPTY_RESPONSE_FALLBACK);
     // Metrics still recorded as success — the LLM responded, the content
     // just happened to be empty (refusal, etc.).
     expect(aiMetrics.recordRequest).toHaveBeenCalledWith(
@@ -325,7 +329,7 @@ describe('ZaiChatEngine', () => {
     const result = await engine.respond(makeEvent());
 
     expect(result).not.toBeNull();
-    expect(result!.body).toBe(ZAI_EMPTY_RESPONSE_FALLBACK);
+    expect(result!.reply.body).toBe(ZAI_EMPTY_RESPONSE_FALLBACK);
   });
 
   // ── Metrics ────────────────────────────────────────────────────────────────
@@ -399,7 +403,7 @@ describe('ZaiChatEngine', () => {
     const result = await engine.respond(event);
 
     expect(result).not.toBeNull();
-    expect(result!.body).toContain('no longer available');
+    expect(result!.reply.body).toContain('no longer available');
     expect(gateway.complete).not.toHaveBeenCalled();
   });
 

@@ -1,5 +1,7 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import type { RedisClientType } from 'redis';
+import type { Counter } from 'prom-client';
+import { MetricsService } from '@libs/metrics';
 import type {
   AiConversationContext,
   ModerationLabelType,
@@ -54,10 +56,29 @@ export class CacheService {
   private readonly FRIEND_LIST_TTL = 600; // 10 minutes
   private readonly MESSAGES_RECENT_TTL = 300; // 5 minutes
 
+  /**
+   * Counter for ABNORMAL AI-conversation context reads — Redis threw or
+   * the stored JSON was corrupt, both of which silently disable AI routing
+   * for that conversation (fail-safe returns null). A plain key-miss is
+   * NORMAL and does NOT increment. Lazily created only when MetricsService
+   * is available (it's optional so services without MetricsModule still
+   * construct CacheService).
+   */
+  private readonly aiConvCacheErrorCounter?: Counter;
+
   constructor(
     @Inject(REDIS_CLIENT)
     private readonly redisClient: RedisClientType,
-  ) {}
+    @Optional() private readonly metrics?: MetricsService,
+  ) {
+    if (this.metrics) {
+      this.aiConvCacheErrorCounter = this.metrics.getCounter(
+        'ai_conv_cache_error_total',
+        'AI conversation context cache failures (Redis error or corrupt JSON) that degraded AI routing',
+        ['reason'],
+      );
+    }
+  }
 
   async get<T>(key: string): Promise<T | null> {
     try {
@@ -376,6 +397,7 @@ export class CacheService {
       try {
         return JSON.parse(raw) as AiConversationContext;
       } catch (parseErr) {
+        this.aiConvCacheErrorCounter?.labels('corrupt_json').inc();
         this.logger.error(
           `Failed to parse AI conversation context for ${conversationId}`,
           {
@@ -388,6 +410,9 @@ export class CacheService {
         return null;
       }
     } catch (error) {
+      // Redis threw — abnormal. A plain key-miss returns null ABOVE without
+      // reaching this block, so this counter only reflects real failures.
+      this.aiConvCacheErrorCounter?.labels('redis_error').inc();
       this.logger.error(
         `Failed to get AI conversation context for ${conversationId}:`,
         error,

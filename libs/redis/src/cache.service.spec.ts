@@ -515,6 +515,70 @@ describe('CacheService', () => {
     });
   });
 
+  // ── Phase 6 W1: AI-conversation cache failure metric ───────────────────
+
+  describe('getAiConversationContext error metric', () => {
+    let counterInc: jest.Mock;
+    let counterLabels: jest.Mock;
+    let metricsCache: CacheService;
+
+    beforeEach(async () => {
+      counterInc = jest.fn();
+      counterLabels = jest.fn().mockReturnValue({ inc: counterInc });
+      const metrics = {
+        getCounter: jest.fn().mockReturnValue({ labels: counterLabels }),
+      };
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          CacheService,
+          { provide: REDIS_CLIENT, useValue: redis },
+          // @libs/metrics MetricsService is optional; provide a mock here.
+          {
+            provide: (await import('@libs/metrics')).MetricsService,
+            useValue: metrics,
+          },
+        ],
+      }).compile();
+      metricsCache = module.get(CacheService);
+    });
+
+    it('increments reason=redis_error when Redis throws', async () => {
+      redis.get.mockRejectedValue(new Error('Redis down'));
+
+      await metricsCache.getAiConversationContext('conv-001');
+
+      expect(counterLabels).toHaveBeenCalledWith('redis_error');
+      expect(counterInc).toHaveBeenCalledTimes(1);
+    });
+
+    it('increments reason=corrupt_json when stored value is unparseable', async () => {
+      redis.get.mockResolvedValue('not-json{{{');
+
+      await metricsCache.getAiConversationContext('conv-001');
+
+      expect(counterLabels).toHaveBeenCalledWith('corrupt_json');
+      expect(counterInc).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT increment on a normal key-miss', async () => {
+      redis.get.mockResolvedValue(null);
+
+      await metricsCache.getAiConversationContext('conv-001');
+
+      expect(counterInc).not.toHaveBeenCalled();
+    });
+
+    it('does NOT increment on a normal hit', async () => {
+      redis.get.mockResolvedValue(
+        JSON.stringify({ version: 1, feature: 'general', created_at: 1 }),
+      );
+
+      await metricsCache.getAiConversationContext('conv-001');
+
+      expect(counterInc).not.toHaveBeenCalled();
+    });
+  });
+
   describe('acquireZaiMentionCooldown', () => {
     it('returns true when NX SET succeeds (first call)', async () => {
       redis.set.mockResolvedValue('OK');

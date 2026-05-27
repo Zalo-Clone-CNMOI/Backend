@@ -3,7 +3,11 @@ import { randomUUID } from 'crypto';
 import { MessageRepository } from '@libs/scylla';
 import { APP_CONFIG, AppConfig } from '@libs/config';
 import { BusinessException } from '@app/types';
-import type { AiZaiChatRequestEvent } from '@libs/contracts';
+import {
+  type AiProviderType,
+  type AiZaiChatRequestEvent,
+  toAiProviderType,
+} from '@libs/contracts';
 import { AiGatewayService } from '../ai-gateway/services/ai-gateway.service';
 import { PromptBuilderService } from '../ai-gateway/services/prompt-builder.service';
 import { AiMetricsService } from '../ai-gateway/services/ai-metrics.service';
@@ -25,6 +29,19 @@ const MENTION_HISTORY_LIMIT = 10;
 export const ZAI_EMPTY_RESPONSE_FALLBACK =
   'Xin lỗi, tôi chưa thể trả lời câu này. Vui lòng thử lại. / Sorry, I could not generate a response. Please try again.';
 
+/**
+ * Engine result: the message to publish PLUS the provider/token telemetry
+ * the consumer needs to populate AiStreamComplete accurately (Phase 6 S1).
+ * provider='unknown' + zero tokens for fallbacks that never reached the LLM
+ * (e.g. document-no-longer-available).
+ */
+export interface ZaiChatResult {
+  reply: AiChatSendInput;
+  provider: AiProviderType;
+  tokensIn: number;
+  tokensOut: number;
+}
+
 @Injectable()
 export class ZaiChatEngine {
   private readonly logger = new Logger(ZaiChatEngine.name);
@@ -41,7 +58,7 @@ export class ZaiChatEngine {
   async respond(
     event: AiZaiChatRequestEvent,
     onChunk?: (content: string) => Promise<void>,
-  ): Promise<AiChatSendInput | null> {
+  ): Promise<ZaiChatResult | null> {
     if (event.sender_id === this.config.zaiBotUserId) {
       return null;
     }
@@ -87,11 +104,17 @@ export class ZaiChatEngine {
         );
       } catch (err) {
         if (err instanceof BusinessException) {
+          // Graceful fallback — never reached the LLM, so no provider/tokens.
           return {
-            message_id: randomUUID(),
-            conversation_id: event.conversation_id,
-            body: 'This document is no longer available.',
-            trace_id: event.trace_id ?? `zai-${randomUUID()}`,
+            reply: {
+              message_id: randomUUID(),
+              conversation_id: event.conversation_id,
+              body: 'This document is no longer available.',
+              trace_id: event.trace_id ?? `zai-${randomUUID()}`,
+            },
+            provider: 'unknown',
+            tokensIn: 0,
+            tokensOut: 0,
           };
         }
         throw err;
@@ -157,10 +180,15 @@ export class ZaiChatEngine {
       }
 
       return {
-        message_id: randomUUID(),
-        conversation_id: event.conversation_id,
-        body,
-        trace_id: event.trace_id ?? `zai-${randomUUID()}`,
+        reply: {
+          message_id: randomUUID(),
+          conversation_id: event.conversation_id,
+          body,
+          trace_id: event.trace_id ?? `zai-${randomUUID()}`,
+        },
+        provider: toAiProviderType(result.provider),
+        tokensIn: result.tokensIn,
+        tokensOut: result.tokensOut,
       };
     } catch (err) {
       this.aiMetrics.recordRequest(

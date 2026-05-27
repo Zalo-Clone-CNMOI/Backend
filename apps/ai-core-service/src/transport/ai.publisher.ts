@@ -28,12 +28,18 @@ export class AiPublisher implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  async emit(topic: string, payload: unknown): Promise<void> {
+  /**
+   * @param key Optional Kafka partition key. Pass it for events that must
+   *   stay ordered per-entity under a multi-instance consumer (e.g. AI
+   *   stream chunks keyed by stream_id). Omit for fire-and-forget events.
+   */
+  async emit(topic: string, payload: unknown, key?: string): Promise<void> {
     await publishKafkaWithRetry({
       kafka: this.kafka,
       logger: this.logger,
       topic,
       payload,
+      key,
       producer: AiPublisher.name,
     });
   }

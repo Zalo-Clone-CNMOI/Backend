@@ -300,7 +300,14 @@ export class AiConsumer {
           is_final: false,
           trace_id: event.trace_id,
         };
-        await this.publisher.emit(KafkaTopics.AiStreamChunk, chunkPayload);
+        // Key by streamId so all chunks of one stream land on the same
+        // Kafka partition → ordered delivery under a multi-instance
+        // ws-gateway (Phase 6 W6).
+        await this.publisher.emit(
+          KafkaTopics.AiStreamChunk,
+          chunkPayload,
+          streamId,
+        );
       };
 
       const result = await this.zaiChatEngine.respond(event, onChunk);
@@ -322,6 +329,7 @@ export class AiConsumer {
         await this.publisher.emit(
           KafkaTopics.AiStreamComplete,
           completePayload,
+          streamId,
         );
 
         await this.chatPublisher.send(reply);

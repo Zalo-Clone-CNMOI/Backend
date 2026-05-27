@@ -22,6 +22,13 @@ export interface KafkaPublishOptions {
   topic: string;
   payload: unknown;
   producer: string;
+  /**
+   * Optional Kafka partition key. When set, the message is emitted as
+   * `{ key, value: payload }` so all messages sharing a key land on the
+   * same partition (ordering guarantee). When omitted, the payload is
+   * emitted directly (round-robin partitioning, current behavior).
+   */
+  key?: string;
   retryPolicy?: Partial<KafkaRetryPolicy>;
   emitDlqOnFailure?: boolean;
 }
@@ -48,9 +55,13 @@ export async function publishKafkaWithRetry(
   let lastBrokerError: unknown;
 
   try {
+    const message =
+      options.key !== undefined
+        ? { key: options.key, value: options.payload }
+        : options.payload;
     const source$ = defer(() => {
       attemptsUsed += 1;
-      return options.kafka.emit(options.topic, options.payload);
+      return options.kafka.emit(options.topic, message);
     }).pipe(
       timeout(policy.timeoutMs),
       retry({

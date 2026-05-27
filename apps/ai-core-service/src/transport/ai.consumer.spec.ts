@@ -516,7 +516,11 @@ describe('AiConsumer', () => {
 
       await consumer.onZaiChatRequest(event);
 
-      const emitCalls = publisher.emit.mock.calls as [string, unknown][];
+      const emitCalls = publisher.emit.mock.calls as [
+        string,
+        unknown,
+        string?,
+      ][];
       const chunkCalls = emitCalls.filter(
         ([topic]) => topic === KafkaTopics.AiStreamChunk,
       );
@@ -529,6 +533,11 @@ describe('AiConsumer', () => {
         chunk_index: 1,
         content: ' world',
       });
+      // W6: chunks keyed by stream_id for partition-ordered delivery.
+      const chunkStreamId = (chunkCalls[0][1] as { stream_id: string })
+        .stream_id;
+      expect(chunkCalls[0][2]).toBe(chunkStreamId);
+      expect(chunkCalls[1][2]).toBe(chunkStreamId);
 
       // AiStreamComplete with message_id matching the reply
       const completeCalls = emitCalls.filter(

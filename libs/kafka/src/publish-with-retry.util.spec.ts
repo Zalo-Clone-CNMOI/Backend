@@ -44,6 +44,39 @@ describe('publishKafkaWithRetry', () => {
     );
   });
 
+  it('emits payload directly (no key wrapper) when key is omitted', async () => {
+    const kafka = { emit: jest.fn().mockReturnValue(of(undefined)) };
+    const payload = { trace_id: 'no-key' };
+    await publishKafkaWithRetry({
+      kafka: kafka as never,
+      logger,
+      topic: 'ai.stream.chunk',
+      payload,
+      producer: 'TestPublisher',
+      retryPolicy: { maxRetries: 1, backoffBaseMs: 1, backoffCapMs: 1, timeoutMs: 50 },
+    });
+    // No key → message is the raw payload, NOT { key, value }.
+    expect(kafka.emit).toHaveBeenCalledWith('ai.stream.chunk', payload);
+  });
+
+  it('wraps payload as { key, value } when a partition key is provided (W6)', async () => {
+    const kafka = { emit: jest.fn().mockReturnValue(of(undefined)) };
+    const payload = { stream_id: 'stream-42', trace_id: 'keyed' };
+    await publishKafkaWithRetry({
+      kafka: kafka as never,
+      logger,
+      topic: 'ai.stream.chunk',
+      payload,
+      key: 'stream-42',
+      producer: 'TestPublisher',
+      retryPolicy: { maxRetries: 1, backoffBaseMs: 1, backoffCapMs: 1, timeoutMs: 50 },
+    });
+    expect(kafka.emit).toHaveBeenCalledWith('ai.stream.chunk', {
+      key: 'stream-42',
+      value: payload,
+    });
+  });
+
   it('should route failed publish to DLQ and rethrow', async () => {
     const kafka = {
       emit: jest.fn((topic: string) => {

@@ -463,4 +463,64 @@ describe('ZaiChatEngine', () => {
     expect(onChunk).toHaveBeenNthCalledWith(1, 'hello');
     expect(onChunk).toHaveBeenNthCalledWith(2, ' world');
   });
+
+  // ── Phase 6 C6: strategy registry fallback ─────────────────────────────────
+
+  it('unknown feature (no document_id, no mention) falls back to the general strategy', async () => {
+    const event = makeEvent({
+      ai_context: { feature: 'translation', created_at: 1 } as never,
+    });
+
+    const result = await engine.respond(event);
+
+    expect(promptBuilder.buildZaiChatPrompt).toHaveBeenCalled();
+    expect(promptBuilder.buildZaiMentionReplyPrompt).not.toHaveBeenCalled();
+    expect(documentRag.buildRagMessages).not.toHaveBeenCalled();
+    expect(result).not.toBeNull();
+  });
+
+  // ── Phase 6 C7: markdown body_format for document replies ───────────────────
+
+  it('document reply carries body_format:"markdown"', async () => {
+    const event = makeEvent({
+      body: 'Summarize this',
+      ai_context: { feature: 'document', document_id: DOC_ID, created_at: 1 },
+    });
+
+    const result = await engine.respond(event);
+
+    expect(result).not.toBeNull();
+    expect(result!.reply.body_format).toBe('markdown');
+  });
+
+  it('general reply omits body_format (text default)', async () => {
+    const result = await engine.respond(makeEvent());
+
+    expect(result).not.toBeNull();
+    expect(result!.reply.body_format).toBeUndefined();
+  });
+
+  it('mention reply omits body_format (text default)', async () => {
+    const result = await engine.respond(
+      makeEvent({ trigger: 'mention', body: 'hey @zai' }),
+    );
+
+    expect(result).not.toBeNull();
+    expect(result!.reply.body_format).toBeUndefined();
+  });
+
+  it('document-unavailable short-circuit reply stays plain text (no markdown)', async () => {
+    const rag = makeDocumentRag();
+    (rag.validateDocumentAccess as jest.Mock).mockRejectedValue(
+      new BusinessException(ErrorCode.NOT_FOUND, 'Document not found'),
+    );
+    await build(undefined, undefined, rag);
+
+    const event = makeEvent({
+      ai_context: { feature: 'document', document_id: DOC_ID, created_at: 1 },
+    });
+    const result = await engine.respond(event);
+
+    expect(result!.reply.body_format).toBeUndefined();
+  });
 });

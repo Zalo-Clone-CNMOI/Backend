@@ -2,9 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { MessageRepository } from '@libs/scylla';
 import { APP_CONFIG, AppConfig } from '@libs/config';
-import { BusinessException } from '@app/types';
 import {
-  type AiProviderType,
   type AiZaiChatRequestEvent,
   toAiProviderType,
 } from '@libs/contracts';
@@ -15,8 +13,16 @@ import type {
   LlmChatMessage,
   LlmCompletionResult,
 } from '../ai-gateway/interfaces';
-import type { AiChatSendInput } from '../../transport/ai-chat.publisher';
 import { DocumentRagService } from './document-rag.service';
+import {
+  type ChatStrategy,
+  DocumentChatStrategy,
+  GeneralChatStrategy,
+  MentionReplyStrategy,
+  type ZaiChatResult,
+} from './chat-strategy';
+
+export type { ZaiChatResult } from './chat-strategy';
 
 const HISTORY_LIMIT = 20;
 const MENTION_HISTORY_LIMIT = 10;
@@ -29,22 +35,14 @@ const MENTION_HISTORY_LIMIT = 10;
 export const ZAI_EMPTY_RESPONSE_FALLBACK =
   'Xin lỗi, tôi chưa thể trả lời câu này. Vui lòng thử lại. / Sorry, I could not generate a response. Please try again.';
 
-/**
- * Engine result: the message to publish PLUS the provider/token telemetry
- * the consumer needs to populate AiStreamComplete accurately (Phase 6 S1).
- * provider='unknown' + zero tokens for fallbacks that never reached the LLM
- * (e.g. document-no-longer-available).
- */
-export interface ZaiChatResult {
-  reply: AiChatSendInput;
-  provider: AiProviderType;
-  tokensIn: number;
-  tokensOut: number;
-}
-
 @Injectable()
 export class ZaiChatEngine {
   private readonly logger = new Logger(ZaiChatEngine.name);
+
+  /** Strategy registry resolved by (feature, trigger). New agents plug in here. */
+  private readonly documentStrategy: ChatStrategy;
+  private readonly mentionStrategy: ChatStrategy;
+  private readonly generalStrategy: ChatStrategy;
 
   constructor(
     private readonly messageRepo: MessageRepository,
@@ -53,7 +51,29 @@ export class ZaiChatEngine {
     private readonly aiMetrics: AiMetricsService,
     private readonly documentRag: DocumentRagService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
-  ) {}
+  ) {
+    this.documentStrategy = new DocumentChatStrategy(this.documentRag);
+    this.mentionStrategy = new MentionReplyStrategy(this.promptBuilder);
+    this.generalStrategy = new GeneralChatStrategy(this.promptBuilder);
+  }
+
+  /**
+   * Resolve the chat strategy for this request. Document feature wins over
+   * mention (a doc conversation that happens to @Zai stays document chat);
+   * everything else falls back to general.
+   */
+  private resolveStrategy(event: AiZaiChatRequestEvent): ChatStrategy {
+    const feature = event.ai_context?.feature;
+    const documentId = event.ai_context?.document_id;
+
+    if (feature === 'document' && documentId) {
+      return this.documentStrategy;
+    }
+    if (event.trigger === 'mention') {
+      return this.mentionStrategy;
+    }
+    return this.generalStrategy;
+  }
 
   async respond(
     event: AiZaiChatRequestEvent,
@@ -85,48 +105,13 @@ export class ZaiChatEngine {
       );
     }
 
-    const feature = event.ai_context?.feature;
-    const documentId = event.ai_context?.document_id;
-
-    let messages: LlmChatMessage[];
-
-    if (feature === 'document' && documentId) {
-      try {
-        await this.documentRag.validateDocumentAccess(
-          event.sender_id,
-          documentId,
-        );
-        messages = await this.documentRag.buildRagMessages(
-          event.sender_id,
-          documentId,
-          event.body,
-          history,
-        );
-      } catch (err) {
-        if (err instanceof BusinessException) {
-          // Graceful fallback — never reached the LLM, so no provider/tokens.
-          return {
-            reply: {
-              message_id: randomUUID(),
-              conversation_id: event.conversation_id,
-              body: 'This document is no longer available.',
-              trace_id: event.trace_id ?? `zai-${randomUUID()}`,
-            },
-            provider: 'unknown',
-            tokensIn: 0,
-            tokensOut: 0,
-          };
-        }
-        throw err;
-      }
-    } else if (isMention) {
-      messages = this.promptBuilder.buildZaiMentionReplyPrompt(
-        history,
-        event.body,
-      );
-    } else {
-      messages = this.promptBuilder.buildZaiChatPrompt(history);
+    const strategy = this.resolveStrategy(event);
+    const outcome = await strategy.buildMessages(event, history);
+    if (outcome.kind === 'short-circuit') {
+      // Pre-built reply that never reached the LLM (e.g. doc unavailable).
+      return outcome.result;
     }
+    const messages = outcome.messages;
 
     const startMs = Date.now();
 
@@ -185,6 +170,10 @@ export class ZaiChatEngine {
           conversation_id: event.conversation_id,
           body,
           trace_id: event.trace_id ?? `zai-${randomUUID()}`,
+          // C7: document-chat replies are markdown; others stay text default.
+          ...(strategy.bodyFormat
+            ? { body_format: strategy.bodyFormat }
+            : {}),
         },
         provider: toAiProviderType(result.provider),
         tokensIn: result.tokensIn,

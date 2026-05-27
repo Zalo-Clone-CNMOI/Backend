@@ -72,8 +72,15 @@ export class LocDoRouterProvider implements ILlmProvider {
     const systemMsg = mapped.find((m) => m.role === 'system');
     const rest = mapped.filter((m) => m.role !== 'system');
     if (!systemMsg) return mapped;
+    // System content is always plain text; guard defensively against arrays.
+    const systemText =
+      typeof systemMsg.content === 'string'
+        ? systemMsg.content
+        : (systemMsg.content ?? [])
+            .map((p) => (p.type === 'text' ? p.text : ''))
+            .join('\n');
     return [
-      { role: 'user', content: systemMsg.content as string },
+      { role: 'user', content: systemText },
       {
         role: 'assistant',
         content:

@@ -488,6 +488,16 @@ export class SendMessageHandler {
           );
 
           if (aiContext) {
+            // Document RAG needs a text query to embed — an image-only message
+            // (no caption) has none, so skip rather than embed an empty string.
+            // Other features (general) handle image-only fine.
+            if (!params.body?.trim() && aiContext.feature === 'document') {
+              this.shared.logger.debug(
+                `[${params.traceId}] Skipping Zai for image-only message in document conversation: ${params.conversationId}`,
+              );
+              return;
+            }
+
             // AI_ASSISTANT conversation — always route to Zai with conversation trigger.
             const zaiEvent: AiZaiChatRequestEvent = {
               message_id: params.messageId,

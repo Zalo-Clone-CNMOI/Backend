@@ -43,7 +43,9 @@ describe('ZaiImageResolverService', () => {
 
     const parts = await service.resolve([PNG]);
 
-    expect(s3.presignDownload).toHaveBeenCalledWith('k1');
+    expect(s3.presignDownload).toHaveBeenCalledWith('k1', {
+      expiresSeconds: 300,
+    });
     expect(s3.download).not.toHaveBeenCalled();
     expect(parts).toEqual([
       { type: 'image_url', url: 'https://s3/signed', mime_type: 'image/png' },

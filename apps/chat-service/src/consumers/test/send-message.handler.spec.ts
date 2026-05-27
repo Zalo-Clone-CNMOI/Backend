@@ -602,6 +602,70 @@ describe('SendMessageHandler', () => {
       });
     });
 
+    it('Image-only message in a DOCUMENT conversation: skips Zai (RAG needs a query)', async () => {
+      const payload = createMockChatSendCommand({
+        body: '',
+        attachments: [
+          {
+            key: 'uploads/x.png',
+            type: 'image',
+            name: 'x.png',
+            size: 10,
+            content_type: 'image/png',
+          },
+        ],
+      } as Partial<Parameters<typeof createMockChatSendCommand>[0]>);
+      membershipService.canUserAccessConversation.mockResolvedValue(true);
+      repo.tryBeginMessageProcessing.mockResolvedValue(true);
+      repo.insertMessage.mockResolvedValue(undefined);
+      repo.markMessageStored.mockResolvedValue(undefined);
+      cacheService.getAiConversationContext.mockResolvedValue({
+        feature: 'document',
+        document_id: 'doc-1',
+        created_at: 1,
+      });
+
+      await handler.handle(payload);
+      await drainMicrotasks();
+
+      const aiCalls = (publisher.emit.mock.calls as [string, unknown][]).filter(
+        ([topic]) => topic === 'ai.zai.chat.request',
+      );
+      expect(aiCalls).toHaveLength(0);
+    });
+
+    it('Image + caption in a DOCUMENT conversation: still triggers (has a query)', async () => {
+      const payload = createMockChatSendCommand({
+        body: 'what does the diagram on page 2 mean?',
+        attachments: [
+          {
+            key: 'uploads/x.png',
+            type: 'image',
+            name: 'x.png',
+            size: 10,
+            content_type: 'image/png',
+          },
+        ],
+      } as Partial<Parameters<typeof createMockChatSendCommand>[0]>);
+      membershipService.canUserAccessConversation.mockResolvedValue(true);
+      repo.tryBeginMessageProcessing.mockResolvedValue(true);
+      repo.insertMessage.mockResolvedValue(undefined);
+      repo.markMessageStored.mockResolvedValue(undefined);
+      cacheService.getAiConversationContext.mockResolvedValue({
+        feature: 'document',
+        document_id: 'doc-1',
+        created_at: 1,
+      });
+
+      await handler.handle(payload);
+      await drainMicrotasks();
+
+      const aiCalls = (publisher.emit.mock.calls as [string, unknown][]).filter(
+        ([topic]) => topic === 'ai.zai.chat.request',
+      );
+      expect(aiCalls).toHaveLength(1);
+    });
+
     it('Non-image media only (no body): does NOT trigger Zai', async () => {
       const payload = createMockChatSendCommand({
         body: '',

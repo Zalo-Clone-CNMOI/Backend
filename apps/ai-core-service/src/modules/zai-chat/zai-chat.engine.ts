@@ -269,8 +269,17 @@ export class ZaiChatEngine {
     }
 
     // Image-only (no caption), or no user turn to augment → append a fresh turn.
+    // Drop a trailing EMPTY user turn first (a strategy may emit one for an
+    // empty body) so we don't send a blank message some providers reject.
+    const base =
+      messages.length > 0 &&
+      messages[messages.length - 1].role === 'user' &&
+      messages[messages.length - 1].content === ''
+        ? messages.slice(0, -1)
+        : messages;
+
     return [
-      ...messages,
+      ...base,
       {
         role: 'user',
         content: [

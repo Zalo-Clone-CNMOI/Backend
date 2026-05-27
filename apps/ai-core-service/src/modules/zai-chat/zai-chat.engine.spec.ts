@@ -498,8 +498,13 @@ describe('ZaiChatEngine', () => {
 
     await engine.respond(makeEvent(), onChunk, controller.signal);
 
-    const args = (gateway.completeStream as jest.Mock).mock.calls[0];
     // signal is the 4th positional arg (userId, options, onChunk, signal).
+    const args = (gateway.completeStream as jest.Mock).mock.calls[0] as [
+      string,
+      unknown,
+      unknown,
+      AbortSignal | undefined,
+    ];
     expect(args[3]).toBe(controller.signal);
   });
 

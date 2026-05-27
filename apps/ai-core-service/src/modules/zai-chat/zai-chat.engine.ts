@@ -80,6 +80,7 @@ export class ZaiChatEngine {
   async respond(
     event: AiZaiChatRequestEvent,
     onChunk?: (content: string) => Promise<void>,
+    signal?: AbortSignal,
   ): Promise<ZaiChatResult | null> {
     if (event.sender_id === this.config.zaiBotUserId) {
       return null;
@@ -134,6 +135,7 @@ export class ZaiChatEngine {
           event.sender_id,
           { messages, maxTokens: 1024, temperature: 0.7 },
           (chunk) => {
+            if (signal?.aborted) return; // stop forwarding chunks on abort
             if (chunk.content) {
               // gateway expects sync onChunk; the consumer's callback is async
               // (it publishes to Kafka). Detach the promise but catch rejections
@@ -145,6 +147,7 @@ export class ZaiChatEngine {
               });
             }
           },
+          signal,
         );
       } else {
         result = await this.gateway.complete(event.sender_id, {
@@ -152,6 +155,15 @@ export class ZaiChatEngine {
           maxTokens: 1024,
           temperature: 0.7,
         });
+      }
+
+      // Stream aborted (client disconnected) — discard the partial reply: no
+      // metrics, no persisted message, no AiStreamComplete (Phase 6 C12).
+      if (signal?.aborted) {
+        this.logger.log(
+          `[${event.trace_id}] Zai stream aborted for ${event.conversation_id}; discarding partial reply`,
+        );
+        return null;
       }
 
       // The LLM responded — record the call as a success regardless of

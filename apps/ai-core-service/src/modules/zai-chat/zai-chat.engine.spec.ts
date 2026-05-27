@@ -473,6 +473,36 @@ describe('ZaiChatEngine', () => {
     expect(onChunk).toHaveBeenNthCalledWith(2, ' world');
   });
 
+  // ── Phase 6 C12: abort discards the partial reply ──────────────────────────
+
+  it('aborted signal: returns null, records no metrics (partial discarded)', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const onChunk = jest.fn().mockResolvedValue(undefined);
+
+    const result = await engine.respond(
+      makeEvent(),
+      onChunk,
+      controller.signal,
+    );
+
+    expect(result).toBeNull();
+    expect(gateway.completeStream).toHaveBeenCalled();
+    // No success metric and no reply built when the stream was aborted.
+    expect(aiMetrics.recordRequest).not.toHaveBeenCalled();
+  });
+
+  it('passes the abort signal through to gateway.completeStream', async () => {
+    const controller = new AbortController();
+    const onChunk = jest.fn().mockResolvedValue(undefined);
+
+    await engine.respond(makeEvent(), onChunk, controller.signal);
+
+    const args = (gateway.completeStream as jest.Mock).mock.calls[0];
+    // signal is the 4th positional arg (userId, options, onChunk, signal).
+    expect(args[3]).toBe(controller.signal);
+  });
+
   // ── Phase 6 C6: strategy registry fallback ─────────────────────────────────
 
   it('unknown feature (no document_id, no mention) falls back to the general strategy', async () => {

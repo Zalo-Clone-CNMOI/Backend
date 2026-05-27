@@ -11,6 +11,7 @@ import { ConversationMembershipModule } from '@libs/mvp-access';
 import { ScyllaModule } from '@libs/scylla';
 import { RedisModule } from '@libs/redis';
 import { ChatGateway } from './socket/chat.gateway';
+import { ActiveStreamTracker } from './socket/active-stream.tracker';
 import {
   ChatHandler,
   CallHandler,
@@ -57,6 +58,7 @@ import {
   providers: [
     { provide: APP_FILTER, useClass: RpcAllExceptionsFilter },
     ChatGateway,
+    ActiveStreamTracker,
     ChatHandler,
     CallHandler,
     CallRateLimiter,

@@ -7,6 +7,7 @@ import {
 } from '@nestjs/websockets';
 import {
   Inject,
+  Logger,
   OnModuleInit,
   UseFilters,
   UseGuards,
@@ -20,8 +21,14 @@ import { WsException } from '@nestjs/websockets';
 import { JwtService, WsAuthGuard } from '@libs/auth';
 import { RedisService } from '@libs/redis';
 import { randomUUID } from 'crypto';
-import { WsEvents, type WsQrBindIssuedPayload } from '@libs/contracts';
+import {
+  KafkaTopics,
+  WsEvents,
+  type AiStreamAbortEvent,
+  type WsQrBindIssuedPayload,
+} from '@libs/contracts';
 import { KAFKA_CLIENT } from '@libs/kafka';
+import { ActiveStreamTracker } from './active-stream.tracker';
 import {
   ChatHandler,
   CallHandler,
@@ -78,6 +85,8 @@ export class ChatGateway implements OnModuleInit {
   @WebSocketServer()
   private readonly server!: Server;
 
+  private readonly logger = new Logger(ChatGateway.name);
+
   constructor(
     @Inject(KAFKA_CLIENT) private readonly kafka: ClientKafka,
     private readonly jwtService: JwtService,
@@ -87,6 +96,7 @@ export class ChatGateway implements OnModuleInit {
     private readonly presenceHandler: PresenceHandler,
     private readonly aiHandler: AiHandler,
     private readonly typingHandler: TypingHandler,
+    private readonly streamTracker: ActiveStreamTracker,
   ) {}
 
   async onModuleInit() {
@@ -113,6 +123,14 @@ export class ChatGateway implements OnModuleInit {
       void socket.join(AUTHENTICATED_CLIENTS_ROOM);
       void socket.join(`user:${user.userId}`);
 
+      // 'disconnecting' fires while socket.rooms is still populated, so we can
+      // see which conversations this socket was in and abort their Zai streams
+      // if no other recipient remains (Phase 6 C12). handleDisconnect runs
+      // after rooms are cleared, so the check must happen here.
+      socket.on('disconnecting', () => {
+        void this.abortStreamsForDepartingSocket(socket);
+      });
+
       this.presenceHandler.handleConnect(socket, user.userId);
     } catch {
       socket.data.userId = undefined;
@@ -124,6 +142,61 @@ export class ChatGateway implements OnModuleInit {
     if (!userId) return;
 
     this.presenceHandler.handleDisconnect(socket, userId);
+  }
+
+  /**
+   * On the `disconnecting` event, abort any active Zai stream in a conversation
+   * this socket is leaving — but ONLY when it is the last recipient remaining
+   * in that conversation room. Other group members watching the same stream
+   * must keep receiving it. Publishes AiStreamAbort keyed by stream_id so it
+   * lands on the same partition as the stream's chunks (Phase 6 C12).
+   */
+  private async abortStreamsForDepartingSocket(
+    socket: AuthedSocket,
+  ): Promise<void> {
+    const convRooms = [...socket.rooms].filter((room) =>
+      room.startsWith('conv:'),
+    );
+
+    for (const room of convRooms) {
+      const conversationId = room.slice('conv:'.length);
+      const activeStreams = this.streamTracker.getActiveStreams(conversationId);
+      if (activeStreams.length === 0) continue;
+
+      // fetchSockets() (Redis adapter) returns recipients across all instances
+      // and still includes THIS socket (it has not left the room yet). Abort
+      // only if no other recipient remains.
+      let remaining = 0;
+      try {
+        const sockets = await this.server.in(room).fetchSockets();
+        remaining = sockets.filter((s) => s.id !== socket.id).length;
+      } catch (err) {
+        // Be conservative: if occupancy is unknown, do NOT abort (avoid cutting
+        // off other members). The stream will end naturally on completion.
+        this.logger.warn(
+          `Failed to resolve room occupancy for ${room}; skipping stream abort: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        continue;
+      }
+      if (remaining > 0) continue;
+
+      for (const streamId of activeStreams) {
+        this.streamTracker.complete(streamId);
+        const abortEvent: AiStreamAbortEvent = {
+          stream_id: streamId,
+          conversation_id: conversationId,
+          reason: 'client_disconnect',
+          aborted_at: Date.now(),
+        };
+        void this.kafka.emit(KafkaTopics.AiStreamAbort, {
+          key: streamId,
+          value: abortEvent,
+        });
+        this.logger.log(
+          `Published AiStreamAbort for stream ${streamId} (conversation ${conversationId}) — last recipient left`,
+        );
+      }
+    }
   }
 
   // ── Chat Event Handlers ──────────────────────────────────────────────

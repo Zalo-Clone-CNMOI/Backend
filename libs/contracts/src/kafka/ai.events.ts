@@ -372,6 +372,20 @@ export interface AiStreamCompleteEvent {
   trace_id?: string;
 }
 
+/**
+ * Published by ws-gateway when the last recipient of a Zai stream disconnects
+ * (or explicitly cancels). ai-core aborts the matching in-flight LLM stream and
+ * discards the partial reply. Keyed by stream_id on the same partition as the
+ * stream's chunks (Phase 6 C12).
+ */
+export interface AiStreamAbortEvent {
+  stream_id: string;
+  conversation_id: string;
+  reason: 'client_disconnect' | 'user_cancel';
+  aborted_at: number;
+  trace_id?: string;
+}
+
 export interface AiZaiChatRequestEvent {
   message_id: string;
   conversation_id: string;

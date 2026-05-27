@@ -634,4 +634,39 @@ describe('AiConsumer', () => {
       expect(cacheService.releaseMentionCooldown).not.toHaveBeenCalled();
     });
   });
+
+  // ── Phase 6 C12: stream abort ──────────────────────────────────────────────
+
+  describe('onAiStreamAbort', () => {
+    function getActiveStreams(): Map<string, AbortController> {
+      return (
+        consumer as unknown as { activeStreams: Map<string, AbortController> }
+      ).activeStreams;
+    }
+
+    it('aborts the matching in-flight stream controller', () => {
+      const controller = new AbortController();
+      getActiveStreams().set('stream-x', controller);
+
+      consumer.onAiStreamAbort({
+        stream_id: 'stream-x',
+        conversation_id: 'conv-z',
+        reason: 'client_disconnect',
+        aborted_at: Date.now(),
+      });
+
+      expect(controller.signal.aborted).toBe(true);
+    });
+
+    it('is a no-op for an unknown stream (e.g. owned by another instance)', () => {
+      expect(() =>
+        consumer.onAiStreamAbort({
+          stream_id: 'unknown-stream',
+          conversation_id: 'conv-z',
+          reason: 'client_disconnect',
+          aborted_at: Date.now(),
+        }),
+      ).not.toThrow();
+    });
+  });
 });

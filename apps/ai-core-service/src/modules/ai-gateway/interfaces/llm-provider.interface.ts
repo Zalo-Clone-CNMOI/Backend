@@ -43,9 +43,16 @@ export interface ILlmProvider {
 
   complete(options: LlmCompletionOptions): Promise<LlmCompletionResult>;
 
+  /**
+   * Stream a completion. When `signal` is provided and fires mid-stream, the
+   * provider stops emitting chunks and resolves with the partial result
+   * collected so far — it MUST NOT throw on abort, so the gateway does not
+   * fail over to another provider for an intentional cancel (Phase 6 C12).
+   */
   completeStream(
     options: LlmCompletionOptions,
     onChunk: (chunk: LlmStreamChunk) => void,
+    signal?: AbortSignal,
   ): Promise<LlmCompletionResult>;
 
   embed(text: string, model?: string): Promise<LlmEmbeddingResult>;

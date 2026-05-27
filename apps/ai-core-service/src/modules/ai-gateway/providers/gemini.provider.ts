@@ -98,9 +98,14 @@ export class GeminiProvider implements ILlmProvider {
   async completeStream(
     options: LlmCompletionOptions,
     onChunk: (chunk: LlmStreamChunk) => void,
+    signal?: AbortSignal,
   ): Promise<LlmCompletionResult> {
     const start = Date.now();
     const model = options.model ?? 'gemini-1.5-flash';
+
+    // Hoisted so the abort path can return the partial collected so far.
+    let fullContent = '';
+    let index = 0;
 
     try {
       const client = await this.getClient();
@@ -141,15 +146,29 @@ export class GeminiProvider implements ILlmProvider {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       const result = await chat.sendMessageStream(lastMessage.parts[0].text);
 
-      let fullContent = '';
-      let index = 0;
-
       for await (const chunk of result.stream) {
+        // Client gone — stop emitting and return the partial (Phase 6 C12).
+        // NOTE: @google/generative-ai has no clean request-cancel hook, so the
+        // underlying HTTP request may finish in the background; we simply stop
+        // consuming and return. Tokens already spent are sunk.
+        if (signal?.aborted) break;
+
         const text = chunk.text?.() ?? '';
         if (text) {
           fullContent += text;
           onChunk({ content: text, index: index++, isFinal: false });
         }
+      }
+
+      if (signal?.aborted) {
+        return {
+          content: fullContent,
+          tokensIn: 0,
+          tokensOut: 0,
+          model,
+          provider: this.name,
+          latencyMs: Date.now() - start,
+        };
       }
 
       onChunk({ content: '', index: index++, isFinal: true });
@@ -167,6 +186,17 @@ export class GeminiProvider implements ILlmProvider {
         latencyMs: Date.now() - start,
       };
     } catch (error) {
+      // Intentional abort — return the partial rather than failing over.
+      if (signal?.aborted) {
+        return {
+          content: fullContent,
+          tokensIn: 0,
+          tokensOut: 0,
+          model,
+          provider: this.name,
+          latencyMs: Date.now() - start,
+        };
+      }
       this.logger.error(
         `Gemini completeStream() failed - Model: ${model}, Error: ${error instanceof Error ? error.message : String(error)}`,
         error instanceof Error ? error.stack : undefined,

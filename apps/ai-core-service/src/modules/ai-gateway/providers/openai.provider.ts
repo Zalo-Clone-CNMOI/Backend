@@ -70,31 +70,39 @@ export class OpenAiProvider implements ILlmProvider {
   async completeStream(
     options: LlmCompletionOptions,
     onChunk: (chunk: LlmStreamChunk) => void,
+    signal?: AbortSignal,
   ): Promise<LlmCompletionResult> {
     const start = Date.now();
     const model = options.model ?? this.config.aiDefaultModel ?? 'gpt-4o-mini';
 
+    // Hoisted so the abort path can return the partial collected so far.
+    let fullContent = '';
+    let index = 0;
+    let tokensIn = 0;
+    let tokensOut = 0;
+
     try {
       const client = await this.getClient();
 
-      const stream = await client.chat.completions.create({
-        model,
-        // TODO(Phase-3): multimodal content parts are passed through as-is; provider
-        // SDK error path is currently the only signal if an array reaches the API.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
-        messages: options.messages as any,
-        max_tokens: options.maxTokens ?? 1024,
-        temperature: options.temperature ?? 0.7,
-        stream: true,
-        stream_options: { include_usage: true },
-      });
-
-      let fullContent = '';
-      let index = 0;
-      let tokensIn = 0;
-      let tokensOut = 0;
+      const stream = await client.chat.completions.create(
+        {
+          model,
+          // TODO(Phase-3): multimodal content parts are passed through as-is; provider
+          // SDK error path is currently the only signal if an array reaches the API.
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
+          messages: options.messages as any,
+          max_tokens: options.maxTokens ?? 1024,
+          temperature: options.temperature ?? 0.7,
+          stream: true,
+          stream_options: { include_usage: true },
+        },
+        { signal },
+      );
 
       for await (const chunk of stream) {
+        // Client gone — stop emitting and return the partial (Phase 6 C12).
+        if (signal?.aborted) break;
+
         const delta = chunk.choices?.[0]?.delta?.content ?? '';
         const finishReason = chunk.choices?.[0]?.finish_reason;
         const isFinished =
@@ -126,6 +134,18 @@ export class OpenAiProvider implements ILlmProvider {
         latencyMs: Date.now() - start,
       };
     } catch (error) {
+      // Intentional abort — the SDK throws an AbortError when `signal` fires.
+      // Return the partial rather than failing over to another provider.
+      if (signal?.aborted) {
+        return {
+          content: fullContent,
+          tokensIn,
+          tokensOut,
+          model,
+          provider: this.name,
+          latencyMs: Date.now() - start,
+        };
+      }
       this.logger.error(
         `OpenAI completeStream() failed - Model: ${model}, Error: ${error instanceof Error ? error.message : String(error)}`,
         error instanceof Error ? error.stack : undefined,

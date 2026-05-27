@@ -14,6 +14,7 @@ import type {
   AiZaiChatRequestEvent,
   AiStreamChunkEvent,
   AiStreamCompleteEvent,
+  AiStreamAbortEvent,
   AiZaiTypingEvent,
 } from '@libs/contracts';
 import { APP_CONFIG, AppConfig } from '@libs/config';
@@ -35,6 +36,17 @@ import { ZaiChatEngine } from '../modules/zai-chat/zai-chat.engine';
 @Controller()
 export class AiConsumer {
   private readonly logger = new Logger(AiConsumer.name);
+
+  /**
+   * In-flight Zai streams on THIS instance, keyed by stream_id. An AiStreamAbort
+   * event aborts the matching controller (Phase 6 C12).
+   *
+   * Limitation: the controller is in-memory, so abort only works when the
+   * abort event is consumed by the SAME ai-core instance that owns the stream.
+   * Multi-instance ai-core would need the abort routed to the owning instance
+   * (e.g. Redis pub/sub keyed by stream_id) — out of scope for this phase.
+   */
+  private readonly activeStreams = new Map<string, AbortController>();
 
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
@@ -259,6 +271,11 @@ export class AiConsumer {
     let chunkIndex = 0;
     let typingOffEmitted = false;
 
+    // Register an abort controller so an AiStreamAbort (client disconnect) can
+    // cancel this stream (Phase 6 C12).
+    const abortController = new AbortController();
+    this.activeStreams.set(streamId, abortController);
+
     const emitTypingOff = async () => {
       if (typingOffEmitted) return;
       typingOffEmitted = true;
@@ -310,7 +327,11 @@ export class AiConsumer {
         );
       };
 
-      const result = await this.zaiChatEngine.respond(event, onChunk);
+      const result = await this.zaiChatEngine.respond(
+        event,
+        onChunk,
+        abortController.signal,
+      );
 
       if (result) {
         const { reply, provider, tokensIn, tokensOut } = result;
@@ -353,7 +374,23 @@ export class AiConsumer {
           );
       }
     } finally {
+      this.activeStreams.delete(streamId);
       await emitTypingOff();
     }
+  }
+
+  // ── Zai Stream Abort ─────────────────────────────────────────────────
+
+  @EventPattern(KafkaTopics.AiStreamAbort)
+  onAiStreamAbort(@Payload() event: AiStreamAbortEvent) {
+    const controller = this.activeStreams.get(event.stream_id);
+    if (!controller) {
+      // Stream already finished, or it is owned by another ai-core instance.
+      return;
+    }
+    this.logger.log(
+      `[${event.trace_id}] Aborting Zai stream ${event.stream_id} (reason: ${event.reason})`,
+    );
+    controller.abort();
   }
 }

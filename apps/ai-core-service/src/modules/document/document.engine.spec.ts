@@ -255,15 +255,14 @@ describe('DocumentEngine.processDocument', () => {
       expect(fileKeys[0]).toBe(expectedFileKey);
     });
 
-    it('fails the ingest fail-loud when event.file_key is empty (M3 — column is NOT NULL)', async () => {
-      const embedBatch = jest
-        .fn()
-        .mockResolvedValue([makeEmbeddingResult([0.1], 5)]);
+    it('fails the ingest fail-loud when event.file_key is empty (M3 — column is NOT NULL, no API spend)', async () => {
+      const embedBatch = jest.fn();
+      const chunker = jest.fn();
       const chunkRepoCreate = jest.fn();
       const docMetaRepoUpdate = jest.fn().mockResolvedValue({ affected: 1 });
 
       const engine = buildEngine({
-        chunker: { chunk: jest.fn().mockResolvedValue(['only chunk']) },
+        chunker: { chunk: chunker },
         gateway: { embedBatch, embed: jest.fn(), complete: jest.fn() },
         chunkRepo: { create: chunkRepoCreate, save: jest.fn() },
         docMetaRepo: {
@@ -280,9 +279,20 @@ describe('DocumentEngine.processDocument', () => {
         'text',
       );
 
-      // The malformed event is rejected before any chunk is created.
+      // The guard runs up-front, so the malformed event short-circuits
+      // BEFORE the expensive side effects: no chunking and — critically —
+      // no embedding API spend. (docMetaRepo.update is still called by
+      // recordDocumentFailure to flip status to 'failed'; that's expected.)
+      expect(chunker).not.toHaveBeenCalled();
+      expect(embedBatch).not.toHaveBeenCalled();
       expect(chunkRepoCreate).not.toHaveBeenCalled();
-      // The error funnels through recordDocumentFailure → status='failed'.
+      // The metadata transition is ONLY the failure marker, not the regular
+      // 'processing' transition that would precede chunking.
+      expect(docMetaRepoUpdate).toHaveBeenCalledTimes(1);
+      expect(docMetaRepoUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'doc-001' }),
+        expect.objectContaining({ status: 'failed' }),
+      );
       expect(result.status).toBe('failed');
       expect(result.error_message).toMatch(/file_key/i);
     });

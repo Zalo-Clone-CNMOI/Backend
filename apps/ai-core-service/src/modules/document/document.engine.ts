@@ -74,6 +74,17 @@ export class DocumentEngine {
         throw new Error(`Document exceeds ${this.maxDocSizeMb}MB limit`);
       }
 
+      // M3: file_key is the canonical chunk identifier and is NOT NULL at
+      // the DB level. Kafka deserialization bypasses class-validator, so
+      // validate the input up-front — BEFORE any DB write, chunking, or
+      // embedding spend. A malformed/replayed event surfaces immediately
+      // as a clean status='failed' result via the catch block below.
+      if (typeof event.file_key !== 'string' || event.file_key.length === 0) {
+        throw new Error(
+          `AiDocumentUpload event missing required file_key for document ${event.document_id}; cannot ingest`,
+        );
+      }
+
       // The row is pre-created by media-service.confirmUploaded with
       // status='pending' before the AiDocumentUpload event is emitted, so
       // we only need to transition status here. Fall back to an upsert if
@@ -122,21 +133,10 @@ export class DocumentEngine {
       );
 
       // M3: chunks are scoped by file_key alone (document_id column dropped).
-      // Kafka deserialization bypasses class-validator, so guard against a
-      // malformed/replayed event with empty file_key. Throwing here surfaces
-      // the bad event as a clean status='failed' result via the catch block
-      // below — much louder than the M1/M2 silent-NULL behavior, and required
-      // because the column is now NOT NULL at the DB level.
-      if (typeof event.file_key !== 'string' || event.file_key.length === 0) {
-        throw new Error(
-          `AiDocumentUpload event missing required file_key for document ${event.document_id}; cannot ingest`,
-        );
-      }
-      const fileKey = event.file_key;
-
+      // file_key was validated up-front; safe to use directly here.
       const chunkEntities: DocumentChunk[] = embeddingResults.map((result, i) =>
         this.chunkRepo.create({
-          fileKey,
+          fileKey: event.file_key,
           chunkIndex: i,
           content: chunks[i],
           tokenCount: result.tokensUsed,

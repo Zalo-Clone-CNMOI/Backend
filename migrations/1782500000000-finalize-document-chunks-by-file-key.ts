@@ -21,11 +21,15 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  *
  * Rollback (down): re-add `document_id` (NULLABLE), recreate the index,
  * restore the FK as ON DELETE NO ACTION (matching M1's post-state),
- * and re-add NULLABLE to file_key. NOTE: the original document_id values
- * are LOST by the time M3 runs — `down()` can only restore the column
- * shape, not the per-row data. If a rollback is needed, do it BEFORE
- * dropping the column in production (i.e., run M3 `down()` immediately
- * after `up()` fails, not days later).
+ * and re-add NULLABLE to file_key. The DDL is wrapped in a transaction,
+ * so `up()` is all-or-nothing: a mid-step failure rolls back cleanly
+ * (and `down()` is not even needed). The data-loss caveat applies only
+ * when `up()` has already committed successfully in production — at
+ * that point `down()` restores the column SHAPE but the per-row
+ * `document_id` values are permanently lost. Operators who genuinely
+ * need to rebuild the column post-commit must backfill manually
+ * (e.g., by joining on file_key + earliest document_metadata row,
+ * accepting that re-linked chunks lose their original ownership trail).
  */
 export class FinalizeDocumentChunksByFileKey1782500000000 implements MigrationInterface {
   name = 'FinalizeDocumentChunksByFileKey1782500000000';

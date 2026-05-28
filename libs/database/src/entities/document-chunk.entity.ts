@@ -17,9 +17,19 @@ import { BaseEntity } from '@libs/shared';
  */
 @Entity('document_chunks')
 @Index('idx_chunk_document', ['documentId'])
+@Index('idx_chunk_file_key', ['fileKey'])
 export class DocumentChunk extends BaseEntity {
   @Column({ type: 'uuid', name: 'document_id' })
   documentId: string;
+
+  /**
+   * Stable key used to share chunks across re-uploads/forwards of the same
+   * physical file. Nullable during the M1→M3 rollout: M1 backfills + starts
+   * dual-write, M2 switches readers to query by file_key, M3 drops
+   * document_id and makes this NOT NULL.
+   */
+  @Column({ type: 'varchar', name: 'file_key', length: 512, nullable: true })
+  fileKey: string | null = null;
 
   @Column({ type: 'int', name: 'chunk_index' })
   chunkIndex: number;

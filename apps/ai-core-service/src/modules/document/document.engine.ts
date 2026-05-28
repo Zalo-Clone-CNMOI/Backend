@@ -121,9 +121,13 @@ export class DocumentEngine {
         0,
       );
 
+      // Dual-write file_key alongside document_id during the M1→M3 rollout
+      // so M2 can switch readers to chunks-by-file_key without a data gap.
+      // M3 will drop document_id and stop populating it here.
       const chunkEntities: DocumentChunk[] = embeddingResults.map((result, i) =>
         this.chunkRepo.create({
           documentId: event.document_id,
+          fileKey: event.file_key,
           chunkIndex: i,
           content: chunks[i],
           tokenCount: result.tokensUsed,

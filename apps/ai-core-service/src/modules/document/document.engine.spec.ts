@@ -195,6 +195,46 @@ describe('DocumentEngine.processDocument', () => {
       );
     });
 
+    it('dual-writes file_key alongside document_id on every chunk (M1 rollout)', async () => {
+      const chunks = ['a', 'b', 'c'];
+      const embedBatch = jest
+        .fn()
+        .mockResolvedValue([
+          makeEmbeddingResult([0.1], 5),
+          makeEmbeddingResult([0.2], 5),
+          makeEmbeddingResult([0.3], 5),
+        ]);
+      const chunkRepoCreate = jest
+        .fn()
+        .mockImplementation((data: Record<string, unknown>) => ({ ...data }));
+
+      const engine = buildEngine({
+        chunker: { chunk: jest.fn().mockResolvedValue(chunks) },
+        gateway: { embedBatch, embed: jest.fn(), complete: jest.fn() },
+        chunkRepo: { create: chunkRepoCreate, save: jest.fn() },
+      });
+
+      await engine.processDocument(
+        makeUploadEvent({
+          document_id: 'doc-dual',
+          file_key: 'uploads/shared/file-abc.pdf',
+        }),
+        'text',
+      );
+
+      expect(chunkRepoCreate).toHaveBeenCalledTimes(3);
+      for (let i = 0; i < 3; i++) {
+        expect(chunkRepoCreate).toHaveBeenNthCalledWith(
+          i + 1,
+          expect.objectContaining({
+            documentId: 'doc-dual',
+            fileKey: 'uploads/shared/file-abc.pdf',
+            chunkIndex: i,
+          }),
+        );
+      }
+    });
+
     it('sums tokensUsed from all embedBatch results as totalTokens', async () => {
       const embeddingResults = [
         makeEmbeddingResult([0.1], 10),

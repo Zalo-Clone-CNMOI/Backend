@@ -8,7 +8,7 @@
  *
  * Usage:
  *   KAFKA_BROKERS=<broker>:9092 \
- *   ZAI_BOT_USER_ID=00000000-0000-0000-0000-0000000000a1 \
+ *   ZAI_BOT_USER_ID=00000000-0000-4000-8000-0000000000a1 \
  *   CONVERSATION_ID=<existing-conv-uuid> \
  *   npx ts-node -r tsconfig-paths/register scripts/smoke-zai-message.ts
  *

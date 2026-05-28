@@ -64,7 +64,7 @@ export class ConversationClientService extends BaseHttpClient {
         { conversationId },
         { headers: { Authorization: `Bearer ${accessToken}` } },
       );
-      return response.data;
+      return (response.data as { data: ConversationDetailDto }).data;
     } catch (error) {
       this.handleError('getConversationById', error);
     }
@@ -412,7 +412,7 @@ export class ConversationClientService extends BaseHttpClient {
       const response = await this.aiConversationsApi.getOrCreateZaiConversation(
         { headers: { Authorization: `Bearer ${accessToken}` } },
       );
-      return response.data as { conversationId: string };
+      return response.data;
     } catch (error) {
       this.handleError('getOrCreateZaiConversation', error);
     }
@@ -429,7 +429,7 @@ export class ConversationClientService extends BaseHttpClient {
           { createDocumentConversationDto: dto },
           { headers: { Authorization: `Bearer ${accessToken}` } },
         );
-      return response.data as { conversationId: string };
+      return response.data;
     } catch (error) {
       this.handleError('getOrCreateDocumentConversation', error);
     }
@@ -444,7 +444,7 @@ export class ConversationClientService extends BaseHttpClient {
         { conversationId },
         { headers: { Authorization: `Bearer ${accessToken}` } },
       );
-      return response.data as { message: string };
+      return (response.data as { data: { message: string } }).data;
     } catch (error) {
       this.handleError('disbandAiConversation', error);
     }

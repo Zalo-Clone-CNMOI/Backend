@@ -18,7 +18,7 @@ import { ClientKafka } from '@nestjs/microservices';
 import { AiConversationFactoryService } from './ai-conversation-factory.service';
 import { KafkaTopics, type AiConversationContext } from '@libs/contracts';
 
-const ZAI_ID = '00000000-0000-0000-0000-0000000000a1';
+const ZAI_ID = '00000000-0000-4000-8000-0000000000a1';
 
 /**
  * Shared mock for the existing-conversation lookup QueryBuilder used by

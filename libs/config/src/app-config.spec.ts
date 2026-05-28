@@ -273,7 +273,7 @@ describe('Zai bot configuration', () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const m2 = require('./app-config') as typeof import('./app-config');
     const config = m2.loadConfig('chat-service');
-    expect(config.zaiBotUserId).toBe('00000000-0000-0000-0000-0000000000a1');
+    expect(config.zaiBotUserId).toBe('00000000-0000-4000-8000-0000000000a1');
   });
 
   it('rejects invalid UUID format', () => {

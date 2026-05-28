@@ -14,7 +14,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * snapshots so they replay correctly against any future enum or schema
  * change.
  */
-const ZAI_BOT_USER_ID = '00000000-0000-0000-0000-0000000000a1';
+const ZAI_BOT_USER_ID = '00000000-0000-4000-8000-0000000000a1';
 
 export class SetZaiUserStatusSystem1782200000001 implements MigrationInterface {
   name = 'SetZaiUserStatusSystem1782200000001';

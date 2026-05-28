@@ -6,7 +6,7 @@ import { KafkaTopics, type ChatAiMessageCommand } from '@libs/contracts';
 import { AiChatPublisher } from './ai-chat.publisher';
 
 describe('AiChatPublisher', () => {
-  const ZAI_ID = '00000000-0000-0000-0000-0000000000a1';
+  const ZAI_ID = '00000000-0000-4000-8000-0000000000a1';
   let publisher: AiChatPublisher;
   let kafka: { emit: jest.Mock; connect: jest.Mock; close: jest.Mock };
   let config: Partial<AppConfig>;

@@ -412,7 +412,7 @@ export class ConversationClientService extends BaseHttpClient {
       const response = await this.aiConversationsApi.getOrCreateZaiConversation(
         { headers: { Authorization: `Bearer ${accessToken}` } },
       );
-      return (response.data as { data: { conversationId: string } }).data;
+      return response.data;
     } catch (error) {
       this.handleError('getOrCreateZaiConversation', error);
     }
@@ -429,7 +429,7 @@ export class ConversationClientService extends BaseHttpClient {
           { createDocumentConversationDto: dto },
           { headers: { Authorization: `Bearer ${accessToken}` } },
         );
-      return (response.data as { data: { conversationId: string } }).data;
+      return response.data;
     } catch (error) {
       this.handleError('getOrCreateDocumentConversation', error);
     }

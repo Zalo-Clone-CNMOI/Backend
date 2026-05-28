@@ -380,9 +380,17 @@ export class MediaService implements OnModuleInit {
   }
 
   private isUniqueViolation(err: unknown): boolean {
-    const driverError = (err as { driverError?: { code?: string } })
-      .driverError;
-    return driverError?.code === '23505';
+    // Mirrors `isUniqueViolationError` in conversation-poll.helpers.ts.
+    // TypeORM's QueryFailedError surfaces the Postgres SQLSTATE on
+    // either `err.code` or `err.driverError.code` depending on the pg
+    // driver version, so we check both for forward compatibility.
+    if (!err || typeof err !== 'object') {
+      return false;
+    }
+    const anyErr = err as { code?: unknown; driverError?: { code?: unknown } };
+    return (
+      anyErr.code === '23505' || anyErr.driverError?.code === '23505'
+    );
   }
 
   private async generateImageThumbnail(originalKey: string): Promise<string> {

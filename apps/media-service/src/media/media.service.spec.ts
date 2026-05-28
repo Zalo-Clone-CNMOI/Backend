@@ -390,6 +390,30 @@ describe('MediaService', () => {
       expect(aiDocCalls).toHaveLength(0);
     });
 
+    it('C1: rethrows the unique-violation when the re-query finds no winner (extremely narrow window)', async () => {
+      mediaFileRepo.findOne.mockResolvedValue(null);
+      // Pre-flight findOne: null. Re-query findOne after catch: also null
+      // (winner row deleted/soft-deleted between violation and re-query).
+      documentMetadataRepo.findOne
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null);
+
+      const uniqueViolation = Object.assign(
+        new Error('duplicate key value violates unique constraint'),
+        { driverError: { code: '23505' } },
+      );
+      documentMetadataRepo.save.mockRejectedValueOnce(uniqueViolation);
+
+      await expect(
+        service.confirmUploaded(
+          'docs/report.pdf',
+          'application/pdf',
+          'user-1',
+          'conv-1',
+        ),
+      ).rejects.toThrow('duplicate key value violates unique constraint');
+    });
+
     it('C1: rethrows non-unique DB errors instead of swallowing them', async () => {
       mediaFileRepo.findOne.mockResolvedValue(null);
       documentMetadataRepo.findOne.mockResolvedValueOnce(null);

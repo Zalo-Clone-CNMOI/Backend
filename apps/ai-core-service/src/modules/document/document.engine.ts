@@ -121,27 +121,21 @@ export class DocumentEngine {
         0,
       );
 
-      // Dual-write file_key alongside document_id during the M1→M3 rollout
-      // so M2 can switch readers to chunks-by-file_key without a data gap.
-      // M3 will drop document_id and stop populating it here.
-      //
-      // Guard: `event.file_key` is typed `string` (required) but Kafka deserialization
-      // bypasses class-validator. A malformed/replayed event with empty file_key
-      // would silently pass the M1 NULL check yet break M2 lookups. Persist NULL
-      // (matches column default) and log so the bad event surfaces.
-      const fileKey =
-        typeof event.file_key === 'string' && event.file_key.length > 0
-          ? event.file_key
-          : null;
-      if (fileKey === null) {
-        this.logger.warn(
-          `Missing/empty file_key on AiDocumentUpload for document ${event.document_id}; chunks will have NULL file_key (M2 lookups will fail for this doc).`,
+      // M3: chunks are scoped by file_key alone (document_id column dropped).
+      // Kafka deserialization bypasses class-validator, so guard against a
+      // malformed/replayed event with empty file_key. Throwing here surfaces
+      // the bad event as a clean status='failed' result via the catch block
+      // below — much louder than the M1/M2 silent-NULL behavior, and required
+      // because the column is now NOT NULL at the DB level.
+      if (typeof event.file_key !== 'string' || event.file_key.length === 0) {
+        throw new Error(
+          `AiDocumentUpload event missing required file_key for document ${event.document_id}; cannot ingest`,
         );
       }
+      const fileKey = event.file_key;
 
       const chunkEntities: DocumentChunk[] = embeddingResults.map((result, i) =>
         this.chunkRepo.create({
-          documentId: event.document_id,
           fileKey,
           chunkIndex: i,
           content: chunks[i],

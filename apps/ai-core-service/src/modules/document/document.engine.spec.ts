@@ -202,7 +202,7 @@ describe('DocumentEngine.processDocument', () => {
       );
     });
 
-    it('dual-writes file_key alongside document_id on every chunk (M1 rollout)', async () => {
+    it('writes chunks keyed by file_key only — no longer dual-writes document_id (M3)', async () => {
       const expectedFileKey = 'uploads/shared/file-abc.pdf';
       const chunks = ['a', 'b', 'c'];
       const embedBatch = jest
@@ -224,7 +224,7 @@ describe('DocumentEngine.processDocument', () => {
 
       await engine.processDocument(
         makeUploadEvent({
-          document_id: 'doc-dual',
+          document_id: 'doc-meta-only',
           file_key: expectedFileKey,
         }),
         'text',
@@ -235,48 +235,66 @@ describe('DocumentEngine.processDocument', () => {
         expect(chunkRepoCreate).toHaveBeenNthCalledWith(
           i + 1,
           expect.objectContaining({
-            documentId: 'doc-dual',
             fileKey: expectedFileKey,
             chunkIndex: i,
           }),
         );
       }
 
-      // Belt-and-suspenders: guarantee every chunk shares the SAME file_key
-      // (catches a regression where someone appends an index or per-chunk salt).
+      // M3 invariant: documentId is no longer part of the chunk row.
+      // Belt-and-suspenders: every chunk shares the SAME file_key (catches a
+      // regression where someone appends an index or per-chunk salt).
       const calls = chunkRepoCreate.mock.calls as Array<
-        [{ fileKey: string | null }]
+        [{ fileKey: string; documentId?: string }]
       >;
+      for (const [arg] of calls) {
+        expect(arg).not.toHaveProperty('documentId');
+      }
       const fileKeys = calls.map(([arg]) => arg.fileKey);
       expect(new Set(fileKeys).size).toBe(1);
       expect(fileKeys[0]).toBe(expectedFileKey);
     });
 
-    it('persists NULL file_key when event.file_key is empty (defensive against malformed Kafka replays)', async () => {
-      const embedBatch = jest
-        .fn()
-        .mockResolvedValue([makeEmbeddingResult([0.1], 5)]);
-      const chunkRepoCreate = jest
-        .fn()
-        .mockImplementation((data: Record<string, unknown>) => ({ ...data }));
+    it('fails the ingest fail-loud when event.file_key is empty (M3 — column is NOT NULL, no API spend)', async () => {
+      const embedBatch = jest.fn();
+      const chunker = jest.fn();
+      const chunkRepoCreate = jest.fn();
+      const docMetaRepoUpdate = jest.fn().mockResolvedValue({ affected: 1 });
 
       const engine = buildEngine({
-        chunker: { chunk: jest.fn().mockResolvedValue(['only chunk']) },
+        chunker: { chunk: chunker },
         gateway: { embedBatch, embed: jest.fn(), complete: jest.fn() },
         chunkRepo: { create: chunkRepoCreate, save: jest.fn() },
+        docMetaRepo: {
+          create: jest.fn().mockImplementation((d: unknown) => d),
+          save: jest.fn().mockResolvedValue(undefined),
+          update: docMetaRepoUpdate,
+        },
       });
 
-      // Force file_key to empty string via cast — bypasses TS but mirrors a
-      // malformed Kafka event that bypasses class-validator at runtime.
-      await engine.processDocument(
+      // Force file_key to empty string via cast — mirrors a malformed Kafka
+      // event that bypasses class-validator at runtime.
+      const result = await engine.processDocument(
         makeUploadEvent({ file_key: '' as unknown as string }),
         'text',
       );
 
-      expect(chunkRepoCreate).toHaveBeenCalledTimes(1);
-      expect(chunkRepoCreate).toHaveBeenCalledWith(
-        expect.objectContaining({ fileKey: null }),
+      // The guard runs up-front, so the malformed event short-circuits
+      // BEFORE the expensive side effects: no chunking and — critically —
+      // no embedding API spend. (docMetaRepo.update is still called by
+      // recordDocumentFailure to flip status to 'failed'; that's expected.)
+      expect(chunker).not.toHaveBeenCalled();
+      expect(embedBatch).not.toHaveBeenCalled();
+      expect(chunkRepoCreate).not.toHaveBeenCalled();
+      // The metadata transition is ONLY the failure marker, not the regular
+      // 'processing' transition that would precede chunking.
+      expect(docMetaRepoUpdate).toHaveBeenCalledTimes(1);
+      expect(docMetaRepoUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'doc-001' }),
+        expect.objectContaining({ status: 'failed' }),
       );
+      expect(result.status).toBe('failed');
+      expect(result.error_message).toMatch(/file_key/i);
     });
 
     it('sums tokensUsed from all embedBatch results as totalTokens', async () => {

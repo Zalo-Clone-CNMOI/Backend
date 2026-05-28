@@ -74,6 +74,17 @@ export class DocumentEngine {
         throw new Error(`Document exceeds ${this.maxDocSizeMb}MB limit`);
       }
 
+      // M3: file_key is the canonical chunk identifier and is NOT NULL at
+      // the DB level. Kafka deserialization bypasses class-validator, so
+      // validate the input up-front — BEFORE any DB write, chunking, or
+      // embedding spend. A malformed/replayed event surfaces immediately
+      // as a clean status='failed' result via the catch block below.
+      if (typeof event.file_key !== 'string' || event.file_key.length === 0) {
+        throw new Error(
+          `AiDocumentUpload event missing required file_key for document ${event.document_id}; cannot ingest`,
+        );
+      }
+
       // The row is pre-created by media-service.confirmUploaded with
       // status='pending' before the AiDocumentUpload event is emitted, so
       // we only need to transition status here. Fall back to an upsert if
@@ -121,28 +132,11 @@ export class DocumentEngine {
         0,
       );
 
-      // Dual-write file_key alongside document_id during the M1→M3 rollout
-      // so M2 can switch readers to chunks-by-file_key without a data gap.
-      // M3 will drop document_id and stop populating it here.
-      //
-      // Guard: `event.file_key` is typed `string` (required) but Kafka deserialization
-      // bypasses class-validator. A malformed/replayed event with empty file_key
-      // would silently pass the M1 NULL check yet break M2 lookups. Persist NULL
-      // (matches column default) and log so the bad event surfaces.
-      const fileKey =
-        typeof event.file_key === 'string' && event.file_key.length > 0
-          ? event.file_key
-          : null;
-      if (fileKey === null) {
-        this.logger.warn(
-          `Missing/empty file_key on AiDocumentUpload for document ${event.document_id}; chunks will have NULL file_key (M2 lookups will fail for this doc).`,
-        );
-      }
-
+      // M3: chunks are scoped by file_key alone (document_id column dropped).
+      // file_key was validated up-front; safe to use directly here.
       const chunkEntities: DocumentChunk[] = embeddingResults.map((result, i) =>
         this.chunkRepo.create({
-          documentId: event.document_id,
-          fileKey,
+          fileKey: event.file_key,
           chunkIndex: i,
           content: chunks[i],
           tokenCount: result.tokensUsed,

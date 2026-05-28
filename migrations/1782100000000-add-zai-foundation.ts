@@ -13,7 +13,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  */
 
 // Must match ZAI_BOT_USER_ID env default in libs/config/src/app-config.ts.
-const ZAI_BOT_USER_ID = '00000000-0000-0000-0000-0000000000a1';
+const ZAI_BOT_USER_ID = '00000000-0000-4000-8000-0000000000a1';
 
 // Sentinel phone — intentionally not E.164 valid, so no real signup can collide.
 const ZAI_PHONE = '+zai-system';

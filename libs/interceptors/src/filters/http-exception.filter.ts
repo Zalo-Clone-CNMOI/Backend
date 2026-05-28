@@ -56,12 +56,20 @@ export class HttpExceptionFilter implements ExceptionFilter {
         const responseObj = exceptionResponse as Record<string, unknown>;
         message = (responseObj.message as string) ?? exception.message;
 
-        // Handle class-validator errors
-        if (Array.isArray(responseObj.message)) {
+        // Handle class-validator errors (exceptionFactory format)
+        if (
+          responseObj.message === 'Validation failed' &&
+          Array.isArray(responseObj.details)
+        ) {
           message = 'Validation failed';
-          details = this.formatValidationErrors(
-            responseObj.message as string[],
-          );
+          details = responseObj.details;
+        } else if (Array.isArray(responseObj.message)) {
+          // Fallback: legacy string-array format (no property name available)
+          message = 'Validation failed';
+          details = (responseObj.message as string[]).map((msg) => ({
+            field: 'unknown',
+            message: msg,
+          }));
         }
       } else {
         message = exception.message;

@@ -13,7 +13,7 @@ import { AiMessageConsumer } from '../../chat-service/src/consumers/ai-message.c
 // bridge end-to-end. Expected to break if Nx/workspace isolation is enforced — move to
 // a top-level `test/integration/` directory at that time.
 
-const ZAI_ID = '00000000-0000-0000-0000-0000000000a1';
+const ZAI_ID = '00000000-0000-4000-8000-0000000000a1';
 
 describe('Zai foundation integration', () => {
   it('end-to-end: publisher emits → consumer persists → chat.message.created produced', async () => {

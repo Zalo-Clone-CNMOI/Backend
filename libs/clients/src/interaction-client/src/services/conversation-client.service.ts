@@ -444,7 +444,10 @@ export class ConversationClientService extends BaseHttpClient {
         { conversationId },
         { headers: { Authorization: `Bearer ${accessToken}` } },
       );
-      return (response.data as { data: { message: string } }).data;
+      // The generated type marks `message` as optional because the OAS
+      // spec doesn't list it under `required`, but the controller always
+      // returns it on 200. Cast to the non-optional shape callers expect.
+      return response.data as { message: string };
     } catch (error) {
       this.handleError('disbandAiConversation', error);
     }

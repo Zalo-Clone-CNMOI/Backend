@@ -136,7 +136,7 @@ export class AiConversationFactoryService {
       .innerJoin('c.members', 'm', 'm.userId = :userId AND m.leftAt IS NULL', {
         userId,
       })
-      .where("c.type = :type AND c.aiContext->>'feature' = :feature", {
+      .where("c.type = :type AND c.ai_context->>'feature' = :feature", {
         type: ConversationType.AI_ASSISTANT,
         feature: 'general',
       })
@@ -185,7 +185,7 @@ export class AiConversationFactoryService {
         userId,
       })
       .where(
-        "c.type = :type AND c.aiContext->>'feature' = :feature AND c.aiContext->>'document_id' = :documentId",
+        "c.type = :type AND c.ai_context->>'feature' = :feature AND c.ai_context->>'document_id' = :documentId",
         {
           type: ConversationType.AI_ASSISTANT,
           feature: 'document',

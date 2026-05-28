@@ -314,7 +314,8 @@ describe('LocDoRouterProvider', () => {
 
   describe('multimodal (vision)', () => {
     function captureMessages(mockCreate: jest.Mock): unknown[] {
-      return (mockCreate.mock.calls[0][0] as { messages: unknown[] }).messages;
+      const calls = mockCreate.mock.calls as Array<[{ messages: unknown[] }]>;
+      return calls[0][0].messages;
     }
 
     it('maps image_url content parts to the OpenAI { image_url: { url } } shape', async () => {

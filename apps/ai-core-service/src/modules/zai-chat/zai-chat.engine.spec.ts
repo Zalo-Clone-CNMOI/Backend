@@ -617,8 +617,10 @@ describe('ZaiChatEngine', () => {
   };
 
   function lastUserContent(): unknown {
-    const msgs = (gateway.complete as jest.Mock).mock.calls[0][1]
-      .messages as LlmChatMessage[];
+    const calls = (gateway.complete as jest.Mock).mock.calls as Array<
+      [unknown, { messages: LlmChatMessage[] }]
+    >;
+    const msgs = calls[0][1].messages;
     const userMsgs = msgs.filter((m) => m.role === 'user');
     return userMsgs[userMsgs.length - 1].content;
   }

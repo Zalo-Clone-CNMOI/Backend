@@ -290,6 +290,81 @@ describe('DocumentEngine.processDocument', () => {
       expect(embedBatch).not.toHaveBeenCalled();
     });
   });
+
+  describe('pending row contract with media-service', () => {
+    it('transitions an existing pending row via update() (no fallback insert)', async () => {
+      const embedBatch = jest
+        .fn()
+        .mockResolvedValue([
+          makeEmbeddingResult([0.1], 5),
+          makeEmbeddingResult([0.2], 5),
+        ]);
+      const docMetaCreate = jest.fn().mockImplementation((d: unknown) => d);
+      const docMetaSave = jest.fn().mockResolvedValue(undefined);
+      const docMetaUpdate = jest.fn().mockResolvedValue({ affected: 1 });
+
+      const engine = buildEngine({
+        gateway: { embedBatch, embed: jest.fn(), complete: jest.fn() },
+        docMetaRepo: {
+          create: docMetaCreate,
+          save: docMetaSave,
+          update: docMetaUpdate,
+        },
+      });
+
+      await engine.processDocument(
+        makeUploadEvent({ document_id: 'doc-pending-1' }),
+        'text',
+      );
+
+      // First call updates status pending → processing
+      expect(docMetaUpdate).toHaveBeenCalledWith(
+        { id: 'doc-pending-1' },
+        { status: 'processing' },
+      );
+      // No fallback insert because update affected a row
+      expect(docMetaSave).not.toHaveBeenCalled();
+    });
+
+    it('falls back to insert when the pending row is missing (legacy/replay)', async () => {
+      const embedBatch = jest
+        .fn()
+        .mockResolvedValue([
+          makeEmbeddingResult([0.1], 5),
+          makeEmbeddingResult([0.2], 5),
+        ]);
+      const docMetaCreate = jest.fn().mockImplementation((d: unknown) => d);
+      const docMetaSave = jest.fn().mockResolvedValue(undefined);
+      // First call (status='processing' transition) finds no row.
+      // Second call (status='completed') affects the row we just inserted.
+      const docMetaUpdate = jest
+        .fn()
+        .mockResolvedValueOnce({ affected: 0 })
+        .mockResolvedValue({ affected: 1 });
+
+      const engine = buildEngine({
+        gateway: { embedBatch, embed: jest.fn(), complete: jest.fn() },
+        docMetaRepo: {
+          create: docMetaCreate,
+          save: docMetaSave,
+          update: docMetaUpdate,
+        },
+      });
+
+      await engine.processDocument(
+        makeUploadEvent({ document_id: 'doc-replay-1' }),
+        'text',
+      );
+
+      // Fallback insert fired with status='processing'
+      expect(docMetaSave).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'doc-replay-1',
+          status: 'processing',
+        }),
+      );
+    });
+  });
 });
 
 describe('DocumentEngine.queryDocument', () => {

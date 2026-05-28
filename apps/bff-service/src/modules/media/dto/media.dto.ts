@@ -62,6 +62,13 @@ export class BffConfirmUploadResponseDto {
 
   @ApiPropertyOptional({ example: 'thumbs/public/photo.jpg-1730000000000' })
   thumbnailKey?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Document metadata id (UUID v4). Present only when the upload is a document (PDF / Word / etc.) within a conversation. Pass it to POST /api/ai-assist/conversations/document to open a Zai document chat.',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  documentId?: string;
 }
 
 export class BffPresignDownloadRequestDto {

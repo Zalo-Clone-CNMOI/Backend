@@ -74,17 +74,29 @@ export class DocumentEngine {
         throw new Error(`Document exceeds ${this.maxDocSizeMb}MB limit`);
       }
 
-      const processingMetadata = this.docMetaRepo.create({
-        id: event.document_id,
-        conversationId: event.conversation_id,
-        userId: event.user_id,
-        fileKey: event.file_key,
-        fileName: event.file_name,
-        fileSize: event.file_size,
-        contentType: event.content_type,
-        status: 'processing',
-      });
-      await this.docMetaRepo.save(processingMetadata);
+      // The row is pre-created by media-service.confirmUploaded with
+      // status='pending' before the AiDocumentUpload event is emitted, so
+      // we only need to transition status here. Fall back to an upsert if
+      // the row is somehow missing (legacy events, manual replays, etc.)
+      // to keep the consumer resilient against schema-evolution gaps.
+      const updateResult = await this.docMetaRepo.update(
+        { id: event.document_id },
+        { status: 'processing' },
+      );
+      if (!updateResult.affected) {
+        await this.docMetaRepo.save(
+          this.docMetaRepo.create({
+            id: event.document_id,
+            conversationId: event.conversation_id,
+            userId: event.user_id,
+            fileKey: event.file_key,
+            fileName: event.file_name,
+            fileSize: event.file_size,
+            contentType: event.content_type,
+            status: 'processing',
+          }),
+        );
+      }
 
       const chunks = await this.chunker.chunk(textContent, {
         size: 400,

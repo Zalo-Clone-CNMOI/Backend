@@ -69,6 +69,12 @@ export interface ConfirmUploadResponseDto {
      * @memberof ConfirmUploadResponseDto
      */
     'thumbnailKey'?: string;
+    /**
+     * Document metadata id (UUID v4). Present only when the upload is a document (PDF / Word / etc.) within a conversation. Pass it to POST /api/ai-assist/conversations/document to open a Zai document chat.
+     * @type {string}
+     * @memberof ConfirmUploadResponseDto
+     */
+    'documentId'?: string;
 }
 /**
  * 

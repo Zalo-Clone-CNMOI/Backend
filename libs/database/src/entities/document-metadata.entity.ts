@@ -1,10 +1,17 @@
-import { Entity, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
+import { Entity, Column, ManyToOne, JoinColumn, Index, Unique } from 'typeorm';
 import { User } from './user.entity';
 import { BaseEntity } from '@libs/shared';
 
 @Entity('document_metadata')
 @Index('idx_document_conversation', ['conversationId'])
 @Index('idx_document_user', ['userId'])
+// Idempotency + race-protection: at most one DocumentMetadata row per
+// (file_key, user_id, conversation_id). Without this, two concurrent
+// confirmUploads can both pass `findOne` returning null and INSERT
+// duplicate rows that point at the same underlying upload. The unique
+// constraint also implicitly creates a composite index that backs the
+// idempotency lookup in MediaService.confirmUploaded.
+@Unique('uq_document_file_user_conv', ['fileKey', 'userId', 'conversationId'])
 export class DocumentMetadata extends BaseEntity {
   @Column({ type: 'uuid', name: 'conversation_id' })
   conversationId: string;

@@ -14,7 +14,7 @@ import { S3Service, S3_CLIENT, S3_CONFIG } from '@libs/s3';
 import { KAFKA_CLIENT } from '@libs/kafka';
 import { KafkaTopics } from '@libs/contracts';
 import { ConversationMembershipService } from '@libs/mvp-access';
-import { MediaFile } from '@libs/database';
+import { DocumentMetadata, MediaFile } from '@libs/database';
 
 describe('MediaService', () => {
   let service: MediaService;
@@ -22,6 +22,7 @@ describe('MediaService', () => {
   let s3Service: Record<string, jest.Mock>;
   let s3Client: Record<string, jest.Mock>;
   let mediaFileRepo: Record<string, jest.Mock>;
+  let documentMetadataRepo: Record<string, jest.Mock>;
   let membershipService: Record<string, jest.Mock>;
   let s3Config: { bucket: string; region: string };
 
@@ -53,6 +54,19 @@ describe('MediaService', () => {
       save: jest.fn().mockResolvedValue(undefined),
     };
 
+    // Default: no existing document; save returns a row with a generated id.
+    documentMetadataRepo = {
+      create: jest.fn<DocumentMetadata, [Partial<DocumentMetadata>]>(
+        (value) => value as DocumentMetadata,
+      ),
+      findOne: jest.fn().mockResolvedValue(null),
+      save: jest
+        .fn()
+        .mockImplementation((entity: Partial<DocumentMetadata>) =>
+          Promise.resolve({ ...entity, id: 'doc-uuid-stub' } as DocumentMetadata),
+        ),
+    };
+
     membershipService = {
       canUserAccessConversation: jest.fn().mockResolvedValue(true),
     };
@@ -67,6 +81,10 @@ describe('MediaService', () => {
         { provide: S3_CLIENT, useValue: s3Client },
         { provide: S3_CONFIG, useValue: s3Config },
         { provide: getRepositoryToken(MediaFile), useValue: mediaFileRepo },
+        {
+          provide: getRepositoryToken(DocumentMetadata),
+          useValue: documentMetadataRepo,
+        },
         {
           provide: ConversationMembershipService,
           useValue: membershipService,
@@ -243,24 +261,176 @@ describe('MediaService', () => {
       expect(result).toEqual({});
     });
 
-    it('should emit AiDocumentUpload event for PDF with conversationId', async () => {
+    it('should persist DocumentMetadata (pending), emit AiDocumentUpload, and return documentId for PDF with conversationId', async () => {
       mediaFileRepo.findOne.mockResolvedValue(null);
-      await service.confirmUploaded(
+      documentMetadataRepo.save.mockResolvedValueOnce({
+        id: 'doc-pdf-1',
+        fileKey: 'docs/report.pdf',
+        userId: 'user-1',
+        conversationId: 'conv-1',
+        status: 'pending',
+      });
+
+      const result = await service.confirmUploaded(
         'docs/report.pdf',
         'application/pdf',
         'user-1',
         'conv-1',
       );
 
+      // 1. Row was persisted with status='pending' BEFORE Kafka emit
+      expect(documentMetadataRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          conversationId: 'conv-1',
+          userId: 'user-1',
+          fileKey: 'docs/report.pdf',
+          contentType: 'application/pdf',
+          status: 'pending',
+        }),
+      );
+      expect(documentMetadataRepo.save).toHaveBeenCalled();
+
+      // 2. Kafka event carries the persisted row's id
       expect(kafka.emit).toHaveBeenCalledWith(
         KafkaTopics.AiDocumentUpload,
         expect.objectContaining({
+          document_id: 'doc-pdf-1',
           conversation_id: 'conv-1',
           user_id: 'user-1',
           file_key: 'docs/report.pdf',
           content_type: 'application/pdf',
         }),
       );
+
+      // 3. documentId returned to caller so FE can call /conversations/document
+      expect(result.documentId).toBe('doc-pdf-1');
+    });
+
+    it('idempotency: reuses existing documentId on duplicate confirmUpload, skips re-emit', async () => {
+      mediaFileRepo.findOne.mockResolvedValue(null);
+      documentMetadataRepo.findOne.mockResolvedValueOnce({
+        id: 'doc-existing',
+        fileKey: 'docs/report.pdf',
+        userId: 'user-1',
+        conversationId: 'conv-1',
+        status: 'completed',
+      });
+
+      const result = await service.confirmUploaded(
+        'docs/report.pdf',
+        'application/pdf',
+        'user-1',
+        'conv-1',
+      );
+
+      expect(documentMetadataRepo.save).not.toHaveBeenCalled();
+      const aiDocCalls = kafka.emit.mock.calls.filter(
+        (c: unknown[]) => c[0] === KafkaTopics.AiDocumentUpload,
+      );
+      expect(aiDocCalls).toHaveLength(0);
+      expect(result.documentId).toBe('doc-existing');
+    });
+
+    it('W5: skips document persistence and AI emit when user is not a member of the conversation', async () => {
+      mediaFileRepo.findOne.mockResolvedValue(null);
+      membershipService.canUserAccessConversation.mockResolvedValueOnce(false);
+
+      const result = await service.confirmUploaded(
+        'docs/report.pdf',
+        'application/pdf',
+        'user-outsider',
+        'conv-they-dont-own',
+      );
+
+      // No DB lookup, no save, no Kafka emit for AI ingest.
+      expect(documentMetadataRepo.findOne).not.toHaveBeenCalled();
+      expect(documentMetadataRepo.save).not.toHaveBeenCalled();
+      const aiDocCalls = kafka.emit.mock.calls.filter(
+        (c: unknown[]) => c[0] === KafkaTopics.AiDocumentUpload,
+      );
+      expect(aiDocCalls).toHaveLength(0);
+      expect(result.documentId).toBeUndefined();
+    });
+
+    it('C1: handles unique-constraint violation by re-querying the concurrent winner', async () => {
+      mediaFileRepo.findOne.mockResolvedValue(null);
+      // First findOne pre-flight returns null (no row yet visible).
+      // Second findOne (after the unique-violation catch) returns the
+      // row inserted by the concurrent confirmUpload.
+      documentMetadataRepo.findOne
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({
+          id: 'doc-winner',
+          fileKey: 'docs/report.pdf',
+          userId: 'user-1',
+          conversationId: 'conv-1',
+          status: 'pending',
+        });
+
+      // Simulate Postgres 23505 unique_violation surfacing through TypeORM.
+      const uniqueViolation = Object.assign(
+        new Error('duplicate key value violates unique constraint'),
+        { driverError: { code: '23505' } },
+      );
+      documentMetadataRepo.save.mockRejectedValueOnce(uniqueViolation);
+
+      const result = await service.confirmUploaded(
+        'docs/report.pdf',
+        'application/pdf',
+        'user-1',
+        'conv-1',
+      );
+
+      expect(result.documentId).toBe('doc-winner');
+      // No AI ingest event because we did NOT win the insert race —
+      // the winner already emitted it.
+      const aiDocCalls = kafka.emit.mock.calls.filter(
+        (c: unknown[]) => c[0] === KafkaTopics.AiDocumentUpload,
+      );
+      expect(aiDocCalls).toHaveLength(0);
+    });
+
+    it('C1: rethrows the unique-violation when the re-query finds no winner (extremely narrow window)', async () => {
+      mediaFileRepo.findOne.mockResolvedValue(null);
+      // Pre-flight findOne: null. Re-query findOne after catch: also null
+      // (winner row deleted/soft-deleted between violation and re-query).
+      documentMetadataRepo.findOne
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null);
+
+      const uniqueViolation = Object.assign(
+        new Error('duplicate key value violates unique constraint'),
+        { driverError: { code: '23505' } },
+      );
+      documentMetadataRepo.save.mockRejectedValueOnce(uniqueViolation);
+
+      await expect(
+        service.confirmUploaded(
+          'docs/report.pdf',
+          'application/pdf',
+          'user-1',
+          'conv-1',
+        ),
+      ).rejects.toThrow('duplicate key value violates unique constraint');
+    });
+
+    it('C1: rethrows non-unique DB errors instead of swallowing them', async () => {
+      mediaFileRepo.findOne.mockResolvedValue(null);
+      documentMetadataRepo.findOne.mockResolvedValueOnce(null);
+      // A generic DB error (not a unique-violation) must surface so the
+      // caller sees the upload failed.
+      documentMetadataRepo.save.mockRejectedValueOnce(
+        new Error('connection refused'),
+      );
+
+      await expect(
+        service.confirmUploaded(
+          'docs/report.pdf',
+          'application/pdf',
+          'user-1',
+          'conv-1',
+        ),
+      ).rejects.toThrow('connection refused');
     });
 
     it('should emit AiDocumentUpload event for docx with conversationId', async () => {
@@ -398,6 +568,16 @@ describe('MediaService.cloneAttachment', () => {
         { provide: S3_CLIENT, useValue: {} },
         { provide: S3_CONFIG, useValue: s3Config },
         { provide: getRepositoryToken(MediaFile), useValue: mediaFileRepo },
+        {
+          provide: getRepositoryToken(DocumentMetadata),
+          useValue: {
+            findOne: jest.fn().mockResolvedValue(null),
+            create: jest.fn((v: Partial<DocumentMetadata>) => v),
+            save: jest.fn((v: Partial<DocumentMetadata>) =>
+              Promise.resolve({ ...v, id: 'doc-stub' }),
+            ),
+          },
+        },
         {
           provide: ConversationMembershipService,
           useValue: {

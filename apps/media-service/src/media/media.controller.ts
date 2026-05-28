@@ -90,7 +90,11 @@ export class MediaController {
       userId,
       body.conversationId,
     );
-    return { ok: true, thumbnailKey: result.thumbnailKey };
+    return {
+      ok: true,
+      thumbnailKey: result.thumbnailKey,
+      documentId: result.documentId,
+    };
   }
 
   @Post('presign/download')

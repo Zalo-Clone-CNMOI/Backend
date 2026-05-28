@@ -15,6 +15,7 @@ import type {
 } from '../ai-gateway/interfaces';
 import { DocumentRagService } from './document-rag.service';
 import { ZaiMemoryService } from './zai-memory.service';
+import { ZaiImageResolverService } from './zai-image-resolver.service';
 import {
   type ChatStrategy,
   DocumentChatStrategy,
@@ -36,6 +37,13 @@ const MENTION_HISTORY_LIMIT = 10;
 export const ZAI_EMPTY_RESPONSE_FALLBACK =
   'Xin lỗi, tôi chưa thể trả lời câu này. Vui lòng thử lại. / Sorry, I could not generate a response. Please try again.';
 
+/**
+ * Used as the text turn for an image-only message (no caption) so the vision
+ * model still gets an instruction alongside the image(s).
+ */
+export const ZAI_VISION_DEFAULT_PROMPT =
+  'Người dùng đã gửi (các) hình ảnh. Hãy xem và phản hồi phù hợp. / The user sent image(s). Please look and respond.';
+
 @Injectable()
 export class ZaiChatEngine {
   private readonly logger = new Logger(ZaiChatEngine.name);
@@ -52,6 +60,7 @@ export class ZaiChatEngine {
     private readonly aiMetrics: AiMetricsService,
     private readonly documentRag: DocumentRagService,
     private readonly zaiMemory: ZaiMemoryService,
+    private readonly imageResolver: ZaiImageResolverService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {
     this.documentStrategy = new DocumentChatStrategy(this.documentRag);
@@ -123,7 +132,14 @@ export class ZaiChatEngine {
       // Pre-built reply that never reached the LLM (e.g. doc unavailable).
       return outcome.result;
     }
-    const messages = outcome.messages;
+    let messages = outcome.messages;
+
+    // Vision (images-only): attach the triggering message's images to the
+    // current user turn so a vision-capable model can see them. No-op when the
+    // flag is off or there are no images.
+    if (this.config.zaiVisionEnabled !== false && event.images?.length) {
+      messages = await this.attachImages(messages, event);
+    }
 
     const startMs = Date.now();
 
@@ -217,5 +233,67 @@ export class ZaiChatEngine {
       );
       return null;
     }
+  }
+
+  /**
+   * Attach the triggering message's images to the current user turn. When the
+   * message has text, augment the last user turn (the triggering message in
+   * every strategy); for an image-only message, append a fresh vision turn
+   * with a default prompt. Returns the original messages if nothing resolves.
+   */
+  private async attachImages(
+    messages: LlmChatMessage[],
+    event: AiZaiChatRequestEvent,
+  ): Promise<LlmChatMessage[]> {
+    const imageParts = await this.imageResolver.resolve(
+      event.images,
+      event.trace_id,
+    );
+    if (imageParts.length === 0) return messages;
+
+    const text = event.body?.trim();
+
+    if (text) {
+      // Augment the last user turn (the triggering message across all strategies).
+      const idx = this.lastUserIndex(messages);
+      if (idx >= 0) {
+        const existing = messages[idx].content;
+        const baseText = typeof existing === 'string' ? existing : text;
+        const next = [...messages];
+        next[idx] = {
+          role: 'user',
+          content: [{ type: 'text', text: baseText }, ...imageParts],
+        };
+        return next;
+      }
+    }
+
+    // Image-only (no caption), or no user turn to augment → append a fresh turn.
+    // Drop a trailing EMPTY user turn first (a strategy may emit one for an
+    // empty body) so we don't send a blank message some providers reject.
+    const base =
+      messages.length > 0 &&
+      messages[messages.length - 1].role === 'user' &&
+      messages[messages.length - 1].content === ''
+        ? messages.slice(0, -1)
+        : messages;
+
+    return [
+      ...base,
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: text || ZAI_VISION_DEFAULT_PROMPT },
+          ...imageParts,
+        ],
+      },
+    ];
+  }
+
+  private lastUserIndex(messages: LlmChatMessage[]): number {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'user') return i;
+    }
+    return -1;
   }
 }

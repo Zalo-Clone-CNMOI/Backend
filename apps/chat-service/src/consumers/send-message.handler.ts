@@ -5,9 +5,11 @@ import {
   type ChatMessageCreatedEvent,
   type ChatMessageRejectedEvent,
   type MessageMention,
+  type MessageAttachment,
   AiModerationRequestEvent,
   AiEntityDetectionRequestEvent,
   type AiZaiChatRequestEvent,
+  type AiZaiImageRef,
 } from '@libs/contracts';
 import { MessageRepository } from '@libs/scylla';
 import { CacheService } from '@libs/redis';
@@ -240,6 +242,7 @@ export class SendMessageHandler {
               createdAt: existingMessage.created_at,
               traceId,
               mentions: payload.mentions,
+              attachments: existingMessage.attachments,
             });
 
             return;
@@ -370,6 +373,7 @@ export class SendMessageHandler {
         createdAt,
         traceId,
         mentions: payload.mentions,
+        attachments: payload.attachments,
       });
 
       this.shared.logger.log(`[${traceId}] ChatMessageSend completed`, {
@@ -395,6 +399,8 @@ export class SendMessageHandler {
     // Forwarded to emitMessageNotification for branched
     // (Mention vs ChatMessage) notification fanout.
     mentions?: MessageMention[];
+    // Attachments on the message — image ones are forwarded to Zai for vision.
+    attachments?: MessageAttachment[];
   }): Promise<void> {
     await this.shared.emitMessageNotification(
       params.conversationId,
@@ -461,11 +467,17 @@ export class SendMessageHandler {
     }
 
     // ── Zai Chat: route messages to ZaiChatEngine for AI conversations or @Zai mentions ────────
-    // Skip media-only messages (no text body): the LLM has nothing to respond
-    // to and embedding an empty string in the document RAG path fails. Mirrors
-    // the entity-detection guard above. Same logic must hold for both
-    // AI_ASSISTANT conversations and @Zai mentions.
-    if (params.body?.trim()) {
+    // Vision: forward image attachments so Zai can "see" them (images-only).
+    const zaiImages: AiZaiImageRef[] =
+      params.attachments
+        ?.filter((a) => a.type === 'image')
+        .map((a) => ({ key: a.key, content_type: a.content_type })) ?? [];
+
+    // Route to Zai when there is text to respond to OR an image to look at.
+    // Pure non-image media (video/audio/file) still skips — the LLM (and the
+    // document RAG path) have nothing usable. Holds for AI_ASSISTANT convs and
+    // @Zai mentions alike.
+    if (params.body?.trim() || zaiImages.length > 0) {
       void (async () => {
         try {
           // Don't trigger Zai for messages sent by Zai itself (loop guard).
@@ -476,6 +488,16 @@ export class SendMessageHandler {
           );
 
           if (aiContext) {
+            // Document RAG needs a text query to embed — an image-only message
+            // (no caption) has none, so skip rather than embed an empty string.
+            // Other features (general) handle image-only fine.
+            if (!params.body?.trim() && aiContext.feature === 'document') {
+              this.shared.logger.debug(
+                `[${params.traceId}] Skipping Zai for image-only message in document conversation: ${params.conversationId}`,
+              );
+              return;
+            }
+
             // AI_ASSISTANT conversation — always route to Zai with conversation trigger.
             const zaiEvent: AiZaiChatRequestEvent = {
               message_id: params.messageId,
@@ -485,6 +507,7 @@ export class SendMessageHandler {
               created_at: params.createdAt,
               ai_context: aiContext,
               trigger: 'conversation',
+              ...(zaiImages.length > 0 ? { images: zaiImages } : {}),
               trace_id: params.traceId,
             };
             await this.publisher.emit(KafkaTopics.AiZaiChatRequest, zaiEvent);
@@ -518,6 +541,7 @@ export class SendMessageHandler {
             body: params.body,
             created_at: params.createdAt,
             trigger: 'mention',
+            ...(zaiImages.length > 0 ? { images: zaiImages } : {}),
             trace_id: params.traceId,
           };
           await this.publisher.emit(KafkaTopics.AiZaiChatRequest, zaiEvent);

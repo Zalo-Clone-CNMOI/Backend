@@ -471,6 +471,11 @@ services:
       LCDO_ROUTER_URL: ${LCDO_ROUTER_URL}
       LCDO_ROUTER_KEY: ${LCDO_ROUTER_KEY}
       LCDO_ROUTER_MODEL: ${LCDO_ROUTER_MODEL}
+      # Zai vision (images-only). INLINE_BASE64 must be true on LocalStack dev
+      # (router can't fetch local S3 URLs); false in prod (presigned S3 URL).
+      ZAI_VISION_ENABLED: ${ZAI_VISION_ENABLED:-true}
+      ZAI_VISION_MAX_IMAGES: ${ZAI_VISION_MAX_IMAGES:-4}
+      ZAI_VISION_INLINE_BASE64: ${ZAI_VISION_INLINE_BASE64:-false}
       ZAI_BOT_USER_ID: ${ZAI_BOT_USER_ID:-00000000-0000-4000-8000-0000000000a1}
       SCYLLA_CONTACT_POINTS: scylla
       SCYLLA_LOCAL_DATACENTER: datacenter1

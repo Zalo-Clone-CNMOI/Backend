@@ -8,6 +8,7 @@ import {
   LlmStreamChunk,
   LlmEmbeddingResult,
 } from '../interfaces';
+import { flattenMessages } from './content.util';
 
 @Injectable()
 export class AnthropicProvider implements ILlmProvider {
@@ -36,25 +37,21 @@ export class AnthropicProvider implements ILlmProvider {
     try {
       const client = await this.getClient();
 
-      const systemMsg = options.messages.find((m) => m.role === 'system');
-      const chatMessages = options.messages
+      // Text-only provider: flatten any image parts (LocDo is the vision path).
+      const flatMessages = flattenMessages(options.messages);
+      const systemMsg = flatMessages.find((m) => m.role === 'system');
+      const chatMessages = flatMessages
         .filter((m) => m.role !== 'system')
         .map((m) => ({
           role: m.role as 'user' | 'assistant',
-          content: m.content,
+          content: m.content as string,
         }));
 
       const response = await client.messages.create({
         model,
         max_tokens: options.maxTokens ?? 1024,
-        // TODO(Phase-3): multimodal content parts are passed through as-is; provider
-        // SDK error path is currently the only signal if an array reaches the API.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
-        system: systemMsg?.content as any,
-        // TODO(Phase-3): multimodal content parts are passed through as-is; provider
-        // SDK error path is currently the only signal if an array reaches the API.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
-        messages: chatMessages as any,
+        system: systemMsg?.content as string,
+        messages: chatMessages,
       });
 
       const content =
@@ -94,26 +91,22 @@ export class AnthropicProvider implements ILlmProvider {
     try {
       const client = await this.getClient();
 
-      const systemMsg = options.messages.find((m) => m.role === 'system');
-      const chatMessages = options.messages
+      // Text-only provider: flatten any image parts (LocDo is the vision path).
+      const flatMessages = flattenMessages(options.messages);
+      const systemMsg = flatMessages.find((m) => m.role === 'system');
+      const chatMessages = flatMessages
         .filter((m) => m.role !== 'system')
         .map((m) => ({
           role: m.role as 'user' | 'assistant',
-          content: m.content,
+          content: m.content as string,
         }));
 
       const stream = client.messages.stream(
         {
           model,
           max_tokens: options.maxTokens ?? 1024,
-          // TODO(Phase-3): multimodal content parts are passed through as-is; provider
-          // SDK error path is currently the only signal if an array reaches the API.
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
-          system: systemMsg?.content as any,
-          // TODO(Phase-3): multimodal content parts are passed through as-is; provider
-          // SDK error path is currently the only signal if an array reaches the API.
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
-          messages: chatMessages as any,
+          system: systemMsg?.content as string,
+          messages: chatMessages,
         },
         { signal },
       );

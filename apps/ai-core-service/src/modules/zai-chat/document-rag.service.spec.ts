@@ -76,6 +76,15 @@ describe('DocumentRagService', () => {
   beforeEach(async () => {
     chunkRepo = makeChunkRepo();
     docMetaRepo = makeDocMetaRepo();
+    // M2: buildRagMessages now resolves document_id → file_key before the
+    // chunk lookup. Default to a "ready" doc so the existing tests still
+    // exercise the chunk search.
+    (docMetaRepo.findOne as jest.Mock).mockResolvedValue({
+      id: DOC_ID,
+      userId: USER_ID,
+      fileKey: 'uploads/doc-001.pdf',
+      status: 'ready',
+    });
     gateway = makeGateway();
     promptBuilder = makePromptBuilder();
 
@@ -204,6 +213,77 @@ describe('DocumentRagService', () => {
       expect(chunkRepo._qb.setParameter).toHaveBeenCalledWith('threshold', 0.7);
       expect(chunkRepo._qb.limit).toHaveBeenCalledWith(5);
       expect(chunkRepo._qb.orderBy).toHaveBeenCalledWith('similarity', 'DESC');
+    });
+
+    it('M2 — queries chunks by file_key (resolved from document_id) not document_id', async () => {
+      (docMetaRepo.findOne as jest.Mock).mockResolvedValue({
+        id: 'doc-shared',
+        userId: USER_ID,
+        fileKey: 'uploads/shared-physical.pdf',
+        status: 'ready',
+      });
+
+      await service.buildRagMessages(USER_ID, 'doc-shared', 'q', []);
+
+      expect(docMetaRepo.findOne).toHaveBeenCalledWith({
+        where: { id: 'doc-shared', userId: USER_ID },
+      });
+      expect(chunkRepo._qb.where).toHaveBeenCalledWith(
+        'chunk.file_key = :fileKey',
+        { fileKey: 'uploads/shared-physical.pdf' },
+      );
+    });
+
+    it('M2 — throws NOT_FOUND when DocumentMetadata is missing for the user', async () => {
+      (docMetaRepo.findOne as jest.Mock).mockResolvedValue(null);
+
+      await expect(
+        service.buildRagMessages(USER_ID, 'doc-other', 'q', []),
+      ).rejects.toBeInstanceOf(BusinessException);
+      expect(gateway.embed).not.toHaveBeenCalled(); // no wasted embedding spend
+    });
+
+    it("M2 — surfaces a useful error when document status='failed' (don't silently return empty RAG)", async () => {
+      (docMetaRepo.findOne as jest.Mock).mockResolvedValue({
+        id: DOC_ID,
+        userId: USER_ID,
+        fileKey: 'uploads/bad.pdf',
+        status: 'failed',
+      });
+
+      let caught: unknown;
+      try {
+        await service.buildRagMessages(USER_ID, DOC_ID, 'q', []);
+      } catch (err) {
+        caught = err;
+      }
+      expect(caught).toBeInstanceOf(BusinessException);
+      const response = (caught as BusinessException).getResponse() as {
+        error: { message: string };
+      };
+      expect(response.error.message).toContain('previously failed');
+      expect(gateway.embed).not.toHaveBeenCalled();
+    });
+
+    it("M2 — surfaces a useful error when document status='pending'", async () => {
+      (docMetaRepo.findOne as jest.Mock).mockResolvedValue({
+        id: DOC_ID,
+        userId: USER_ID,
+        fileKey: 'uploads/wip.pdf',
+        status: 'pending',
+      });
+
+      let caught: unknown;
+      try {
+        await service.buildRagMessages(USER_ID, DOC_ID, 'q', []);
+      } catch (err) {
+        caught = err;
+      }
+      expect(caught).toBeInstanceOf(BusinessException);
+      const response = (caught as BusinessException).getResponse() as {
+        error: { message: string };
+      };
+      expect(response.error.message).toContain('still being processed');
     });
   });
 });

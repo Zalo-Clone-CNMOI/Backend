@@ -15,8 +15,10 @@ import { MessageRepository } from '@libs/scylla';
 import { CacheService } from '@libs/redis';
 import { ConversationMembershipService } from '@libs/mvp-access';
 import { APP_CONFIG, AppConfig } from '@libs/config';
+import { isDocumentMime } from '@libs/shared';
 import { ChatPublisher } from '../services/chat.publisher';
 import { PreSendModerationService } from '../services/pre-send-moderation.service';
+import { DocumentLinkService } from '../services/document-link.service';
 import { ensureConversationAccess } from '../utils/access.helper';
 import { MessageConsumerSharedService } from './message-consumer-shared.service';
 
@@ -29,6 +31,7 @@ export class SendMessageHandler {
     private readonly membershipService: ConversationMembershipService,
     private readonly shared: MessageConsumerSharedService,
     private readonly preSendModerationService: PreSendModerationService,
+    private readonly documentLinkService: DocumentLinkService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
@@ -473,39 +476,98 @@ export class SendMessageHandler {
         ?.filter((a) => a.type === 'image')
         .map((a) => ({ key: a.key, content_type: a.content_type })) ?? [];
 
-    // Route to Zai when there is text to respond to OR an image to look at.
-    // Pure non-image media (video/audio/file) still skips — the LLM (and the
-    // document RAG path) have nothing usable. Holds for AI_ASSISTANT convs and
-    // @Zai mentions alike.
-    if (params.body?.trim() || zaiImages.length > 0) {
+    const zaiDocs =
+      params.attachments?.filter((a) => isDocumentMime(a.content_type)) ?? [];
+    if (params.body?.trim() || zaiImages.length > 0 || zaiDocs.length > 0) {
       void (async () => {
         try {
           // Don't trigger Zai for messages sent by Zai itself (loop guard).
           if (params.senderId === this.config.zaiBotUserId) return;
 
-          const aiContext = await this.cacheService.getAiConversationContext(
-            params.conversationId,
-          );
+          const storedAiContext =
+            await this.cacheService.getAiConversationContext(
+              params.conversationId,
+            );
 
-          if (aiContext) {
+          const mentionedZai = params.mentions?.some(
+            (m) => m.user_id === this.config.zaiBotUserId,
+          );
+          const zaiWillSee = Boolean(storedAiContext) || mentionedZai;
+
+          let docOverrideContext: typeof storedAiContext = null;
+          if (zaiWillSee && zaiDocs.length > 0) {
+            const primary = zaiDocs[0];
+            try {
+              const outcome = await this.documentLinkService.resolveForUser(
+                params.senderId,
+                params.conversationId,
+                {
+                  file_key: primary.key,
+                  file_name: primary.name,
+                  file_size: primary.size,
+                  content_type: primary.content_type,
+                },
+              );
+              if (outcome.kind === 'ready') {
+                docOverrideContext = {
+                  feature: 'document',
+                  document_id: outcome.documentId,
+                  created_at: Date.now(),
+                };
+                if (zaiDocs.length > 1) {
+                  this.shared.logger.warn(
+                    `[${params.traceId}] Multi-doc message: only first attachment (${primary.key}) is routed to Zai RAG; the rest are ignored.`,
+                  );
+                }
+              } else {
+                if (outcome.kind === 'pending') {
+                  this.shared.logger.log(
+                    `[${params.traceId}] Doc ${primary.key} still processing (id=${outcome.documentId}); falling back to general routing.`,
+                  );
+                } else if (outcome.kind === 'failed') {
+                  this.shared.logger.warn(
+                    `[${params.traceId}] Doc ${primary.key} ingest previously failed (id=${outcome.documentId}); falling back to general routing.`,
+                  );
+                } else {
+                  this.shared.logger.log(
+                    `[${params.traceId}] Doc ${primary.key} has no chunks yet (no prior ingest); falling back to general routing.`,
+                  );
+                }
+              }
+            } catch (linkErr) {
+              // Auto-link is best-effort. A DB hiccup must not block the
+              // user's message; we fall back to general routing.
+              this.shared.logger.error(
+                `[${params.traceId}] Document auto-link failed for ${primary.key}; falling back to general routing.`,
+                linkErr,
+              );
+            }
+          }
+
+          const effectiveAiContext = docOverrideContext ?? storedAiContext;
+
+          if (effectiveAiContext) {
             // Document RAG needs a text query to embed — an image-only message
             // (no caption) has none, so skip rather than embed an empty string.
             // Other features (general) handle image-only fine.
-            if (!params.body?.trim() && aiContext.feature === 'document') {
+            if (
+              !params.body?.trim() &&
+              effectiveAiContext.feature === 'document'
+            ) {
               this.shared.logger.debug(
                 `[${params.traceId}] Skipping Zai for image-only message in document conversation: ${params.conversationId}`,
               );
               return;
             }
 
-            // AI_ASSISTANT conversation — always route to Zai with conversation trigger.
+            // AI_ASSISTANT conversation (or doc-override) — route with conversation trigger.
             const zaiEvent: AiZaiChatRequestEvent = {
               message_id: params.messageId,
               conversation_id: params.conversationId,
               sender_id: params.senderId,
               body: params.body,
               created_at: params.createdAt,
-              ai_context: aiContext,
+              ai_context: effectiveAiContext,
               trigger: 'conversation',
               ...(zaiImages.length > 0 ? { images: zaiImages } : {}),
               trace_id: params.traceId,
@@ -518,9 +580,6 @@ export class SendMessageHandler {
           }
 
           // Group @Zai mention path — mutually exclusive with AI_ASSISTANT path.
-          const mentionedZai = params.mentions?.some(
-            (m) => m.user_id === this.config.zaiBotUserId,
-          );
           if (!mentionedZai) return;
 
           const acquired = await this.cacheService.acquireZaiMentionCooldown(

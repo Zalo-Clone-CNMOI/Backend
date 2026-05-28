@@ -79,6 +79,13 @@ describe('PersistMessageConsumer', () => {
       checkOrAllow: jest.fn().mockResolvedValue(null),
     };
 
+    // M2: SendMessageHandler now also depends on DocumentLinkService. This
+    // suite doesn't exercise doc auto-link, so a 'missing' stub keeps the
+    // handler on the existing general-routing path.
+    const stubDocumentLinkService = {
+      resolveForUser: jest.fn().mockResolvedValue({ kind: 'missing' }),
+    };
+
     const sendHandler = new SendMessageHandler(
       repo as unknown as MessageRepository,
       publisher as unknown as ChatPublisher,
@@ -86,6 +93,7 @@ describe('PersistMessageConsumer', () => {
       membershipService as unknown as ConversationMembershipService,
       shared,
       stubPreSendModerationService as never,
+      stubDocumentLinkService as never,
       appConfig,
     );
 

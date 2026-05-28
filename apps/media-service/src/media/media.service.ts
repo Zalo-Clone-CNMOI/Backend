@@ -18,6 +18,7 @@ import { KAFKA_CLIENT } from '@libs/kafka';
 import { S3Service, S3_CLIENT, S3_CONFIG, type S3Config } from '@libs/s3';
 import { ConversationMembershipService } from '@libs/mvp-access';
 import { DocumentMetadata, MediaFile } from '@libs/database';
+import { isDocumentMime } from '@libs/shared';
 import { inferMediaVisibility } from '@app/constant';
 import type { S3Client } from '@aws-sdk/client-s3';
 import {
@@ -252,19 +253,6 @@ export class MediaService implements OnModuleInit {
     );
   }
 
-  private isDocument(contentType: string): boolean {
-    const documentTypes = [
-      'application/pdf',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
-      'application/msword', // .doc
-      'text/plain',
-      'text/csv',
-      'text/markdown',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
-    ];
-    return documentTypes.includes(contentType);
-  }
-
   /**
    * For document uploads inside a conversation, persist a DocumentMetadata
    * row (status='pending') and emit the AiDocumentUpload Kafka event so the
@@ -287,7 +275,7 @@ export class MediaService implements OnModuleInit {
     conversationId?: string;
   }): Promise<string | undefined> {
     const { key, contentType, userId, conversationId } = input;
-    if (!conversationId || !userId || !this.isDocument(contentType)) {
+    if (!conversationId || !userId || !isDocumentMime(contentType)) {
       return undefined;
     }
 
@@ -388,9 +376,7 @@ export class MediaService implements OnModuleInit {
       return false;
     }
     const anyErr = err as { code?: unknown; driverError?: { code?: unknown } };
-    return (
-      anyErr.code === '23505' || anyErr.driverError?.code === '23505'
-    );
+    return anyErr.code === '23505' || anyErr.driverError?.code === '23505';
   }
 
   private async generateImageThumbnail(originalKey: string): Promise<string> {

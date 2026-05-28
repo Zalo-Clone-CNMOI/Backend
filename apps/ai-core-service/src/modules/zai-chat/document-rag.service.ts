@@ -52,6 +52,29 @@ export class DocumentRagService {
     query: string,
     history: LlmChatMessage[],
   ): Promise<LlmChatMessage[]> {
+    const doc = await this.docMetaRepo.findOne({
+      where: { id: documentId, userId },
+    });
+    if (!doc) {
+      throw new BusinessException(
+        ErrorCode.NOT_FOUND,
+        'Document not found or access denied',
+      );
+    }
+
+    if (doc.status === 'failed') {
+      throw new BusinessException(
+        ErrorCode.NOT_FOUND,
+        'Document ingest previously failed. Please re-upload to retry.',
+      );
+    }
+    if (doc.status === 'pending' || doc.status === 'processing') {
+      throw new BusinessException(
+        ErrorCode.NOT_FOUND,
+        'Document is still being processed. Please try again in a moment.',
+      );
+    }
+
     const queryEmbedding = await this.gateway.embed(
       userId,
       query,
@@ -65,7 +88,7 @@ export class DocumentRagService {
         `1 - (chunk.embedding::vector <=> :queryVector::vector)`,
         'similarity',
       )
-      .where('chunk.document_id = :documentId', { documentId })
+      .where('chunk.file_key = :fileKey', { fileKey: doc.fileKey })
       .andWhere(
         `1 - (chunk.embedding::vector <=> :queryVector::vector) >= :threshold`,
       )
@@ -81,7 +104,7 @@ export class DocumentRagService {
     }));
 
     this.logger.debug(
-      `RAG query for doc ${documentId}: ${chunks.length} chunks above threshold`,
+      `RAG query for doc ${documentId} (file_key=${doc.fileKey}): ${chunks.length} chunks above threshold`,
     );
 
     return this.promptBuilder.buildDocumentChatPrompt(history, query, chunks);

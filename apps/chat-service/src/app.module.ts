@@ -8,7 +8,12 @@ import { RedisModule } from '@libs/redis';
 import { MetricsModule } from '@libs/metrics';
 import { AiCoreClientModule } from '@app/clients';
 import { HealthCheckService } from '@libs/shared';
-import { DatabaseModule, User, ConversationMember } from '@libs/database';
+import {
+  DatabaseModule,
+  User,
+  ConversationMember,
+  DocumentMetadata,
+} from '@libs/database';
 import { ConversationMembershipModule } from '@libs/mvp-access';
 import { AiMessageConsumer } from './consumers/ai-message.consumer';
 import { PersistMessageConsumer } from './consumers/persist-message.consumer';
@@ -17,6 +22,7 @@ import { SendMessageHandler } from './consumers/send-message.handler';
 import { ModerationResultHandler } from './consumers/moderation-result.handler';
 import { MessageConsumerSharedService } from './consumers/message-consumer-shared.service';
 import { ChatPublisher } from './services/chat.publisher';
+import { DocumentLinkService } from './services/document-link.service';
 import { PreSendModerationMetricsService } from './services/pre-send-moderation.metrics';
 import { PreSendModerationService } from './services/pre-send-moderation.service';
 import { MessagesModule } from './modules/messages';
@@ -27,7 +33,7 @@ import { HealthController } from './health.controller';
     ConfigModule,
     LoggerModule,
     DatabaseModule,
-    TypeOrmModule.forFeature([User, ConversationMember]),
+    TypeOrmModule.forFeature([User, ConversationMember, DocumentMetadata]),
     KafkaModule,
     NotificationOutboxModule,
     ScyllaModule,
@@ -52,6 +58,7 @@ import { HealthController } from './health.controller';
   ],
   providers: [
     ChatPublisher,
+    DocumentLinkService,
     HealthCheckService,
     MessageConsumerSharedService,
     SendMessageHandler,

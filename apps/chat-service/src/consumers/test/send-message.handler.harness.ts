@@ -41,6 +41,7 @@ export type MembershipServiceMock = {
   getCachedConversationType: jest.Mock;
 };
 export type PreSendMock = { checkOrAllow: jest.Mock };
+export type DocumentLinkServiceMock = { resolveForUser: jest.Mock };
 export type NotificationPublisherMock = { publish: jest.Mock };
 export type UserRepoMock = { findOne: jest.Mock; find: jest.Mock };
 export type ConversationMemberRepoMock = {
@@ -56,6 +57,7 @@ export interface Harness {
   cacheService: CacheServiceMock;
   membershipService: MembershipServiceMock;
   preSendModerationService: PreSendMock;
+  documentLinkService: DocumentLinkServiceMock;
   notificationPublisher: NotificationPublisherMock;
   userRepo: UserRepoMock;
   conversationMemberRepo: ConversationMemberRepoMock;
@@ -123,6 +125,10 @@ export function createHandlerHarness(): Harness {
   jest.spyOn(shared.logger, 'warn').mockImplementation(() => undefined);
   jest.spyOn(shared.logger, 'error').mockImplementation(() => undefined);
 
+  const documentLinkService = {
+    resolveForUser: jest.fn().mockResolvedValue({ kind: 'missing' }),
+  };
+
   const handler = new SendMessageHandler(
     repo as unknown as MessageRepository,
     publisher as unknown as ChatPublisher,
@@ -130,6 +136,7 @@ export function createHandlerHarness(): Harness {
     membershipService as unknown as ConversationMembershipService,
     shared,
     preSendModerationService as unknown as PreSendModerationService,
+    documentLinkService as never,
     { zaiBotUserId: ZAI_BOT_ID } as never,
   );
 
@@ -141,6 +148,7 @@ export function createHandlerHarness(): Harness {
     cacheService,
     membershipService,
     preSendModerationService,
+    documentLinkService,
     notificationPublisher,
     userRepo,
     conversationMemberRepo,

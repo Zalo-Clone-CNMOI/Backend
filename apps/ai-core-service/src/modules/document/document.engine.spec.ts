@@ -558,10 +558,43 @@ describe('DocumentEngine.queryDocument', () => {
 
     await engine.queryDocument(makeQueryEvent({ document_id: 'doc-xyz' }));
 
-    expect(findOne).toHaveBeenCalledWith({ where: { id: 'doc-xyz' } });
+    expect(findOne).toHaveBeenCalledWith({
+      where: { id: 'doc-xyz', userId: 'user-001' },
+    });
     expect(qb.where).toHaveBeenCalledWith('chunk.file_key = :fileKey', {
       fileKey: 'uploads/shared-file.pdf',
     });
+  });
+
+  it('M2 — denies access when document belongs to another user (findOne(id+userId) returns null)', async () => {
+    const embed = jest.fn();
+    // findOne filters by both id AND userId, so a doc owned by another user
+    // returns null. Confirms the AiDocumentQuery path enforces the same
+    // access check as the Zai chat path (DocumentRagService).
+    const findOne = jest.fn().mockResolvedValue(null);
+
+    const engine = buildEngine({
+      gateway: { embed, complete: jest.fn(), embedBatch: jest.fn() },
+      docMetaRepo: {
+        create: jest.fn(),
+        save: jest.fn(),
+        update: jest.fn(),
+        findOne,
+      },
+    });
+
+    const result = await engine.queryDocument(
+      makeQueryEvent({
+        document_id: 'doc-someone-else',
+        user_id: 'attacker-user',
+      }),
+    );
+
+    expect(findOne).toHaveBeenCalledWith({
+      where: { id: 'doc-someone-else', userId: 'attacker-user' },
+    });
+    expect(embed).not.toHaveBeenCalled();
+    expect(result.sources).toEqual([]);
   });
 
   it('returns empty chunks when DocumentMetadata is missing (M2 — soft fallback, no throw)', async () => {

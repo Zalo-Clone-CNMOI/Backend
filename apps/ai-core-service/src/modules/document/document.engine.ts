@@ -259,12 +259,14 @@ export class DocumentEngine {
 
     // M2: resolve document_id → file_key so re-linked DocumentMetadata rows
     // for the same file all share one set of chunks (no re-embedding).
+    // Filter by userId so this path matches DocumentRagService.buildRagMessages
+    // — a leaked document_id from another user cannot pull chunks here.
     const doc = await this.docMetaRepo.findOne({
-      where: { id: event.document_id },
+      where: { id: event.document_id, userId: event.user_id },
     });
     if (!doc) {
       this.logger.warn(
-        `searchRelevantChunks: DocumentMetadata not found for id=${event.document_id}, returning empty`,
+        `searchRelevantChunks: DocumentMetadata not found for id=${event.document_id} user=${event.user_id}, returning empty`,
       );
       return { chunks: [], embeddingTokens: 0 };
     }

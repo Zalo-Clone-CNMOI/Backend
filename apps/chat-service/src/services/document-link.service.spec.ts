@@ -64,6 +64,8 @@ describe('DocumentLinkService', () => {
     service = module.get(DocumentLinkService);
   });
 
+  afterEach(() => jest.clearAllMocks());
+
   describe('fast path — sender already has metadata in this conversation', () => {
     it('returns ready with the existing document_id when status=ready', async () => {
       docMetaRepo.findOne.mockResolvedValueOnce(makeMetadataRow());

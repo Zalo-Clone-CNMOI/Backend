@@ -556,7 +556,7 @@ describe('SendMessageHandler — Zai routing (Phase 4)', () => {
       expect(aiCalls).toHaveLength(0);
     });
 
-    it('Group + @Zai mention + ready doc: overrides ai_context AND honors cooldown', async () => {
+    it('Group + @Zai mention + ready doc: doc override promotes to conversation-trigger (mention cooldown bypassed by design)', async () => {
       cacheService.getAiConversationContext.mockResolvedValue(null);
       cacheService.acquireZaiMentionCooldown.mockResolvedValue(true);
       documentLinkService.resolveForUser.mockResolvedValue({
@@ -599,6 +599,9 @@ describe('SendMessageHandler — Zai routing (Phase 4)', () => {
         trigger: 'conversation',
         ai_context: { feature: 'document', document_id: 'doc-mentioned' },
       });
+      // Cooldown is bypassed: doc-RAG override supersedes the mention path,
+      // so per-user mention cooldown is not consulted. This is intentional.
+      expect(cacheService.acquireZaiMentionCooldown).not.toHaveBeenCalled();
     });
 
     it('Auto-link throws (DB hiccup): handler falls back to general routing, never crashes', async () => {

@@ -62,7 +62,11 @@ export class DocumentChunk extends BaseEntity {
   @Column({ type: 'int', name: 'page_number', nullable: true })
   pageNumber: number | null;
 
-  @ManyToOne(() => DocumentMetadata, { onDelete: 'CASCADE' })
+  // ON DELETE NO ACTION (not CASCADE) so chunks survive when one of multiple
+  // DocumentMetadata rows sharing a file_key is deleted. See M1 migration.
+  // KEEP IN SYNC with the FK constraint — `synchronize: true` in dev would
+  // otherwise revert the migration's FK swap on service startup.
+  @ManyToOne(() => DocumentMetadata, { onDelete: 'NO ACTION' })
   @JoinColumn({ name: 'document_id' })
   document: DocumentMetadata;
 }

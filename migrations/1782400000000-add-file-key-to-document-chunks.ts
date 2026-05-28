@@ -24,6 +24,18 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * Rollback (down): restores ON DELETE CASCADE, drops index + column. Safe
  * to run only BEFORE M2 ships (after M2, dropping file_key breaks readers).
  * Document this in the runbook.
+ *
+ * Transactional note: TypeORM wraps `up()` in a single transaction by default,
+ * and PostgreSQL is fully transactional for DDL (ALTER TABLE, CREATE INDEX,
+ * DROP/ADD CONSTRAINT). If the fail-loud check on step 3 throws, all earlier
+ * steps roll back cleanly — re-running the migration is safe.
+ *
+ * Concurrency note: between step 2 (UPDATE) and step 3 (COUNT), a concurrent
+ * INSERT from pre-deploy code (without the dual-write patch) would land with
+ * NULL file_key and correctly trip the fail-loud check. New code emits with
+ * file_key populated, so it cannot leave NULLs. M2 should re-verify the
+ * backfill (SELECT COUNT(*) WHERE file_key IS NULL → 0) before switching
+ * readers, as an extra safety net against late-arriving in-flight writes.
  */
 export class AddFileKeyToDocumentChunks1782400000000 implements MigrationInterface {
   name = 'AddFileKeyToDocumentChunks1782400000000';

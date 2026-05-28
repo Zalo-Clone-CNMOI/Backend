@@ -196,6 +196,7 @@ describe('DocumentEngine.processDocument', () => {
     });
 
     it('dual-writes file_key alongside document_id on every chunk (M1 rollout)', async () => {
+      const expectedFileKey = 'uploads/shared/file-abc.pdf';
       const chunks = ['a', 'b', 'c'];
       const embedBatch = jest
         .fn()
@@ -217,7 +218,7 @@ describe('DocumentEngine.processDocument', () => {
       await engine.processDocument(
         makeUploadEvent({
           document_id: 'doc-dual',
-          file_key: 'uploads/shared/file-abc.pdf',
+          file_key: expectedFileKey,
         }),
         'text',
       );
@@ -228,11 +229,47 @@ describe('DocumentEngine.processDocument', () => {
           i + 1,
           expect.objectContaining({
             documentId: 'doc-dual',
-            fileKey: 'uploads/shared/file-abc.pdf',
+            fileKey: expectedFileKey,
             chunkIndex: i,
           }),
         );
       }
+
+      // Belt-and-suspenders: guarantee every chunk shares the SAME file_key
+      // (catches a regression where someone appends an index or per-chunk salt).
+      const calls = chunkRepoCreate.mock.calls as Array<
+        [{ fileKey: string | null }]
+      >;
+      const fileKeys = calls.map(([arg]) => arg.fileKey);
+      expect(new Set(fileKeys).size).toBe(1);
+      expect(fileKeys[0]).toBe(expectedFileKey);
+    });
+
+    it('persists NULL file_key when event.file_key is empty (defensive against malformed Kafka replays)', async () => {
+      const embedBatch = jest
+        .fn()
+        .mockResolvedValue([makeEmbeddingResult([0.1], 5)]);
+      const chunkRepoCreate = jest
+        .fn()
+        .mockImplementation((data: Record<string, unknown>) => ({ ...data }));
+
+      const engine = buildEngine({
+        chunker: { chunk: jest.fn().mockResolvedValue(['only chunk']) },
+        gateway: { embedBatch, embed: jest.fn(), complete: jest.fn() },
+        chunkRepo: { create: chunkRepoCreate, save: jest.fn() },
+      });
+
+      // Force file_key to empty string via cast — bypasses TS but mirrors a
+      // malformed Kafka event that bypasses class-validator at runtime.
+      await engine.processDocument(
+        makeUploadEvent({ file_key: '' as unknown as string }),
+        'text',
+      );
+
+      expect(chunkRepoCreate).toHaveBeenCalledTimes(1);
+      expect(chunkRepoCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ fileKey: null }),
+      );
     });
 
     it('sums tokensUsed from all embedBatch results as totalTokens', async () => {

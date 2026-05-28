@@ -86,6 +86,13 @@ function buildEngine(
     create: jest.fn().mockImplementation((data: unknown) => data),
     save: jest.fn().mockResolvedValue(undefined),
     update: jest.fn().mockResolvedValue({ affected: 1 }),
+    // M2: queryDocument now resolves document_id → file_key before chunk lookup.
+    // Default to a synthetic completed doc so existing tests still see chunks.
+    findOne: jest.fn().mockResolvedValue({
+      id: 'doc-001',
+      fileKey: 'uploads/doc-001.pdf',
+      status: 'completed',
+    }),
     ...overrides.docMetaRepo,
   } as unknown as Repository<DocumentMetadata>;
 
@@ -510,6 +517,75 @@ describe('DocumentEngine.queryDocument', () => {
       'chunk.embeddingModel = :embeddingModel',
       { embeddingModel: 'text-embedding-3-small' },
     );
+  });
+
+  it('queries chunks by file_key (M2 reader switch) — not document_id', async () => {
+    const qb = makeQueryBuilder();
+    const embed = jest.fn().mockResolvedValue({
+      embedding: [0.1, 0.2],
+      tokensUsed: 5,
+      model: 'text-embedding-3-small',
+      provider: 'openai',
+    });
+    const complete = jest.fn().mockResolvedValue({
+      content: JSON.stringify({ answer: 'OK', source_indices: [0] }),
+      tokensIn: 5,
+      tokensOut: 5,
+      model: 'gpt-4o',
+      provider: 'openai',
+      latencyMs: 50,
+    });
+    const findOne = jest.fn().mockResolvedValue({
+      id: 'doc-xyz',
+      fileKey: 'uploads/shared-file.pdf',
+      status: 'completed',
+    });
+
+    const engine = buildEngine({
+      gateway: { embed, complete, embedBatch: jest.fn() },
+      chunkRepo: {
+        createQueryBuilder: jest.fn().mockReturnValue(qb),
+        create: jest.fn(),
+        save: jest.fn(),
+      },
+      docMetaRepo: {
+        create: jest.fn(),
+        save: jest.fn(),
+        update: jest.fn(),
+        findOne,
+      },
+    });
+
+    await engine.queryDocument(makeQueryEvent({ document_id: 'doc-xyz' }));
+
+    expect(findOne).toHaveBeenCalledWith({ where: { id: 'doc-xyz' } });
+    expect(qb.where).toHaveBeenCalledWith('chunk.file_key = :fileKey', {
+      fileKey: 'uploads/shared-file.pdf',
+    });
+  });
+
+  it('returns empty chunks when DocumentMetadata is missing (M2 — soft fallback, no throw)', async () => {
+    const embed = jest.fn();
+    const findOne = jest.fn().mockResolvedValue(null);
+
+    const engine = buildEngine({
+      gateway: { embed, complete: jest.fn(), embedBatch: jest.fn() },
+      docMetaRepo: {
+        create: jest.fn(),
+        save: jest.fn(),
+        update: jest.fn(),
+        findOne,
+      },
+    });
+
+    const result = await engine.queryDocument(
+      makeQueryEvent({ document_id: 'doc-gone' }),
+    );
+
+    expect(findOne).toHaveBeenCalled();
+    expect(embed).not.toHaveBeenCalled(); // skipped — no doc, no embedding spend
+    expect(result.sources).toEqual([]);
+    expect(result.answer).toContain('No content was found');
   });
 
   it('returns fallback answer when gateway.embed throws', async () => {

@@ -257,6 +257,18 @@ export class DocumentEngine {
   }> {
     const topK = event.top_k ?? 5;
 
+    // M2: resolve document_id → file_key so re-linked DocumentMetadata rows
+    // for the same file all share one set of chunks (no re-embedding).
+    const doc = await this.docMetaRepo.findOne({
+      where: { id: event.document_id },
+    });
+    if (!doc) {
+      this.logger.warn(
+        `searchRelevantChunks: DocumentMetadata not found for id=${event.document_id}, returning empty`,
+      );
+      return { chunks: [], embeddingTokens: 0 };
+    }
+
     const queryEmbedding = await this.gateway.embed(
       event.user_id,
       event.query,
@@ -270,9 +282,7 @@ export class DocumentEngine {
         `1 - (chunk.embedding::vector <=> :queryVector::vector)`,
         'similarity',
       )
-      .where('chunk.document_id = :documentId', {
-        documentId: event.document_id,
-      })
+      .where('chunk.file_key = :fileKey', { fileKey: doc.fileKey })
       .andWhere('chunk.embeddingModel = :embeddingModel', {
         embeddingModel: this.embeddingModel,
       })

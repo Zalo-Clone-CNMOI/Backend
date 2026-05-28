@@ -40,4 +40,11 @@ export class ConfirmUploadResponseDto {
     example: 'thumbs/public/photo.jpg-1730000000000',
   })
   thumbnailKey?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Document metadata id (UUID v4). Returned only when the upload is a document (PDF / Word / etc.) within a conversation. Use this to open a Zai document chat via POST /api/ai-assist/conversations/document.',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  documentId?: string;
 }

@@ -3,7 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@libs/config';
 import { LoggerModule } from '@libs/logger';
 import { KafkaModule } from '@libs/kafka';
-import { DatabaseModule, MediaFile } from '@libs/database';
+import { DatabaseModule, DocumentMetadata, MediaFile } from '@libs/database';
 import { ConversationMembershipModule } from '@libs/mvp-access';
 import { RedisModule } from '@libs/redis';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -20,7 +20,7 @@ import { OrphanedFileCleanupTask } from './tasks/cleanup.task';
     ConfigModule,
     LoggerModule,
     DatabaseModule,
-    TypeOrmModule.forFeature([MediaFile]),
+    TypeOrmModule.forFeature([MediaFile, DocumentMetadata]),
     ConversationMembershipModule,
     RedisModule.forRootAsync(),
     ScheduleModule.forRoot(),

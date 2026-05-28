@@ -17,7 +17,7 @@ import { Repository } from 'typeorm';
 import { KAFKA_CLIENT } from '@libs/kafka';
 import { S3Service, S3_CLIENT, S3_CONFIG, type S3Config } from '@libs/s3';
 import { ConversationMembershipService } from '@libs/mvp-access';
-import { MediaFile } from '@libs/database';
+import { DocumentMetadata, MediaFile } from '@libs/database';
 import { inferMediaVisibility } from '@app/constant';
 import type { S3Client } from '@aws-sdk/client-s3';
 import {
@@ -56,6 +56,8 @@ export class MediaService implements OnModuleInit {
     @Inject(S3_CONFIG) private readonly s3Config: S3Config,
     @InjectRepository(MediaFile)
     private readonly mediaFileRepo: Repository<MediaFile>,
+    @InjectRepository(DocumentMetadata)
+    private readonly documentMetadataRepo: Repository<DocumentMetadata>,
     private readonly membershipService: ConversationMembershipService,
   ) {}
 
@@ -172,7 +174,7 @@ export class MediaService implements OnModuleInit {
     contentType: string,
     userId?: string,
     conversationId?: string,
-  ): Promise<{ thumbnailKey?: string }> {
+  ): Promise<{ thumbnailKey?: string; documentId?: string }> {
     const fileExists = await this.s3Service.exists(key);
     if (!fileExists) {
       this.logger.warn(
@@ -223,46 +225,23 @@ export class MediaService implements OnModuleInit {
 
     this.kafka.emit(KafkaTopics.MediaUploaded, event);
 
-    if (conversationId && userId && this.isDocument(contentType)) {
-      let fileSize = 0;
-      try {
-        const headResult = await this.s3.send(
-          new HeadObjectCommand({ Bucket: this.s3Config.bucket, Key: key }),
-        );
-        fileSize = headResult.ContentLength ?? 0;
-      } catch (err) {
-        this.logger.warn(
-          `Could not fetch file size via HEAD for bucket=${this.s3Config.bucket}, key=${key}: ${String(err)}`,
-        );
-      }
-
-      const docEvent: AiDocumentUploadEvent = {
-        document_id: uuidv4(),
-        conversation_id: conversationId,
-        user_id: userId,
-        file_key: key,
-        file_name: key.split('/').pop() ?? key,
-        file_size: fileSize,
-        content_type: contentType,
-        uploaded_at: Date.now(),
-        trace_id: userId,
-      };
-      void this.kafka.emit(KafkaTopics.AiDocumentUpload, docEvent);
-      this.logger.log(
-        `AiDocumentUpload emitted for key=${key}, doc_id=${docEvent.document_id}`,
-      );
-    }
+    const documentId = await this.maybePersistDocumentMetadata({
+      key,
+      contentType,
+      userId,
+      conversationId,
+    });
 
     if (this.isImage(contentType)) {
       try {
         const thumbnailKey = await this.generateImageThumbnail(key);
-        return { thumbnailKey };
+        return { thumbnailKey, documentId };
       } catch (error) {
         this.logger.error(`Failed to generate thumbnail for ${key}`, error);
       }
     }
 
-    return {};
+    return { documentId };
   }
 
   private isImage(contentType: string): boolean {
@@ -284,6 +263,126 @@ export class MediaService implements OnModuleInit {
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
     ];
     return documentTypes.includes(contentType);
+  }
+
+  /**
+   * For document uploads inside a conversation, persist a DocumentMetadata
+   * row (status='pending') and emit the AiDocumentUpload Kafka event so the
+   * AI core can ingest the file. Returns the persisted row's id to the
+   * caller — needed by FE to immediately open a Zai document chat without
+   * racing the async ingest consumer.
+   *
+   * Idempotency: pre-flight `findOne` plus a unique constraint on
+   * (file_key, user_id, conversation_id) catches duplicate confirmUpload
+   * calls from retries or concurrent FE taps.
+   *
+   * Authorization: callers may only persist document rows for conversations
+   * they are a member of. Silently skips otherwise (no exception — the
+   * upload itself still succeeds, just no AI ingest is triggered).
+   */
+  private async maybePersistDocumentMetadata(input: {
+    key: string;
+    contentType: string;
+    userId?: string;
+    conversationId?: string;
+  }): Promise<string | undefined> {
+    const { key, contentType, userId, conversationId } = input;
+    if (!conversationId || !userId || !this.isDocument(contentType)) {
+      return undefined;
+    }
+
+    // W5: only members of the target conversation can anchor a document
+    // chat to it. Skip silently if not a member — the media upload itself
+    // is unaffected.
+    const canAccess = await this.membershipService.canUserAccessConversation(
+      userId,
+      conversationId,
+    );
+    if (!canAccess) {
+      this.logger.warn(
+        `Document metadata skipped: user=${userId} is not a member of conversation=${conversationId}`,
+      );
+      return undefined;
+    }
+
+    const existingDoc = await this.documentMetadataRepo.findOne({
+      where: { fileKey: key, userId, conversationId },
+    });
+    if (existingDoc) {
+      this.logger.log(
+        `Existing DocumentMetadata reused for key=${key}, doc_id=${existingDoc.id}`,
+      );
+      return existingDoc.id;
+    }
+
+    let fileSize = 0;
+    try {
+      const headResult = await this.s3.send(
+        new HeadObjectCommand({ Bucket: this.s3Config.bucket, Key: key }),
+      );
+      fileSize = headResult.ContentLength ?? 0;
+    } catch (err) {
+      this.logger.warn(
+        `Could not fetch file size via HEAD for bucket=${this.s3Config.bucket}, key=${key}: ${String(err)}`,
+      );
+    }
+    const fileName = key.split('/').pop() ?? key;
+
+    let documentId: string;
+    try {
+      const savedDoc = await this.documentMetadataRepo.save(
+        this.documentMetadataRepo.create({
+          conversationId,
+          userId,
+          fileKey: key,
+          fileName,
+          fileSize,
+          contentType,
+          status: 'pending',
+        }),
+      );
+      documentId = savedDoc.id;
+    } catch (err) {
+      // C1: concurrent confirmUpload may have inserted the row between our
+      // findOne and save. Postgres returns SQLSTATE 23505 (unique_violation)
+      // because of `uq_document_file_user_conv`. Re-query and reuse instead
+      // of bubbling up a 500.
+      if (this.isUniqueViolation(err)) {
+        const winner = await this.documentMetadataRepo.findOne({
+          where: { fileKey: key, userId, conversationId },
+        });
+        if (winner) {
+          this.logger.log(
+            `DocumentMetadata race resolved by reusing concurrent winner for key=${key}, doc_id=${winner.id}`,
+          );
+          return winner.id;
+        }
+      }
+      throw err;
+    }
+
+    const docEvent: AiDocumentUploadEvent = {
+      document_id: documentId,
+      conversation_id: conversationId,
+      user_id: userId,
+      file_key: key,
+      file_name: fileName,
+      file_size: fileSize,
+      content_type: contentType,
+      uploaded_at: Date.now(),
+      trace_id: userId,
+    };
+    void this.kafka.emit(KafkaTopics.AiDocumentUpload, docEvent);
+    this.logger.log(
+      `AiDocumentUpload emitted for key=${key}, doc_id=${documentId}`,
+    );
+    return documentId;
+  }
+
+  private isUniqueViolation(err: unknown): boolean {
+    const driverError = (err as { driverError?: { code?: string } })
+      .driverError;
+    return driverError?.code === '23505';
   }
 
   private async generateImageThumbnail(originalKey: string): Promise<string> {

@@ -110,6 +110,24 @@ describe('MediaController', () => {
       });
     });
 
+    it('should include documentId when service returns one (document upload)', async () => {
+      mediaService.confirmUploaded.mockResolvedValue({
+        documentId: '550e8400-e29b-41d4-a716-446655440000',
+      });
+
+      const body = {
+        key: 'uploads/abc/doc.pdf',
+        contentType: 'application/pdf',
+        conversationId: 'conv-1',
+      };
+      const result = await controller.confirmUpload(body, 'user-1');
+
+      expect(result).toEqual({
+        ok: true,
+        documentId: '550e8400-e29b-41d4-a716-446655440000',
+      });
+    });
+
     it('should pass undefined conversationId when not in body', async () => {
       const body = { key: 'file.txt', contentType: 'text/plain' };
       await controller.confirmUpload(body, 'user-1');

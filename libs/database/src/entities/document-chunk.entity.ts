@@ -17,9 +17,19 @@ import { BaseEntity } from '@libs/shared';
  */
 @Entity('document_chunks')
 @Index('idx_chunk_document', ['documentId'])
+@Index('idx_chunk_file_key', ['fileKey'])
 export class DocumentChunk extends BaseEntity {
   @Column({ type: 'uuid', name: 'document_id' })
   documentId: string;
+
+  /**
+   * Stable key used to share chunks across re-uploads/forwards of the same
+   * physical file. Nullable during the M1→M3 rollout: M1 backfills + starts
+   * dual-write, M2 switches readers to query by file_key, M3 drops
+   * document_id and makes this NOT NULL.
+   */
+  @Column({ type: 'varchar', name: 'file_key', length: 512, nullable: true })
+  fileKey: string | null = null;
 
   @Column({ type: 'int', name: 'chunk_index' })
   chunkIndex: number;
@@ -52,7 +62,11 @@ export class DocumentChunk extends BaseEntity {
   @Column({ type: 'int', name: 'page_number', nullable: true })
   pageNumber: number | null;
 
-  @ManyToOne(() => DocumentMetadata, { onDelete: 'CASCADE' })
+  // ON DELETE NO ACTION (not CASCADE) so chunks survive when one of multiple
+  // DocumentMetadata rows sharing a file_key is deleted. See M1 migration.
+  // KEEP IN SYNC with the FK constraint — `synchronize: true` in dev would
+  // otherwise revert the migration's FK swap on service startup.
+  @ManyToOne(() => DocumentMetadata, { onDelete: 'NO ACTION' })
   @JoinColumn({ name: 'document_id' })
   document: DocumentMetadata;
 }

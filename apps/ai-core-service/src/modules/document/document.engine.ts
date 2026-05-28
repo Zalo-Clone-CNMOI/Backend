@@ -121,9 +121,28 @@ export class DocumentEngine {
         0,
       );
 
+      // Dual-write file_key alongside document_id during the M1→M3 rollout
+      // so M2 can switch readers to chunks-by-file_key without a data gap.
+      // M3 will drop document_id and stop populating it here.
+      //
+      // Guard: `event.file_key` is typed `string` (required) but Kafka deserialization
+      // bypasses class-validator. A malformed/replayed event with empty file_key
+      // would silently pass the M1 NULL check yet break M2 lookups. Persist NULL
+      // (matches column default) and log so the bad event surfaces.
+      const fileKey =
+        typeof event.file_key === 'string' && event.file_key.length > 0
+          ? event.file_key
+          : null;
+      if (fileKey === null) {
+        this.logger.warn(
+          `Missing/empty file_key on AiDocumentUpload for document ${event.document_id}; chunks will have NULL file_key (M2 lookups will fail for this doc).`,
+        );
+      }
+
       const chunkEntities: DocumentChunk[] = embeddingResults.map((result, i) =>
         this.chunkRepo.create({
           documentId: event.document_id,
+          fileKey,
           chunkIndex: i,
           content: chunks[i],
           tokenCount: result.tokensUsed,

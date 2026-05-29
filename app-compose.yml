@@ -471,7 +471,7 @@ services:
       LCDO_ROUTER_URL: ${LCDO_ROUTER_URL}
       LCDO_ROUTER_KEY: ${LCDO_ROUTER_KEY}
       LCDO_ROUTER_MODEL: ${LCDO_ROUTER_MODEL}
-      VOYAGE_AI_API_KEY: ${VOYAGE_AI_API_KEY}
+      VOYAGE_AI_API_KEY: ${VOYAGE_AI_API_KEY: pa-UWg7gYQ5LAPkTkPP0py7LxiszMojtHwE2Ab_KLz6lXE}
       # Zai vision (images-only). INLINE_BASE64 must be true on LocalStack dev
       # (router can't fetch local S3 URLs); false in prod (presigned S3 URL).
       ZAI_VISION_ENABLED: ${ZAI_VISION_ENABLED:-true}

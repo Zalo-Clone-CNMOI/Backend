@@ -209,6 +209,7 @@ export class ZaiChatEngine {
           conversation_id: event.conversation_id,
           body,
           trace_id: event.trace_id ?? `zai-${randomUUID()}`,
+          created_at: event.created_at + 1,
           // C7: document-chat replies are markdown; others stay text default.
           ...(strategy.bodyFormat
             ? { body_format: strategy.bodyFormat }

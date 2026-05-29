@@ -207,12 +207,40 @@ describe('DocumentRagService', () => {
       ).rejects.toThrow('embedding failed');
     });
 
-    it('applies similarity threshold filter and limit in query builder', async () => {
+    it('orders by similarity, limits to TOP_K, and filters by embedding_model (same-dimension vectors only)', async () => {
       await service.buildRagMessages(USER_ID, DOC_ID, 'q', []);
 
-      expect(chunkRepo._qb.setParameter).toHaveBeenCalledWith('threshold', 0.7);
       expect(chunkRepo._qb.limit).toHaveBeenCalledWith(5);
       expect(chunkRepo._qb.orderBy).toHaveBeenCalledWith('similarity', 'DESC');
+      // The 0.7 SQL threshold is gone — filtering now happens in-app so we can
+      // log real scores. The model filter guards against mixed-dimension rows.
+      expect(chunkRepo._qb.setParameter).not.toHaveBeenCalledWith(
+        'threshold',
+        expect.anything(),
+      );
+      expect(chunkRepo._qb.andWhere).toHaveBeenCalledWith(
+        'chunk.embedding_model = :embeddingModel',
+        { embeddingModel: 'text-embedding-3-small' },
+      );
+    });
+
+    it('drops chunks scoring below the similarity floor (0.3) in-app', async () => {
+      chunkRepo._qb.getRawAndEntities.mockResolvedValueOnce({
+        raw: [{ similarity: '0.55' }, { similarity: '0.12' }],
+        entities: [
+          { chunkIndex: 0, content: 'relevant chunk' },
+          { chunkIndex: 1, content: 'noise chunk' },
+        ],
+      });
+
+      await service.buildRagMessages(USER_ID, DOC_ID, 'q', []);
+
+      // Only the 0.55 chunk clears the 0.3 floor; the 0.12 chunk is dropped.
+      expect(promptBuilder.buildDocumentChatPrompt).toHaveBeenCalledWith(
+        [],
+        'q',
+        [{ content: 'relevant chunk', chunkIndex: 0 }],
+      );
     });
 
     it('M2 — queries chunks by file_key (resolved from document_id) not document_id', async () => {

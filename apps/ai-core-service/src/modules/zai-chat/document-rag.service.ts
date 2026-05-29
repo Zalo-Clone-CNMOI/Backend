@@ -10,7 +10,14 @@ import { PromptBuilderService } from '../ai-gateway/services/prompt-builder.serv
 import type { LlmChatMessage } from '../ai-gateway/interfaces';
 
 const TOP_K = 5;
-const SIMILARITY_THRESHOLD = 0.7;
+// Cosine-similarity floor for a chunk to be considered relevant. Tuned for
+// voyage-3 (the default embedder), whose relevant-pair scores sit ~0.4-0.65 —
+// markedly lower than OpenAI text-embedding-3-small (~0.75-0.85). The old 0.7
+// floor was an OpenAI value that silently rejected EVERY voyage-3 match, so
+// doc-chat always saw zero context. The sibling RAG path
+// (document.engine.searchRelevantChunks) uses no floor at all; this keeps a
+// low one purely to drop obvious noise on vague queries.
+const SIMILARITY_THRESHOLD = 0.3;
 
 interface SimilarityRow {
   similarity?: string;
@@ -75,12 +82,19 @@ export class DocumentRagService {
       );
     }
 
+    const queryEmbeddingModel = this.config.aiEmbeddingModel ?? 'voyage-3';
+
     const queryEmbedding = await this.gateway.embed(
       userId,
       query,
-      this.config.aiEmbeddingModel,
+      queryEmbeddingModel,
     );
 
+    // Fetch top-K by similarity WITHOUT the threshold in SQL, so we can log the
+    // real scores and apply the floor in-app. Filter by embedding_model to
+    // compare only against same-dimension vectors — a file_key may carry rows
+    // from an earlier embedder (text-embedding-3-small=1536) alongside the
+    // current voyage-3=1024, and pgvector's <=> throws on mixed dimensions.
     const result = await this.chunkRepo
       .createQueryBuilder('chunk')
       .select(['chunk.id', 'chunk.chunkIndex', 'chunk.content'])
@@ -89,22 +103,32 @@ export class DocumentRagService {
         'similarity',
       )
       .where('chunk.file_key = :fileKey', { fileKey: doc.fileKey })
-      .andWhere(
-        `1 - (chunk.embedding::vector <=> :queryVector::vector) >= :threshold`,
-      )
+      .andWhere('chunk.embedding_model = :embeddingModel', {
+        embeddingModel: queryEmbeddingModel,
+      })
       .setParameter('queryVector', JSON.stringify(queryEmbedding.embedding))
-      .setParameter('threshold', SIMILARITY_THRESHOLD)
       .orderBy('similarity', 'DESC')
       .limit(TOP_K)
       .getRawAndEntities();
 
-    const chunks = result.raw.map((row: SimilarityRow, i: number) => ({
+    const scored = result.raw.map((row: SimilarityRow, i: number) => ({
       content: result.entities[i]?.content ?? '',
       chunkIndex: result.entities[i]?.chunkIndex ?? 0,
+      similarity: parseFloat(row.similarity ?? '0'),
     }));
 
+    const chunks = scored
+      .filter((c) => c.similarity >= SIMILARITY_THRESHOLD)
+      .map((c) => ({ content: c.content, chunkIndex: c.chunkIndex }));
+
+    // Diagnostic: candidate count distinguishes "no chunks stored for this
+    // file_key" (0 candidates) from "stored but all below the floor"
+    // (candidates > 0, low top score). topSimilarity shows the real ceiling.
     this.logger.debug(
-      `RAG query for doc ${documentId} (file_key=${doc.fileKey}): ${chunks.length} chunks above threshold`,
+      `RAG query for doc ${documentId} (file_key=${doc.fileKey}, model=${queryEmbeddingModel}): ` +
+        `${scored.length} candidate chunk(s), ` +
+        `topSimilarity=${scored[0]?.similarity.toFixed(3) ?? 'n/a'}, ` +
+        `${chunks.length} >= threshold ${SIMILARITY_THRESHOLD}`,
     );
 
     return this.promptBuilder.buildDocumentChatPrompt(history, query, chunks);

@@ -90,6 +90,8 @@ export class DocumentChatStrategy implements ChatStrategy {
           conversation_id: event.conversation_id,
           body: 'Mình đang xử lý file của bạn, vui lòng thử lại sau vài giây nhé!',
           trace_id: event.trace_id ?? `zai-${randomUUID()}`,
+          // Same clock source as the trigger so it sorts after the question on reload.
+          created_at: event.created_at + 1,
         },
         provider: 'unknown',
         tokensIn: 0,
@@ -108,6 +110,8 @@ export class DocumentChatStrategy implements ChatStrategy {
           conversation_id: event.conversation_id,
           body: 'This document is no longer available.',
           trace_id: event.trace_id ?? `zai-${randomUUID()}`,
+          // Same clock source as the trigger so it sorts after the question on reload.
+          created_at: event.created_at + 1,
         },
         provider: 'unknown',
         tokensIn: 0,

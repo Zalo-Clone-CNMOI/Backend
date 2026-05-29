@@ -63,6 +63,7 @@ export class ModerationEngine {
         messages,
         maxTokens: 256,
         temperature: 0,
+        responseFormat: 'json_object',
       });
 
       const parsed = this.parseResponse(result.content);
@@ -308,15 +309,25 @@ export class ModerationEngine {
     decision_source: ModerationDecisionSourceType;
     failure_reason: string;
   } {
+    if (source === 'fallback_parse_failure') {
+      // LLM responded but JSON was unparseable — fail-open (pass-through).
+      // A parse failure means the model is available but confused; blocking
+      // every message on a parse glitch produces too many false positives.
+      return {
+        is_flagged: false,
+        labels: ['clean' as ModerationLabelType],
+        confidence: 0,
+        decision_source: source,
+        failure_reason: 'moderation_response_parse_failed',
+      };
+    }
+    // Provider completely unavailable — fail-closed (block to be safe).
     return {
       is_flagged: true,
       labels: ['spam' as ModerationLabelType],
       confidence: 1,
       decision_source: source,
-      failure_reason:
-        source === 'fallback_parse_failure'
-          ? 'moderation_response_parse_failed'
-          : 'moderation_provider_failed',
+      failure_reason: 'moderation_provider_failed',
     };
   }
 }

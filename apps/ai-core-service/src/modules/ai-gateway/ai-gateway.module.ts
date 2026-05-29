@@ -3,6 +3,7 @@ import { OpenAiProvider } from './providers/openai.provider';
 import { GeminiProvider } from './providers/gemini.provider';
 import { AnthropicProvider } from './providers/anthropic.provider';
 import { LocDoRouterProvider } from './providers/locdo-router.provider';
+import { VoyageAiProvider } from './providers/voyageai.provider';
 import { LLM_PROVIDERS } from './interfaces';
 import { DataSanitizer } from './services/data-sanitizer.service';
 import { TokenBudgetService } from './services/token-budget.service';
@@ -17,6 +18,7 @@ import { AiMetricsService } from './services/ai-metrics.service';
     OpenAiProvider,
     GeminiProvider,
     AnthropicProvider,
+    VoyageAiProvider,
     {
       provide: LLM_PROVIDERS,
       useFactory: (
@@ -24,12 +26,14 @@ import { AiMetricsService } from './services/ai-metrics.service';
         openai: OpenAiProvider,
         gemini: GeminiProvider,
         anthropic: AnthropicProvider,
-      ) => [locdo, openai, gemini, anthropic],
+        voyage: VoyageAiProvider,
+      ) => [locdo, openai, gemini, anthropic, voyage],
       inject: [
         LocDoRouterProvider,
         OpenAiProvider,
         GeminiProvider,
         AnthropicProvider,
+        VoyageAiProvider,
       ],
     },
     DataSanitizer,

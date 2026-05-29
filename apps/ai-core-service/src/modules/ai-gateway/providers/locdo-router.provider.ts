@@ -102,6 +102,9 @@ export class LocDoRouterProvider implements ILlmProvider {
         messages: this.transformMessages(options.messages),
         max_tokens: options.maxTokens ?? 1024,
         temperature: options.temperature ?? 0.7,
+        ...(options.responseFormat === 'json_object'
+          ? { response_format: { type: 'json_object' as const } }
+          : {}),
       });
 
       const choice = response.choices?.[0];

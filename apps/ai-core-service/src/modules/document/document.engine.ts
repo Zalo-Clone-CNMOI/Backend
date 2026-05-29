@@ -24,14 +24,25 @@ interface SimilarityRow {
   similarity?: string;
 }
 
-const SUPPORTED_EMBEDDING_MODELS: readonly TiktokenModel[] = [
+const OPENAI_EMBEDDING_MODELS: readonly TiktokenModel[] = [
   'text-embedding-3-small',
   'text-embedding-3-large',
   'text-embedding-ada-002',
 ];
 
-function resolveEmbeddingModel(configured: string | undefined): TiktokenModel {
-  const fallback: TiktokenModel = 'text-embedding-3-small';
+const VOYAGE_EMBEDDING_MODELS: readonly string[] = [
+  'voyage-3',
+  'voyage-3-lite',
+  'voyage-code-2',
+];
+
+const SUPPORTED_EMBEDDING_MODELS: readonly string[] = [
+  ...OPENAI_EMBEDDING_MODELS,
+  ...VOYAGE_EMBEDDING_MODELS,
+];
+
+function resolveEmbeddingModel(configured: string | undefined): string {
+  const fallback = 'text-embedding-3-small';
   if (!configured) return fallback;
   if (!(SUPPORTED_EMBEDDING_MODELS as readonly string[]).includes(configured)) {
     throw new Error(
@@ -39,7 +50,14 @@ function resolveEmbeddingModel(configured: string | undefined): TiktokenModel {
         `Supported models: ${SUPPORTED_EMBEDDING_MODELS.join(', ')}`,
     );
   }
-  return configured as TiktokenModel;
+  return configured;
+}
+
+function resolveTiktokenModel(embeddingModel: string): TiktokenModel {
+  if ((OPENAI_EMBEDDING_MODELS as readonly string[]).includes(embeddingModel)) {
+    return embeddingModel as TiktokenModel;
+  }
+  return 'text-embedding-3-small';
 }
 
 @Injectable()
@@ -47,7 +65,7 @@ export class DocumentEngine {
   private readonly logger = new Logger(DocumentEngine.name);
   private readonly maxDocSizeMb: number;
   private readonly maxPages: number;
-  private readonly embeddingModel: TiktokenModel;
+  private readonly embeddingModel: string;
 
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
@@ -112,7 +130,7 @@ export class DocumentEngine {
       const chunks = await this.chunker.chunk(textContent, {
         size: 400,
         overlap: 50,
-        model: this.embeddingModel,
+        model: resolveTiktokenModel(this.embeddingModel),
       });
 
       if (chunks.length === 0) {

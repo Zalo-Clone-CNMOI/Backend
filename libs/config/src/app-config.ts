@@ -51,6 +51,7 @@ export interface AppConfig {
   lcdoRouterUrl?: string;
   lcdoRouterKey?: string;
   lcdoRouterModel?: string;
+  voyageAiApiKey?: string;
   aiDefaultModel?: string;
   aiEmbeddingModel?: string;
   aiDailyTokenBudget?: number;
@@ -352,9 +353,9 @@ export function loadConfig(serviceName: string): AppConfig {
     lcdoRouterUrl: process.env.LCDO_ROUTER_URL?.trim(),
     lcdoRouterKey: process.env.LCDO_ROUTER_KEY?.trim(),
     lcdoRouterModel: process.env.LCDO_ROUTER_MODEL?.trim(),
+    voyageAiApiKey: process.env.VOYAGE_AI_API_KEY?.trim(),
     aiDefaultModel: process.env.AI_DEFAULT_MODEL ?? 'gpt-4o-mini',
-    aiEmbeddingModel:
-      process.env.AI_EMBEDDING_MODEL ?? 'text-embedding-3-small',
+    aiEmbeddingModel: process.env.AI_EMBEDDING_MODEL ?? 'voyage-3',
     aiDailyTokenBudget:
       readNumber(process.env.AI_DAILY_TOKEN_BUDGET) ?? 1_000_000,
     aiEnablePiiSanitization: process.env.AI_ENABLE_PII_SANITIZATION !== 'false',

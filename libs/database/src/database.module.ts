@@ -25,6 +25,7 @@ import {
   ConversationPollOption,
   ConversationPollVote,
   CallSession,
+  AiEntityDetectionLog,
 } from './entities';
 
 export const entities = [
@@ -51,6 +52,7 @@ export const entities = [
   ConversationPollOption,
   ConversationPollVote,
   CallSession,
+  AiEntityDetectionLog,
 ];
 
 // const useSsl = process.env.DB_SSL === 'true';

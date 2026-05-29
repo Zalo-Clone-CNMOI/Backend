@@ -54,6 +54,7 @@ export class EntityDetectionEngine {
         messages,
         maxTokens: 512,
         temperature: 0,
+        responseFormat: 'json_object',
       });
 
       let parsed = this.parseEntities(result.content, event.body);
@@ -78,6 +79,7 @@ export class EntityDetectionEngine {
           ],
           maxTokens: 512,
           temperature: 0,
+          responseFormat: 'json_object',
         });
         parsed = this.parseEntities(retry.content, event.body);
         totalTokensIn += retry.tokensIn;

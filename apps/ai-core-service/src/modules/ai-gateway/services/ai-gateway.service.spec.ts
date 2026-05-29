@@ -314,7 +314,7 @@ describe('AiGatewayService', () => {
       const gw = m.get(AiGatewayService);
 
       await expect(gw.embed('user-001', 'test')).rejects.toThrow(
-        'OpenAI provider not available for embeddings',
+        'No embedding provider available.',
       );
     });
   });
@@ -404,7 +404,7 @@ describe('AiGatewayService', () => {
       const gw = m.get(AiGatewayService);
 
       await expect(gw.embedBatch('user-001', ['text'])).rejects.toThrow(
-        'OpenAI provider not available for batch embeddings',
+        'No embedding provider available.',
       );
     });
   });

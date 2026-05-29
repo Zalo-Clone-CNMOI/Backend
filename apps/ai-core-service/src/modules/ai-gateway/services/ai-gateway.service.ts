@@ -182,12 +182,7 @@ export class AiGatewayService {
     if (!canConsume) {
       throw new Error('Daily token budget exceeded');
     }
-    const provider = this.providers.find(
-      (p) => p.name === 'openai' && p.isAvailable,
-    );
-    if (!provider) {
-      throw new Error('OpenAI provider not available for embeddings');
-    }
+    const provider = this.resolveEmbeddingProvider();
     const result = await provider.embed(sanitized, model);
     await this.tokenBudget.consume(userId, result.tokensUsed);
     return result;
@@ -208,16 +203,24 @@ export class AiGatewayService {
     if (!canConsume) {
       throw new Error('Daily token budget exceeded');
     }
-    const provider = this.providers.find(
-      (p) => p.name === 'openai' && p.isAvailable,
-    );
-    if (!provider) {
-      throw new Error('OpenAI provider not available for batch embeddings');
-    }
+    const provider = this.resolveEmbeddingProvider();
     const results = await provider.embedBatch(sanitized, model);
     const totalTokens = results.reduce((sum, r) => sum + r.tokensUsed, 0);
     await this.tokenBudget.consume(userId, totalTokens);
     return results;
+  }
+
+  private resolveEmbeddingProvider(): ILlmProvider {
+    // Prefer OpenAI (native embeddings), fall back to Voyage AI
+    const provider =
+      this.providers.find((p) => p.name === 'openai' && p.isAvailable) ??
+      this.providers.find((p) => p.name === 'voyageai' && p.isAvailable);
+    if (!provider) {
+      throw new Error(
+        'No embedding provider available. Set OPENAI_API_KEY or VOYAGE_AI_API_KEY.',
+      );
+    }
+    return provider;
   }
 
   getProvider(name: string): ILlmProvider | undefined {

@@ -13,6 +13,7 @@ export interface LlmCompletionOptions {
   maxTokens?: number;
   temperature?: number;
   stream?: boolean;
+  responseFormat?: 'json_object';
 }
 
 export interface LlmCompletionResult {

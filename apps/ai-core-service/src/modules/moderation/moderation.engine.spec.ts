@@ -258,8 +258,9 @@ describe('ModerationEngine', () => {
 
       const result = await engine.moderate(makeRequest());
 
-      expect(result.is_flagged).toBe(true);
-      expect(result.labels).toEqual(['spam']);
+      // Parse failure uses fail-open: LLM responded but response was unparseable.
+      expect(result.is_flagged).toBe(false);
+      expect(result.labels).toEqual(['clean']);
       expect(result.decision_source).toBe('fallback_parse_failure');
       expect(result.failure_reason).toBe('moderation_response_parse_failed');
     });

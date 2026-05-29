@@ -2,9 +2,7 @@ import { Injectable, Logger, Inject } from '@nestjs/common';
 import { APP_CONFIG, AppConfig } from '@libs/config';
 import type {
   ILlmProvider,
-  LlmCompletionOptions,
   LlmCompletionResult,
-  LlmStreamChunk,
   LlmEmbeddingResult,
 } from '../interfaces';
 
@@ -33,10 +31,7 @@ export class VoyageAiProvider implements ILlmProvider {
     );
   }
 
-  completeStream(
-    _options: LlmCompletionOptions,
-    _onChunk: (chunk: LlmStreamChunk) => void,
-  ): Promise<LlmCompletionResult> {
+  completeStream(): Promise<LlmCompletionResult> {
     return Promise.reject(
       new Error('Voyage AI does not support chat completions.'),
     );

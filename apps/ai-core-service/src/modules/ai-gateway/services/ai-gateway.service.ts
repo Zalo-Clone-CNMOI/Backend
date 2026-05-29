@@ -39,7 +39,9 @@ export class AiGatewayService {
       });
     }
     this.logger.log(
-      `AI Gateway initialized with providers: ${providers.map((p) => p.name).join(', ')}`,
+      `AI Gateway initialized with providers: ${providers
+        .map((p) => `${p.name}[${p.isAvailable ? 'READY' : 'NO KEY'}]`)
+        .join(', ')}`,
     );
   }
 

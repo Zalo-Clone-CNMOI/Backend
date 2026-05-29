@@ -39,6 +39,7 @@ import {
 import {
   WsAiDocumentQueryRequestPayloadDto,
   WsAiSmartReplyRequestPayloadDto,
+  WsAiStreamCancelPayloadDto,
   WsAiSummaryRequestPayloadDto,
   WsAiTranslateRequestPayloadDto,
   WsCallAcceptPayloadDto,
@@ -381,6 +382,55 @@ export class ChatGateway implements OnModuleInit {
     @MessageBody() body: WsAiDocumentQueryRequestPayloadDto,
   ) {
     return this.aiHandler.handleDocumentQuery(socket, body);
+  }
+
+  /**
+   * Client "Stop" button: abort the in-flight Zai stream for a conversation.
+   * Resolves the conversation's active stream(s) and publishes AiStreamAbort
+   * (Kafka, reason 'user_cancel') keyed by stream_id — same path the
+   * disconnect handler uses (Phase 6 C12). Auth gate: the socket must have
+   * joined the `conv:{id}` room, so only a participant viewing the chat can
+   * cancel its stream.
+   */
+  @UseGuards(WsAuthGuard)
+  @SubscribeMessage(WsEvents.AiStreamCancel)
+  handleAiStreamCancel(
+    @ConnectedSocket() socket: AuthedSocket,
+    @MessageBody() body: WsAiStreamCancelPayloadDto,
+  ): void {
+    const conversationId = body.conversation_id;
+    const room = `conv:${conversationId}`;
+    if (!socket.rooms.has(room)) {
+      this.logger.debug(
+        `Ignoring ai:stream:cancel for ${conversationId}: socket ${socket.id} has not joined ${room}`,
+      );
+      return;
+    }
+
+    // Invariant: Zai runs at most ONE stream per conversation at a time
+    // (ActiveStreamTracker is keyed per conversation), so aborting every active
+    // stream for this conversation is equivalent to "stop this conversation's
+    // Zai reply". If concurrent per-user streams are ever introduced, filter by
+    // the originating user (socket.data.userId) before aborting.
+    const activeStreams = this.streamTracker.getActiveStreams(conversationId);
+    if (activeStreams.length === 0) return;
+
+    for (const streamId of activeStreams) {
+      this.streamTracker.complete(streamId);
+      const abortEvent: AiStreamAbortEvent = {
+        stream_id: streamId,
+        conversation_id: conversationId,
+        reason: 'user_cancel',
+        aborted_at: Date.now(),
+      };
+      void this.kafka.emit(KafkaTopics.AiStreamAbort, {
+        key: streamId,
+        value: abortEvent,
+      });
+      this.logger.log(
+        `Published AiStreamAbort for stream ${streamId} (conversation ${conversationId}) — user cancel`,
+      );
+    }
   }
 
   @SubscribeMessage(WsEvents.QrBindRequest)

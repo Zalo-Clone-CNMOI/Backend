@@ -208,6 +208,65 @@ describe('ChatGateway', () => {
     });
   });
 
+  // ── Phase 6 C12: client "Stop" → ai:stream:cancel → AiStreamAbort ──────────
+
+  describe('handleAiStreamCancel', () => {
+    function makeSocket(socketId: string, rooms: string[]) {
+      return { id: socketId, rooms: new Set(rooms) } as never;
+    }
+
+    it('publishes AiStreamAbort (reason user_cancel) for active streams when socket is in the conv room', () => {
+      streamTracker.getActiveStreams.mockReturnValue(['stream-1']);
+
+      gateway.handleAiStreamCancel(makeSocket('socket-1', ['conv:conv-1']), {
+        conversation_id: 'conv-1',
+      });
+
+      const abortCall = (kafka.emit.mock.calls as [string, unknown][]).find(
+        ([topic]) => topic === 'ai.stream.abort',
+      );
+      expect(abortCall).toBeDefined();
+      const envelope = abortCall![1] as {
+        key: string;
+        value: Record<string, unknown>;
+      };
+      expect(envelope.key).toBe('stream-1');
+      expect(envelope.value).toMatchObject({
+        stream_id: 'stream-1',
+        conversation_id: 'conv-1',
+        reason: 'user_cancel',
+      });
+      expect(streamTracker.complete).toHaveBeenCalledWith('stream-1');
+    });
+
+    it('does NOT abort when the socket has not joined the conversation room', () => {
+      streamTracker.getActiveStreams.mockReturnValue(['stream-1']);
+
+      gateway.handleAiStreamCancel(makeSocket('socket-1', ['conv:other']), {
+        conversation_id: 'conv-1',
+      });
+
+      expect(streamTracker.getActiveStreams).not.toHaveBeenCalled();
+      expect(kafka.emit).not.toHaveBeenCalledWith(
+        'ai.stream.abort',
+        expect.anything(),
+      );
+    });
+
+    it('does nothing when the conversation has no active streams', () => {
+      streamTracker.getActiveStreams.mockReturnValue([]);
+
+      gateway.handleAiStreamCancel(makeSocket('socket-1', ['conv:conv-1']), {
+        conversation_id: 'conv-1',
+      });
+
+      expect(kafka.emit).not.toHaveBeenCalledWith(
+        'ai.stream.abort',
+        expect.anything(),
+      );
+    });
+  });
+
   describe('handleQrBindRequest', () => {
     it('should issue one-time socket binding token and emit it to requesting socket', async () => {
       const emitMock = jest.fn();

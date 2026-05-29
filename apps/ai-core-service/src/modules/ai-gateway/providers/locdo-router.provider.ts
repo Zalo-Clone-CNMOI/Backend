@@ -63,6 +63,7 @@ export class LocDoRouterProvider implements ILlmProvider {
 
   private transformMessages(
     messages: LlmChatMessage[],
+    responseFormat?: 'json_object',
   ): import('openai').default.ChatCompletionMessageParam[] {
     const mapped = messages.map((m) => ({
       role: m.role,
@@ -70,8 +71,26 @@ export class LocDoRouterProvider implements ILlmProvider {
     })) as import('openai').default.ChatCompletionMessageParam[];
 
     const systemMsg = mapped.find((m) => m.role === 'system');
-    const rest = mapped.filter((m) => m.role !== 'system');
-    if (!systemMsg) return mapped;
+    let rest = mapped.filter((m) => m.role !== 'system');
+
+    // Claude via LocDo does not reliably honor response_format:{type:'json_object'}.
+    // Append an explicit JSON-only reminder to the last user message so Claude
+    // treats it as a hard constraint on the current turn, not just a preamble.
+    if (responseFormat === 'json_object') {
+      const lastUserIdx = [...rest].map((m) => m.role).lastIndexOf('user');
+      if (lastUserIdx >= 0 && typeof rest[lastUserIdx].content === 'string') {
+        rest = rest.map((m, i) =>
+          i === lastUserIdx
+            ? {
+                ...m,
+                content: `${m.content as string}\n\nIMPORTANT: Your entire response must be a single valid JSON object starting with { and ending with }. Output NO text before or after the JSON.`,
+              }
+            : m,
+        );
+      }
+    }
+
+    if (!systemMsg) return rest;
     // System content is always plain text; guard defensively against arrays.
     const systemText =
       typeof systemMsg.content === 'string'
@@ -99,7 +118,10 @@ export class LocDoRouterProvider implements ILlmProvider {
 
       const response = await client.chat.completions.create({
         model,
-        messages: this.transformMessages(options.messages),
+        messages: this.transformMessages(
+          options.messages,
+          options.responseFormat,
+        ),
         max_tokens: options.maxTokens ?? 1024,
         temperature: options.temperature ?? 0.7,
         ...(options.responseFormat === 'json_object'

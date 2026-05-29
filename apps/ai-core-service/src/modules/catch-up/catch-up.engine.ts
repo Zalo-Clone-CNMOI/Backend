@@ -57,11 +57,6 @@ export class CatchUpEngine {
   }): Promise<AiCatchUpResultEvent> {
     const { conversation_id, user_id, since, limit, trace_id } = input;
 
-    // ── 0. Defense-in-depth membership check ────────────────────────────────
-    // The BFF already enforces membership before calling this internal endpoint;
-    // re-check here so a buggy/compromised caller cannot summarise a conversation
-    // the user is not a member of. Reuses the shared ConversationMembershipService
-    // (TypeORM-backed, 2s cache) rather than trusting the caller-supplied user_id.
     let isMember: boolean;
     try {
       isMember = await this.membership.canUserAccessConversation(
@@ -69,9 +64,6 @@ export class CatchUpEngine {
         conversation_id,
       );
     } catch (err) {
-      // Fail CLOSED: a membership-store outage must not leak a summary. Map the
-      // raw error to a BusinessException so the HTTP contract stays consistent
-      // with the Scylla-failure path below.
       this.logger.error(
         `Membership check failed for user_id=${user_id} conversation_id=${conversation_id} (trace_id=${trace_id ?? 'none'}): ${err instanceof Error ? err.message : String(err)}`,
       );

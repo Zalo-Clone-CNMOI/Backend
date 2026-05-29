@@ -407,6 +407,11 @@ export class ChatGateway implements OnModuleInit {
       return;
     }
 
+    // Invariant: Zai runs at most ONE stream per conversation at a time
+    // (ActiveStreamTracker is keyed per conversation), so aborting every active
+    // stream for this conversation is equivalent to "stop this conversation's
+    // Zai reply". If concurrent per-user streams are ever introduced, filter by
+    // the originating user (socket.data.userId) before aborting.
     const activeStreams = this.streamTracker.getActiveStreams(conversationId);
     if (activeStreams.length === 0) return;
 

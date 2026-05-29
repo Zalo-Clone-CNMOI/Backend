@@ -62,6 +62,7 @@ export class VoyageAiProvider implements ILlmProvider {
         Authorization: `Bearer ${this.config.voyageAiApiKey}`,
       },
       body: JSON.stringify({ input: inputs, model: embeddingModel }),
+      signal: AbortSignal.timeout(30_000),
     });
 
     if (!response.ok) {

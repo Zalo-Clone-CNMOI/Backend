@@ -179,7 +179,7 @@ export class DocumentEngine {
 
       this.aiMetrics.recordRequest(
         'document_analysis',
-        'openai',
+        embeddingResults[0]?.provider ?? 'unknown',
         this.embeddingModel,
         totalTokens,
         0,
@@ -238,7 +238,7 @@ export class DocumentEngine {
 
     this.aiMetrics.recordRequest(
       'document_analysis',
-      'openai',
+      'unknown',
       this.embeddingModel,
       0,
       0,

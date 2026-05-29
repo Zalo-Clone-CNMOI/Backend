@@ -121,7 +121,7 @@ export class ModerationEngine {
     try {
       const results = await this.gateway.completeEnsemble(
         event.sender_id,
-        { messages, maxTokens: 256, temperature: 0 },
+        { messages, maxTokens: 256, temperature: 0, responseFormat: 'json_object' },
         ModerationEngine.ENSEMBLE_PROVIDERS,
       );
 

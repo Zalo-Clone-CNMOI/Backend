@@ -508,23 +508,24 @@ export class SendMessageHandler {
                   content_type: primary.content_type,
                 },
               );
-              if (outcome.kind === 'ready') {
+              if (outcome.kind === 'ready' || outcome.kind === 'pending') {
                 docOverrideContext = {
                   feature: 'document',
                   document_id: outcome.documentId,
                   created_at: Date.now(),
                 };
+                if (outcome.kind === 'pending') {
+                  this.shared.logger.log(
+                    `[${params.traceId}] Doc ${primary.key} still processing (id=${outcome.documentId}); routing to DocumentChatStrategy for user-facing notice.`,
+                  );
+                }
                 if (zaiDocs.length > 1) {
                   this.shared.logger.warn(
                     `[${params.traceId}] Multi-doc message: only first attachment (${primary.key}) is routed to Zai RAG; the rest are ignored.`,
                   );
                 }
               } else {
-                if (outcome.kind === 'pending') {
-                  this.shared.logger.log(
-                    `[${params.traceId}] Doc ${primary.key} still processing (id=${outcome.documentId}); falling back to general routing.`,
-                  );
-                } else if (outcome.kind === 'failed') {
+                if (outcome.kind === 'failed') {
                   this.shared.logger.warn(
                     `[${params.traceId}] Doc ${primary.key} ingest previously failed (id=${outcome.documentId}); falling back to general routing.`,
                   );

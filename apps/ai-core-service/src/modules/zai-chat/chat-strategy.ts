@@ -31,18 +31,10 @@ export type StrategyOutcome =
   | { kind: 'messages'; messages: LlmChatMessage[] }
   | { kind: 'short-circuit'; result: ZaiChatResult };
 
-/**
- * A pluggable Zai chat behaviour. The engine resolves one strategy per request
- * by (feature, trigger), then runs the shared gateway + stream + metrics tail.
- * New agents add a strategy + a resolver branch without touching the tail.
- */
+
 export interface ChatStrategy {
-  /** Stable identifier for logs/metrics. */
   readonly name: string;
-  /**
-   * body_format applied to the LLM reply for this strategy. Omit for the
-   * default 'text'. Document chat replies are markdown (C7).
-   */
+
   readonly bodyFormat?: MessageBodyFormat;
   buildMessages(
     event: AiZaiChatRequestEvent,
@@ -50,11 +42,7 @@ export interface ChatStrategy {
   ): Promise<StrategyOutcome>;
 }
 
-/**
- * Document RAG chat. Validates access, builds RAG messages with history, and
- * gracefully short-circuits to a plain-text notice when the document is gone.
- * Replies are markdown (the doc-chat prompt permits short markdown lists).
- */
+
 export class DocumentChatStrategy implements ChatStrategy {
   readonly name = 'document';
   readonly bodyFormat: MessageBodyFormat = 'markdown';
@@ -84,10 +72,30 @@ export class DocumentChatStrategy implements ChatStrategy {
       return { kind: 'messages', messages };
     } catch (err) {
       if (err instanceof BusinessException) {
-        return this.unavailable(event);
+        const isProcessing = err.message.includes('still being processed');
+        return isProcessing
+          ? this.processingNotice(event)
+          : this.unavailable(event);
       }
       throw err;
     }
+  }
+
+  private processingNotice(event: AiZaiChatRequestEvent): StrategyOutcome {
+    return {
+      kind: 'short-circuit',
+      result: {
+        reply: {
+          message_id: randomUUID(),
+          conversation_id: event.conversation_id,
+          body: 'Mình đang xử lý file của bạn, vui lòng thử lại sau vài giây nhé!',
+          trace_id: event.trace_id ?? `zai-${randomUUID()}`,
+        },
+        provider: 'unknown',
+        tokensIn: 0,
+        tokensOut: 0,
+      },
+    };
   }
 
   private unavailable(event: AiZaiChatRequestEvent): StrategyOutcome {

@@ -9,7 +9,9 @@ import { BaseEntity } from '@libs/shared';
  * chunks → shared across every DocumentMetadata row that points at it.
  * Access control lives in DocumentMetadata (id+userId lookups in readers).
  *
- * NOTE: The `embedding` column uses pgvector `vector(1536)` type.
+ * NOTE: The `embedding` column uses pgvector `vector(1024)` type (voyage-3).
+ * It was originally vector(1536) for OpenAI text-embedding-3-small and was
+ * resized in migration 1783000000000-resize-embedding-vector-1024.
  * A TypeORM migration MUST be run to:
  *   1. CREATE EXTENSION IF NOT EXISTS vector;
  *   2. Create this table with the vector column
@@ -41,7 +43,7 @@ export class DocumentChunk extends BaseEntity {
 
   /**
    * Vector embedding stored as text for TypeORM entity definition.
-   * Actual DB column type: vector(1536) — managed via migration.
+   * Actual DB column type: vector(1024) — managed via migration.
    * Store as JSON string '[0.1, 0.2, ...]' and cast in queries.
    */
   @Column({ type: 'text', nullable: true })

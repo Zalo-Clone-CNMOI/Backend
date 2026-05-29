@@ -219,7 +219,7 @@ describe('DocumentRagService', () => {
         expect.anything(),
       );
       expect(chunkRepo._qb.andWhere).toHaveBeenCalledWith(
-        'chunk.embedding_model = :embeddingModel',
+        'chunk.embeddingModel = :embeddingModel',
         { embeddingModel: 'text-embedding-3-small' },
       );
     });

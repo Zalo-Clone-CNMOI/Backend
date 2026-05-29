@@ -103,7 +103,7 @@ export class DocumentRagService {
         'similarity',
       )
       .where('chunk.file_key = :fileKey', { fileKey: doc.fileKey })
-      .andWhere('chunk.embedding_model = :embeddingModel', {
+      .andWhere('chunk.embeddingModel = :embeddingModel', {
         embeddingModel: queryEmbeddingModel,
       })
       .setParameter('queryVector', JSON.stringify(queryEmbedding.embedding))

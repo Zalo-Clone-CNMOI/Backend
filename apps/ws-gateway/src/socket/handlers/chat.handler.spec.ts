@@ -14,6 +14,7 @@ import { MediaFile, Conversation } from '@libs/database';
 import { ConversationMembershipService } from '@libs/mvp-access';
 import { KAFKA_CLIENT } from '@libs/kafka';
 import { RedisService } from '@libs/redis';
+import { APP_CONFIG } from '@libs/config';
 import { KafkaTopics, WsEvents } from '@libs/contracts';
 import type {
   WsChatSendPayload,
@@ -133,6 +134,10 @@ describe('ChatHandler', () => {
           useValue: conversationRepo,
         },
         { provide: RedisService, useValue: redisService },
+        {
+          provide: APP_CONFIG,
+          useValue: { zaiBotUserId: 'zai-bot-user-id' },
+        },
       ],
     }).compile();
 
@@ -655,6 +660,22 @@ describe('ChatHandler', () => {
       );
 
       expect(result.error).toBe('mention_target_not_member');
+    });
+
+    it('should allow @Zai mention even when Zai is not a formal member', async () => {
+      membership.listActiveMemberIds.mockResolvedValue([]);
+
+      const result = await callValidate(
+        [{ user_id: 'zai-bot-user-id', mention_type: 'user', offset: 0, length: 4 }],
+        'conv-group',
+        'user-sender',
+        '@Zai hello',
+      );
+
+      expect(result.error).toBeUndefined();
+      expect(result.normalized).toHaveLength(1);
+      expect(result.normalized[0].user_id).toBe('zai-bot-user-id');
+      expect(membership.listActiveMemberIds).not.toHaveBeenCalled();
     });
 
     it('should reject @all in a direct (1-1) conversation', async () => {

@@ -6,6 +6,7 @@ import { KAFKA_CLIENT } from '@libs/kafka';
 import { MediaFile, Conversation } from '@libs/database';
 import { ConversationMembershipService } from '@libs/mvp-access';
 import { RedisService } from '@libs/redis';
+import { APP_CONFIG, AppConfig } from '@libs/config';
 import { ConversationType } from '@app/constant';
 import {
   KafkaTopics,
@@ -50,6 +51,7 @@ export class ChatHandler {
     @InjectRepository(Conversation)
     private readonly conversationRepo: Repository<Conversation>,
     private readonly redisService: RedisService,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
   async handleJoin(socket: AuthedSocket, conversationId: string) {
@@ -279,10 +281,15 @@ export class ChatHandler {
       }
     }
 
-    // 4) Real-user membership check (batch)
+    // 4) Real-user membership check (batch). Zai bot is exempted — it is a
+    //    virtual participant that can be @mentioned in any conversation type
+    //    without holding a formal ConversationMember row.
     const realUserIds = filtered
       .filter(
-        (m) => m.user_id !== MENTION_ALL_SENTINEL && m.mention_type === 'user',
+        (m) =>
+          m.user_id !== MENTION_ALL_SENTINEL &&
+          m.mention_type === 'user' &&
+          m.user_id !== this.config.zaiBotUserId,
       )
       .map((m) => m.user_id);
 

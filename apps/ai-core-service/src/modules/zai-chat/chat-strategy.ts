@@ -66,13 +66,15 @@ export class DocumentChatStrategy implements ChatStrategy {
     history: LlmChatMessage[],
   ): Promise<StrategyOutcome> {
     const documentId = event.ai_context?.document_id;
-    // The engine only routes here when document_id is present; guard defensively.
     if (!documentId) {
       return this.unavailable(event);
     }
 
     try {
-      await this.documentRag.validateDocumentAccess(event.sender_id, documentId);
+      await this.documentRag.validateDocumentAccess(
+        event.sender_id,
+        documentId,
+      );
       const messages = await this.documentRag.buildRagMessages(
         event.sender_id,
         documentId,
@@ -82,10 +84,8 @@ export class DocumentChatStrategy implements ChatStrategy {
       return { kind: 'messages', messages };
     } catch (err) {
       if (err instanceof BusinessException) {
-        // Graceful fallback — never reached the LLM, so no provider/tokens.
         return this.unavailable(event);
       }
-      // Infra failures (e.g. S3/extract) propagate exactly as before.
       throw err;
     }
   }

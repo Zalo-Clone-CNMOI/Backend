@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { HttpStatus } from '@nestjs/common';
 import { CatchUpEngine } from './catch-up.engine';
 import { AiGatewayService } from '../ai-gateway/services/ai-gateway.service';
 import { PromptBuilderService } from '../ai-gateway/services/prompt-builder.service';
@@ -130,13 +131,12 @@ describe('CatchUpEngine', () => {
     it('throws a 403 BusinessException when the user is not a member', async () => {
       mockMembership.canUserAccessConversation.mockResolvedValue(false);
 
-      await expect(
-        engine.summarizeUnread({
-          conversation_id: 'conv-001',
-          user_id: 'intruder',
-        }),
-      ).rejects.toBeInstanceOf(BusinessException);
+      const error = (await engine
+        .summarizeUnread({ conversation_id: 'conv-001', user_id: 'intruder' })
+        .catch((e: unknown) => e)) as BusinessException;
 
+      expect(error).toBeInstanceOf(BusinessException);
+      expect(error.getStatus()).toBe(HttpStatus.FORBIDDEN);
       expect(mockMembership.canUserAccessConversation).toHaveBeenCalledWith(
         'intruder',
         'conv-001',
@@ -162,13 +162,12 @@ describe('CatchUpEngine', () => {
         new Error('postgres unavailable'),
       );
 
-      await expect(
-        engine.summarizeUnread({
-          conversation_id: 'conv-001',
-          user_id: 'user-001',
-        }),
-      ).rejects.toBeInstanceOf(BusinessException);
+      const error = (await engine
+        .summarizeUnread({ conversation_id: 'conv-001', user_id: 'user-001' })
+        .catch((e: unknown) => e)) as BusinessException;
 
+      expect(error).toBeInstanceOf(BusinessException);
+      expect(error.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
       expect(mockRepo.getAllMessages).not.toHaveBeenCalled();
       expect(mockGateway.complete).not.toHaveBeenCalled();
     });

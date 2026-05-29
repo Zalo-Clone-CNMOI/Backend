@@ -12,6 +12,7 @@ import {
 import type { AiCatchUpResultEvent } from '@libs/contracts';
 import { toAiProviderType } from '@libs/contracts';
 import { BusinessException } from '@app/types';
+import { ConversationMembershipService } from '@libs/mvp-access';
 import type { PersistedMessage } from '@app/types/interfaces/chat.interface';
 
 /** How many messages to fetch from ScyllaDB in one shot (newest-first DESC). */
@@ -33,6 +34,7 @@ export class CatchUpEngine {
     private readonly promptBuilder: PromptBuilderService,
     private readonly aiMetrics: AiMetricsService,
     private readonly redis: RedisService,
+    private readonly membership: ConversationMembershipService,
   ) {}
 
   /**
@@ -54,6 +56,37 @@ export class CatchUpEngine {
     trace_id?: string;
   }): Promise<AiCatchUpResultEvent> {
     const { conversation_id, user_id, since, limit, trace_id } = input;
+
+    // ── 0. Defense-in-depth membership check ────────────────────────────────
+    // The BFF already enforces membership before calling this internal endpoint;
+    // re-check here so a buggy/compromised caller cannot summarise a conversation
+    // the user is not a member of. Reuses the shared ConversationMembershipService
+    // (TypeORM-backed, 2s cache) rather than trusting the caller-supplied user_id.
+    let isMember: boolean;
+    try {
+      isMember = await this.membership.canUserAccessConversation(
+        user_id,
+        conversation_id,
+      );
+    } catch (err) {
+      // Fail CLOSED: a membership-store outage must not leak a summary. Map the
+      // raw error to a BusinessException so the HTTP contract stays consistent
+      // with the Scylla-failure path below.
+      this.logger.error(
+        `Membership check failed for user_id=${user_id} conversation_id=${conversation_id} (trace_id=${trace_id ?? 'none'}): ${err instanceof Error ? err.message : String(err)}`,
+      );
+      throw BusinessException.internal(
+        'Could not verify conversation access. Please try again later.',
+      );
+    }
+    if (!isMember) {
+      this.logger.warn(
+        `Catch-up denied: user_id=${user_id} is not a member of conversation_id=${conversation_id} (trace_id=${trace_id ?? 'none'})`,
+      );
+      throw BusinessException.forbidden(
+        'You are not a member of this conversation.',
+      );
+    }
 
     // Effective per-request cap: caller may narrow it but never exceed SUMMARY_CAP.
     const effectiveCap =

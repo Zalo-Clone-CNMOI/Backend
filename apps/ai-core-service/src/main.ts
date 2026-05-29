@@ -4,7 +4,7 @@ import { MicroserviceOptions } from '@nestjs/microservices';
 import { AppModule } from './app.module';
 import { loadConfig } from '@libs/config';
 import { createKafkaMicroserviceOptions } from '@libs/kafka';
-import { RpcAllExceptionsFilter } from '@app/interceptors';
+import { HttpExceptionFilter, RpcAllExceptionsFilter } from '@app/interceptors';
 
 async function bootstrap() {
   process.env.SERVICE_NAME ??= 'ai-core-service';
@@ -34,7 +34,9 @@ async function bootstrap() {
     }),
   );
 
-  app.useGlobalFilters(new RpcAllExceptionsFilter());
+  // HTTP filter first (catch-up/moderation/entity-info are HTTP endpoints on :5005),
+  // then the RPC filter for the Kafka microservice — mirrors media/interaction services.
+  app.useGlobalFilters(new HttpExceptionFilter(), new RpcAllExceptionsFilter());
 
   await app.startAllMicroservices();
 

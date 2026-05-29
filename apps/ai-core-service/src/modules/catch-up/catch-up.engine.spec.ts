@@ -5,6 +5,7 @@ import { PromptBuilderService } from '../ai-gateway/services/prompt-builder.serv
 import { AiMetricsService } from '../ai-gateway/services/ai-metrics.service';
 import { RedisService } from '@libs/redis';
 import { MessageRepository } from '@libs/scylla';
+import { ConversationMembershipService } from '@libs/mvp-access';
 import { BusinessException } from '@app/types';
 import type { AiCatchUpResultEvent } from '@libs/contracts';
 import type { PersistedMessage } from '@app/types/interfaces/chat.interface';
@@ -85,6 +86,11 @@ function makeAiMetrics(): jest.Mocked<AiMetricsService> {
   } as unknown as jest.Mocked<AiMetricsService>;
 }
 
+function makeMembership(): { canUserAccessConversation: jest.Mock } {
+  // Default: caller IS a member (so the existing happy-path tests proceed).
+  return { canUserAccessConversation: jest.fn().mockResolvedValue(true) };
+}
+
 // ── Test suite ─────────────────────────────────────────────────────────────
 
 describe('CatchUpEngine', () => {
@@ -94,6 +100,7 @@ describe('CatchUpEngine', () => {
   let mockRepo: { getAllMessages: jest.Mock };
   let mockPromptBuilder: jest.Mocked<PromptBuilderService>;
   let mockAiMetrics: jest.Mocked<AiMetricsService>;
+  let mockMembership: { canUserAccessConversation: jest.Mock };
 
   beforeEach(async () => {
     mockGateway = makeGateway();
@@ -101,6 +108,7 @@ describe('CatchUpEngine', () => {
     mockPromptBuilder = makePromptBuilder();
     mockRepo = { getAllMessages: jest.fn() };
     mockAiMetrics = makeAiMetrics();
+    mockMembership = makeMembership();
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -110,10 +118,74 @@ describe('CatchUpEngine', () => {
         { provide: AiMetricsService, useValue: mockAiMetrics },
         { provide: RedisService, useValue: mockRedis },
         { provide: MessageRepository, useValue: mockRepo },
+        { provide: ConversationMembershipService, useValue: mockMembership },
       ],
     }).compile();
 
     engine = module.get(CatchUpEngine);
+  });
+
+  // ── membership ACL (defense-in-depth, Issue #15) ──────────────────────────
+  describe('membership ACL', () => {
+    it('throws a 403 BusinessException when the user is not a member', async () => {
+      mockMembership.canUserAccessConversation.mockResolvedValue(false);
+
+      await expect(
+        engine.summarizeUnread({
+          conversation_id: 'conv-001',
+          user_id: 'intruder',
+        }),
+      ).rejects.toBeInstanceOf(BusinessException);
+
+      expect(mockMembership.canUserAccessConversation).toHaveBeenCalledWith(
+        'intruder',
+        'conv-001',
+      );
+    });
+
+    it('does NOT read messages or call the gateway for a non-member', async () => {
+      mockMembership.canUserAccessConversation.mockResolvedValue(false);
+
+      await expect(
+        engine.summarizeUnread({
+          conversation_id: 'conv-001',
+          user_id: 'intruder',
+        }),
+      ).rejects.toThrow();
+
+      expect(mockRepo.getAllMessages).not.toHaveBeenCalled();
+      expect(mockGateway.complete).not.toHaveBeenCalled();
+    });
+
+    it('fails CLOSED (throws BusinessException, no read/gateway) when the membership store errors', async () => {
+      mockMembership.canUserAccessConversation.mockRejectedValue(
+        new Error('postgres unavailable'),
+      );
+
+      await expect(
+        engine.summarizeUnread({
+          conversation_id: 'conv-001',
+          user_id: 'user-001',
+        }),
+      ).rejects.toBeInstanceOf(BusinessException);
+
+      expect(mockRepo.getAllMessages).not.toHaveBeenCalled();
+      expect(mockGateway.complete).not.toHaveBeenCalled();
+    });
+
+    it('proceeds normally for a member', async () => {
+      mockMembership.canUserAccessConversation.mockResolvedValue(true);
+      mockRepo.getAllMessages.mockResolvedValue(makeMessages(5, 1000));
+      mockGateway.complete.mockResolvedValue(llmResult('ok'));
+
+      const result = await engine.summarizeUnread({
+        conversation_id: 'conv-001',
+        user_id: 'member',
+      });
+
+      expect(result.had_unread).toBe(true);
+      expect(mockGateway.complete).toHaveBeenCalledTimes(1);
+    });
   });
 
   // ── zero-unread short-circuit ─────────────────────────────────────────────

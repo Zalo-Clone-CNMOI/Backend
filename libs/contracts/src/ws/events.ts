@@ -93,6 +93,7 @@ export const WsEvents = {
   AiDocumentQueryResult: 'ai:document:query:result',
   AiStreamChunk: 'ai:stream:chunk',
   AiStreamComplete: 'ai:stream:complete',
+  AiStreamCancel: 'ai:stream:cancel',
   AiZaiTyping: 'ai:zai:typing',
   MessageEntities: 'message:entities',
 } as const;
@@ -704,6 +705,16 @@ export interface WsAiStreamCompletePayload {
 export interface WsAiZaiTypingPayload {
   conversation_id: string;
   is_typing: boolean;
+}
+
+/**
+ * Inbound: a client requests cancellation of the in-flight Zai stream in a
+ * conversation it is viewing (the "Stop" button). The gateway resolves the
+ * conversation's active stream(s) and publishes AiStreamAbort (Kafka) keyed by
+ * stream_id so ai-core aborts the in-flight LLM stream (Phase 6 C12, user-cancel).
+ */
+export interface WsAiStreamCancelPayload {
+  conversation_id: string;
 }
 
 export interface WsConversationPollCreatedPayload {

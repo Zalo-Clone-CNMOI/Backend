@@ -392,6 +392,13 @@ export class WsAiSummaryRequestPayloadDto {
   message_count?: number;
 }
 
+export class WsAiStreamCancelPayloadDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(WsPayloadLimits.idMaxLength)
+  conversation_id!: string;
+}
+
 export class WsAiTranslateRequestPayloadDto {
   @IsString()
   @IsNotEmpty()

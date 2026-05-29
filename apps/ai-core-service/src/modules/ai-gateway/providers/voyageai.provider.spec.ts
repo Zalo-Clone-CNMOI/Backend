@@ -96,7 +96,10 @@ describe('VoyageAiProvider', () => {
 
     it('happy path: calls Voyage API and returns ordered results', async () => {
       const provider = await buildProvider();
-      global.fetch = mockFetch(200, HAPPY_RESPONSE) as unknown as typeof global.fetch;
+      global.fetch = mockFetch(
+        200,
+        HAPPY_RESPONSE,
+      ) as unknown as typeof global.fetch;
 
       const results = await provider.embedBatch(['hello', 'world']);
 
@@ -125,7 +128,10 @@ describe('VoyageAiProvider', () => {
         usage: { total_tokens: 20 },
         model: 'voyage-3',
       };
-      global.fetch = mockFetch(200, outOfOrderResponse) as unknown as typeof global.fetch;
+      global.fetch = mockFetch(
+        200,
+        outOfOrderResponse,
+      ) as unknown as typeof global.fetch;
 
       const results = await provider.embedBatch(['first', 'second']);
 
@@ -135,14 +141,16 @@ describe('VoyageAiProvider', () => {
 
     it('uses the provided model override', async () => {
       const provider = await buildProvider();
-      const fetchMock = mockFetch(200, { ...HAPPY_RESPONSE, model: 'voyage-3-lite' });
+      const fetchMock = mockFetch(200, {
+        ...HAPPY_RESPONSE,
+        model: 'voyage-3-lite',
+      });
       global.fetch = fetchMock as unknown as typeof global.fetch;
 
       await provider.embedBatch(['hello'], 'voyage-3-lite');
 
-      const body = JSON.parse(
-        (fetchMock.mock.calls[0][1] as RequestInit).body as string,
-      ) as { model: string };
+      const [, callInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+      const body = JSON.parse(callInit.body as string) as { model: string };
       expect(body.model).toBe('voyage-3-lite');
     });
   });
@@ -155,7 +163,10 @@ describe('VoyageAiProvider', () => {
         model: 'voyage-3',
       };
       const provider = await buildProvider();
-      global.fetch = mockFetch(200, singleResponse) as unknown as typeof global.fetch;
+      global.fetch = mockFetch(
+        200,
+        singleResponse,
+      ) as unknown as typeof global.fetch;
 
       const result = await provider.embed('hello');
 
@@ -171,16 +182,24 @@ describe('VoyageAiProvider', () => {
   describe('HTTP error handling', () => {
     it('throws on non-OK response', async () => {
       const provider = await buildProvider();
-      global.fetch = mockFetch(429, { error: 'rate limited' }) as unknown as typeof global.fetch;
+      global.fetch = mockFetch(429, {
+        error: 'rate limited',
+      }) as unknown as typeof global.fetch;
 
-      await expect(provider.embed('hello')).rejects.toThrow('Voyage AI API error 429');
+      await expect(provider.embed('hello')).rejects.toThrow(
+        'Voyage AI API error 429',
+      );
     });
 
     it('throws on 500 error', async () => {
       const provider = await buildProvider();
-      global.fetch = mockFetch(500, { error: 'internal server error' }) as unknown as typeof global.fetch;
+      global.fetch = mockFetch(500, {
+        error: 'internal server error',
+      }) as unknown as typeof global.fetch;
 
-      await expect(provider.embedBatch(['hello'])).rejects.toThrow('Voyage AI API error 500');
+      await expect(provider.embedBatch(['hello'])).rejects.toThrow(
+        'Voyage AI API error 500',
+      );
     });
   });
 });

@@ -53,6 +53,14 @@ function resolveEmbeddingModel(configured: string | undefined): string {
   return configured;
 }
 
+function resolveEmbeddingProvider(model: string): string {
+  if ((OPENAI_EMBEDDING_MODELS as readonly string[]).includes(model))
+    return 'openai';
+  if ((VOYAGE_EMBEDDING_MODELS as readonly string[]).includes(model))
+    return 'voyageai';
+  return 'unknown';
+}
+
 function resolveTiktokenModel(embeddingModel: string): TiktokenModel {
   if ((OPENAI_EMBEDDING_MODELS as readonly string[]).includes(embeddingModel)) {
     return embeddingModel as TiktokenModel;
@@ -238,7 +246,7 @@ export class DocumentEngine {
 
     this.aiMetrics.recordRequest(
       'document_analysis',
-      'unknown',
+      resolveEmbeddingProvider(this.embeddingModel),
       this.embeddingModel,
       0,
       0,

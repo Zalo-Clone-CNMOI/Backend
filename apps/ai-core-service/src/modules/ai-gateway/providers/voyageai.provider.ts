@@ -4,6 +4,7 @@ import type {
   ILlmProvider,
   LlmCompletionResult,
   LlmEmbeddingResult,
+  EmbeddingInputType,
 } from '../interfaces';
 
 const VOYAGE_API_URL = 'https://api.voyageai.com/v1/embeddings';
@@ -37,22 +38,28 @@ export class VoyageAiProvider implements ILlmProvider {
     );
   }
 
-  async embed(text: string, model?: string): Promise<LlmEmbeddingResult> {
-    const results = await this.callApi([text], model);
+  async embed(
+    text: string,
+    model?: string,
+    inputType?: EmbeddingInputType,
+  ): Promise<LlmEmbeddingResult> {
+    const results = await this.callApi([text], model, inputType);
     return results[0];
   }
 
   async embedBatch(
     texts: string[],
     model?: string,
+    inputType?: EmbeddingInputType,
   ): Promise<LlmEmbeddingResult[]> {
     if (texts.length === 0) return [];
-    return this.callApi(texts, model);
+    return this.callApi(texts, model, inputType);
   }
 
   private async callApi(
     inputs: string[],
     model?: string,
+    inputType?: EmbeddingInputType,
   ): Promise<LlmEmbeddingResult[]> {
     const embeddingModel = model ?? 'voyage-3';
     const response = await fetch(VOYAGE_API_URL, {
@@ -61,7 +68,16 @@ export class VoyageAiProvider implements ILlmProvider {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${this.config.voyageAiApiKey}`,
       },
-      body: JSON.stringify({ input: inputs, model: embeddingModel }),
+      // input_type makes Voyage produce asymmetric vectors: chunks ingested as
+      // 'document' and search text as 'query' land in a shared space where
+      // cosine similarity is meaningful. Omitting it (the previous behavior)
+      // collapsed relevant scores to ~0.08. Only sent when provided so other
+      // callers keep the symmetric default.
+      body: JSON.stringify({
+        input: inputs,
+        model: embeddingModel,
+        ...(inputType ? { input_type: inputType } : {}),
+      }),
       signal: AbortSignal.timeout(30_000),
     });
 

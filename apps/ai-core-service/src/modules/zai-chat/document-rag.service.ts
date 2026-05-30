@@ -10,14 +10,16 @@ import { PromptBuilderService } from '../ai-gateway/services/prompt-builder.serv
 import type { LlmChatMessage } from '../ai-gateway/interfaces';
 
 const TOP_K = 5;
-// Cosine-similarity floor for a chunk to be considered relevant. Tuned for
-// voyage-3 (the default embedder), whose relevant-pair scores sit ~0.4-0.65 —
-// markedly lower than OpenAI text-embedding-3-small (~0.75-0.85). The old 0.7
-// floor was an OpenAI value that silently rejected EVERY voyage-3 match, so
-// doc-chat always saw zero context. The sibling RAG path
-// (document.engine.searchRelevantChunks) uses no floor at all; this keeps a
-// low one purely to drop obvious noise on vague queries.
-const SIMILARITY_THRESHOLD = 0.3;
+// NO similarity floor for document-anchored chat. The conversation is bound to
+// ONE specific document, so the user's intent is "answer from THIS file" — the
+// top-K nearest chunks are always the best available context and withholding
+// them (the old behavior) is what made Zai answer with zero document context.
+// The sibling path (document.engine.searchRelevantChunks) likewise uses no
+// floor. Threshold tuning here was a red herring: the real cause of the
+// ~0.08 scores was an embedding provider/input_type mismatch (now fixed in
+// AiGatewayService.resolveEmbeddingProvider + VoyageAiProvider input_type), not
+// a too-high cutoff. We keep only a defensive drop of non-positive similarities.
+const MIN_POSITIVE_SIMILARITY = 0;
 
 interface SimilarityRow {
   similarity?: string;
@@ -84,10 +86,15 @@ export class DocumentRagService {
 
     const queryEmbeddingModel = this.config.aiEmbeddingModel ?? 'voyage-3';
 
+    // inputType:'query' — the asymmetric counterpart to the 'document' vectors
+    // stored at ingest. This is the single most important line for relevance:
+    // without it Voyage returns a vector in a different space and cosine
+    // similarity to the stored chunks collapses toward zero.
     const queryEmbedding = await this.gateway.embed(
       userId,
       query,
       queryEmbeddingModel,
+      'query',
     );
 
     // Fetch top-K by similarity WITHOUT the threshold in SQL, so we can log the
@@ -118,17 +125,22 @@ export class DocumentRagService {
     }));
 
     const chunks = scored
-      .filter((c) => c.similarity >= SIMILARITY_THRESHOLD)
+      .filter((c) => c.similarity > MIN_POSITIVE_SIMILARITY)
       .map((c) => ({ content: c.content, chunkIndex: c.chunkIndex }));
 
-    // Diagnostic: candidate count distinguishes "no chunks stored for this
-    // file_key" (0 candidates) from "stored but all below the floor"
-    // (candidates > 0, low top score). topSimilarity shows the real ceiling.
+    // Diagnostic (Bug #1): logs everything needed to confirm the fix from ONE
+    // production line — which provider actually ran, the query vector dimension,
+    // candidate count, and the real top similarity. A healthy voyage-3
+    // document/query pair scores ~0.4-0.7; a dimension/provider mismatch shows
+    // up as a tiny topSimilarity AND/OR a queryDim that differs from the stored
+    // chunk dimension.
     this.logger.debug(
-      `RAG query for doc ${documentId} (file_key=${doc.fileKey}, model=${queryEmbeddingModel}): ` +
+      `RAG query for doc ${documentId} (file_key=${doc.fileKey}, ` +
+        `model=${queryEmbeddingModel}, provider=${queryEmbedding.provider}, ` +
+        `actualModel=${queryEmbedding.model}, queryDim=${queryEmbedding.embedding.length}): ` +
         `${scored.length} candidate chunk(s), ` +
         `topSimilarity=${scored[0]?.similarity.toFixed(3) ?? 'n/a'}, ` +
-        `${chunks.length} >= threshold ${SIMILARITY_THRESHOLD}`,
+        `${chunks.length} selected (no floor)`,
     );
 
     return this.promptBuilder.buildDocumentChatPrompt(history, query, chunks);

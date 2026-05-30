@@ -158,6 +158,11 @@ export class OpenAiProvider implements ILlmProvider {
     }
   }
 
+  // NOTE: OpenAI embeddings are symmetric and have no input_type concept. The
+  // ILlmProvider.embed signature accepts an optional `inputType`, but TypeScript
+  // parameter bivariance lets this implementation omit the trailing param and
+  // still satisfy the interface — so we simply don't declare it (avoids an
+  // unused-arg lint error). Voyage is the provider that honors input_type.
   async embed(text: string, model?: string): Promise<LlmEmbeddingResult> {
     const embeddingModel =
       model ?? this.config.aiEmbeddingModel ?? 'text-embedding-3-small';
@@ -187,6 +192,7 @@ export class OpenAiProvider implements ILlmProvider {
     }
   }
 
+  // input_type omitted on purpose — see embed() above (symmetric embeddings).
   async embedBatch(
     texts: string[],
     model?: string,

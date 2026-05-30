@@ -159,6 +159,7 @@ describe('DocumentRagService', () => {
         USER_ID,
         'What is the main point?',
         'text-embedding-3-small',
+        'query',
       );
       expect(chunkRepo.createQueryBuilder).toHaveBeenCalled();
       expect(promptBuilder.buildDocumentChatPrompt).toHaveBeenCalledWith(
@@ -224,22 +225,53 @@ describe('DocumentRagService', () => {
       );
     });
 
-    it('drops chunks scoring below the similarity floor (0.3) in-app', async () => {
+    it('keeps all positively-scored top-K chunks (no similarity floor) for the anchored doc', async () => {
+      // Bug #1 fix: doc-anchored chat must NOT apply a similarity floor — the
+      // conversation is bound to ONE document, so the top-K nearest chunks are
+      // always the best available context. The previous 0.3 floor (combined
+      // with a provider/input_type mismatch) is what made Zai answer with zero
+      // context. Only non-positive similarities are dropped now.
       chunkRepo._qb.getRawAndEntities.mockResolvedValueOnce({
         raw: [{ similarity: '0.55' }, { similarity: '0.12' }],
         entities: [
           { chunkIndex: 0, content: 'relevant chunk' },
-          { chunkIndex: 1, content: 'noise chunk' },
+          { chunkIndex: 1, content: 'lower-scored chunk' },
         ],
       });
 
       await service.buildRagMessages(USER_ID, DOC_ID, 'q', []);
 
-      // Only the 0.55 chunk clears the 0.3 floor; the 0.12 chunk is dropped.
+      // BOTH chunks pass now — the 0.12 chunk is no longer dropped by a floor.
       expect(promptBuilder.buildDocumentChatPrompt).toHaveBeenCalledWith(
         [],
         'q',
-        [{ content: 'relevant chunk', chunkIndex: 0 }],
+        [
+          { content: 'relevant chunk', chunkIndex: 0 },
+          { content: 'lower-scored chunk', chunkIndex: 1 },
+        ],
+      );
+    });
+
+    it('drops only non-positive (zero/negative) similarity chunks', async () => {
+      chunkRepo._qb.getRawAndEntities.mockResolvedValueOnce({
+        raw: [
+          { similarity: '0.42' },
+          { similarity: '0' },
+          { similarity: '-0.1' },
+        ],
+        entities: [
+          { chunkIndex: 0, content: 'kept' },
+          { chunkIndex: 1, content: 'zero' },
+          { chunkIndex: 2, content: 'negative' },
+        ],
+      });
+
+      await service.buildRagMessages(USER_ID, DOC_ID, 'q', []);
+
+      expect(promptBuilder.buildDocumentChatPrompt).toHaveBeenCalledWith(
+        [],
+        'q',
+        [{ content: 'kept', chunkIndex: 0 }],
       );
     });
 

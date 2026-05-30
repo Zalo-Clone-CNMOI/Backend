@@ -276,8 +276,10 @@ describe('AiGatewayService', () => {
       const result = await gateway.embed('user-001', 'Hello world');
 
       expect(result).toBe(mockEmbedding);
+      // (text, model, inputType) — no model/inputType here, so both undefined.
       expect(primaryProvider.embed).toHaveBeenCalledWith(
         expect.any(String),
+        undefined,
         undefined,
       );
     });
@@ -296,6 +298,7 @@ describe('AiGatewayService', () => {
       expect(sanitizer.sanitize).toHaveBeenCalledWith('user@example.com info');
       expect(primaryProvider.embed).toHaveBeenCalledWith(
         '[SANITIZED]',
+        undefined,
         undefined,
       );
     });
@@ -316,6 +319,103 @@ describe('AiGatewayService', () => {
       await expect(gw.embed('user-001', 'test')).rejects.toThrow(
         'No embedding provider available.',
       );
+    });
+
+    // ── Bug #1: provider routing BY MODEL + input_type passthrough ──────────
+    // The doc-RAG failure was caused by resolving the provider by static
+    // preference (OpenAI-first) and ignoring the model, so a voyage-3 request
+    // could be sent to OpenAI. Routing must follow the model family, and the
+    // inputType (document/query) must reach the provider.
+    it('routes a voyage-* model to the voyageai provider and passes inputType', async () => {
+      const voyage = makeProvider('voyageai');
+      const openai = makeProvider('openai');
+      const embedding = {
+        embedding: [0.1, 0.2],
+        tokensUsed: 7,
+        model: 'voyage-3',
+        provider: 'voyageai',
+      };
+      voyage.embed.mockResolvedValue(embedding);
+
+      const m = await Test.createTestingModule({
+        providers: [
+          AiGatewayService,
+          { provide: LLM_PROVIDERS, useValue: [openai, voyage] },
+          { provide: DataSanitizer, useValue: sanitizer },
+          { provide: TokenBudgetService, useValue: budget },
+          { provide: AiMetricsService, useValue: metrics },
+        ],
+      }).compile();
+      const gw = m.get(AiGatewayService);
+
+      const result = await gw.embed('user-001', 'hi', 'voyage-3', 'query');
+
+      expect(result).toBe(embedding);
+      expect(voyage.embed).toHaveBeenCalledWith(
+        expect.any(String),
+        'voyage-3',
+        'query',
+      );
+      // OpenAI must NOT be used for a voyage model, even though it's available
+      // and listed first.
+      expect(openai.embed).not.toHaveBeenCalled();
+    });
+
+    it('routes a text-embedding-* model to the openai provider', async () => {
+      const voyage = makeProvider('voyageai');
+      const openai = makeProvider('openai');
+      openai.embed.mockResolvedValue({
+        embedding: [0.3],
+        tokensUsed: 4,
+        model: 'text-embedding-3-small',
+        provider: 'openai',
+      });
+
+      const m = await Test.createTestingModule({
+        providers: [
+          AiGatewayService,
+          // Voyage first to prove routing is by model, not list order.
+          { provide: LLM_PROVIDERS, useValue: [voyage, openai] },
+          { provide: DataSanitizer, useValue: sanitizer },
+          { provide: TokenBudgetService, useValue: budget },
+          { provide: AiMetricsService, useValue: metrics },
+        ],
+      }).compile();
+      const gw = m.get(AiGatewayService);
+
+      await gw.embed('user-001', 'hi', 'text-embedding-3-small', 'document');
+
+      expect(openai.embed).toHaveBeenCalledWith(
+        expect.any(String),
+        'text-embedding-3-small',
+        'document',
+      );
+      expect(voyage.embed).not.toHaveBeenCalled();
+    });
+
+    it('fails loud (no cross-provider fallback) when the model provider is unavailable', async () => {
+      // voyage-3 requested but Voyage has no key — must NOT silently embed with
+      // OpenAI (which would produce an incomparable vector → the 0.08 bug).
+      const m = await Test.createTestingModule({
+        providers: [
+          AiGatewayService,
+          {
+            provide: LLM_PROVIDERS,
+            useValue: [
+              makeProvider('openai', true),
+              makeProvider('voyageai', false),
+            ],
+          },
+          { provide: DataSanitizer, useValue: sanitizer },
+          { provide: TokenBudgetService, useValue: budget },
+          { provide: AiMetricsService, useValue: metrics },
+        ],
+      }).compile();
+      const gw = m.get(AiGatewayService);
+
+      await expect(
+        gw.embed('user-001', 'test', 'voyage-3', 'query'),
+      ).rejects.toThrow(/Voyage AI provider.*unavailable/);
     });
   });
 
@@ -349,6 +449,7 @@ describe('AiGatewayService', () => {
       expect(primaryProvider.embedBatch).toHaveBeenCalledWith(
         ['hello', 'world'],
         undefined,
+        undefined,
       );
     });
 
@@ -368,6 +469,7 @@ describe('AiGatewayService', () => {
       expect(sanitizer.sanitize).toHaveBeenCalledWith('user@example.com info');
       expect(primaryProvider.embedBatch).toHaveBeenCalledWith(
         ['[SANITIZED]'],
+        undefined,
         undefined,
       );
     });

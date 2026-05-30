@@ -147,16 +147,25 @@ export class DocumentEngine {
         );
       }
 
+      // inputType:'document' so Voyage embeds chunks in the asymmetric
+      // "document" space that the 'query' search text is compared against.
       const embeddingResults = await this.gateway.embedBatch(
         event.user_id,
         chunks,
         this.embeddingModel,
+        'document',
       );
 
       const totalTokens = embeddingResults.reduce(
         (sum, r) => sum + r.tokensUsed,
         0,
       );
+
+      // Persist the model the provider ACTUALLY used, not the configured label.
+      // The query path filters chunks by embedding_model, so this must reflect
+      // reality or a provider/label drift would silently exclude every chunk.
+      const actualEmbeddingModel =
+        embeddingResults[0]?.model ?? this.embeddingModel;
 
       // M3: chunks are scoped by file_key alone (document_id column dropped).
       // file_key was validated up-front; safe to use directly here.
@@ -167,7 +176,7 @@ export class DocumentEngine {
           content: chunks[i],
           tokenCount: result.tokensUsed,
           embedding: JSON.stringify(result.embedding),
-          embeddingModel: this.embeddingModel,
+          embeddingModel: result.model ?? actualEmbeddingModel,
           embeddingVersion: 1,
         }),
       );
@@ -180,7 +189,7 @@ export class DocumentEngine {
           status: 'completed',
           chunkCount: chunks.length,
           totalTokens,
-          embeddingModel: this.embeddingModel,
+          embeddingModel: actualEmbeddingModel,
           embeddingVersion: 1,
         },
       );
@@ -295,6 +304,7 @@ export class DocumentEngine {
       event.user_id,
       event.query,
       this.embeddingModel,
+      'query',
     );
 
     const result = await this.chunkRepo

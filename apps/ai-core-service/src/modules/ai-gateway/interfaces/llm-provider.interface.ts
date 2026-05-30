@@ -38,6 +38,15 @@ export interface LlmEmbeddingResult {
   provider: string;
 }
 
+/**
+ * Embedding input role. Some providers (Voyage AI) produce asymmetric vectors:
+ * a chunk must be embedded as 'document' at ingest and the search text as
+ * 'query'. Mismatching (or omitting) these collapses cosine similarity toward
+ * zero — the root cause of the "topSimilarity≈0.08" doc-RAG failure. Providers
+ * without the concept (OpenAI) ignore it.
+ */
+export type EmbeddingInputType = 'document' | 'query';
+
 export interface ILlmProvider {
   readonly name: string;
   readonly isAvailable: boolean;
@@ -56,9 +65,17 @@ export interface ILlmProvider {
     signal?: AbortSignal,
   ): Promise<LlmCompletionResult>;
 
-  embed(text: string, model?: string): Promise<LlmEmbeddingResult>;
+  embed(
+    text: string,
+    model?: string,
+    inputType?: EmbeddingInputType,
+  ): Promise<LlmEmbeddingResult>;
 
-  embedBatch(texts: string[], model?: string): Promise<LlmEmbeddingResult[]>;
+  embedBatch(
+    texts: string[],
+    model?: string,
+    inputType?: EmbeddingInputType,
+  ): Promise<LlmEmbeddingResult[]>;
 }
 
 export const LLM_PROVIDERS = Symbol('LLM_PROVIDERS');

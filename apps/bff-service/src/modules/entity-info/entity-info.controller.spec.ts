@@ -1,11 +1,12 @@
 import { Test } from '@nestjs/testing';
-import { BusinessException, type AuthenticatedUser } from '@app/types';
-import { JwtAuthGuard } from '@libs/auth';
+import { BusinessException } from '@app/types';
+import { JwtService } from '@libs/auth';
 import { EntityInfoController } from './entity-info.controller';
 import { EntityInfoService } from './entity-info.service';
 
 const mockService = { getEntityInfo: jest.fn() };
-const mockUser = { id: 'user-123' } as AuthenticatedUser;
+const mockJwt = { verifyAccessToken: jest.fn() };
+const TOKEN = 'token-abc';
 
 const SAMPLE_RESULT = {
   entity_text: 'React',
@@ -23,27 +24,33 @@ describe('EntityInfoController', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockJwt.verifyAccessToken.mockReturnValue({
+      sub: 'user-123',
+      phone: '+84900000001',
+      type: 'access',
+    });
     const module = await Test.createTestingModule({
       controllers: [EntityInfoController],
-      providers: [{ provide: EntityInfoService, useValue: mockService }],
-    })
-      .overrideGuard(JwtAuthGuard)
-      .useValue({ canActivate: () => true })
-      .compile();
+      providers: [
+        { provide: EntityInfoService, useValue: mockService },
+        { provide: JwtService, useValue: mockJwt },
+      ],
+    }).compile();
 
     controller = module.get(EntityInfoController);
   });
 
   describe('getEntityInfo', () => {
-    it('delegates to service with correct params', async () => {
+    it('derives userId from the JWT and delegates to service with correct params', async () => {
       mockService.getEntityInfo.mockResolvedValue(SAMPLE_RESULT);
 
-      const result = await controller.getEntityInfo(mockUser, {
+      const result = await controller.getEntityInfo(TOKEN, {
         text: 'React',
         type: 'tool',
         lang: 'vi',
       });
 
+      expect(mockJwt.verifyAccessToken).toHaveBeenCalledWith(TOKEN);
       expect(mockService.getEntityInfo).toHaveBeenCalledWith({
         text: 'React',
         type: 'tool',
@@ -56,7 +63,7 @@ describe('EntityInfoController', () => {
     it('defaults lang to vi when not provided', async () => {
       mockService.getEntityInfo.mockResolvedValue(SAMPLE_RESULT);
 
-      await controller.getEntityInfo(mockUser, { text: 'React', type: 'tool' });
+      await controller.getEntityInfo(TOKEN, { text: 'React', type: 'tool' });
 
       expect(mockService.getEntityInfo).toHaveBeenCalledWith({
         text: 'React',
@@ -66,22 +73,30 @@ describe('EntityInfoController', () => {
       });
     });
 
+    it('throws (401) when the access token is missing', async () => {
+      await expect(
+        controller.getEntityInfo(null, { text: 'React', type: 'tool' }),
+      ).rejects.toThrow(BusinessException);
+      expect(mockJwt.verifyAccessToken).not.toHaveBeenCalled();
+      expect(mockService.getEntityInfo).not.toHaveBeenCalled();
+    });
+
     it('throws BadRequestException when text is empty', async () => {
       await expect(
-        controller.getEntityInfo(mockUser, { text: '', type: 'tool' }),
+        controller.getEntityInfo(TOKEN, { text: '', type: 'tool' }),
       ).rejects.toThrow(BusinessException);
     });
 
     it('throws BadRequestException when text exceeds 200 chars', async () => {
       const longText = 'a'.repeat(201);
       await expect(
-        controller.getEntityInfo(mockUser, { text: longText, type: 'tool' }),
+        controller.getEntityInfo(TOKEN, { text: longText, type: 'tool' }),
       ).rejects.toThrow(BusinessException);
     });
 
     it('throws BadRequestException for invalid type', async () => {
       await expect(
-        controller.getEntityInfo(mockUser, {
+        controller.getEntityInfo(TOKEN, {
           text: 'React',
           type: 'invalid-type',
         }),
@@ -91,7 +106,7 @@ describe('EntityInfoController', () => {
     it('trims whitespace from text before passing to service', async () => {
       mockService.getEntityInfo.mockResolvedValue(SAMPLE_RESULT);
 
-      await controller.getEntityInfo(mockUser, {
+      await controller.getEntityInfo(TOKEN, {
         text: '  React  ',
         type: 'tool',
       });

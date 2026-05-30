@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AiCoreClientModule } from '@app/clients';
 import { InteractionClientModule } from '@app/clients/interaction-client';
+import { JwtService } from '@libs/auth';
 import { AiAssistController } from './ai-assist.controller';
 import { AiAssistService } from './ai-assist.service';
 
@@ -25,6 +26,6 @@ import { AiAssistService } from './ai-assist.service';
     }),
   ],
   controllers: [AiAssistController],
-  providers: [AiAssistService],
+  providers: [AiAssistService, JwtService],
 })
 export class AiAssistModule {}

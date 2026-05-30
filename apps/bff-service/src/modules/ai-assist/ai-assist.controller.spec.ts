@@ -1,17 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { BusinessException } from '@app/types';
+import { JwtService } from '@libs/auth';
 import { AiAssistController } from './ai-assist.controller';
 import { AiAssistService } from './ai-assist.service';
-import type { AuthenticatedUser } from '@app/types';
 import type { CatchUpResponseDto } from './dto/catch-up-response.dto';
 import type { ZaiConversationResponseDto } from './dto/zai-conversation-response.dto';
 
 // ── helpers ────────────────────────────────────────────────────────────────
-
-const mockUser = (): AuthenticatedUser =>
-  ({
-    id: 'user-1',
-    phone: '+84900000001',
-  }) as AuthenticatedUser;
 
 const mockCatchUpResponse = (): CatchUpResponseDto => ({
   hadUnread: true,
@@ -30,6 +25,7 @@ const mockCatchUpResponse = (): CatchUpResponseDto => ({
 describe('AiAssistController', () => {
   let controller: AiAssistController;
   let service: jest.Mocked<AiAssistService>;
+  let jwt: jest.Mocked<JwtService>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -43,11 +39,18 @@ describe('AiAssistController', () => {
             disbandAiConversation: jest.fn(),
           },
         },
+        {
+          provide: JwtService,
+          useValue: {
+            verifyAccessToken: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
     controller = module.get<AiAssistController>(AiAssistController);
     service = module.get(AiAssistService);
+    jwt = module.get(JwtService);
   });
 
   describe('getOrCreateZaiConversation', () => {
@@ -90,16 +93,18 @@ describe('AiAssistController', () => {
   });
 
   describe('getCatchUp', () => {
-    it('delegates to service.catchUp with (token, user.id, conversationId) and returns result', async () => {
+    it('derives userId from the JWT and delegates to service.catchUp with (token, userId, conversationId)', async () => {
       const expected = mockCatchUpResponse();
       service.catchUp.mockResolvedValue(expected);
+      jwt.verifyAccessToken.mockReturnValue({
+        sub: 'user-1',
+        phone: '+84900000001',
+        type: 'access',
+      });
 
-      const result = await controller.getCatchUp(
-        mockUser(),
-        'token-abc',
-        'conv-1',
-      );
+      const result = await controller.getCatchUp('token-abc', 'conv-1');
 
+      expect(jwt.verifyAccessToken).toHaveBeenCalledWith('token-abc');
       expect(service.catchUp).toHaveBeenCalledWith(
         'token-abc',
         'user-1',
@@ -108,17 +113,31 @@ describe('AiAssistController', () => {
       expect(result).toEqual(expected);
     });
 
+    it('throws (401) when the access token is missing — never reads user off an unguarded request', async () => {
+      await expect(controller.getCatchUp(null, 'conv-1')).rejects.toThrow(
+        BusinessException,
+      );
+      expect(jwt.verifyAccessToken).not.toHaveBeenCalled();
+      expect(service.catchUp).not.toHaveBeenCalled();
+    });
+
     it('throws BusinessException when conversationId is empty string', async () => {
-      await expect(
-        controller.getCatchUp(mockUser(), 'token-abc', ''),
-      ).rejects.toThrow();
+      jwt.verifyAccessToken.mockReturnValue({
+        sub: 'user-1',
+        phone: '+84900000001',
+        type: 'access',
+      });
+      await expect(controller.getCatchUp('token-abc', '')).rejects.toThrow();
       expect(service.catchUp).not.toHaveBeenCalled();
     });
 
     it('throws BusinessException when conversationId is whitespace only', async () => {
-      await expect(
-        controller.getCatchUp(mockUser(), 'token-abc', '   '),
-      ).rejects.toThrow();
+      jwt.verifyAccessToken.mockReturnValue({
+        sub: 'user-1',
+        phone: '+84900000001',
+        type: 'access',
+      });
+      await expect(controller.getCatchUp('token-abc', '   ')).rejects.toThrow();
       expect(service.catchUp).not.toHaveBeenCalled();
     });
   });

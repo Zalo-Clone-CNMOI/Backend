@@ -104,6 +104,8 @@ describe('EntityDetectionEngine', () => {
         text: 'Telegram',
         type: 'tool',
         confidence: 0.95,
+        start_index: 9,
+        end_index: 17,
       });
       expect(repo.save).toHaveBeenCalled();
     });

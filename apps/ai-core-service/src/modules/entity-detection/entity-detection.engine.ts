@@ -286,7 +286,16 @@ export class EntityDetectionEngine {
     const text = typeof r.text === 'string' ? r.text.trim() : '';
     if (!text) return null;
 
-    if (!body.toLowerCase().includes(text.toLowerCase())) return null;
+    // Locate the entity in the body to produce character offsets. The frontend
+    // highlighter REQUIRES start_index/end_index; without them every entity is
+    // dropped client-side (the entity-highlight feature silently does nothing).
+    // Case-insensitive match (the LLM may return a differently-cased form), but
+    // the offsets index the ORIGINAL body so the highlighted slice matches what
+    // the user sees. We deliberately do NOT trust any offsets the model emits
+    // (LLMs routinely miscount) and compute them ourselves.
+    const start_index = body.toLowerCase().indexOf(text.toLowerCase());
+    if (start_index < 0) return null;
+    const end_index = start_index + text.length;
 
     const type =
       typeof r.type === 'string' &&
@@ -300,7 +309,7 @@ export class EntityDetectionEngine {
         : 0;
     if (confidence < MIN_CONFIDENCE) return null;
 
-    return { text, type, confidence };
+    return { text, type, confidence, start_index, end_index };
   }
 
   private parseInfoResponse(

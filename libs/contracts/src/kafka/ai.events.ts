@@ -304,6 +304,14 @@ export interface DetectedEntity {
   text: string;
   type: EntityType;
   confidence: number;
+  /**
+   * Character offsets of `text` within the original message body
+   * (start inclusive, end exclusive: body.slice(start_index, end_index) === text).
+   * The frontend highlighter REQUIRES these to render the entity span and open
+   * the info panel — without them every detected entity is silently dropped.
+   */
+  start_index: number;
+  end_index: number;
 }
 
 export interface AiEntityDetectionRequestEvent {

@@ -15,8 +15,9 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
-import { AccessToken, CurrentUser } from '@app/decorator';
-import { AuthenticatedUser, BusinessException } from '@app/types';
+import { AccessToken } from '@app/decorator';
+import { BusinessException } from '@app/types';
+import { JwtService } from '@libs/auth';
 import { AiAssistService } from './ai-assist.service';
 import { CatchUpResponseDto } from './dto/catch-up-response.dto';
 import { ZaiConversationResponseDto } from './dto/zai-conversation-response.dto';
@@ -26,7 +27,10 @@ import { CreateDocumentConversationDto } from './dto/create-document-conversatio
 @ApiBearerAuth('BearerAuth')
 @Controller('ai-assist')
 export class AiAssistController {
-  constructor(private readonly service: AiAssistService) {}
+  constructor(
+    private readonly service: AiAssistService,
+    private readonly jwt: JwtService,
+  ) {}
 
   @Post('conversations/zai')
   @HttpCode(HttpStatus.OK)
@@ -100,13 +104,21 @@ export class AiAssistController {
   })
   @ApiResponse({ status: 404, description: 'Conversation not found' })
   async getCatchUp(
-    @CurrentUser() user: AuthenticatedUser,
-    @AccessToken() token: string,
+    @AccessToken() token: string | null,
     @Param('conversationId') conversationId: string,
   ): Promise<CatchUpResponseDto> {
+    // The BFF has no JwtAuthGuard — auth is normally enforced by the downstream
+    // service that receives the forwarded token. This endpoint also needs the
+    // caller's userId to forward to ai-core, so it verifies the JWT here and
+    // reads `sub`, rather than @CurrentUser() which would be null on an
+    // unguarded request (the source of the previous "reading 'id'" 500).
+    if (!token) {
+      throw BusinessException.unauthorized('Authentication required');
+    }
+    const { sub: userId } = this.jwt.verifyAccessToken(token);
     if (!conversationId?.trim()) {
       throw BusinessException.badRequest('conversationId is required');
     }
-    return this.service.catchUp(token, user.id, conversationId);
+    return this.service.catchUp(token, userId, conversationId);
   }
 }

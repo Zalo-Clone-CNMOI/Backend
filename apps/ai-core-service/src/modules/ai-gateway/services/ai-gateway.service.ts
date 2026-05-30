@@ -5,6 +5,7 @@ import {
   LlmCompletionResult,
   LlmStreamChunk,
   LlmEmbeddingResult,
+  EmbeddingInputType,
   LLM_PROVIDERS,
 } from '../interfaces';
 import { DataSanitizer } from './data-sanitizer.service';
@@ -178,14 +179,15 @@ export class AiGatewayService {
     userId: string,
     text: string,
     model?: string,
+    inputType?: EmbeddingInputType,
   ): Promise<LlmEmbeddingResult> {
     const sanitized = this.sanitizer.sanitize(text);
     const canConsume = await this.tokenBudget.canConsume(userId, 100);
     if (!canConsume) {
       throw new Error('Daily token budget exceeded');
     }
-    const provider = this.resolveEmbeddingProvider();
-    const result = await provider.embed(sanitized, model);
+    const provider = this.resolveEmbeddingProvider(model);
+    const result = await provider.embed(sanitized, model, inputType);
     await this.tokenBudget.consume(userId, result.tokensUsed);
     return result;
   }
@@ -194,6 +196,7 @@ export class AiGatewayService {
     userId: string,
     texts: string[],
     model?: string,
+    inputType?: EmbeddingInputType,
   ): Promise<LlmEmbeddingResult[]> {
     if (texts.length === 0) return [];
     const sanitized = texts.map((t) => this.sanitizer.sanitize(t));
@@ -205,15 +208,55 @@ export class AiGatewayService {
     if (!canConsume) {
       throw new Error('Daily token budget exceeded');
     }
-    const provider = this.resolveEmbeddingProvider();
-    const results = await provider.embedBatch(sanitized, model);
+    const provider = this.resolveEmbeddingProvider(model);
+    const results = await provider.embedBatch(sanitized, model, inputType);
     const totalTokens = results.reduce((sum, r) => sum + r.tokensUsed, 0);
     await this.tokenBudget.consume(userId, totalTokens);
     return results;
   }
 
-  private resolveEmbeddingProvider(): ILlmProvider {
-    // Prefer OpenAI (native embeddings), fall back to Voyage AI
+  /**
+   * Pick the embedding provider by the requested MODEL, not by static
+   * preference. An embedding vector is only comparable to another produced by
+   * the same provider+model+dimension, so ingest and query MUST resolve
+   * identically. The previous "OpenAI-first, ignore the model" logic silently
+   * sent a voyage-3 request to OpenAI whenever OPENAI_API_KEY was set — the
+   * model string is just a label to OpenAI, so it 404'd / produced an
+   * incompatible vector, and doc-RAG returned ~0.08 similarity.
+   *
+   * Routing rules:
+   *  - voyage-*            → voyageai
+   *  - text-embedding-*    → openai
+   *  - unknown / no model  → first available provider (openai then voyageai)
+   * If the model's required provider is unavailable we FAIL LOUD rather than
+   * fall back to a different provider that would produce an incomparable vector.
+   */
+  private resolveEmbeddingProvider(model?: string): ILlmProvider {
+    const isVoyageModel = !!model && model.toLowerCase().startsWith('voyage');
+    const isOpenAiModel =
+      !!model && model.toLowerCase().startsWith('text-embedding');
+
+    if (isVoyageModel) {
+      const voyage = this.providers.find(
+        (p) => p.name === 'voyageai' && p.isAvailable,
+      );
+      if (voyage) return voyage;
+      throw new Error(
+        `Embedding model "${model}" requires the Voyage AI provider, but it is unavailable. Set VOYAGE_AI_API_KEY.`,
+      );
+    }
+
+    if (isOpenAiModel) {
+      const openai = this.providers.find(
+        (p) => p.name === 'openai' && p.isAvailable,
+      );
+      if (openai) return openai;
+      throw new Error(
+        `Embedding model "${model}" requires the OpenAI provider, but it is unavailable. Set OPENAI_API_KEY.`,
+      );
+    }
+
+    // No model (or an unrecognized one): fall back to any available provider.
     const provider =
       this.providers.find((p) => p.name === 'openai' && p.isAvailable) ??
       this.providers.find((p) => p.name === 'voyageai' && p.isAvailable);

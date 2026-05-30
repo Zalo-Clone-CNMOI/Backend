@@ -156,6 +156,7 @@ describe('DocumentEngine.processDocument', () => {
         'user-001',
         chunks,
         'text-embedding-3-small',
+        'document',
       );
     });
 

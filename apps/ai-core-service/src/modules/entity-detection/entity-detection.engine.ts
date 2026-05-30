@@ -8,6 +8,10 @@ import { AiGatewayService } from '../ai-gateway/services/ai-gateway.service';
 import { PromptBuilderService } from '../ai-gateway/services/prompt-builder.service';
 import { AiMetricsService } from '../ai-gateway/services/ai-metrics.service';
 import { parseJsonResponse } from '../ai-gateway/services/parse-json.util';
+import {
+  withTimeout,
+  AI_SYNC_COMPLETION_TIMEOUT_MS,
+} from '../ai-gateway/services/with-timeout.util';
 import type {
   AiEntityDetectionRequestEvent,
   AiEntityDetectionResultEvent,
@@ -182,11 +186,18 @@ export class EntityDetectionEngine {
         language,
       );
 
-      const result = await this.gateway.complete(event.user_id, {
-        messages,
-        maxTokens: 600,
-        temperature: 0.1,
-      });
+      // Bound the call: the user is actively waiting on the info panel, so a
+      // slow/hung provider must surface as a failure (→ graceful fallback below)
+      // before the mobile client's own HTTP timeout fires.
+      const result = await withTimeout(
+        this.gateway.complete(event.user_id, {
+          messages,
+          maxTokens: 600,
+          temperature: 0.1,
+        }),
+        AI_SYNC_COMPLETION_TIMEOUT_MS,
+        'entity_info',
+      );
 
       const parsed = this.parseInfoResponse(result.content, event.entity_text);
 

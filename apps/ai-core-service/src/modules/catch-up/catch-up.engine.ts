@@ -9,6 +9,10 @@ import {
   parseAiSummaryJson,
   recordSummarizationMetrics,
 } from '../ai-gateway/services/text-summarizer.util';
+import {
+  withTimeout,
+  AI_SYNC_COMPLETION_TIMEOUT_MS,
+} from '../ai-gateway/services/with-timeout.util';
 import type { AiCatchUpResultEvent } from '@libs/contracts';
 import { toAiProviderType } from '@libs/contracts';
 import { BusinessException } from '@app/types';
@@ -196,11 +200,17 @@ export class CatchUpEngine {
     const messages = this.promptBuilder.buildCatchUpPrompt(lines);
 
     try {
-      const result = await this.gateway.complete(user_id, {
-        messages,
-        maxTokens: 400,
-        temperature: 0.3,
-      });
+      // Bound the call so a slow/hung provider falls into the graceful fallback
+      // below before the mobile client's own HTTP timeout fires.
+      const result = await withTimeout(
+        this.gateway.complete(user_id, {
+          messages,
+          maxTokens: 400,
+          temperature: 0.3,
+        }),
+        AI_SYNC_COMPLETION_TIMEOUT_MS,
+        'catch_up',
+      );
 
       const { summary } = parseAiSummaryJson(result.content);
 

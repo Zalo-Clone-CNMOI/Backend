@@ -548,20 +548,22 @@ describe('ZaiChatEngine', () => {
     expect(result!.reply.body_format).toBe('markdown');
   });
 
-  it('general reply omits body_format (text default)', async () => {
+  it('general reply carries body_format:"markdown"', async () => {
+    // Zai emits Markdown for general 1:1 replies too — the FE renders it as
+    // Markdown (previously these displayed raw '**'/'---').
     const result = await engine.respond(makeEvent());
 
     expect(result).not.toBeNull();
-    expect(result!.reply.body_format).toBeUndefined();
+    expect(result!.reply.body_format).toBe('markdown');
   });
 
-  it('mention reply omits body_format (text default)', async () => {
+  it('mention reply carries body_format:"markdown"', async () => {
     const result = await engine.respond(
       makeEvent({ trigger: 'mention', body: 'hey @zai' }),
     );
 
     expect(result).not.toBeNull();
-    expect(result!.reply.body_format).toBeUndefined();
+    expect(result!.reply.body_format).toBe('markdown');
   });
 
   it('document-unavailable short-circuit reply stays plain text (no markdown)', async () => {

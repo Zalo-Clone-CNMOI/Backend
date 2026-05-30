@@ -127,6 +127,10 @@ export class DocumentChatStrategy implements ChatStrategy {
  */
 export class MentionReplyStrategy implements ChatStrategy {
   readonly name = 'mention';
+  // Zai's prompts emit Markdown (bold, lists, headings) for every reply, so the
+  // FE must render mention replies as Markdown too — not just doc-chat. Without
+  // this flag the client showed raw '**' / '---' literally.
+  readonly bodyFormat: MessageBodyFormat = 'markdown';
 
   constructor(private readonly promptBuilder: PromptBuilderService) {}
 
@@ -149,6 +153,10 @@ export class MentionReplyStrategy implements ChatStrategy {
  */
 export class GeneralChatStrategy implements ChatStrategy {
   readonly name = 'general';
+  // Zai emits Markdown for general 1:1 replies too (e.g. the Tesla-style
+  // answers), so flag it for the FE renderer. Previously only DocumentChat set
+  // this, so normal Zai replies displayed raw Markdown syntax.
+  readonly bodyFormat: MessageBodyFormat = 'markdown';
 
   constructor(private readonly promptBuilder: PromptBuilderService) {}
 

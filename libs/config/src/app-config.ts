@@ -376,6 +376,10 @@ export function loadConfig(serviceName: string): AppConfig {
     // heavier default model. See the caveat in entity-detection.engine.ts.
     aiEntityModel:
       process.env.AI_ENTITY_DETECTION_MODEL?.trim() || 'claude-haiku-4.5',
+    // Keep ≤ ~8000: the mobile client shows an "analyzing…" hint with a 10s
+    // hard deadline (PENDING_TIMEOUT_MS in useEntityDetectionStore). Raising
+    // this above 8s makes the hint vanish while the server is still detecting —
+    // bump the FE deadline too if you raise this.
     aiEntityDetectionTimeoutMs:
       readPositiveInteger(
         process.env.AI_ENTITY_DETECTION_TIMEOUT_MS,

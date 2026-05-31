@@ -176,9 +176,12 @@ export class ChatHandler {
   }
 
   /**
-   * Per-user fixed-window send rate limit. INCRs the window counter and sets
-   * the TTL on the first hit; rejects once the count exceeds the configured
-   * max. Fails OPEN.
+   * Per-user rate limit. INCRs the window counter and ALWAYS refreshes its TTL
+   * (so the counter never lingers without an expiry — a crash between INCR and
+   * EXPIRE can't strand a TTL-less key that would permanently block the user;
+   * the next send self-heals it). This makes it a sliding window: the TTL
+   * resets on each send, so a sustained burst stays blocked until the user
+   * pauses for the window. Rejects once the count exceeds max. Fails OPEN.
    */
   private async isSendRateLimited(userId: string): Promise<boolean> {
     const max = this.config.wsMessageRateMax ?? 10;
@@ -186,9 +189,7 @@ export class ChatHandler {
     try {
       const key = messageRateKey(userId);
       const count = await this.redisService.incrBy(key, 1);
-      if (count === 1) {
-        await this.redisService.expire(key, windowSeconds);
-      }
+      await this.redisService.expire(key, windowSeconds);
       return count > max;
     } catch {
       return false;

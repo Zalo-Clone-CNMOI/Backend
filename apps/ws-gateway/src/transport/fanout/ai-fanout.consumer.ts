@@ -1,4 +1,4 @@
-import { Controller, Inject } from '@nestjs/common';
+import { Controller, Inject, Logger } from '@nestjs/common';
 import { EventPattern, Payload } from '@nestjs/microservices';
 import {
   KafkaTopics,
@@ -26,6 +26,8 @@ import {
 
 @Controller()
 export class AiFanoutConsumer {
+  private readonly logger = new Logger(AiFanoutConsumer.name);
+
   constructor(
     private readonly gateway: ChatGateway,
     private readonly streamTracker: ActiveStreamTracker,
@@ -98,9 +100,6 @@ export class AiFanoutConsumer {
     try {
       const strikeKey = moderationStrikeKey(userId);
       const strikes = await this.redisService.incrBy(strikeKey, 1);
-      if (strikes === 1) {
-        await this.redisService.expire(strikeKey, windowSeconds);
-      }
       if (strikes >= threshold) {
         await this.redisService.setEx(
           moderationCooldownKey(userId),
@@ -109,9 +108,16 @@ export class AiFanoutConsumer {
         );
         // Reset so the window starts fresh after the cooldown elapses.
         await this.redisService.del(strikeKey);
+      } else {
+        await this.redisService.expire(strikeKey, windowSeconds);
       }
-    } catch {
+    } catch (err) {
       // best-effort — never disrupt the broadcast path
+      this.logger.warn(
+        `Failed to record moderation strike for ${userId}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
     }
   }
 

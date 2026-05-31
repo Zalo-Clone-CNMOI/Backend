@@ -7,6 +7,7 @@ import { MediaFile, Conversation } from '@libs/database';
 import { ConversationMembershipService } from '@libs/mvp-access';
 import { RedisService } from '@libs/redis';
 import { APP_CONFIG, AppConfig } from '@libs/config';
+import { messageRateKey, moderationCooldownKey } from '../throttle-keys';
 import { ConversationType } from '@app/constant';
 import {
   KafkaTopics,
@@ -73,6 +74,28 @@ export class ChatHandler {
 
   async handleSend(socket: AuthedSocket, body: WsChatSendPayload) {
     const userId = String(socket.data.userId);
+
+    // Anti-spam gate (cheapest checks first, before any DB lookup). A repeat
+    // moderation offender in cooldown is rejected outright; otherwise a
+    // per-user fixed-window send rate limit applies. Both fail OPEN on Redis
+    // errors so an outage never blocks legitimate chat.
+    if (await this.isInModerationCooldown(userId)) {
+      socket.emit(WsEvents.ChatAck, {
+        message_id: body.message_id,
+        status: 'rejected',
+        reason: 'moderation_cooldown',
+      } satisfies WsChatAckPayload);
+      return;
+    }
+    if (await this.isSendRateLimited(userId)) {
+      socket.emit(WsEvents.ChatAck, {
+        message_id: body.message_id,
+        status: 'rejected',
+        reason: 'rate_limited',
+      } satisfies WsChatAckPayload);
+      return;
+    }
+
     const { allowed, reason } = await this.membershipService.canUserSendMessage(
       userId,
       body.conversation_id,
@@ -136,6 +159,40 @@ export class ChatHandler {
       message_id: body.message_id,
       status: 'accepted',
     } satisfies WsChatAckPayload);
+  }
+
+  /**
+   * True if the user is serving a moderation cooldown (set by the AI fanout
+   * consumer after repeated deleted-message strikes). Fails OPEN.
+   */
+  private async isInModerationCooldown(userId: string): Promise<boolean> {
+    try {
+      return (
+        (await this.redisService.get(moderationCooldownKey(userId))) !== null
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Per-user fixed-window send rate limit. INCRs the window counter and sets
+   * the TTL on the first hit; rejects once the count exceeds the configured
+   * max. Fails OPEN.
+   */
+  private async isSendRateLimited(userId: string): Promise<boolean> {
+    const max = this.config.wsMessageRateMax ?? 10;
+    const windowSeconds = this.config.wsMessageRateWindowSeconds ?? 10;
+    try {
+      const key = messageRateKey(userId);
+      const count = await this.redisService.incrBy(key, 1);
+      if (count === 1) {
+        await this.redisService.expire(key, windowSeconds);
+      }
+      return count > max;
+    } catch {
+      return false;
+    }
   }
 
   async handleEdit(socket: AuthedSocket, body: WsChatEditPayload) {

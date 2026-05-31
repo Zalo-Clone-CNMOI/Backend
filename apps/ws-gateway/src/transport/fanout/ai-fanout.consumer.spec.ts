@@ -11,12 +11,32 @@ describe('AiFanoutConsumer', () => {
     complete: jest.fn(),
     getActiveStreams: jest.fn(),
   };
+  const redisService = {
+    incrBy: jest.fn().mockResolvedValue(1),
+    expire: jest.fn().mockResolvedValue(1),
+    setEx: jest.fn().mockResolvedValue(undefined),
+    del: jest.fn().mockResolvedValue(undefined),
+  };
+  const config = {
+    moderationStrikeThreshold: 3,
+    moderationStrikeWindowSeconds: 60,
+    moderationCooldownSeconds: 30,
+  };
+
+  // recordModerationStrike runs fire-and-forget; flush microtasks to observe it.
+  const flush = () => new Promise((resolve) => setImmediate(resolve));
 
   let consumer: AiFanoutConsumer;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    consumer = new AiFanoutConsumer(gateway as never, streamTracker as never);
+    redisService.incrBy.mockResolvedValue(1);
+    consumer = new AiFanoutConsumer(
+      gateway as never,
+      streamTracker as never,
+      redisService as never,
+      config as never,
+    );
   });
 
   describe('onAiModerationResult', () => {
@@ -141,6 +161,82 @@ describe('AiFanoutConsumer', () => {
         expect(gateway.emitToUser).not.toHaveBeenCalled();
       },
     );
+
+    it('records a strike for a deleted message and sets a cooldown at the threshold', async () => {
+      redisService.incrBy.mockResolvedValue(3); // reaches the default threshold (3)
+
+      consumer.onAiModerationEnforcement({
+        message_id: 'msg-5',
+        conversation_id: 'conv-5',
+        sender_id: 'user-5',
+        created_at: Date.now(),
+        is_flagged: true,
+        labels: ['toxic'],
+        confidence: 1,
+        provider: 'openai',
+        action: 'soft_delete',
+        outcome: 'deleted',
+        reason: 'conditional_delete_applied',
+        enforced_at: Date.now(),
+      });
+      await flush();
+
+      expect(redisService.incrBy).toHaveBeenCalledWith('mod:strikes:user-5', 1);
+      expect(redisService.setEx).toHaveBeenCalledWith(
+        'mod:cooldown:user-5',
+        30,
+        '1',
+      );
+      expect(redisService.del).toHaveBeenCalledWith('mod:strikes:user-5');
+    });
+
+    it('does NOT set a cooldown below the strike threshold', async () => {
+      redisService.incrBy.mockResolvedValue(1);
+
+      consumer.onAiModerationEnforcement({
+        message_id: 'msg-6',
+        conversation_id: 'conv-6',
+        sender_id: 'user-6',
+        created_at: Date.now(),
+        is_flagged: true,
+        labels: ['toxic'],
+        confidence: 1,
+        provider: 'openai',
+        action: 'soft_delete',
+        outcome: 'deleted',
+        reason: 'conditional_delete_applied',
+        enforced_at: Date.now(),
+      });
+      await flush();
+
+      expect(redisService.incrBy).toHaveBeenCalledWith('mod:strikes:user-6', 1);
+      expect(redisService.expire).toHaveBeenCalledWith(
+        'mod:strikes:user-6',
+        60,
+      );
+      expect(redisService.setEx).not.toHaveBeenCalled();
+    });
+
+    it('does NOT record a strike for non-deleted enforcement outcomes', async () => {
+      consumer.onAiModerationEnforcement({
+        message_id: 'msg-7',
+        conversation_id: 'conv-7',
+        sender_id: 'user-7',
+        created_at: Date.now(),
+        is_flagged: true,
+        labels: ['spam'],
+        confidence: 1,
+        provider: 'openai',
+        action: 'soft_delete',
+        outcome: 'deduplicated',
+        reason: 'delete_event_already_emitted_after_lock_acquired',
+        enforced_at: Date.now(),
+      });
+      await flush();
+
+      expect(redisService.incrBy).not.toHaveBeenCalled();
+      expect(redisService.setEx).not.toHaveBeenCalled();
+    });
   });
 
   describe('onAiStreamComplete', () => {

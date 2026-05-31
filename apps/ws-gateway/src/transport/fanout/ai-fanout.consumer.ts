@@ -1,4 +1,4 @@
-import { Controller } from '@nestjs/common';
+import { Controller, Inject } from '@nestjs/common';
 import { EventPattern, Payload } from '@nestjs/microservices';
 import {
   KafkaTopics,
@@ -15,14 +15,22 @@ import {
   type AiEntityDetectionResultEvent,
   type AiZaiTypingEvent,
 } from '@libs/contracts';
+import { RedisService } from '@libs/redis';
+import { APP_CONFIG, AppConfig } from '@libs/config';
 import { ChatGateway } from '../../socket/chat.gateway';
 import { ActiveStreamTracker } from '../../socket/active-stream.tracker';
+import {
+  moderationStrikeKey,
+  moderationCooldownKey,
+} from '../../socket/throttle-keys';
 
 @Controller()
 export class AiFanoutConsumer {
   constructor(
     private readonly gateway: ChatGateway,
     private readonly streamTracker: ActiveStreamTracker,
+    private readonly redisService: RedisService,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
   /**
@@ -64,6 +72,47 @@ export class AiFanoutConsumer {
         enforced_at: payload.enforced_at,
       },
     );
+
+    // Fire-and-forget (with internal error swallowing) so a Redis failure can't
+    // reject this handler and trigger Kafka redelivery → a duplicate broadcast.
+    void this.recordModerationStrike(payload);
+  }
+
+  /**
+   * Count actual message removals per sender in a fixed window; once the
+   * threshold is hit, set a cooldown the ws-gateway send gate enforces. Only
+   * `deleted` outcomes count (a flagged-but-not-removed message is not a
+   * strike). Best-effort: any Redis error is swallowed.
+   */
+  private async recordModerationStrike(
+    payload: AiModerationEnforcementEvent,
+  ): Promise<void> {
+    if (payload.outcome !== 'deleted') return;
+    const userId = payload.sender_id;
+    if (!userId) return;
+
+    const threshold = this.config.moderationStrikeThreshold ?? 3;
+    const windowSeconds = this.config.moderationStrikeWindowSeconds ?? 60;
+    const cooldownSeconds = this.config.moderationCooldownSeconds ?? 30;
+
+    try {
+      const strikeKey = moderationStrikeKey(userId);
+      const strikes = await this.redisService.incrBy(strikeKey, 1);
+      if (strikes === 1) {
+        await this.redisService.expire(strikeKey, windowSeconds);
+      }
+      if (strikes >= threshold) {
+        await this.redisService.setEx(
+          moderationCooldownKey(userId),
+          cooldownSeconds,
+          '1',
+        );
+        // Reset so the window starts fresh after the cooldown elapses.
+        await this.redisService.del(strikeKey);
+      }
+    } catch {
+      // best-effort — never disrupt the broadcast path
+    }
   }
 
   /**

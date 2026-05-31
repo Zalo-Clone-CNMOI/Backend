@@ -103,7 +103,7 @@ describe('ChatHandler', () => {
   let kafka: { emit: jest.Mock };
   let mediaFileRepo: { find: jest.Mock };
   let conversationRepo: { findOne: jest.Mock };
-  let redisService: { incrBy: jest.Mock; expire: jest.Mock };
+  let redisService: { incrBy: jest.Mock; expire: jest.Mock; get: jest.Mock };
 
   beforeEach(async () => {
     kafka = { emit: jest.fn() };
@@ -114,6 +114,7 @@ describe('ChatHandler', () => {
     redisService = {
       incrBy: jest.fn().mockResolvedValue(1),
       expire: jest.fn().mockResolvedValue(1),
+      get: jest.fn().mockResolvedValue(null),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -231,6 +232,42 @@ describe('ChatHandler', () => {
         message_id: body.message_id,
         status: 'rejected',
         reason: 'not_member',
+      });
+    });
+
+    it('should reject with rate_limited when the per-user send rate is exceeded', async () => {
+      const socket = createMockSocket();
+      const body = makeSendPayload();
+      membership.canUserSendMessage.mockResolvedValue({ allowed: true });
+      // Over the default window cap (10).
+      redisService.incrBy.mockResolvedValue(11);
+
+      await handler.handleSend(socket, body);
+
+      expect(kafka.emit).not.toHaveBeenCalled();
+      expect(membership.canUserSendMessage).not.toHaveBeenCalled();
+      expect(socket.emit).toHaveBeenCalledWith(WsEvents.ChatAck, {
+        message_id: body.message_id,
+        status: 'rejected',
+        reason: 'rate_limited',
+      });
+    });
+
+    it('should reject with moderation_cooldown while the user is cooling down', async () => {
+      const socket = createMockSocket();
+      const body = makeSendPayload();
+      membership.canUserSendMessage.mockResolvedValue({ allowed: true });
+      redisService.get.mockResolvedValue('1'); // cooldown key present
+
+      await handler.handleSend(socket, body);
+
+      expect(kafka.emit).not.toHaveBeenCalled();
+      // Cooldown is checked first — the rate counter is not even touched.
+      expect(redisService.incrBy).not.toHaveBeenCalled();
+      expect(socket.emit).toHaveBeenCalledWith(WsEvents.ChatAck, {
+        message_id: body.message_id,
+        status: 'rejected',
+        reason: 'moderation_cooldown',
       });
     });
 
@@ -666,7 +703,14 @@ describe('ChatHandler', () => {
       membership.listActiveMemberIds.mockResolvedValue([]);
 
       const result = await callValidate(
-        [{ user_id: 'zai-bot-user-id', mention_type: 'user', offset: 0, length: 4 }],
+        [
+          {
+            user_id: 'zai-bot-user-id',
+            mention_type: 'user',
+            offset: 0,
+            length: 4,
+          },
+        ],
         'conv-group',
         'user-sender',
         '@Zai hello',

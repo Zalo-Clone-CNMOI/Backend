@@ -69,6 +69,18 @@ export interface AppConfig {
   chatModerationEnforceMinConfidence?: number;
   chatModerationHighRiskLabels?: string[];
 
+  // ws-gateway anti-spam (per-user, Redis-backed at the socket edge)
+  /** Max chat sends per window before rejecting. Default 10. */
+  wsMessageRateMax?: number;
+  /** Fixed rate-limit window in seconds. Default 10. */
+  wsMessageRateWindowSeconds?: number;
+  /** Deleted-message strikes within the window that trigger a cooldown. Default 3. */
+  moderationStrikeThreshold?: number;
+  /** Strike-counter window in seconds (fixed window). Default 60. */
+  moderationStrikeWindowSeconds?: number;
+  /** Cooldown duration in seconds once the strike threshold is hit. Default 30. */
+  moderationCooldownSeconds?: number;
+
   // Chat Service pre-send moderation gate (Phase 5)
   /** Master flag — default true. */
   chatPreSendModerationEnabled?: boolean;
@@ -384,6 +396,17 @@ export function loadConfig(serviceName: string): AppConfig {
     chatModerationHighRiskLabels: readCsv(
       process.env.CHAT_MODERATION_HIGH_RISK_LABELS,
     ),
+    wsMessageRateMax:
+      readPositiveInteger(process.env.WS_MSG_RATE_MAX, 1, 1000) ?? 10,
+    wsMessageRateWindowSeconds:
+      readPositiveInteger(process.env.WS_MSG_RATE_WINDOW_SECONDS, 1, 3600) ??
+      10,
+    moderationStrikeThreshold:
+      readPositiveInteger(process.env.MOD_STRIKE_THRESHOLD, 1, 100) ?? 3,
+    moderationStrikeWindowSeconds:
+      readPositiveInteger(process.env.MOD_STRIKE_WINDOW_SECONDS, 1, 3600) ?? 60,
+    moderationCooldownSeconds:
+      readPositiveInteger(process.env.MOD_COOLDOWN_SECONDS, 1, 3600) ?? 30,
     chatPreSendModerationEnabled:
       readBoolean(process.env.CHAT_PRE_SEND_MODERATION_ENABLED) ?? true,
     chatPreSendModerationSkipConvTypes: parseConversationTypeCsv(
@@ -428,8 +451,7 @@ export function loadConfig(serviceName: string): AppConfig {
       }
       return raw;
     })(),
-    zaiL2MemoryEnabled:
-      readBoolean(process.env.ZAI_L2_MEMORY_ENABLED) ?? false,
+    zaiL2MemoryEnabled: readBoolean(process.env.ZAI_L2_MEMORY_ENABLED) ?? false,
     zaiL2SummaryTriggerTurns:
       readPositiveInteger(process.env.ZAI_L2_SUMMARY_TRIGGER_TURNS, 5, 500) ??
       30,

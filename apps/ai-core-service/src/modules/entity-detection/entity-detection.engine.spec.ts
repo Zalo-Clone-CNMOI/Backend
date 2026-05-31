@@ -6,7 +6,11 @@ import { AiGatewayService } from '../ai-gateway/services/ai-gateway.service';
 import { PromptBuilderService } from '../ai-gateway/services/prompt-builder.service';
 import { AiMetricsService } from '../ai-gateway/services/ai-metrics.service';
 import { RedisService } from '@libs/redis';
+import { APP_CONFIG } from '@libs/config';
 import { AiEntityDetectionLog } from '@libs/database/entities';
+
+const TEST_ENTITY_MODEL = 'claude-haiku-4.5';
+const TEST_ENTITY_TIMEOUT_MS = 8000;
 
 function makeGateway(): jest.Mocked<AiGatewayService> {
   return { complete: jest.fn() } as unknown as jest.Mocked<AiGatewayService>;
@@ -64,6 +68,13 @@ describe('EntityDetectionEngine', () => {
         { provide: AiMetricsService, useValue: metrics },
         { provide: RedisService, useValue: redis },
         { provide: getRepositoryToken(AiEntityDetectionLog), useValue: repo },
+        {
+          provide: APP_CONFIG,
+          useValue: {
+            aiEntityModel: TEST_ENTITY_MODEL,
+            aiEntityDetectionTimeoutMs: TEST_ENTITY_TIMEOUT_MS,
+          },
+        },
       ],
     }).compile();
 
@@ -108,6 +119,35 @@ describe('EntityDetectionEngine', () => {
         end_index: 17,
       });
       expect(repo.save).toHaveBeenCalled();
+    });
+
+    it('routes detection through the configured fast model', async () => {
+      gateway.complete.mockResolvedValue(
+        llmResult(JSON.stringify({ entities: [] })),
+      );
+
+      await engine.detect(baseEvent);
+
+      expect(gateway.complete).toHaveBeenCalledWith(
+        baseEvent.sender_id,
+        expect.objectContaining({ model: TEST_ENTITY_MODEL }),
+      );
+    });
+
+    it('falls back to empty entities when the LLM call exceeds the timeout', async () => {
+      jest.useFakeTimers();
+      // A completion that never settles → withTimeout rejects after the deadline,
+      // and detect()'s catch returns the graceful empty-entities result.
+      gateway.complete.mockImplementation(
+        () => new Promise(() => undefined) as never,
+      );
+
+      const promise = engine.detect(baseEvent);
+      await jest.advanceTimersByTimeAsync(TEST_ENTITY_TIMEOUT_MS + 1);
+      const result = await promise;
+
+      expect(result.entities).toEqual([]);
+      jest.useRealTimers();
     });
 
     it('filters entities below confidence threshold (0.75)', async () => {

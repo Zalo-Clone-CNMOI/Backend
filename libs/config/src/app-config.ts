@@ -63,6 +63,11 @@ export interface AppConfig {
   aiModerationEnsemble?: boolean;
   aiModerationFailOpen?: boolean;
 
+  // Entity detection (the message-highlight pass). A fast model + bounded
+  // deadline keep the highlight from feeling broken on a slow provider.
+  aiEntityModel?: string;
+  aiEntityDetectionTimeoutMs?: number;
+
   // Chat Service moderation delete emit lock TTL (seconds)
   chatModerationDeleteLockTtlSeconds?: number;
   chatModerationWarnOnly?: boolean;
@@ -366,6 +371,17 @@ export function loadConfig(serviceName: string): AppConfig {
     aiStreamBufferSize: readNumber(process.env.AI_STREAM_BUFFER_SIZE) ?? 50,
     aiModerationEnsemble: process.env.AI_MODERATION_ENSEMBLE === 'true',
     aiModerationFailOpen: process.env.AI_MODERATION_FAIL_OPEN === 'true',
+    // Default to a fast Claude tier served by the primary (locdo_router)
+    // provider; entity extraction is a simple task that does not need the
+    // heavier default model. See the caveat in entity-detection.engine.ts.
+    aiEntityModel:
+      process.env.AI_ENTITY_DETECTION_MODEL?.trim() || 'claude-haiku-4.5',
+    aiEntityDetectionTimeoutMs:
+      readPositiveInteger(
+        process.env.AI_ENTITY_DETECTION_TIMEOUT_MS,
+        1000,
+        60000,
+      ) ?? 8000,
     chatModerationDeleteLockTtlSeconds:
       readPositiveInteger(
         process.env.CHAT_MODERATION_DELETE_LOCK_TTL_SECONDS,
@@ -428,8 +444,7 @@ export function loadConfig(serviceName: string): AppConfig {
       }
       return raw;
     })(),
-    zaiL2MemoryEnabled:
-      readBoolean(process.env.ZAI_L2_MEMORY_ENABLED) ?? false,
+    zaiL2MemoryEnabled: readBoolean(process.env.ZAI_L2_MEMORY_ENABLED) ?? false,
     zaiL2SummaryTriggerTurns:
       readPositiveInteger(process.env.ZAI_L2_SUMMARY_TRIGGER_TURNS, 5, 500) ??
       30,

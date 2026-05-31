@@ -11,6 +11,7 @@ import {
 import { DataSanitizer } from './data-sanitizer.service';
 import { TokenBudgetService } from './token-budget.service';
 import { AiMetricsService } from './ai-metrics.service';
+import { cleanLlmContent, cleanStreamChunk } from './clean-llm-content.util';
 
 interface CircuitState {
   failures: number;
@@ -82,7 +83,13 @@ export class AiGatewayService {
       }
 
       try {
-        const result = await provider.complete(options);
+        const raw = await provider.complete(options);
+        const result = { ...raw, content: cleanLlmContent(raw.content) };
+        if (result.content !== raw.content) {
+          this.logger.debug(
+            `cleanLlmContent: stripped artifact from ${provider.name} (${raw.content.length}→${result.content.length} chars)`,
+          );
+        }
 
         this.onSuccess(provider.name);
 
@@ -140,7 +147,18 @@ export class AiGatewayService {
       if (!this.isCircuitAllowed(provider.name)) continue;
 
       try {
-        const result = await provider.completeStream(options, onChunk, signal);
+        const cleaningOnChunk = (chunk: LlmStreamChunk): void => {
+          if (!chunk.content) {
+            onChunk(chunk);
+            return;
+          }
+          const cleaned = cleanStreamChunk(chunk.content);
+          onChunk(
+            cleaned !== chunk.content ? { ...chunk, content: cleaned } : chunk,
+          );
+        };
+        const raw = await provider.completeStream(options, cleaningOnChunk, signal);
+        const result = { ...raw, content: cleanLlmContent(raw.content) };
         this.onSuccess(provider.name);
         await this.tokenBudget.consume(
           userId,

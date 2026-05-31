@@ -107,7 +107,7 @@ describe('AiGatewayService', () => {
 
       const result = await gateway.complete('user1', BASE_OPTIONS);
 
-      expect(result).toBe(expected);
+      expect(result).toStrictEqual(expected);
       expect(primaryProvider.complete).toHaveBeenCalledTimes(1);
     });
 
@@ -181,7 +181,7 @@ describe('AiGatewayService', () => {
 
       const result = await gateway.complete('user1', BASE_OPTIONS);
 
-      expect(result).toBe(fallbackResult);
+      expect(result).toStrictEqual(fallbackResult);
       expect(secondaryProvider.complete).toHaveBeenCalledTimes(1);
     });
 

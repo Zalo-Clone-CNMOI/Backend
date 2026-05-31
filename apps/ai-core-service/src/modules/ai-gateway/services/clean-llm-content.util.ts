@@ -16,12 +16,12 @@ export function cleanLlmContent(content: string): string {
   if (!content) return content;
 
   // ── Format B: <tool_call> / <tool_calls> JSON-in-XML ─────────────────────
-  if (content.includes('<tool_call>') || content.includes('<tool_calls>')) {
+  if (content.includes('<tool_call') || content.includes('<tool_calls')) {
     const cleaned = content
-      .replace(/\n?<tool_call>[\s\S]*?<\/tool_call>\n?/g, '\n')
-      .replace(/\n?<tool_calls>[\s\S]*?<\/tool_calls>\n?/g, '\n')
+      .replace(/\n?<tool_call[^>]*>[\s\S]*?<\/tool_call>\n?/g, '\n')
+      .replace(/\n?<tool_calls[^>]*>[\s\S]*?<\/tool_calls>\n?/g, '\n')
       .replace(/<\/?tool_calls?[^>]*>/g, '')
-      .replace(/\n{2,}/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
       .trim();
     return cleaned || FALLBACK_VI;
   }
@@ -50,7 +50,7 @@ export function cleanLlmContent(content: string): string {
   }
 
   // ── Format D: Anthropic content-block JSON array {"type":"tool_use",…} ────
-  if (/"type"\s*:\s*"tool_use"/.test(content)) {
+  if (content.length <= 64_000 && /"type"\s*:\s*"tool_use"/.test(content)) {
     const cleaned = content
       .replace(/\n?\[[\s\S]*?"type"\s*:\s*"tool_use"[\s\S]*?\]\n?/g, '\n')
       .replace(/\n{2,}/g, '\n')
@@ -97,18 +97,11 @@ export function cleanStreamChunk(chunk: string): string {
     return firstStart > 0 ? chunk.slice(0, firstStart).trim() : '';
   }
 
-  // Format B: only strip if both <tool_call> and </tool_call> are present
-  if (chunk.includes('<tool_call>') && chunk.includes('</tool_call>')) {
+  // Format B: only strip if both <tool_call...> and </tool_call> are present
+  if (chunk.includes('<tool_call') && chunk.includes('</tool_call>')) {
     return chunk
-      .replace(/<tool_call>[\s\S]*?<\/tool_call>/g, '')
-      .replace(/<tool_calls>[\s\S]*?<\/tool_calls>/g, '')
-      .trim();
-  }
-
-  // Format D: only strip if both the tool_use marker and a closing ] are present
-  if (/"type"\s*:\s*"tool_use"/.test(chunk) && /\]/.test(chunk)) {
-    return chunk
-      .replace(/\[[\s\S]*?"type"\s*:\s*"tool_use"[\s\S]*?\]/g, '')
+      .replace(/<tool_call[^>]*>[\s\S]*?<\/tool_call>/g, '')
+      .replace(/<tool_calls[^>]*>[\s\S]*?<\/tool_calls>/g, '')
       .trim();
   }
 

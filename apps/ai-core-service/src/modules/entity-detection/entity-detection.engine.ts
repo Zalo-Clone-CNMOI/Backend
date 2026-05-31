@@ -1,7 +1,8 @@
 import { createHash } from 'crypto';
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { APP_CONFIG, AppConfig } from '@libs/config';
 import { AiEntityDetectionLog } from '@libs/database/entities';
 import { RedisService } from '@libs/redis';
 import { AiGatewayService } from '../ai-gateway/services/ai-gateway.service';
@@ -38,6 +39,7 @@ export class EntityDetectionEngine {
   private readonly logger = new Logger(EntityDetectionEngine.name);
 
   constructor(
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly gateway: AiGatewayService,
     private readonly promptBuilder: PromptBuilderService,
     private readonly aiMetrics: AiMetricsService,
@@ -45,6 +47,11 @@ export class EntityDetectionEngine {
     @InjectRepository(AiEntityDetectionLog)
     private readonly logRepo: Repository<AiEntityDetectionLog>,
   ) {}
+
+  /** Bounded deadline for a single detection LLM call (env-configurable). */
+  private get detectionTimeoutMs(): number {
+    return this.config.aiEntityDetectionTimeoutMs ?? 8000;
+  }
 
   async detect(
     event: AiEntityDetectionRequestEvent,
@@ -54,12 +61,17 @@ export class EntityDetectionEngine {
         event.body,
       );
 
-      const result = await this.gateway.complete(event.sender_id, {
-        messages,
-        maxTokens: 512,
-        temperature: 0,
-        responseFormat: 'json_object',
-      });
+      const result = await withTimeout(
+        this.gateway.complete(event.sender_id, {
+          model: this.config.aiEntityModel,
+          messages,
+          maxTokens: 512,
+          temperature: 0,
+          responseFormat: 'json_object',
+        }),
+        this.detectionTimeoutMs,
+        'entity_detection',
+      );
 
       let parsed = this.parseEntities(result.content, event.body);
       let totalTokensIn = result.tokensIn;
@@ -71,20 +83,25 @@ export class EntityDetectionEngine {
         this.logger.warn(
           `Entity detection retry for message ${event.message_id} — initial parse failed for ${result.content.length}-char response`,
         );
-        const retry = await this.gateway.complete(event.sender_id, {
-          messages: [
-            ...messages,
-            { role: 'assistant', content: result.content },
-            {
-              role: 'user',
-              content:
-                'Your previous response was not valid JSON. Return ONLY a valid JSON object with the "entities" array, no prose, no markdown fences.',
-            },
-          ],
-          maxTokens: 512,
-          temperature: 0,
-          responseFormat: 'json_object',
-        });
+        const retry = await withTimeout(
+          this.gateway.complete(event.sender_id, {
+            model: this.config.aiEntityModel,
+            messages: [
+              ...messages,
+              { role: 'assistant', content: result.content },
+              {
+                role: 'user',
+                content:
+                  'Your previous response was not valid JSON. Return ONLY a valid JSON object with the "entities" array, no prose, no markdown fences.',
+              },
+            ],
+            maxTokens: 512,
+            temperature: 0,
+            responseFormat: 'json_object',
+          }),
+          this.detectionTimeoutMs,
+          'entity_detection_retry',
+        );
         parsed = this.parseEntities(retry.content, event.body);
         totalTokensIn += retry.tokensIn;
         totalTokensOut += retry.tokensOut;

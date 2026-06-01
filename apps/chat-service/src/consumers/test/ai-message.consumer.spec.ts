@@ -146,4 +146,27 @@ describe('AiMessageConsumer', () => {
     );
     expect(repo.clearMessageProcessing).toHaveBeenCalledWith('msg-1');
   });
+
+  it('emits AiEntityDetectionRequest for a non-empty Zai message body', async () => {
+    const payload = buildPayload({ body: 'Hãy dùng Google và Python' });
+    await consumer.onAiMessage(payload);
+
+    expect(publisher.emit).toHaveBeenCalledWith(
+      KafkaTopics.AiEntityDetectionRequest,
+      expect.objectContaining({
+        message_id: payload.message_id,
+        conversation_id: payload.conversation_id,
+        sender_id: payload.sender_id,
+        body: payload.body,
+      }),
+    );
+  });
+
+  it('does NOT emit AiEntityDetectionRequest for an empty/whitespace Zai body', async () => {
+    const payload = buildPayload({ body: '   ' });
+    await consumer.onAiMessage(payload);
+
+    const calls = (publisher.emit as jest.Mock).mock.calls as [string, unknown][];
+    expect(calls.some(([t]) => t === KafkaTopics.AiEntityDetectionRequest)).toBe(false);
+  });
 });

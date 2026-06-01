@@ -4,6 +4,7 @@ import {
   KafkaTopics,
   type ChatAiMessageCommand,
   type ChatMessageCreatedEvent,
+  type AiEntityDetectionRequestEvent,
 } from '@libs/contracts';
 import { APP_CONFIG, AppConfig } from '@libs/config';
 import { MessageRepository } from '@libs/scylla';
@@ -79,6 +80,31 @@ export class AiMessageConsumer {
         trace_id: traceId,
       };
       await this.publisher.emit(KafkaTopics.ChatMessageCreated, event);
+
+      // Entity detection for Zai replies. The human-message path
+      // (send-message.handler) triggers this; the Zai path persists via a
+      // separate topic, so detection must be fired here too or Zai replies
+      // never get entity highlights. Fire-and-forget: detection must never
+      // block or fail Zai persistence. Condition mirrors the human path
+      // (send-message.handler.ts:445): only non-empty text bodies.
+      if (payload.body?.trim()) {
+        const entityEvent: AiEntityDetectionRequestEvent = {
+          message_id,
+          conversation_id,
+          sender_id: payload.sender_id,
+          body: payload.body,
+          created_at: payload.created_at,
+          trace_id: traceId,
+        };
+        void this.publisher
+          .emit(KafkaTopics.AiEntityDetectionRequest, entityEvent)
+          .catch((err) =>
+            this.logger.warn(
+              `[${traceId}] AiEntityDetectionRequest emit failed for Zai message ${message_id}`,
+              { error: err instanceof Error ? err.message : String(err) },
+            ),
+          );
+      }
 
       await this.repo.markMessageStored(message_id);
 

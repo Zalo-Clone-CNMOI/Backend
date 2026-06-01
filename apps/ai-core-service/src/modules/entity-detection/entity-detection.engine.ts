@@ -378,6 +378,19 @@ export class EntityDetectionEngine {
           `error: ${err instanceof Error ? err.message : String(err)} | ` +
           `raw (first 300): ${content.slice(0, 300)}`,
       );
+
+      // Graceful degradation: a valid-but-truncated response (output hit the
+      // token cap mid-field) still contains the EARLIER fields intact. Recover
+      // them so the user sees the headline info instead of a blank panel —
+      // robust regardless of the maxTokens ceiling.
+      const salvaged = this.salvageTruncatedInfo(content, fallbackTitle);
+      if (salvaged) {
+        this.logger.warn(
+          `Recovered partial entity info for "${fallbackTitle}" from truncated JSON`,
+        );
+        return salvaged;
+      }
+
       return {
         title: fallbackTitle,
         summary: 'Unable to generate information at this time.',
@@ -385,5 +398,55 @@ export class EntityDetectionEngine {
         related_entities: [],
       };
     }
+  }
+
+  /**
+   * Best-effort recovery from valid-but-truncated JSON (the output hit the
+   * token cap mid-string, so `JSON.parse` throws on the unterminated value).
+   *
+   * The schema emits fields in order title → summary → details →
+   * related_entities, so an overflow truncates the LATER fields while the
+   * earlier ones stay complete. Each `"key": "value"` is extracted via regex;
+   * a truncated value has no closing quote and simply won't match, leaving that
+   * field empty. Returns null only when even the headline fields are missing
+   * (i.e. the response was genuine garbage, not a clean truncation).
+   */
+  private salvageTruncatedInfo(
+    content: string,
+    fallbackTitle: string,
+  ): {
+    title: string;
+    summary: string;
+    details: string;
+    related_entities: string[];
+  } | null {
+    const extractString = (key: string): string => {
+      // Capture a complete JSON string value, honoring escaped quotes (\").
+      const match = content.match(
+        new RegExp(`"${key}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"`),
+      );
+      if (!match) return '';
+      try {
+        // Re-parse so JSON escapes (\n, \", \uXXXX) decode to real characters.
+        return JSON.parse(`"${match[1]}"`) as string;
+      } catch {
+        return '';
+      }
+    };
+
+    const title = extractString('title');
+    const summary = extractString('summary');
+    const details = extractString('details');
+
+    // Only worth surfacing if we recovered the headline content; otherwise let
+    // the caller fall through to the explicit error message.
+    if (!title && !summary) return null;
+
+    return {
+      title: title || fallbackTitle,
+      summary: summary || '',
+      details,
+      related_entities: [],
+    };
   }
 }

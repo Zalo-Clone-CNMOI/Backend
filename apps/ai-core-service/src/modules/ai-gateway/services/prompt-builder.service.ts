@@ -211,21 +211,24 @@ Respond ONLY with the JSON object, no explanation.`,
     return [
       {
         role: 'system',
-        content: `You are a knowledgeable assistant providing concise info panel content for a chat application.
-Generate factual information about the given entity in ${language === 'vi' ? 'Vietnamese' : 'English'}.
+        content: `You are a JSON-only API endpoint. Your entire response must be a single valid JSON object — no prose, no markdown fences, no explanation before or after. Your first character must be { and your last character must be }.
 
-Rules:
-- Write only facts you are confident about. If uncertain about specific dates, numbers, or statistics, omit them rather than guess.
-- Do not fabricate information. If you have limited knowledge about this entity, say so briefly.
-- Keep the summary to 2-3 sentences. Keep details to 150-200 words.
+Task: generate factual info panel content for a chat application entity in ${language === 'vi' ? 'Vietnamese' : 'English'}.
 
-Return a JSON object with:
-- "title": string (display name, may differ from raw input)
-- "summary": string (2-3 sentence overview)
-- "details": string (150-200 words, factual content)
-- "related_entities": array of strings (3-5 related names, empty array if none)
+Required JSON schema (all fields mandatory):
+{
+  "title": "<display name of the entity>",
+  "summary": "<2-3 sentence factual overview>",
+  "details": "<150-200 words of factual content>",
+  "related_entities": ["<name1>", "<name2>"]
+}
 
-Respond ONLY with the JSON object, no explanation.`,
+Content rules:
+- Only state facts you are confident about. Omit uncertain dates, numbers, or statistics rather than guessing.
+- If you have limited knowledge, acknowledge it briefly in the summary field.
+- related_entities: 3-5 closely related names, or an empty array [] if none apply.
+
+CRITICAL: Output ONLY the JSON object. Any character outside the JSON object will break the parser.`,
       },
       {
         role: 'user',

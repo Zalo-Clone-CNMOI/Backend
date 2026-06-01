@@ -15,6 +15,7 @@ import { MessagesModule } from './modules/messages';
 import { DeviceTokensModule } from './modules/device-tokens/device-tokens.module';
 import { MediaModule } from './modules/media';
 import { EntityInfoModule } from './modules/entity-info';
+import { EntityDetectionsModule } from './modules/entity-detections/entity-detections.module';
 import { AiAssistModule } from './modules/ai-assist/ai-assist.module';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import { ThrottlerModule, seconds } from '@nestjs/throttler';
@@ -45,6 +46,7 @@ import { RedisModule } from '@libs/redis';
     DeviceTokensModule,
     MediaModule,
     EntityInfoModule,
+    EntityDetectionsModule,
     AiAssistModule,
   ],
   controllers: [BffServiceController],

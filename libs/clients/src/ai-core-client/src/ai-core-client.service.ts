@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
+  EntityDetectionsApi,
+  EntityDetectionsResponseDto,
   EntityInfoApi,
   EntityType,
   ModerationApi,
@@ -20,6 +22,7 @@ export class AiCoreClientService extends BaseHttpClient {
     private readonly entityInfoApi: EntityInfoApi,
     private readonly zaiAssistApi: ZaiAssistApi,
     private readonly moderationApi: ModerationApi,
+    private readonly entityDetectionsApi: EntityDetectionsApi,
   ) {
     super();
   }
@@ -106,6 +109,21 @@ export class AiCoreClientService extends BaseHttpClient {
       return response.data;
     } catch (error) {
       this.handleError('checkPreSendModeration', error);
+    }
+  }
+
+  async getEntityDetections(params: {
+    conversationId: string;
+    userId: string;
+  }): Promise<EntityDetectionsResponseDto> {
+    try {
+      const response = await this.entityDetectionsApi.getEntityDetections({
+        conversationId: params.conversationId,
+        userId: params.userId,
+      });
+      return response.data;
+    } catch (error) {
+      this.handleError('getEntityDetections', error);
     }
   }
 }

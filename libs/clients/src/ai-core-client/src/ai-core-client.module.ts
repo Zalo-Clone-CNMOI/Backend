@@ -1,7 +1,7 @@
 import { Module, DynamicModule } from '@nestjs/common';
 import { HttpModule } from '@nestjs/axios';
 import { AiCoreClientService } from './ai-core-client.service';
-import { EntityInfoApi, ModerationApi, ZaiAssistApi } from './client';
+import { EntityDetectionsApi, EntityInfoApi, ModerationApi, ZaiAssistApi } from './client';
 import {
   AiCoreClientConfig,
   AiCoreClientAsyncConfig,
@@ -21,6 +21,7 @@ export class AiCoreClientModule {
         injectApiProvider(EntityInfoApi, config),
         injectApiProvider(ZaiAssistApi, config),
         injectApiProvider(ModerationApi, config),
+        injectApiProvider(EntityDetectionsApi, config),
         AiCoreClientService,
       ],
       exports: [
@@ -28,6 +29,7 @@ export class AiCoreClientModule {
         EntityInfoApi,
         ZaiAssistApi,
         ModerationApi,
+        EntityDetectionsApi,
       ],
     };
   }
@@ -46,6 +48,7 @@ export class AiCoreClientModule {
         injectApiProviderAsync(EntityInfoApi),
         injectApiProviderAsync(ZaiAssistApi),
         injectApiProviderAsync(ModerationApi),
+        injectApiProviderAsync(EntityDetectionsApi),
         AiCoreClientService,
       ],
       exports: [
@@ -53,6 +56,7 @@ export class AiCoreClientModule {
         EntityInfoApi,
         ZaiAssistApi,
         ModerationApi,
+        EntityDetectionsApi,
       ],
     };
   }

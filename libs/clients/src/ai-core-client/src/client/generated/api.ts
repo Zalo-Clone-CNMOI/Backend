@@ -189,6 +189,58 @@ export interface AiEntityInfoResultDto {
 /**
  * 
  * @export
+ * @interface DetectedEntityDto
+ */
+export interface DetectedEntityDto {
+    /**
+     * 
+     * @type {string}
+     * @memberof DetectedEntityDto
+     */
+    'text': string;
+    /**
+     * 
+     * @type {EntityType}
+     * @memberof DetectedEntityDto
+     */
+    'type': EntityType;
+    /**
+     * 
+     * @type {number}
+     * @memberof DetectedEntityDto
+     */
+    'confidence': number;
+    /**
+     * 
+     * @type {number}
+     * @memberof DetectedEntityDto
+     */
+    'start_index': number;
+    /**
+     * 
+     * @type {number}
+     * @memberof DetectedEntityDto
+     */
+    'end_index': number;
+}
+
+
+/**
+ * 
+ * @export
+ * @interface EntityDetectionsResponseDto
+ */
+export interface EntityDetectionsResponseDto {
+    /**
+     * 
+     * @type {Array<MessageEntitiesDto>}
+     * @memberof EntityDetectionsResponseDto
+     */
+    'items': Array<MessageEntitiesDto>;
+}
+/**
+ * 
+ * @export
  * @enum {string}
  */
 
@@ -203,6 +255,25 @@ export enum EntityType {
 }
 
 
+/**
+ * 
+ * @export
+ * @interface MessageEntitiesDto
+ */
+export interface MessageEntitiesDto {
+    /**
+     * 
+     * @type {string}
+     * @memberof MessageEntitiesDto
+     */
+    'message_id': string;
+    /**
+     * 
+     * @type {Array<DetectedEntityDto>}
+     * @memberof MessageEntitiesDto
+     */
+    'entities': Array<DetectedEntityDto>;
+}
 /**
  * 
  * @export
@@ -289,6 +360,146 @@ export interface PreSendModerationCheckResponseDto {
      * @memberof PreSendModerationCheckResponseDto
      */
     'decision_source': ModerationDecisionSource;
+}
+
+
+
+/**
+ * EntityDetectionsApi - axios parameter creator
+ * @export
+ */
+export const EntityDetectionsApiAxiosParamCreator = function (configuration?: Configuration) {
+    return {
+        /**
+         * 
+         * @summary Fetch persisted entity detections for a conversation (reload restore)
+         * @param {string} conversationId 
+         * @param {string} userId 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        getEntityDetections: async (conversationId: string, userId: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'conversationId' is not null or undefined
+            assertParamExists('getEntityDetections', 'conversationId', conversationId)
+            // verify required parameter 'userId' is not null or undefined
+            assertParamExists('getEntityDetections', 'userId', userId)
+            const localVarPath = `/entity-detections`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            if (conversationId !== undefined) {
+                localVarQueryParameter['conversation_id'] = conversationId;
+            }
+
+            if (userId !== undefined) {
+                localVarQueryParameter['user_id'] = userId;
+            }
+
+
+    
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+    }
+};
+
+/**
+ * EntityDetectionsApi - functional programming interface
+ * @export
+ */
+export const EntityDetectionsApiFp = function(configuration?: Configuration) {
+    const localVarAxiosParamCreator = EntityDetectionsApiAxiosParamCreator(configuration)
+    return {
+        /**
+         * 
+         * @summary Fetch persisted entity detections for a conversation (reload restore)
+         * @param {string} conversationId 
+         * @param {string} userId 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async getEntityDetections(conversationId: string, userId: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<EntityDetectionsResponseDto>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.getEntityDetections(conversationId, userId, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['EntityDetectionsApi.getEntityDetections']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+    }
+};
+
+/**
+ * EntityDetectionsApi - factory interface
+ * @export
+ */
+export const EntityDetectionsApiFactory = function (configuration?: Configuration, basePath?: string, axios?: AxiosInstance) {
+    const localVarFp = EntityDetectionsApiFp(configuration)
+    return {
+        /**
+         * 
+         * @summary Fetch persisted entity detections for a conversation (reload restore)
+         * @param {EntityDetectionsApiGetEntityDetectionsRequest} requestParameters Request parameters.
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        getEntityDetections(requestParameters: EntityDetectionsApiGetEntityDetectionsRequest, options?: RawAxiosRequestConfig): AxiosPromise<EntityDetectionsResponseDto> {
+            return localVarFp.getEntityDetections(requestParameters.conversationId, requestParameters.userId, options).then((request) => request(axios, basePath));
+        },
+    };
+};
+
+/**
+ * Request parameters for getEntityDetections operation in EntityDetectionsApi.
+ * @export
+ * @interface EntityDetectionsApiGetEntityDetectionsRequest
+ */
+export interface EntityDetectionsApiGetEntityDetectionsRequest {
+    /**
+     * 
+     * @type {string}
+     * @memberof EntityDetectionsApiGetEntityDetections
+     */
+    readonly conversationId: string
+
+    /**
+     * 
+     * @type {string}
+     * @memberof EntityDetectionsApiGetEntityDetections
+     */
+    readonly userId: string
+}
+
+/**
+ * EntityDetectionsApi - object-oriented interface
+ * @export
+ * @class EntityDetectionsApi
+ * @extends {BaseAPI}
+ */
+export class EntityDetectionsApi extends BaseAPI {
+    /**
+     * 
+     * @summary Fetch persisted entity detections for a conversation (reload restore)
+     * @param {EntityDetectionsApiGetEntityDetectionsRequest} requestParameters Request parameters.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof EntityDetectionsApi
+     */
+    public getEntityDetections(requestParameters: EntityDetectionsApiGetEntityDetectionsRequest, options?: RawAxiosRequestConfig) {
+        return EntityDetectionsApiFp(this.configuration).getEntityDetections(requestParameters.conversationId, requestParameters.userId, options).then((request) => request(this.axios, this.basePath));
+    }
 }
 
 

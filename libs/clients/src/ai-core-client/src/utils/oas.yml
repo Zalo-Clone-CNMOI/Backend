@@ -70,6 +70,32 @@ paths:
                 $ref: '#/components/schemas/PreSendModerationCheckResponseDto'
         '400':
           description: Validation error
+  /entity-detections:
+    get:
+      tags:
+        - EntityDetections
+      summary: Fetch persisted entity detections for a conversation (reload restore)
+      operationId: getEntityDetections
+      parameters:
+        - name: conversation_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: user_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Per-message detected entities with offsets
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntityDetectionsResponseDto'
+        '400':
+          description: Invalid query parameters
   /catch-up:
     get:
       tags:
@@ -252,3 +278,43 @@ components:
           type: number
         trace_id:
           type: string
+    DetectedEntityDto:
+      type: object
+      required:
+        - text
+        - type
+        - confidence
+        - start_index
+        - end_index
+      properties:
+        text:
+          type: string
+        type:
+          $ref: '#/components/schemas/EntityType'
+        confidence:
+          type: number
+        start_index:
+          type: integer
+        end_index:
+          type: integer
+    MessageEntitiesDto:
+      type: object
+      required:
+        - message_id
+        - entities
+      properties:
+        message_id:
+          type: string
+        entities:
+          type: array
+          items:
+            $ref: '#/components/schemas/DetectedEntityDto'
+    EntityDetectionsResponseDto:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MessageEntitiesDto'

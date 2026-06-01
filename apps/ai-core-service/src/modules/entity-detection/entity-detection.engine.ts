@@ -209,7 +209,7 @@ export class EntityDetectionEngine {
       const result = await withTimeout(
         this.gateway.complete(event.user_id, {
           messages,
-          maxTokens: 600,
+          maxTokens: 1500,
           temperature: 0.1,
           responseFormat: 'json_object',
         }),

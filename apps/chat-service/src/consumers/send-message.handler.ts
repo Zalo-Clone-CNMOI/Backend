@@ -461,7 +461,7 @@ export class SendMessageHandler {
             `[${params.traceId}] AiEntityDetectionRequest emitted for message: ${params.messageId}`,
           );
         } catch (err) {
-          this.shared.logger.error(
+          this.shared.logger.warn(
             `[${params.traceId}] AiEntityDetectionRequest emit failed`,
             err,
           );

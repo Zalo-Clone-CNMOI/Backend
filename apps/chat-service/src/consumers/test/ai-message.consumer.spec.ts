@@ -162,8 +162,12 @@ describe('AiMessageConsumer', () => {
     );
   });
 
-  it('does NOT emit AiEntityDetectionRequest for an empty/whitespace Zai body', async () => {
-    const payload = buildPayload({ body: '   ' });
+  it.each([
+    ['empty string', ''],
+    ['whitespace only', '   '],
+    ['undefined body', undefined],
+  ])('does NOT emit AiEntityDetectionRequest for body=%s', async (_label, body) => {
+    const payload = buildPayload({ body } as any);
     await consumer.onAiMessage(payload);
 
     const calls = (publisher.emit as jest.Mock).mock.calls as [string, unknown][];

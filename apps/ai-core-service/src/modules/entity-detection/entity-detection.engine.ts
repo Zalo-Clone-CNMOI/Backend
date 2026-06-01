@@ -217,6 +217,12 @@ export class EntityDetectionEngine {
         'entity_info',
       );
 
+      this.logger.debug(
+        `[entity-info] raw LLM response for "${event.entity_text}" ` +
+          `(provider=${result.provider} tokens=${result.tokensIn + result.tokensOut}): ` +
+          result.content.slice(0, 500),
+      );
+
       const parsed = this.parseInfoResponse(result.content, event.entity_text);
 
       this.aiMetrics.recordRequest(
@@ -256,8 +262,12 @@ export class EntityDetectionEngine {
 
       return infoResult;
     } catch (error) {
+      const isTimeout =
+        error instanceof Error && error.message.includes('timed out');
       this.logger.error(
-        `Entity info generation failed for "${event.entity_text}": ${error instanceof Error ? error.message : String(error)}`,
+        `Entity info generation failed for "${event.entity_text}" ` +
+          `[${isTimeout ? 'TIMEOUT' : 'GATEWAY_ERROR'}]: ` +
+          `${error instanceof Error ? error.message : String(error)}`,
       );
 
       this.aiMetrics.recordRequest(
@@ -362,8 +372,12 @@ export class EntityDetectionEngine {
             )
           : [],
       };
-    } catch {
-      this.logger.warn('Failed to parse entity info response');
+    } catch (err) {
+      this.logger.warn(
+        `Failed to parse entity info response — ` +
+          `error: ${err instanceof Error ? err.message : String(err)} | ` +
+          `raw (first 300): ${content.slice(0, 300)}`,
+      );
       return {
         title: fallbackTitle,
         summary: 'Unable to generate information at this time.',

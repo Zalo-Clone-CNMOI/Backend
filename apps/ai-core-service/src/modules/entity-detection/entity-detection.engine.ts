@@ -211,6 +211,7 @@ export class EntityDetectionEngine {
           messages,
           maxTokens: 600,
           temperature: 0.1,
+          responseFormat: 'json_object',
         }),
         AI_SYNC_COMPLETION_TIMEOUT_MS,
         'entity_info',
@@ -365,7 +366,7 @@ export class EntityDetectionEngine {
       this.logger.warn('Failed to parse entity info response');
       return {
         title: fallbackTitle,
-        summary: '',
+        summary: 'Unable to generate information at this time.',
         details: '',
         related_entities: [],
       };

@@ -166,11 +166,16 @@ describe('AiMessageConsumer', () => {
     ['empty string', ''],
     ['whitespace only', '   '],
     ['undefined body', undefined],
-  ])('does NOT emit AiEntityDetectionRequest for body=%s', async (_label, body) => {
-    const payload = buildPayload({ body } as any);
-    await consumer.onAiMessage(payload);
+  ])(
+    'does NOT emit AiEntityDetectionRequest for body=%s',
+    async (_label, body) => {
+      const payload = buildPayload({ body } as unknown);
+      await consumer.onAiMessage(payload);
 
-    const calls = (publisher.emit as jest.Mock).mock.calls as [string, unknown][];
-    expect(calls.some(([t]) => t === KafkaTopics.AiEntityDetectionRequest)).toBe(false);
-  });
+      const calls = publisher.emit.mock.calls as [string, unknown][];
+      expect(
+        calls.some(([t]) => t === KafkaTopics.AiEntityDetectionRequest),
+      ).toBe(false);
+    },
+  );
 });

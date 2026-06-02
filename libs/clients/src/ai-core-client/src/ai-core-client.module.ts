@@ -1,7 +1,12 @@
 import { Module, DynamicModule } from '@nestjs/common';
 import { HttpModule } from '@nestjs/axios';
 import { AiCoreClientService } from './ai-core-client.service';
-import { EntityDetectionsApi, EntityInfoApi, ModerationApi, ZaiAssistApi } from './client';
+import {
+  EntityDetectionsApi,
+  EntityInfoApi,
+  ModerationApi,
+  ZaiAssistApi,
+} from './client';
 import {
   AiCoreClientConfig,
   AiCoreClientAsyncConfig,

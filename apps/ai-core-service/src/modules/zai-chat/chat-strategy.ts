@@ -31,7 +31,6 @@ export type StrategyOutcome =
   | { kind: 'messages'; messages: LlmChatMessage[] }
   | { kind: 'short-circuit'; result: ZaiChatResult };
 
-
 export interface ChatStrategy {
   readonly name: string;
 
@@ -41,7 +40,6 @@ export interface ChatStrategy {
     history: LlmChatMessage[],
   ): Promise<StrategyOutcome>;
 }
-
 
 export class DocumentChatStrategy implements ChatStrategy {
   readonly name = 'document';

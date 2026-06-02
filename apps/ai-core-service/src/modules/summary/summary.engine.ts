@@ -199,9 +199,9 @@ export class SummaryEngine {
     }
 
     const dbMsgIds = allDbMessages
-      ? filterMessagesForSummarization(allDbMessages, { requireBody: true }).map(
-          (m) => m.message_id,
-        )
+      ? filterMessagesForSummarization(allDbMessages, {
+          requireBody: true,
+        }).map((m) => m.message_id)
       : [];
 
     if (

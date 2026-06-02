@@ -1,4 +1,7 @@
-import { withTimeout, AI_SYNC_COMPLETION_TIMEOUT_MS } from './with-timeout.util';
+import {
+  withTimeout,
+  AI_SYNC_COMPLETION_TIMEOUT_MS,
+} from './with-timeout.util';
 
 describe('withTimeout', () => {
   afterEach(() => {

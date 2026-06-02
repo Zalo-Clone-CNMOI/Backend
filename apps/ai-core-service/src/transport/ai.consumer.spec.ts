@@ -585,9 +585,7 @@ describe('AiConsumer', () => {
     it('releases the mention cooldown when engine throws AND trigger=mention', async () => {
       zaiChatEngine.respond.mockRejectedValue(new Error('LLM down'));
 
-      await consumer.onZaiChatRequest(
-        makeZaiEvent({ trigger: 'mention' }),
-      );
+      await consumer.onZaiChatRequest(makeZaiEvent({ trigger: 'mention' }));
 
       expect(cacheService.releaseMentionCooldown).toHaveBeenCalledWith(
         'conv-z',
@@ -627,9 +625,7 @@ describe('AiConsumer', () => {
         tokensOut: 1,
       });
 
-      await consumer.onZaiChatRequest(
-        makeZaiEvent({ trigger: 'mention' }),
-      );
+      await consumer.onZaiChatRequest(makeZaiEvent({ trigger: 'mention' }));
 
       expect(cacheService.releaseMentionCooldown).not.toHaveBeenCalled();
     });

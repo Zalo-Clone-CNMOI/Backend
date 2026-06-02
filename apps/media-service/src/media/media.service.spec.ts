@@ -60,11 +60,12 @@ describe('MediaService', () => {
         (value) => value as DocumentMetadata,
       ),
       findOne: jest.fn().mockResolvedValue(null),
-      save: jest
-        .fn()
-        .mockImplementation((entity: Partial<DocumentMetadata>) =>
-          Promise.resolve({ ...entity, id: 'doc-uuid-stub' } as DocumentMetadata),
-        ),
+      save: jest.fn().mockImplementation((entity: Partial<DocumentMetadata>) =>
+        Promise.resolve({
+          ...entity,
+          id: 'doc-uuid-stub',
+        } as DocumentMetadata),
+      ),
     };
 
     membershipService = {

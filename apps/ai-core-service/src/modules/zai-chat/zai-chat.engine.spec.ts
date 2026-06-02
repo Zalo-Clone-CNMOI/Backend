@@ -651,7 +651,10 @@ describe('ZaiChatEngine', () => {
     imageResolver.resolve.mockResolvedValue([IMG_PART]);
 
     await engine.respond(
-      makeEvent({ body: '', images: [{ key: 'k1', content_type: 'image/png' }] }),
+      makeEvent({
+        body: '',
+        images: [{ key: 'k1', content_type: 'image/png' }],
+      }),
     );
 
     const content = lastUserContent() as { type: string; text?: string }[];
@@ -663,12 +666,20 @@ describe('ZaiChatEngine', () => {
   });
 
   it('vision disabled: does not resolve images, content stays plain text', async () => {
-    await build(makeMessageRepo([makeMsg('m1', USER_ID, 'hi')]), undefined, undefined, {
-      zaiVisionEnabled: false,
-    });
+    await build(
+      makeMessageRepo([makeMsg('m1', USER_ID, 'hi')]),
+      undefined,
+      undefined,
+      {
+        zaiVisionEnabled: false,
+      },
+    );
 
     await engine.respond(
-      makeEvent({ body: 'hi', images: [{ key: 'k1', content_type: 'image/png' }] }),
+      makeEvent({
+        body: 'hi',
+        images: [{ key: 'k1', content_type: 'image/png' }],
+      }),
     );
 
     expect(imageResolver.resolve).not.toHaveBeenCalled();
@@ -684,7 +695,10 @@ describe('ZaiChatEngine', () => {
     imageResolver.resolve.mockResolvedValue([]); // all failed / filtered
 
     await engine.respond(
-      makeEvent({ body: 'hi', images: [{ key: 'k1', content_type: 'image/png' }] }),
+      makeEvent({
+        body: 'hi',
+        images: [{ key: 'k1', content_type: 'image/png' }],
+      }),
     );
 
     const content = lastUserContent();

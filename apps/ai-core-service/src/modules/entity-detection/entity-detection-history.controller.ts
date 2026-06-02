@@ -13,7 +13,8 @@ export class EntityDetectionHistoryController {
 
   @Get()
   @ApiOperation({
-    summary: 'Fetch persisted entity detections for a conversation (reload restore)',
+    summary:
+      'Fetch persisted entity detections for a conversation (reload restore)',
   })
   @ApiQuery({ name: 'conversation_id', required: true })
   @ApiQuery({ name: 'user_id', required: true })
@@ -24,7 +25,9 @@ export class EntityDetectionHistoryController {
   @ApiResponse({ status: 400, description: 'Invalid query parameters' })
   async getDetections(@Query() query: EntityDetectionsQueryDto) {
     if (!query.conversation_id?.trim()) {
-      throw BusinessException.badRequest('conversation_id query parameter is required');
+      throw BusinessException.badRequest(
+        'conversation_id query parameter is required',
+      );
     }
     if (!query.user_id?.trim()) {
       throw BusinessException.badRequest('user_id query parameter is required');

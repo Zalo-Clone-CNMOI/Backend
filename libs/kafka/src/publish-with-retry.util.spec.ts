@@ -53,7 +53,12 @@ describe('publishKafkaWithRetry', () => {
       topic: 'ai.stream.chunk',
       payload,
       producer: 'TestPublisher',
-      retryPolicy: { maxRetries: 1, backoffBaseMs: 1, backoffCapMs: 1, timeoutMs: 50 },
+      retryPolicy: {
+        maxRetries: 1,
+        backoffBaseMs: 1,
+        backoffCapMs: 1,
+        timeoutMs: 50,
+      },
     });
     // No key → message is the raw payload, NOT { key, value }.
     expect(kafka.emit).toHaveBeenCalledWith('ai.stream.chunk', payload);
@@ -69,7 +74,12 @@ describe('publishKafkaWithRetry', () => {
       payload,
       key: 'stream-42',
       producer: 'TestPublisher',
-      retryPolicy: { maxRetries: 1, backoffBaseMs: 1, backoffCapMs: 1, timeoutMs: 50 },
+      retryPolicy: {
+        maxRetries: 1,
+        backoffBaseMs: 1,
+        backoffCapMs: 1,
+        timeoutMs: 50,
+      },
     });
     expect(kafka.emit).toHaveBeenCalledWith('ai.stream.chunk', {
       key: 'stream-42',

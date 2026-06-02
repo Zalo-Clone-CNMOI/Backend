@@ -157,7 +157,11 @@ export class AiGatewayService {
             cleaned !== chunk.content ? { ...chunk, content: cleaned } : chunk,
           );
         };
-        const raw = await provider.completeStream(options, cleaningOnChunk, signal);
+        const raw = await provider.completeStream(
+          options,
+          cleaningOnChunk,
+          signal,
+        );
         const result = { ...raw, content: cleanLlmContent(raw.content) };
         this.onSuccess(provider.name);
         await this.tokenBudget.consume(

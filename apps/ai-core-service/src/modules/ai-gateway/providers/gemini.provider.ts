@@ -58,7 +58,7 @@ export class GeminiProvider implements ILlmProvider {
       });
 
       const lastMessage = chatMessages[chatMessages.length - 1];
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+
       const result = await chat.sendMessage(lastMessage.parts[0].text);
       const response = result.response;
 
@@ -120,7 +120,7 @@ export class GeminiProvider implements ILlmProvider {
       });
 
       const lastMessage = chatMessages[chatMessages.length - 1];
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+
       const result = await chat.sendMessageStream(lastMessage.parts[0].text);
 
       for await (const chunk of result.stream) {

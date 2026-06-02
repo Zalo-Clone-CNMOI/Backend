@@ -44,7 +44,7 @@ const SUPPORTED_EMBEDDING_MODELS: readonly string[] = [
 function resolveEmbeddingModel(configured: string | undefined): string {
   const fallback = 'text-embedding-3-small';
   if (!configured) return fallback;
-  if (!(SUPPORTED_EMBEDDING_MODELS as readonly string[]).includes(configured)) {
+  if (!SUPPORTED_EMBEDDING_MODELS.includes(configured)) {
     throw new Error(
       `Unsupported embedding model "${configured}". ` +
         `Supported models: ${SUPPORTED_EMBEDDING_MODELS.join(', ')}`,
@@ -56,8 +56,7 @@ function resolveEmbeddingModel(configured: string | undefined): string {
 function resolveEmbeddingProvider(model: string): string {
   if ((OPENAI_EMBEDDING_MODELS as readonly string[]).includes(model))
     return 'openai';
-  if ((VOYAGE_EMBEDDING_MODELS as readonly string[]).includes(model))
-    return 'voyageai';
+  if (VOYAGE_EMBEDDING_MODELS.includes(model)) return 'voyageai';
   return 'unknown';
 }
 

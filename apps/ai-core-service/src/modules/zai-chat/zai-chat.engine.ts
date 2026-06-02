@@ -2,10 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { MessageRepository } from '@libs/scylla';
 import { APP_CONFIG, AppConfig } from '@libs/config';
-import {
-  type AiZaiChatRequestEvent,
-  toAiProviderType,
-} from '@libs/contracts';
+import { type AiZaiChatRequestEvent, toAiProviderType } from '@libs/contracts';
 import { AiGatewayService } from '../ai-gateway/services/ai-gateway.service';
 import { PromptBuilderService } from '../ai-gateway/services/prompt-builder.service';
 import { AiMetricsService } from '../ai-gateway/services/ai-metrics.service';
@@ -211,9 +208,7 @@ export class ZaiChatEngine {
           trace_id: event.trace_id ?? `zai-${randomUUID()}`,
           created_at: event.created_at + 1,
           // C7: document-chat replies are markdown; others stay text default.
-          ...(strategy.bodyFormat
-            ? { body_format: strategy.bodyFormat }
-            : {}),
+          ...(strategy.bodyFormat ? { body_format: strategy.bodyFormat } : {}),
         },
         provider: toAiProviderType(result.provider),
         tokensIn: result.tokensIn,

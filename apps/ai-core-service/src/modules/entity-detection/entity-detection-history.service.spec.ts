@@ -14,7 +14,10 @@ describe('EntityDetectionHistoryService', () => {
     const mod = await Test.createTestingModule({
       providers: [
         EntityDetectionHistoryService,
-        { provide: getRepositoryToken(AiEntityDetectionLog), useValue: logRepo },
+        {
+          provide: getRepositoryToken(AiEntityDetectionLog),
+          useValue: logRepo,
+        },
         { provide: MessageRepository, useValue: messageRepo },
       ],
     }).compile();
@@ -26,7 +29,10 @@ describe('EntityDetectionHistoryService', () => {
       { message_id: 'm1', body: 'Tôi dùng Google', created_at: 1 },
     ]);
     logRepo.find.mockResolvedValue([
-      { messageId: 'm1', entities: [{ text: 'Google', type: 'company', confidence: 0.9 }] },
+      {
+        messageId: 'm1',
+        entities: [{ text: 'Google', type: 'company', confidence: 0.9 }],
+      },
     ]);
 
     const result = await service.getForConversation('c1');
@@ -36,7 +42,13 @@ describe('EntityDetectionHistoryService', () => {
       {
         message_id: 'm1',
         entities: [
-          { text: 'Google', type: 'company', confidence: 0.9, start_index: 9, end_index: 15 },
+          {
+            text: 'Google',
+            type: 'company',
+            confidence: 0.9,
+            start_index: 9,
+            end_index: 15,
+          },
         ],
       },
     ]);
@@ -47,7 +59,10 @@ describe('EntityDetectionHistoryService', () => {
       { message_id: 'm1', body: 'no match here', created_at: 1 },
     ]);
     logRepo.find.mockResolvedValue([
-      { messageId: 'm1', entities: [{ text: 'Google', type: 'company', confidence: 0.9 }] },
+      {
+        messageId: 'm1',
+        entities: [{ text: 'Google', type: 'company', confidence: 0.9 }],
+      },
     ]);
 
     const result = await service.getForConversation('c1');
@@ -59,7 +74,10 @@ describe('EntityDetectionHistoryService', () => {
       { message_id: 'm1', body: 'Tôi dùng Google', created_at: 1 },
     ]);
     logRepo.find.mockResolvedValue([
-      { messageId: 'm1', entities: [{ text: 'Google', type: 'company', confidence: 0.5 }] },
+      {
+        messageId: 'm1',
+        entities: [{ text: 'Google', type: 'company', confidence: 0.5 }],
+      },
     ]);
 
     const result = await service.getForConversation('c1');

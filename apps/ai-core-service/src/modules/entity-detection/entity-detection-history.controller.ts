@@ -17,7 +17,10 @@ export class EntityDetectionHistoryController {
   })
   @ApiQuery({ name: 'conversation_id', required: true })
   @ApiQuery({ name: 'user_id', required: true })
-  @ApiResponse({ status: 200, description: 'Per-message detected entities with offsets' })
+  @ApiResponse({
+    status: 200,
+    description: 'Per-message detected entities with offsets',
+  })
   @ApiResponse({ status: 400, description: 'Invalid query parameters' })
   async getDetections(@Query() query: EntityDetectionsQueryDto) {
     if (!query.conversation_id?.trim()) {

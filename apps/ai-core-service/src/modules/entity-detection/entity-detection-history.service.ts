@@ -6,7 +6,7 @@ import { MessageRepository } from '@libs/scylla';
 import type { DetectedEntity, EntityType } from '@libs/contracts';
 
 const MIN_CONFIDENCE = 0.75; // mirrors EntityHighlightText CONFIDENCE_THRESHOLD
-const FETCH_CAP = 500;       // mirrors catch-up FETCH_CAP for body lookup
+const FETCH_CAP = 500; // mirrors catch-up FETCH_CAP for body lookup
 
 export interface MessageEntities {
   message_id: string;

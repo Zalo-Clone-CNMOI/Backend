@@ -1,0 +1,51 @@
+# ================================================
+# Caddy reverse proxy for Zalo Clone Backend
+# ================================================
+#
+# Terminates TLS (Let's Encrypt) and proxies:
+#   /socket.io/*  -> ws-gateway:3001   (WSS — fixes browser Mixed Content)
+#   /api/*        -> bff-service:5000  (HTTPS REST aggregator)
+#
+# The public hostname is injected via the PUBLIC_HOSTNAME env var so it can be
+# swapped without editing this file (e.g. when the EC2 IP changes or a real
+# domain is added). Default targets the current Elastic IP via nip.io, which
+# resolves <dashed-ip>.nip.io -> that IP with no DNS setup required, letting
+# Let's Encrypt issue a real browser-trusted cert over the HTTP-01 challenge.
+#
+# Caddy upgrades WebSocket connections inside reverse_proxy automatically — no
+# explicit Upgrade/Connection header handling needed (unlike nginx).
+{
+	# ACME account email for Let's Encrypt expiry notices. Override in prod.
+	email {$CADDY_ACME_EMAIL:admin@example.com}
+}
+
+{$PUBLIC_HOSTNAME:18-138-217-102.nip.io} {
+	# Socket.IO real-time gateway (WebSocket + long-poll fallback).
+	# No timeout cap here: Socket.IO manages its own ping/pong heartbeat, and
+	# Caddy keeps the upstream connection open for the lifetime of the socket.
+	handle /socket.io/* {
+		reverse_proxy ws-gateway:3001
+	}
+
+	# REST API aggregator. All browser REST calls flow through here over HTTPS,
+	# which also clears the Mixed Content block for non-WebSocket requests.
+	handle /api/* {
+		reverse_proxy bff-service:5000
+	}
+
+	# Lightweight edge health check (does not hit any upstream).
+	handle /health {
+		respond "healthy" 200
+	}
+
+	# Anything else is not a public backend route.
+	handle {
+		respond "Not Found" 404
+	}
+
+	# Structured access logs to stdout (captured by `docker logs zalo_caddy`).
+	log {
+		output stdout
+		format console
+	}
+}

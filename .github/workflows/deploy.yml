@@ -181,16 +181,39 @@ jobs:
           tags: |
             type=sha
             type=raw,value=latest
-      - uses: docker/build-push-action@v5
+      # Build + push with retry. ghcr.io periodically returns transient 502s on
+      # blob/token endpoints; a single blip should not fail the whole job. The
+      # nick-fields/retry action can only retry a shell command (it cannot wrap a
+      # `uses:` step), so we invoke buildx directly. The type=gha cache makes any
+      # retry near-instant — only the failed push layers are re-sent.
+      - name: Build and push (retry on transient registry errors)
         if: matrix.enabled == 'true'
+        uses: nick-fields/retry@v3
         with:
-          context: .
-          file: apps/${{ matrix.service }}/Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          timeout_minutes: 30
+          max_attempts: 3
+          retry_wait_seconds: 30
+          # Retry on any non-zero exit (502s surface as a failed push); buildx is
+          # idempotent against the gha cache so re-running is safe.
+          command: |
+            # Build buildx args as a bash array so tag/label VALUES containing
+            # spaces (e.g. org.opencontainers.image.description) survive intact —
+            # plain string concatenation + unquoted expansion would word-split them.
+            args=()
+            while IFS= read -r t; do
+              [ -n "$t" ] && args+=(--tag "$t")
+            done <<< "${{ steps.meta.outputs.tags }}"
+            while IFS= read -r l; do
+              [ -n "$l" ] && args+=(--label "$l")
+            done <<< "${{ steps.meta.outputs.labels }}"
+
+            docker buildx build \
+              --file "apps/${{ matrix.service }}/Dockerfile" \
+              "${args[@]}" \
+              --cache-from type=gha \
+              --cache-to type=gha,mode=max \
+              --push \
+              .
 
   deploy:
     runs-on: ubuntu-latest

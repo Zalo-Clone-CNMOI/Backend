@@ -1,6 +1,51 @@
 name: app-compose-prod
 
 services:
+  caddy:
+    image: caddy:2.8-alpine
+    container_name: zalo_caddy
+    # TLS termination + reverse proxy. Fronts the browser-facing services so the
+    # HTTPS Vercel frontend can reach them over wss:// / https:// — a plain
+    # ws://IP:3001 is blocked by browser Mixed Content rules.
+    environment:
+      # Public hostname Caddy requests a Let's Encrypt cert for. Default uses
+      # nip.io against the current Elastic IP; override via .env.prod when a real
+      # domain is added (e.g. PUBLIC_HOSTNAME=api.example.com).
+      PUBLIC_HOSTNAME: ${PUBLIC_HOSTNAME:-18-138-217-102.nip.io}
+      CADDY_ACME_EMAIL: ${CADDY_ACME_EMAIL:-admin@example.com}
+    ports:
+      # 80 is required for the Let's Encrypt HTTP-01 challenge + HTTP->HTTPS
+      # redirect; 443 serves HTTPS/WSS.
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Persist issued certs + ACME account across restarts to avoid hitting
+      # Let's Encrypt rate limits on every redeploy.
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - zalo_network
+    restart: unless-stopped
+    depends_on:
+      - bff-service
+      - ws-gateway
+    healthcheck:
+      test:
+        ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.3"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+
   bff-service:
     image: ${DOCKER_REGISTRY:-ghcr.io}/${DOCKER_IMAGE_PREFIX:-zalo-clone}/bff-service:${IMAGE_TAG:-latest}
     container_name: zalo_bff_service
@@ -21,7 +66,7 @@ services:
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1h}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
       JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000,http://localhost:3001,http://localhost:8081}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000,http://localhost:3001,http://localhost:8081,https://frontend-web-eight-neon.vercel.app}
       KAFKA_BROKERS: kafka:29092
       KAFKA_CLIENT_ID: bff-service
       REDIS_URL: redis://redis:6379
@@ -78,7 +123,7 @@ services:
       REDIS_URL: redis://redis:6379
       KAFKA_BROKERS: kafka:29092
       KAFKA_CLIENT_ID: sso-service
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000,http://localhost:3001,http://localhost:8081}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000,http://localhost:3001,http://localhost:8081,https://frontend-web-eight-neon.vercel.app}
       DB_HOST: ${DB_HOST:-postgres}
       DB_PORT: 5432
       DB_USERNAME: ${POSTGRES_USER:-postgres}
@@ -137,7 +182,7 @@ services:
       SCYLLA_CONTACT_POINTS: scylla
       SCYLLA_LOCAL_DATACENTER: datacenter1
       SCYLLA_KEYSPACE: chat
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000,http://localhost:3001,http://localhost:8081}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000,http://localhost:3001,http://localhost:8081,https://frontend-web-eight-neon.vercel.app}
       DB_HOST: ${DB_HOST:-postgres}
       DB_PORT: 5432
       DB_USERNAME: ${POSTGRES_USER:-postgres}
@@ -183,7 +228,7 @@ services:
       PORT: 3003
       SERVICE_NAME: media-service
       BFF_SERVICE_URL: http://bff-service:5000/api
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000,http://localhost:3001,http://localhost:8081}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000,http://localhost:3001,http://localhost:8081,https://frontend-web-eight-neon.vercel.app}
       AWS_REGION: ${AWS_REGION:-ap-southeast-1}
       S3_BUCKET: ${S3_BUCKET-zalo-bucket-clone}
       S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
@@ -314,7 +359,7 @@ services:
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1h}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
       JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000,http://localhost:3001,http://localhost:8081}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000,http://localhost:3001,http://localhost:8081,https://frontend-web-eight-neon.vercel.app}
       KAFKA_BROKERS: kafka:29092
       KAFKA_CLIENT_ID: ws-gateway
       KAFKA_GROUP_ID: ws-gateway-fanout
@@ -530,6 +575,12 @@ services:
         reservations:
           cpus: "0.25"
           memory: 256M
+
+volumes:
+  caddy_data:
+    driver: local
+  caddy_config:
+    driver: local
 
 networks:
   zalo_network:

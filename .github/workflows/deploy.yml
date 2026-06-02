@@ -12,6 +12,7 @@ on:
       - "infra-compose.yml"
       - "db-compose.yml"
       - "app-compose.yml"
+      - "infra/caddy/**"
       - ".github/workflows/**"
 
   workflow_dispatch:
@@ -101,6 +102,14 @@ jobs:
               echo "$s=false" >> $GITHUB_OUTPUT
             fi
           done
+
+          # The caddy reverse proxy is not built from source and is not a
+          # per-service matrix entry, so it never flips any service to true.
+          # Still flag any_service so the deploy job runs and re-syncs the
+          # Caddyfile + restarts caddy on a Caddyfile-only change.
+          if echo "$CHANGED" | grep -qE "infra/caddy/"; then
+            any=true
+          fi
           echo "any_service=$any" >> $GITHUB_OUTPUT
 
   lint-test:
@@ -238,6 +247,16 @@ jobs:
               app-compose.yml \
               ${{ env.EC2_USER }}@${{ env.EC2_HOST }}:~/Backend/
 
+      - name: Copy Caddy reverse-proxy config
+        run: |
+          # app-compose.yml bind-mounts ./infra/caddy/Caddyfile, so it must exist
+          # on the host before `docker compose up` runs the caddy service.
+          ssh -o BatchMode=yes -o ConnectTimeout=10 \
+              ${{ env.EC2_USER }}@${{ env.EC2_HOST }} 'mkdir -p ~/Backend/infra/caddy'
+          scp -o BatchMode=yes -o ConnectTimeout=10 \
+              infra/caddy/Caddyfile \
+              ${{ env.EC2_USER }}@${{ env.EC2_HOST }}:~/Backend/infra/caddy/Caddyfile
+
       - name: Compute image tag
         id: image-tag
         run: echo "tag=sha-${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
@@ -339,6 +358,14 @@ jobs:
             echo "Checking Infra & DB..."
             docker compose -f infra-compose.yml up -d --remove-orphans
             docker compose -f db-compose.yml up -d --remove-orphans
+
+            # Caddy (TLS reverse proxy) is not built from source and is not part
+            # of the per-service change matrix, so bring it up every deploy. It is
+            # idempotent: no-op if already running with the same config.
+            echo "🔐 Ensuring Caddy reverse proxy is up..."
+            docker compose -f app-compose.yml pull caddy || true
+            docker compose -f app-compose.yml up -d --no-deps caddy || \
+              echo "⚠️ Caddy failed to start — check 'docker logs zalo_caddy'"
 
             [ "${{ env.BFF_CHANGED }}" = "true" ] && deploy_service bff-service app-compose.yml || true
             [ "${{ env.SSO_CHANGED }}" = "true" ] && deploy_service sso-service app-compose.yml || true

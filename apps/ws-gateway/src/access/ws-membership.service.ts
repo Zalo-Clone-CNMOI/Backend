@@ -110,7 +110,7 @@ export class WsMembershipService {
         missing,
       );
       const now = Date.now();
-      for (const entry of entries) {
+      for (const entry of entries ?? []) {
         result.set(entry.conversation_id, entry.allowed);
         this.accessCache.set(
           this.getAccessCacheKey(userId, entry.conversation_id),

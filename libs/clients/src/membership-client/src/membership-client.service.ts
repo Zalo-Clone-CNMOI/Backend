@@ -16,6 +16,26 @@ export interface SendPermissionResult {
 }
 
 /**
+ * interaction-service registers a global TransformResponseInterceptor that wraps
+ * every response as { success, data, timestamp }. media-service does NOT, which
+ * is why the media client reads response.data directly. Here we must unwrap the
+ * envelope. unwrap() tolerates both shapes so it keeps working whether or not
+ * the interceptor is present (e.g. if interaction-service drops it later, or in
+ * unit tests that return the raw payload).
+ */
+function unwrap<T>(body: unknown): T {
+  if (
+    body &&
+    typeof body === 'object' &&
+    'success' in body &&
+    'data' in body
+  ) {
+    return (body as { data: T }).data;
+  }
+  return body as T;
+}
+
+/**
  * HTTP client for ws-gateway → interaction-service internal membership checks.
  * Mirrors the raw-axios pattern of MediaClientService.validateAttachments
  * (no generated OpenAPI client). baseUrl already includes interaction-service's
@@ -39,13 +59,12 @@ export class MembershipClientService extends BaseHttpClient {
   ): Promise<MembershipEntry[]> {
     if (conversationIds.length === 0) return [];
     try {
-      const response = await this.httpService.axiosRef.post<{
-        entries: MembershipEntry[];
-      }>(`${this.config.baseUrl}/v1/internal/membership/batch`, {
-        user_id: userId,
-        conversation_ids: conversationIds,
-      });
-      return response.data.entries;
+      const response = await this.httpService.axiosRef.post(
+        `${this.config.baseUrl}/v1/internal/membership/batch`,
+        { user_id: userId, conversation_ids: conversationIds },
+      );
+      const payload = unwrap<{ entries: MembershipEntry[] }>(response.data);
+      return payload.entries ?? [];
     } catch (error) {
       this.handleError('getMembershipBatch', error);
     }
@@ -56,12 +75,11 @@ export class MembershipClientService extends BaseHttpClient {
     conversationId: string,
   ): Promise<SendPermissionResult> {
     try {
-      const response =
-        await this.httpService.axiosRef.post<SendPermissionResult>(
-          `${this.config.baseUrl}/v1/internal/membership/send-permission`,
-          { user_id: userId, conversation_id: conversationId },
-        );
-      return response.data;
+      const response = await this.httpService.axiosRef.post(
+        `${this.config.baseUrl}/v1/internal/membership/send-permission`,
+        { user_id: userId, conversation_id: conversationId },
+      );
+      return unwrap<SendPermissionResult>(response.data);
     } catch (error) {
       this.handleError('getSendPermission', error);
     }
@@ -69,12 +87,12 @@ export class MembershipClientService extends BaseHttpClient {
 
   async listActiveMemberIds(conversationId: string): Promise<string[]> {
     try {
-      const response = await this.httpService.axiosRef.post<{
-        member_ids: string[];
-      }>(`${this.config.baseUrl}/v1/internal/membership/active-members`, {
-        conversation_id: conversationId,
-      });
-      return response.data.member_ids;
+      const response = await this.httpService.axiosRef.post(
+        `${this.config.baseUrl}/v1/internal/membership/active-members`,
+        { conversation_id: conversationId },
+      );
+      const payload = unwrap<{ member_ids: string[] }>(response.data);
+      return payload.member_ids ?? [];
     } catch (error) {
       this.handleError('listActiveMemberIds', error);
     }
@@ -86,13 +104,12 @@ export class MembershipClientService extends BaseHttpClient {
   ): Promise<string[]> {
     if (candidateIds.length === 0) return [];
     try {
-      const response = await this.httpService.axiosRef.post<{
-        friend_ids: string[];
-      }>(`${this.config.baseUrl}/v1/internal/friends/friend-set`, {
-        reference_user_id: referenceUserId,
-        candidate_ids: candidateIds,
-      });
-      return response.data.friend_ids;
+      const response = await this.httpService.axiosRef.post(
+        `${this.config.baseUrl}/v1/internal/friends/friend-set`,
+        { reference_user_id: referenceUserId, candidate_ids: candidateIds },
+      );
+      const payload = unwrap<{ friend_ids: string[] }>(response.data);
+      return payload.friend_ids ?? [];
     } catch (error) {
       this.handleError('getFriendSet', error);
     }

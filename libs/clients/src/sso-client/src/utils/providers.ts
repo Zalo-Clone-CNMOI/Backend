@@ -1,5 +1,5 @@
 import { HttpService } from '@nestjs/axios';
-import { FactoryProvider } from '@nestjs/common';
+import { FactoryProvider, Logger } from '@nestjs/common';
 import { AxiosInstance } from 'axios';
 import { Configuration } from '../client/generated';
 
@@ -27,6 +27,10 @@ export function injectApiProvider<T>(
   ) => T,
   config: SsoClientConfig,
 ): FactoryProvider<T> {
+  const logger = new Logger('SsoClientProviderFactory');
+  logger.debug(
+    `Creating provider for ${ApiClass.name} with config: ${JSON.stringify(config)}`,
+  );
   return {
     provide: ApiClass,
     inject: [HttpService],
@@ -37,7 +41,13 @@ export function injectApiProvider<T>(
 
       httpService.axiosRef.interceptors.request.use((config) => {
         if (config.url?.includes('/auth/qr/')) {
-          console.log('[SSO-CLIENT] QR request:', config.method?.toUpperCase(), config.url, 'body:', JSON.stringify(config.data));
+          logger.debug(
+            '[SSO-CLIENT] QR request:',
+            config.method?.toUpperCase(),
+            config.url,
+            'body:',
+            JSON.stringify(config.data),
+          );
         }
         return config;
       });

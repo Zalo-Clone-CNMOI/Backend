@@ -304,6 +304,15 @@ jobs:
 
             echo "🔍 Post-source vars: IMAGE_TAG=$IMAGE_TAG MEDIA=$MEDIA_CHANGED CHAT=$CHAT_CHANGED WS=$WS_CHANGED"
 
+            # Patch IMAGE_TAG in .env.prod so docker compose --env-file (and the
+            # implicit .env auto-load) both resolve to the current build's tag.
+            # sed -i replaces the existing IMAGE_TAG= line; if absent, appends it.
+            if grep -q "^IMAGE_TAG=" .env.prod 2>/dev/null; then
+              sed -i "s|^IMAGE_TAG=.*|IMAGE_TAG=$IMAGE_TAG|" .env.prod
+            else
+              echo "IMAGE_TAG=$IMAGE_TAG" >> .env.prod
+            fi
+
             echo "$GH_TOKEN" | docker login ghcr.io -u "$GH_ACTOR" --password-stdin
 
             echo "📊 Disk usage before deploy"

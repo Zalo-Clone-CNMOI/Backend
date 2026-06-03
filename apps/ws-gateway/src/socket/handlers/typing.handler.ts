@@ -1,7 +1,7 @@
 import { Injectable, Inject, Logger, OnModuleDestroy } from '@nestjs/common';
 import type { RedisClientType } from 'redis';
 import { REDIS_CLIENT } from '@libs/redis';
-import { ConversationMembershipService } from '@libs/mvp-access';
+import { WsMembershipService } from '../../access/ws-membership.service';
 import {
   WsEvents,
   type WsChatTypingPayload,
@@ -36,7 +36,7 @@ export class TypingHandler implements OnModuleDestroy {
 
   constructor(
     @Inject(REDIS_CLIENT) private readonly redis: RedisClientType,
-    private readonly membershipService: ConversationMembershipService,
+    private readonly membershipService: WsMembershipService,
   ) {}
 
   setServer(server: Server): void {

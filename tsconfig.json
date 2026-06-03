@@ -59,6 +59,12 @@
       "@app/clients/media-client/*": [
         "libs/clients/src/media-client/src/*"
       ],
+      "@app/clients/membership-client": [
+        "libs/clients/src/membership-client/src"
+      ],
+      "@app/clients/membership-client/*": [
+        "libs/clients/src/membership-client/src/*"
+      ],
       "@app/swagger": [
         "libs/swagger/src"
       ],

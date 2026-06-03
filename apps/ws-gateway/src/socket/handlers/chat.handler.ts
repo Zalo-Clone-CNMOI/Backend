@@ -2,7 +2,7 @@ import { Injectable, Inject } from '@nestjs/common';
 import { ClientKafka } from '@nestjs/microservices';
 import { KAFKA_CLIENT } from '@libs/kafka';
 import { MediaClientService } from '@app/clients/media-client';
-import { ConversationMembershipService } from '@libs/mvp-access';
+import { WsMembershipService } from '../../access/ws-membership.service';
 import { RedisService } from '@libs/redis';
 import { APP_CONFIG, AppConfig } from '@libs/config';
 import { messageRateKey, moderationCooldownKey } from '../throttle-keys';
@@ -44,7 +44,7 @@ export class ChatHandler {
 
   constructor(
     @Inject(KAFKA_CLIENT) private readonly kafka: ClientKafka,
-    private readonly membershipService: ConversationMembershipService,
+    private readonly membershipService: WsMembershipService,
     private readonly mediaClient: MediaClientService,
     private readonly redisService: RedisService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,

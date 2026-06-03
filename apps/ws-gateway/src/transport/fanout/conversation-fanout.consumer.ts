@@ -9,13 +9,13 @@ import {
   type ConversationMemberRoleUpdatedEvent,
 } from '@libs/contracts';
 import { ChatGateway } from '../../socket/chat.gateway';
-import { ConversationMembershipService } from '@libs/mvp-access';
+import { WsMembershipService } from '../../access/ws-membership.service';
 
 @Controller()
 export class ConversationFanoutConsumer {
   constructor(
     private readonly gateway: ChatGateway,
-    private readonly membershipService: ConversationMembershipService,
+    private readonly membershipService: WsMembershipService,
   ) {}
 
   /**

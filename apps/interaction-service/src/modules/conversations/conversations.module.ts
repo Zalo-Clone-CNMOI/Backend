@@ -14,7 +14,9 @@ import { KafkaModule, NotificationOutboxModule } from '@libs/kafka';
 import { RedisModule } from '@libs/redis';
 import { ConversationsController } from './conversations.controller';
 import { AiConversationController } from './ai-conversation.controller';
+import { InternalMembershipController } from './internal-membership.controller';
 import { ConversationsService } from './conversations.service';
+import { MembershipQueryService } from './services/membership-query.service';
 import { ConversationCoreService } from './services/conversation-core.service';
 import { ConversationMemberService } from './services/conversation-member.service';
 import { GroupInviteService } from './services/group-invite.service';
@@ -39,9 +41,14 @@ import { AiConversationFactoryService } from './services/ai-conversation-factory
     NotificationOutboxModule,
     RedisModule,
   ],
-  controllers: [ConversationsController, AiConversationController],
+  controllers: [
+    ConversationsController,
+    AiConversationController,
+    InternalMembershipController,
+  ],
   providers: [
     ConversationsService,
+    MembershipQueryService,
     ConversationCoreService,
     ConversationMemberService,
     GroupInviteService,

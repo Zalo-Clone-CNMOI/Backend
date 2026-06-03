@@ -195,6 +195,7 @@
     "moduleNameMapper": {
       "^@app/clients/interaction-client(|/.*)$": "<rootDir>/libs/clients/src/interaction-client/src/$1",
       "^@app/clients/media-client(|/.*)$": "<rootDir>/libs/clients/src/media-client/src/$1",
+      "^@app/clients/membership-client(|/.*)$": "<rootDir>/libs/clients/src/membership-client/src/$1",
       "^@app/clients(|/.*)$": "<rootDir>/libs/clients/src/$1",
       "^@app/sso-client(|/.*)$": "<rootDir>/libs/sso-client/src/$1",
       "^@app/types(|/.*)$": "<rootDir>/libs/types/src/$1",

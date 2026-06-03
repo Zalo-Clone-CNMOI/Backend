@@ -9,7 +9,7 @@
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { ChatHandler } from './chat.handler';
-import { ConversationMembershipService } from '@libs/mvp-access';
+import { WsMembershipService } from '../../access/ws-membership.service';
 import { KAFKA_CLIENT } from '@libs/kafka';
 import { RedisService } from '@libs/redis';
 import { APP_CONFIG } from '@libs/config';
@@ -99,7 +99,7 @@ function makeUnreactPayload(
 
 describe('ChatHandler', () => {
   let handler: ChatHandler;
-  let membership: jest.Mocked<ConversationMembershipService>;
+  let membership: jest.Mocked<WsMembershipService>;
   let kafka: { emit: jest.Mock };
   let mediaClient: { validateAttachments: jest.Mock };
   let redisService: { incrBy: jest.Mock; expire: jest.Mock; get: jest.Mock };
@@ -118,12 +118,14 @@ describe('ChatHandler', () => {
         ChatHandler,
         { provide: KAFKA_CLIENT, useValue: kafka },
         {
-          provide: ConversationMembershipService,
+          provide: WsMembershipService,
           useValue: {
             canUserAccessConversation: jest.fn(),
             canUserSendMessage: jest.fn(),
             listActiveMemberIds: jest.fn().mockResolvedValue([]),
-            getCachedConversationType: jest.fn().mockResolvedValue(ConversationType.GROUP),
+            getCachedConversationType: jest
+              .fn()
+              .mockResolvedValue(ConversationType.GROUP),
           },
         },
         { provide: MediaClientService, useValue: mediaClient },
@@ -136,7 +138,7 @@ describe('ChatHandler', () => {
     }).compile();
 
     handler = module.get(ChatHandler);
-    membership = module.get(ConversationMembershipService);
+    membership = module.get(WsMembershipService);
   });
 
   // ── handleJoin ────────────────────────────────────────────────────────
@@ -696,7 +698,9 @@ describe('ChatHandler', () => {
     });
 
     it('should reject @all in a direct (1-1) conversation', async () => {
-      membership.getCachedConversationType.mockResolvedValue(ConversationType.DIRECT);
+      membership.getCachedConversationType.mockResolvedValue(
+        ConversationType.DIRECT,
+      );
 
       const result = await callValidate(
         [{ user_id: '__ALL__', mention_type: 'all', offset: 0, length: 4 }],
@@ -791,7 +795,9 @@ describe('ChatHandler', () => {
     });
 
     it('should reject @all when rate-limit exceeded', async () => {
-      membership.getCachedConversationType.mockResolvedValue(ConversationType.GROUP);
+      membership.getCachedConversationType.mockResolvedValue(
+        ConversationType.GROUP,
+      );
       redisService.incrBy.mockResolvedValue(4); // over limit of 3
 
       const result = await callValidate(
@@ -805,7 +811,9 @@ describe('ChatHandler', () => {
     });
 
     it('should allow @all when under rate-limit threshold', async () => {
-      membership.getCachedConversationType.mockResolvedValue(ConversationType.GROUP);
+      membership.getCachedConversationType.mockResolvedValue(
+        ConversationType.GROUP,
+      );
       redisService.incrBy.mockResolvedValue(2);
 
       const result = await callValidate(

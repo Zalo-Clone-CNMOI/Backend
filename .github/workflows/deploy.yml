@@ -273,15 +273,31 @@ jobs:
           PRESENCE_CHANGED: ${{ needs.detect-changes.outputs.presence }}
           NOTIFICATION_CHANGED: ${{ needs.detect-changes.outputs.notification }}
           AI_CHANGED: ${{ needs.detect-changes.outputs.ai }}
-          DEPLOY_IMAGE_TAG: ${{ steps.image-tag.outputs.tag }}
         run: |
-          ssh -o BatchMode=yes -o ConnectTimeout=10 ${{ env.EC2_USER }}@${{ env.EC2_HOST }} << 'DEPLOY_SCRIPT'
+          # Pass all GitHub-resolved values as env var prefixes so the heredoc can
+          # remain single-quoted (prevents bash variable expansion on the runner).
+          # Single-quoted heredocs are safe for remote bash — no accidental $VAR
+          # expansion of remote shell variables on the GitHub Actions runner side.
+          ssh -o BatchMode=yes -o ConnectTimeout=10 ${{ env.EC2_USER }}@${{ env.EC2_HOST }} \
+            IMAGE_TAG="${{ steps.image-tag.outputs.tag }}" \
+            GH_ACTOR="${{ github.actor }}" \
+            GH_TOKEN="${{ env.GH_TOKEN }}" \
+            DOCKER_PRUNE_UNTIL="${{ env.DOCKER_PRUNE_UNTIL }}" \
+            BFF_CHANGED="${{ env.BFF_CHANGED }}" \
+            SSO_CHANGED="${{ env.SSO_CHANGED }}" \
+            INTERACTION_CHANGED="${{ env.INTERACTION_CHANGED }}" \
+            MEDIA_CHANGED="${{ env.MEDIA_CHANGED }}" \
+            CHAT_CHANGED="${{ env.CHAT_CHANGED }}" \
+            WS_CHANGED="${{ env.WS_CHANGED }}" \
+            PRESENCE_CHANGED="${{ env.PRESENCE_CHANGED }}" \
+            NOTIFICATION_CHANGED="${{ env.NOTIFICATION_CHANGED }}" \
+            AI_CHANGED="${{ env.AI_CHANGED }}" \
+            bash -s << 'DEPLOY_SCRIPT'
             set -euo pipefail
             cd ~/Backend
             mkdir -p .rollback
-            DOCKER_PRUNE_UNTIL="${{ env.DOCKER_PRUNE_UNTIL }}"
 
-            echo "${{ env.GH_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            echo "$GH_TOKEN" | docker login ghcr.io -u "$GH_ACTOR" --password-stdin
 
             echo "📊 Disk usage before deploy"
             df -h
@@ -296,8 +312,9 @@ jobs:
               set +a
             fi
 
-            # Override IMAGE_TAG with the tag from current CI build
-            export IMAGE_TAG="${{ env.DEPLOY_IMAGE_TAG }}"
+            # IMAGE_TAG is injected from the CI build via env prefix above;
+            # it overrides whatever tag was in .env.prod.
+            export IMAGE_TAG
             echo "📦 Deploying with IMAGE_TAG=$IMAGE_TAG"
 
             DEPLOYMENT_FAILED=false
@@ -308,7 +325,7 @@ jobs:
               local COMPOSE_FILE=$2
 
               echo "🚀 Deploying $SERVICE_NAME from $COMPOSE_FILE"
-              
+
               CONTAINER_ID=$(docker compose -f "$COMPOSE_FILE" ps -q "$SERVICE_NAME" 2>/dev/null || echo "")
               if [ -n "$CONTAINER_ID" ]; then
                 CURRENT_IMAGE=$(docker inspect "$CONTAINER_ID" --format '{{ .Config.Image }}')
@@ -365,15 +382,15 @@ jobs:
             docker compose -f infra-compose.yml exec -T nginx nginx -s reload 2>/dev/null || \
               echo "⚠️ nginx reload skipped (container may be starting)"
 
-            [ "${{ env.BFF_CHANGED }}" = "true" ] && deploy_service bff-service app-compose.yml || true
-            [ "${{ env.SSO_CHANGED }}" = "true" ] && deploy_service sso-service app-compose.yml || true
-            [ "${{ env.INTERACTION_CHANGED }}" = "true" ] && deploy_service interaction-service app-compose.yml || true
-            [ "${{ env.MEDIA_CHANGED }}" = "true" ] && deploy_service media-service app-compose.yml || true
-            [ "${{ env.CHAT_CHANGED }}" = "true" ] && deploy_service chat-service app-compose.yml || true
-            [ "${{ env.WS_CHANGED }}" = "true" ] && deploy_service ws-gateway app-compose.yml || true
-            [ "${{ env.PRESENCE_CHANGED }}" = "true" ] && deploy_service presence-service app-compose.yml || true
-            [ "${{ env.NOTIFICATION_CHANGED }}" = "true" ] && deploy_service notification-service app-compose.yml || true
-            [ "${{ env.AI_CHANGED }}" = "true" ] && deploy_service ai-core-service app-compose.yml || true
+            [ "$BFF_CHANGED" = "true" ] && deploy_service bff-service app-compose.yml || true
+            [ "$SSO_CHANGED" = "true" ] && deploy_service sso-service app-compose.yml || true
+            [ "$INTERACTION_CHANGED" = "true" ] && deploy_service interaction-service app-compose.yml || true
+            [ "$MEDIA_CHANGED" = "true" ] && deploy_service media-service app-compose.yml || true
+            [ "$CHAT_CHANGED" = "true" ] && deploy_service chat-service app-compose.yml || true
+            [ "$WS_CHANGED" = "true" ] && deploy_service ws-gateway app-compose.yml || true
+            [ "$PRESENCE_CHANGED" = "true" ] && deploy_service presence-service app-compose.yml || true
+            [ "$NOTIFICATION_CHANGED" = "true" ] && deploy_service notification-service app-compose.yml || true
+            [ "$AI_CHANGED" = "true" ] && deploy_service ai-core-service app-compose.yml || true
 
             if [ "$DEPLOYMENT_FAILED" = "true" ]; then
               echo "❌ Deployment failed for: $FAILED_SERVICES"

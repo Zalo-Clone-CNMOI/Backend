@@ -1,6 +1,5 @@
 import { Controller } from '@nestjs/common';
 import { EventPattern, Payload } from '@nestjs/microservices';
-import { InjectRepository } from '@nestjs/typeorm';
 import {
   KafkaTopics,
   WsEvents,
@@ -15,16 +14,12 @@ import {
   type ChatSystemMessageCreatedEvent,
 } from '@libs/contracts';
 import { FriendshipAccessService } from '@libs/mvp-access';
-import { ConversationMember } from '@libs/database/entities';
-import { IsNull, Repository } from 'typeorm';
 import { ChatGateway } from '../../socket/chat.gateway';
 
 @Controller()
 export class ChatFanoutConsumer {
   constructor(
     private readonly gateway: ChatGateway,
-    @InjectRepository(ConversationMember)
-    private readonly conversationMemberRepo: Repository<ConversationMember>,
     private readonly friendshipAccess: FriendshipAccessService,
   ) {}
 
@@ -52,15 +47,7 @@ export class ChatFanoutConsumer {
     }
 
     const sourceSenderId = payload.forwarded_from.source_sender_id;
-    const memberships = await this.conversationMemberRepo.find({
-      where: {
-        conversationId: payload.conversation_id,
-        leftAt: IsNull(),
-      },
-      select: ['userId'],
-    });
-
-    const memberUserIds = [...new Set(memberships.map((m) => m.userId))];
+    const memberUserIds = payload.member_ids ?? [];
     if (memberUserIds.length === 0) {
       return;
     }

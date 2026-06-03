@@ -4,12 +4,11 @@ import { RpcAllExceptionsFilter } from '@app/interceptors';
 import { ConfigModule } from '@libs/config';
 import { LoggerModule } from '@libs/logger';
 import { KafkaModule } from '@libs/kafka';
-import { AuthModule } from '@libs/auth';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { DatabaseModule, MediaFile, Conversation } from '@libs/database';
+import { WsAuthModule } from '@libs/auth';
 import { ConversationMembershipModule } from '@libs/mvp-access';
 import { ScyllaModule } from '@libs/scylla';
 import { RedisModule } from '@libs/redis';
+import { MediaClientModule } from '@app/clients/media-client';
 import { ChatGateway } from './socket/chat.gateway';
 import { ActiveStreamTracker } from './socket/active-stream.tracker';
 import {
@@ -36,13 +35,14 @@ import {
   imports: [
     ConfigModule,
     LoggerModule,
-    AuthModule,
-    DatabaseModule,
-    TypeOrmModule.forFeature([MediaFile, Conversation]),
+    WsAuthModule,
     ConversationMembershipModule,
     ScyllaModule,
     RedisModule.forRootAsync(),
     KafkaModule,
+    MediaClientModule.register({
+      baseUrl: process.env.MEDIA_SERVICE_URL ?? 'http://media-service:3003',
+    }),
   ],
   controllers: [
     ChatFanoutConsumer,

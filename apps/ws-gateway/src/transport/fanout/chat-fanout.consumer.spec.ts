@@ -15,11 +15,6 @@ describe('ChatFanoutConsumer', () => {
     broadcastToConversation: jest.fn<void, [string, string, unknown]>(),
     emitToUser: jest.fn<void, [string, string, unknown]>(),
   };
-  const conversationMemberRepo: {
-    find: jest.Mock<Promise<Array<{ userId: string }>>, [unknown]>;
-  } = {
-    find: jest.fn<Promise<Array<{ userId: string }>>, [unknown]>(),
-  };
   const friendshipAccess: {
     getFriendSet: jest.Mock<Promise<Set<string>>, [string, string[]]>;
   } = {
@@ -32,7 +27,6 @@ describe('ChatFanoutConsumer', () => {
     jest.clearAllMocks();
     consumer = new ChatFanoutConsumer(
       gateway as never,
-      conversationMemberRepo as never,
       friendshipAccess as never,
     );
   });
@@ -62,7 +56,6 @@ describe('ChatFanoutConsumer', () => {
         mentions: undefined,
       },
     );
-    expect(conversationMemberRepo.find).not.toHaveBeenCalled();
     expect(friendshipAccess.getFriendSet).not.toHaveBeenCalled();
     expect(gateway.emitToUser).not.toHaveBeenCalled();
   });
@@ -123,11 +116,6 @@ describe('ChatFanoutConsumer', () => {
   });
 
   it('should emit forwarded message per member and hide forwarded_from for non-friends', async () => {
-    conversationMemberRepo.find.mockResolvedValue([
-      { userId: 'source-user' },
-      { userId: 'friend-user' },
-      { userId: 'stranger-user' },
-    ]);
     friendshipAccess.getFriendSet.mockResolvedValue(new Set(['friend-user']));
 
     await consumer.onMessageCreated({
@@ -136,6 +124,7 @@ describe('ChatFanoutConsumer', () => {
       sender_id: 'forwarder-user',
       body: 'fwd body',
       created_at: 1706162800000,
+      member_ids: ['source-user', 'friend-user', 'stranger-user'],
       forwarded_from: {
         source_message_id: 'src-msg',
         source_conversation_id: 'src-conv',
@@ -147,12 +136,6 @@ describe('ChatFanoutConsumer', () => {
       trace_id: 'trace-fwd',
     });
 
-    expect(conversationMemberRepo.find).toHaveBeenCalledTimes(1);
-    const [[findQuery]] = conversationMemberRepo.find.mock.calls as Array<
-      [{ where: { conversationId: string; leftAt: unknown }; select: string[] }]
-    >;
-    expect(findQuery.where.conversationId).toBe('conv-2');
-    expect(findQuery.select).toEqual(['userId']);
     expect(friendshipAccess.getFriendSet).toHaveBeenCalledWith('source-user', [
       'source-user',
       'friend-user',

@@ -564,6 +564,10 @@ export class PersistMessageConsumer {
         forwarded_from: payload.forwarded_from,
       });
 
+      const memberIds = await this.membershipService.listActiveMemberIds(
+        payload.conversation_id,
+      );
+
       const event: ChatMessageCreatedEvent = {
         message_id: payload.message_id,
         conversation_id: payload.conversation_id,
@@ -572,6 +576,7 @@ export class PersistMessageConsumer {
         created_at: createdAt,
         attachments: payload.attachments,
         forwarded_from: payload.forwarded_from,
+        member_ids: memberIds,
         trace_id: traceId,
       };
 

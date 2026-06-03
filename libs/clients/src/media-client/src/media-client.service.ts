@@ -81,6 +81,21 @@ export class MediaClientService extends BaseHttpClient {
     }
   }
 
+  async validateAttachments(
+    keys: string[],
+    userId: string,
+  ): Promise<string | null> {
+    try {
+      const response = await this.httpService.axiosRef.post<{ error: string | null }>(
+        `${this.config.baseUrl}/v1/media/validate-attachments`,
+        { keys, user_id: userId },
+      );
+      return response.data.error;
+    } catch (error) {
+      this.handleError('validateAttachments', error);
+    }
+  }
+
   async cloneAttachment(
     dto: CloneAttachmentRequest,
     userId: string,

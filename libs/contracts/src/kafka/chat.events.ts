@@ -184,6 +184,8 @@ export interface ChatMessageCreatedEvent {
   trace_id?: string;
   message_type?: string;
   mentions?: MessageMention[];
+  /** Active member IDs at publish time. Required when forwarded_from is set so ws-gateway can fan out per-user visibility without querying DB. */
+  member_ids?: string[];
 }
 
 export interface ChatSystemMessageCommand {

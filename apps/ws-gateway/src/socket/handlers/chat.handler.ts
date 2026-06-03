@@ -1,9 +1,7 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { ClientKafka } from '@nestjs/microservices';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
 import { KAFKA_CLIENT } from '@libs/kafka';
-import { MediaFile, Conversation } from '@libs/database';
+import { MediaClientService } from '@app/clients/media-client';
 import { ConversationMembershipService } from '@libs/mvp-access';
 import { RedisService } from '@libs/redis';
 import { APP_CONFIG, AppConfig } from '@libs/config';
@@ -47,10 +45,7 @@ export class ChatHandler {
   constructor(
     @Inject(KAFKA_CLIENT) private readonly kafka: ClientKafka,
     private readonly membershipService: ConversationMembershipService,
-    @InjectRepository(MediaFile)
-    private readonly mediaFileRepo: Repository<MediaFile>,
-    @InjectRepository(Conversation)
-    private readonly conversationRepo: Repository<Conversation>,
+    private readonly mediaClient: MediaClientService,
     private readonly redisService: RedisService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
@@ -316,14 +311,14 @@ export class ChatHandler {
     // 3) @all → must be group conversation
     const hasAtAll = filtered.some((m) => m.mention_type === 'all');
     if (hasAtAll) {
-      const conv = await this.conversationRepo.findOne({
-        where: { id: conversationId },
-        select: ['type'],
-      });
-      if (!conv) {
+      const convType = await this.membershipService.getCachedConversationType(
+        senderId,
+        conversationId,
+      );
+      if (!convType) {
         return { normalized: [], error: 'conversation_not_found' };
       }
-      if (conv.type !== ConversationType.GROUP) {
+      if (convType !== ConversationType.GROUP) {
         return { normalized: [], error: 'at_all_in_direct_chat_disallowed' };
       }
       const rateKey = `at_all:${conversationId}:${senderId}`;
@@ -373,28 +368,13 @@ export class ChatHandler {
     return { normalized };
   }
 
-  private async validateAttachments(
+  private validateAttachments(
     attachments: WsMessageAttachment[] | undefined,
     userId: string,
   ): Promise<string | null> {
-    if (!attachments || attachments.length === 0) return null;
-
+    if (!attachments || attachments.length === 0) return Promise.resolve(null);
     const keys = attachments.map((a) => a.key);
-    const files = await this.mediaFileRepo.find({
-      where: { key: In(keys) },
-    });
-    const fileMap = new Map(files.map((f) => [f.key, f]));
-
-    for (const att of attachments) {
-      const file = fileMap.get(att.key);
-      if (!file) return 'attachment_not_found';
-      if (!file.uploadedById || file.uploadedById.trim() === '') {
-        return 'attachment_not_owned';
-      }
-      if (file.uploadedById !== userId) return 'attachment_not_owned';
-      if (file.status !== 'uploaded') return 'attachment_not_ready';
-    }
-    return null;
+    return this.mediaClient.validateAttachments(keys, userId);
   }
 
   async handleUnreact(socket: AuthedSocket, body: WsChatUnreactPayload) {

@@ -8,13 +8,13 @@
  */
 
 import { Test, TestingModule } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
 import { ChatHandler } from './chat.handler';
-import { MediaFile, Conversation } from '@libs/database';
 import { ConversationMembershipService } from '@libs/mvp-access';
 import { KAFKA_CLIENT } from '@libs/kafka';
 import { RedisService } from '@libs/redis';
 import { APP_CONFIG } from '@libs/config';
+import { MediaClientService } from '@app/clients/media-client';
+import { ConversationType } from '@app/constant';
 import { KafkaTopics, WsEvents } from '@libs/contracts';
 import type {
   WsChatSendPayload,
@@ -101,16 +101,12 @@ describe('ChatHandler', () => {
   let handler: ChatHandler;
   let membership: jest.Mocked<ConversationMembershipService>;
   let kafka: { emit: jest.Mock };
-  let mediaFileRepo: { find: jest.Mock };
-  let conversationRepo: { findOne: jest.Mock };
+  let mediaClient: { validateAttachments: jest.Mock };
   let redisService: { incrBy: jest.Mock; expire: jest.Mock; get: jest.Mock };
 
   beforeEach(async () => {
     kafka = { emit: jest.fn() };
-    mediaFileRepo = { find: jest.fn().mockResolvedValue([]) };
-    conversationRepo = {
-      findOne: jest.fn().mockResolvedValue({ type: 'group' }),
-    };
+    mediaClient = { validateAttachments: jest.fn().mockResolvedValue(null) };
     redisService = {
       incrBy: jest.fn().mockResolvedValue(1),
       expire: jest.fn().mockResolvedValue(1),
@@ -127,13 +123,10 @@ describe('ChatHandler', () => {
             canUserAccessConversation: jest.fn(),
             canUserSendMessage: jest.fn(),
             listActiveMemberIds: jest.fn().mockResolvedValue([]),
+            getCachedConversationType: jest.fn().mockResolvedValue(ConversationType.GROUP),
           },
         },
-        { provide: getRepositoryToken(MediaFile), useValue: mediaFileRepo },
-        {
-          provide: getRepositoryToken(Conversation),
-          useValue: conversationRepo,
-        },
+        { provide: MediaClientService, useValue: mediaClient },
         { provide: RedisService, useValue: redisService },
         {
           provide: APP_CONFIG,
@@ -304,7 +297,7 @@ describe('ChatHandler', () => {
       );
     });
 
-    it('should include attachments in Kafka command', async () => {
+    it('should include attachments in Kafka command when valid', async () => {
       const socket = createMockSocket();
       const attachments = [
         {
@@ -315,13 +308,7 @@ describe('ChatHandler', () => {
           content_type: 'image/png',
         },
       ];
-      mediaFileRepo.find.mockResolvedValue([
-        {
-          key: 'private/uploads/img-1.png',
-          uploadedById: 'user-abc',
-          status: 'uploaded',
-        },
-      ]);
+      mediaClient.validateAttachments.mockResolvedValue(null);
 
       const body = makeSendPayload({ attachments });
       membership.canUserSendMessage.mockResolvedValue({ allowed: true });
@@ -334,7 +321,7 @@ describe('ChatHandler', () => {
       );
     });
 
-    it('should reject attachment when uploadedById is null', async () => {
+    it('should reject when media-service reports attachment_not_owned', async () => {
       const socket = createMockSocket();
       const attachments = [
         {
@@ -345,14 +332,7 @@ describe('ChatHandler', () => {
           content_type: 'image/png',
         },
       ];
-
-      mediaFileRepo.find.mockResolvedValue([
-        {
-          key: 'private/uploads/img-null-owner.png',
-          uploadedById: null,
-          status: 'uploaded',
-        },
-      ]);
+      mediaClient.validateAttachments.mockResolvedValue('attachment_not_owned');
 
       const body = makeSendPayload({ attachments });
       membership.canUserSendMessage.mockResolvedValue({ allowed: true });
@@ -367,25 +347,18 @@ describe('ChatHandler', () => {
       });
     });
 
-    it('should reject attachment when uploadedById is empty string', async () => {
+    it('should reject when media-service reports attachment_not_found', async () => {
       const socket = createMockSocket();
       const attachments = [
         {
-          key: 'private/uploads/img-empty-owner.png',
+          key: 'private/uploads/missing.png',
           type: 'image' as const,
-          name: 'img-empty-owner.png',
+          name: 'missing.png',
           size: 1024,
           content_type: 'image/png',
         },
       ];
-
-      mediaFileRepo.find.mockResolvedValue([
-        {
-          key: 'private/uploads/img-empty-owner.png',
-          uploadedById: '   ',
-          status: 'uploaded',
-        },
-      ]);
+      mediaClient.validateAttachments.mockResolvedValue('attachment_not_found');
 
       const body = makeSendPayload({ attachments });
       membership.canUserSendMessage.mockResolvedValue({ allowed: true });
@@ -396,7 +369,7 @@ describe('ChatHandler', () => {
       expect(socket.emit).toHaveBeenCalledWith(WsEvents.ChatAck, {
         message_id: body.message_id,
         status: 'rejected',
-        reason: 'attachment_not_owned',
+        reason: 'attachment_not_found',
       });
     });
 
@@ -723,7 +696,7 @@ describe('ChatHandler', () => {
     });
 
     it('should reject @all in a direct (1-1) conversation', async () => {
-      conversationRepo.findOne.mockResolvedValue({ type: 'direct' });
+      membership.getCachedConversationType.mockResolvedValue(ConversationType.DIRECT);
 
       const result = await callValidate(
         [{ user_id: '__ALL__', mention_type: 'all', offset: 0, length: 4 }],
@@ -783,7 +756,7 @@ describe('ChatHandler', () => {
     });
 
     it('should return conversation_not_found when @all targets a missing conversation', async () => {
-      conversationRepo.findOne.mockResolvedValue(null);
+      membership.getCachedConversationType.mockResolvedValue(null);
 
       const result = await callValidate(
         [{ user_id: '__ALL__', mention_type: 'all', offset: 0, length: 4 }],
@@ -818,7 +791,7 @@ describe('ChatHandler', () => {
     });
 
     it('should reject @all when rate-limit exceeded', async () => {
-      conversationRepo.findOne.mockResolvedValue({ type: 'group' });
+      membership.getCachedConversationType.mockResolvedValue(ConversationType.GROUP);
       redisService.incrBy.mockResolvedValue(4); // over limit of 3
 
       const result = await callValidate(
@@ -832,7 +805,7 @@ describe('ChatHandler', () => {
     });
 
     it('should allow @all when under rate-limit threshold', async () => {
-      conversationRepo.findOne.mockResolvedValue({ type: 'group' });
+      membership.getCachedConversationType.mockResolvedValue(ConversationType.GROUP);
       redisService.incrBy.mockResolvedValue(2);
 
       const result = await callValidate(

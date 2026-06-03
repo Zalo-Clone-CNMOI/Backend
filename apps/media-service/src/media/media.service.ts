@@ -13,7 +13,7 @@ import {
 } from '@aws-sdk/client-s3';
 import { ClientKafka } from '@nestjs/microservices';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { KAFKA_CLIENT } from '@libs/kafka';
 import { S3Service, S3_CLIENT, S3_CONFIG, type S3Config } from '@libs/s3';
 import { ConversationMembershipService } from '@libs/mvp-access';
@@ -64,6 +64,30 @@ export class MediaService implements OnModuleInit {
 
   async onModuleInit() {
     await this.kafka.connect();
+  }
+
+  async validateAttachments(
+    keys: string[],
+    userId: string,
+  ): Promise<string | null> {
+    if (!keys.length) return null;
+
+    const files = await this.mediaFileRepo.find({
+      where: { key: In(keys) },
+      select: ['key', 'uploadedById', 'status'],
+    });
+    const fileMap = new Map(files.map((f) => [f.key, f]));
+
+    for (const key of keys) {
+      const file = fileMap.get(key);
+      if (!file) return 'attachment_not_found';
+      if (!file.uploadedById || file.uploadedById.trim() === '') {
+        return 'attachment_not_owned';
+      }
+      if (file.uploadedById !== userId) return 'attachment_not_owned';
+      if (file.status !== 'uploaded') return 'attachment_not_ready';
+    }
+    return null;
   }
 
   async canUserAccessFile(key: string, userId: string): Promise<boolean> {

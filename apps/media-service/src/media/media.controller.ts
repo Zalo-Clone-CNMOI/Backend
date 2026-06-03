@@ -12,6 +12,7 @@ import {
   ApiForbiddenResponse,
   ApiHeader,
   ApiOperation,
+  ApiExcludeEndpoint,
   ApiResponse,
   ApiTags,
   ApiUnauthorizedResponse,
@@ -30,6 +31,10 @@ import {
   CloneAttachmentRequestDto,
   CloneAttachmentResponseDto,
 } from './dto/clone-attachment.dto';
+import {
+  ValidateAttachmentsRequestDto,
+  ValidateAttachmentsResponseDto,
+} from './dto/validate-attachments.dto';
 import { MediaService } from './media.service';
 
 @ApiTags('Media')
@@ -131,6 +136,26 @@ export class MediaController {
     }
 
     return this.media.presignDownload(body.key);
+  }
+
+  @Post('validate-attachments')
+  @ApiExcludeEndpoint()
+  @ApiOperation({
+    summary: 'Validate attachment ownership and readiness',
+    description:
+      'Checks that all provided keys exist, are owned by the given user, and have status=uploaded. Used internally by ws-gateway before publishing a chat message.',
+  })
+  @ApiBody({ type: ValidateAttachmentsRequestDto })
+  @ApiResponse({
+    status: 201,
+    description: 'Validation result — error is null if all attachments are valid',
+    type: ValidateAttachmentsResponseDto,
+  })
+  async validateAttachments(
+    @Body() body: ValidateAttachmentsRequestDto,
+  ): Promise<ValidateAttachmentsResponseDto> {
+    const error = await this.media.validateAttachments(body.keys, body.user_id);
+    return { error };
   }
 
   @Post('clone')

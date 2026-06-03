@@ -366,10 +366,14 @@ jobs:
               echo "✅ Deployed $SERVICE_NAME"
             }
 
-            # Ensure Infra and DB are running first (optional but recommended)
+            # Ensure Infra and DB are running first (optional but recommended).
+            # The || true guards are intentional: scylla_init is a one-shot init
+            # container that exits 0 after seeding; docker compose up reports a
+            # non-zero exit when any service exits, which would abort the script
+            # under set -e even though infra is healthy.
             echo "Checking Infra & DB..."
-            docker compose -f infra-compose.yml up -d --remove-orphans
-            docker compose -f db-compose.yml up -d --remove-orphans
+            docker compose -f infra-compose.yml up -d --remove-orphans || true
+            docker compose -f db-compose.yml up -d --remove-orphans || true
 
             # nginx (TLS reverse proxy) is managed by infra-compose and is already
             # brought up above; reload it after any nginx.conf change.

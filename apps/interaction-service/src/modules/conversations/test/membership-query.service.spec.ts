@@ -24,7 +24,10 @@ describe('MembershipQueryService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         MembershipQueryService,
-        { provide: getRepositoryToken(ConversationMember), useValue: memberRepo },
+        {
+          provide: getRepositoryToken(ConversationMember),
+          useValue: memberRepo,
+        },
         { provide: getRepositoryToken(Conversation), useValue: convRepo },
       ],
     }).compile();
@@ -50,7 +53,10 @@ describe('MembershipQueryService', () => {
         },
       ]);
 
-      const result = await service.getMembershipBatch('u1', ['conv-1', 'conv-2']);
+      const result = await service.getMembershipBatch('u1', [
+        'conv-1',
+        'conv-2',
+      ]);
 
       expect(result).toEqual([
         {

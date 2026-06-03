@@ -123,7 +123,9 @@ describe('ChatHandler', () => {
             canUserAccessConversation: jest.fn(),
             canUserSendMessage: jest.fn(),
             listActiveMemberIds: jest.fn().mockResolvedValue([]),
-            getCachedConversationType: jest.fn().mockResolvedValue(ConversationType.GROUP),
+            getCachedConversationType: jest
+              .fn()
+              .mockResolvedValue(ConversationType.GROUP),
           },
         },
         { provide: MediaClientService, useValue: mediaClient },
@@ -696,7 +698,9 @@ describe('ChatHandler', () => {
     });
 
     it('should reject @all in a direct (1-1) conversation', async () => {
-      membership.getCachedConversationType.mockResolvedValue(ConversationType.DIRECT);
+      membership.getCachedConversationType.mockResolvedValue(
+        ConversationType.DIRECT,
+      );
 
       const result = await callValidate(
         [{ user_id: '__ALL__', mention_type: 'all', offset: 0, length: 4 }],
@@ -791,7 +795,9 @@ describe('ChatHandler', () => {
     });
 
     it('should reject @all when rate-limit exceeded', async () => {
-      membership.getCachedConversationType.mockResolvedValue(ConversationType.GROUP);
+      membership.getCachedConversationType.mockResolvedValue(
+        ConversationType.GROUP,
+      );
       redisService.incrBy.mockResolvedValue(4); // over limit of 3
 
       const result = await callValidate(
@@ -805,7 +811,9 @@ describe('ChatHandler', () => {
     });
 
     it('should allow @all when under rate-limit threshold', async () => {
-      membership.getCachedConversationType.mockResolvedValue(ConversationType.GROUP);
+      membership.getCachedConversationType.mockResolvedValue(
+        ConversationType.GROUP,
+      );
       redisService.incrBy.mockResolvedValue(2);
 
       const result = await callValidate(

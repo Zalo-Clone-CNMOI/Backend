@@ -24,7 +24,9 @@ export class MembershipClientModule {
     };
   }
 
-  static registerAsync(asyncConfig: MembershipClientAsyncConfig): DynamicModule {
+  static registerAsync(
+    asyncConfig: MembershipClientAsyncConfig,
+  ): DynamicModule {
     return {
       module: MembershipClientModule,
       global: true,

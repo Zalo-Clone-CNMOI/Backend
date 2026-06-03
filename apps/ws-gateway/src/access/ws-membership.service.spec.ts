@@ -98,8 +98,12 @@ describe('WsMembershipService', () => {
     });
 
     it('returns false for a conversation the user is not a member of', async () => {
-      client.getMembershipBatch.mockResolvedValue([entry('conv-x', false, null)]);
-      expect(await service.canUserAccessConversation('u1', 'conv-x')).toBe(false);
+      client.getMembershipBatch.mockResolvedValue([
+        entry('conv-x', false, null),
+      ]);
+      expect(await service.canUserAccessConversation('u1', 'conv-x')).toBe(
+        false,
+      );
     });
   });
 
@@ -115,8 +119,12 @@ describe('WsMembershipService', () => {
     });
 
     it('returns null when the user has no access', async () => {
-      client.getMembershipBatch.mockResolvedValue([entry('conv-1', false, null)]);
-      expect(await service.getCachedConversationType('u1', 'conv-1')).toBeNull();
+      client.getMembershipBatch.mockResolvedValue([
+        entry('conv-1', false, null),
+      ]);
+      expect(
+        await service.getCachedConversationType('u1', 'conv-1'),
+      ).toBeNull();
     });
   });
 

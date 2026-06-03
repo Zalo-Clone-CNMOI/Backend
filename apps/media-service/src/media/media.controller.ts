@@ -148,7 +148,8 @@ export class MediaController {
   @ApiBody({ type: ValidateAttachmentsRequestDto })
   @ApiResponse({
     status: 201,
-    description: 'Validation result — error is null if all attachments are valid',
+    description:
+      'Validation result — error is null if all attachments are valid',
     type: ValidateAttachmentsResponseDto,
   })
   async validateAttachments(

@@ -1,10 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import {
-  IsArray,
-  IsNotEmpty,
-  IsString,
-  ArrayMaxSize,
-} from 'class-validator';
+import { IsArray, IsNotEmpty, IsString, ArrayMaxSize } from 'class-validator';
 import { ConversationType } from '@app/constant';
 
 /**

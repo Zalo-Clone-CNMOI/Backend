@@ -295,11 +295,14 @@ jobs:
 
             # Load .env.prod first (service URLs, secrets, etc.), then overlay
             # CI-injected values so IMAGE_TAG from the current build always wins.
+            # source .env.prod with || true so a malformed line doesn't abort.
             set -a
-            [ -f .env.prod ] && source .env.prod
+            [ -f .env.prod ] && source .env.prod || true
             source .ci-deploy.env
             set +a
             rm -f .ci-deploy.env
+
+            echo "🔍 Post-source vars: IMAGE_TAG=$IMAGE_TAG MEDIA=$MEDIA_CHANGED CHAT=$CHAT_CHANGED WS=$WS_CHANGED"
 
             echo "$GH_TOKEN" | docker login ghcr.io -u "$GH_ACTOR" --password-stdin
 

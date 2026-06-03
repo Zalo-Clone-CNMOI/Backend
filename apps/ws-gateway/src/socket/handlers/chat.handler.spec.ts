@@ -9,7 +9,7 @@
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { ChatHandler } from './chat.handler';
-import { ConversationMembershipService } from '@libs/mvp-access';
+import { WsMembershipService } from '../../access/ws-membership.service';
 import { KAFKA_CLIENT } from '@libs/kafka';
 import { RedisService } from '@libs/redis';
 import { APP_CONFIG } from '@libs/config';
@@ -99,7 +99,7 @@ function makeUnreactPayload(
 
 describe('ChatHandler', () => {
   let handler: ChatHandler;
-  let membership: jest.Mocked<ConversationMembershipService>;
+  let membership: jest.Mocked<WsMembershipService>;
   let kafka: { emit: jest.Mock };
   let mediaClient: { validateAttachments: jest.Mock };
   let redisService: { incrBy: jest.Mock; expire: jest.Mock; get: jest.Mock };
@@ -118,7 +118,7 @@ describe('ChatHandler', () => {
         ChatHandler,
         { provide: KAFKA_CLIENT, useValue: kafka },
         {
-          provide: ConversationMembershipService,
+          provide: WsMembershipService,
           useValue: {
             canUserAccessConversation: jest.fn(),
             canUserSendMessage: jest.fn(),
@@ -136,7 +136,7 @@ describe('ChatHandler', () => {
     }).compile();
 
     handler = module.get(ChatHandler);
-    membership = module.get(ConversationMembershipService);
+    membership = module.get(WsMembershipService);
   });
 
   // ── handleJoin ────────────────────────────────────────────────────────

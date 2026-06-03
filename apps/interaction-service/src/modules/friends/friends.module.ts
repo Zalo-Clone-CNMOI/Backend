@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { User, Friendship } from '@libs/database/entities';
 import { FriendsController } from './friends.controller';
+import { InternalFriendsController } from './internal-friends.controller';
 import { FriendsService } from './friends.service';
 import { KafkaModule, NotificationOutboxModule } from '@libs/kafka';
 
@@ -11,7 +12,7 @@ import { KafkaModule, NotificationOutboxModule } from '@libs/kafka';
     KafkaModule,
     NotificationOutboxModule,
   ],
-  controllers: [FriendsController],
+  controllers: [FriendsController, InternalFriendsController],
   providers: [FriendsService],
   exports: [FriendsService],
 })

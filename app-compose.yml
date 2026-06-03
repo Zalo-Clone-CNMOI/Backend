@@ -310,6 +310,10 @@ services:
       PORT: 3001
       SERVICE_NAME: ws-gateway
       BFF_SERVICE_URL: http://bff-service:5000/api
+      # Internal HTTP targets for the stateless membership/media checks.
+      # interaction-service & media-service both use the 'api' global prefix.
+      INTERACTION_SERVICE_URL: http://interaction-service:5004/api
+      MEDIA_SERVICE_URL: http://media-service:3003/api
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1h}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}

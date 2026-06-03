@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 
 import { User, Friendship } from '@libs/database/entities';
 import { ErrorCode, FriendshipStatus, UserStatus } from '@app/constant';
@@ -543,5 +543,43 @@ export class FriendsService {
       },
       createdAt: friendship.createdAt,
     };
+  }
+
+  /**
+   * Internal (ws-gateway): of the given candidate IDs, return those that are
+   * friends with referenceUserId. Port of the DB portion of the former
+   * @libs/mvp-access FriendshipAccessService.getFriendSet. ws-gateway keeps its
+   * own 120s pair-cache; this just answers the uncached remainder from the DB.
+   * The reference user is NOT auto-included here (the caller handles self).
+   */
+  async getFriendSet(
+    referenceUserId: string,
+    candidateIds: string[],
+  ): Promise<string[]> {
+    const targets = candidateIds.filter((id) => id !== referenceUserId);
+    if (targets.length === 0) return [];
+
+    const rows = await this.friendshipRepository.find({
+      where: [
+        {
+          requesterId: referenceUserId,
+          addresseeId: In(targets),
+          status: FriendshipStatus.ACCEPTED,
+        },
+        {
+          requesterId: In(targets),
+          addresseeId: referenceUserId,
+          status: FriendshipStatus.ACCEPTED,
+        },
+      ],
+      select: { requesterId: true, addresseeId: true },
+    });
+
+    const friendIds = new Set(
+      rows.map((r) =>
+        r.requesterId === referenceUserId ? r.addresseeId : r.requesterId,
+      ),
+    );
+    return Array.from(friendIds);
   }
 }

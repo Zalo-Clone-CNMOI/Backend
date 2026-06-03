@@ -13,14 +13,14 @@ import {
   type ChatReactionRemovedEvent,
   type ChatSystemMessageCreatedEvent,
 } from '@libs/contracts';
-import { FriendshipAccessService } from '@libs/mvp-access';
+import { WsMembershipService } from '../../access/ws-membership.service';
 import { ChatGateway } from '../../socket/chat.gateway';
 
 @Controller()
 export class ChatFanoutConsumer {
   constructor(
     private readonly gateway: ChatGateway,
-    private readonly friendshipAccess: FriendshipAccessService,
+    private readonly friendshipAccess: WsMembershipService,
   ) {}
 
   @EventPattern(KafkaTopics.ChatMessageCreated)

@@ -1,6 +1,6 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { ClientKafka } from '@nestjs/microservices';
-import { ConversationMembershipService } from '@libs/mvp-access';
+import { WsMembershipService } from '../../access/ws-membership.service';
 import { KAFKA_CLIENT } from '@libs/kafka';
 import {
   KafkaTopics,
@@ -37,7 +37,7 @@ type AuthedSocket = Socket<
 export class CallHandler {
   constructor(
     @Inject(KAFKA_CLIENT) private readonly kafka: ClientKafka,
-    private readonly membershipService: ConversationMembershipService,
+    private readonly membershipService: WsMembershipService,
     private readonly rateLimiter: CallRateLimiter,
   ) {}
 

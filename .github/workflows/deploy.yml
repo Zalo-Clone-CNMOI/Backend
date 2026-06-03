@@ -392,8 +392,13 @@ jobs:
 
             # nginx (TLS reverse proxy) is managed by infra-compose and is already
             # brought up above; reload it after any nginx.conf change.
+            # CRITICAL: redirect stdin from /dev/null. This whole script is fed to
+            # `bash -s` over ssh via stdin (the heredoc). `docker compose exec`
+            # (even with -T) reads from that same stdin, swallowing the REST of the
+            # script — so deploy_service was never reached and ssh exited 0 at EOF.
+            # < /dev/null isolates exec's stdin so the remaining script survives.
             echo "🔄 Reloading nginx config..."
-            docker compose -f infra-compose.yml exec -T nginx nginx -s reload 2>/dev/null || \
+            docker compose -f infra-compose.yml exec -T nginx nginx -s reload < /dev/null 2>/dev/null || \
               echo "⚠️ nginx reload skipped (container may be starting)"
 
             [ "$BFF_CHANGED" = "true" ] && deploy_service bff-service app-compose.yml || true

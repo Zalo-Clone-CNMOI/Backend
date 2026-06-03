@@ -119,9 +119,11 @@ export class SsoClientService extends BaseHttpClient {
    */
   async qrGenerate(dto: QrGenerateDto): Promise<QrSessionResponseDto> {
     try {
+      this.logger.debug(`[QR] qrGenerate dto: ${JSON.stringify(dto)}`);
       const response = await this.authApi.authQrGenerate({
         qrGenerateDto: dto,
       });
+      this.logger.debug(`[QR] qrGenerate response status: ${response.status}`);
       return response.data;
     } catch (error) {
       this.handleError('qrGenerate', error);

@@ -35,6 +35,13 @@ export function injectApiProvider<T>(
         basePath: config.baseUrl,
       });
 
+      httpService.axiosRef.interceptors.request.use((config) => {
+        if (config.url?.includes('/auth/qr/')) {
+          console.log('[SSO-CLIENT] QR request:', config.method?.toUpperCase(), config.url, 'body:', JSON.stringify(config.data));
+        }
+        return config;
+      });
+
       return new ApiClass(
         configuration,
         configuration.basePath,

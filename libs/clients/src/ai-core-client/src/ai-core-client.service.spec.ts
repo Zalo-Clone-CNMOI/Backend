@@ -1,7 +1,12 @@
 import { Test } from '@nestjs/testing';
 import { AxiosError } from 'axios';
 import { AiCoreClientService } from './ai-core-client.service';
-import { EntityInfoApi, ModerationApi, ZaiAssistApi } from './client';
+import {
+  EntityInfoApi,
+  ModerationApi,
+  ZaiAssistApi,
+  EntityDetectionsApi,
+} from './client';
 import type {
   AiEntityInfoResultEvent,
   AiCatchUpResultEvent,
@@ -51,6 +56,10 @@ const mockModerationApi = {
   checkPreSendModeration: jest.fn(),
 };
 
+const mockEntityDetectionsApi = {
+  getEntityDetections: jest.fn(),
+};
+
 // ── Test suite ─────────────────────────────────────────────────────────────────
 
 describe('AiCoreClientService', () => {
@@ -65,6 +74,7 @@ describe('AiCoreClientService', () => {
         { provide: EntityInfoApi, useValue: mockEntityInfoApi },
         { provide: ZaiAssistApi, useValue: mockZaiAssistApi },
         { provide: ModerationApi, useValue: mockModerationApi },
+        { provide: EntityDetectionsApi, useValue: mockEntityDetectionsApi },
       ],
     }).compile();
 

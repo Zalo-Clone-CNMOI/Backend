@@ -169,7 +169,9 @@ describe('AiMessageConsumer', () => {
   ])(
     'does NOT emit AiEntityDetectionRequest for body=%s',
     async (_label, body) => {
-      const payload = buildPayload({ body } as unknown);
+      const payload = buildPayload({
+        body,
+      } as Partial<ChatAiMessageCommand>);
       await consumer.onAiMessage(payload);
 
       const calls = publisher.emit.mock.calls as [string, unknown][];

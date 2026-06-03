@@ -92,10 +92,15 @@ describe('Zai foundation integration', () => {
       body: 'Integration test',
     });
 
-    // 2. chat.message.created was emitted (no new WS event needed)
-    expect(emittedEvents).toHaveLength(1);
-    expect(emittedEvents[0].topic).toBe(KafkaTopics.ChatMessageCreated);
-    const created = emittedEvents[0].payload as ChatMessageCreatedEvent;
+    // 2. chat.message.created was emitted (no new WS event needed). The
+    // consumer also fires an ai.entity.detection.request for the Zai reply now
+    // that Zai messages are entity-detected too, so select the created event by
+    // topic rather than asserting a single emission.
+    const createdEvent = emittedEvents.find(
+      (e) => e.topic === KafkaTopics.ChatMessageCreated,
+    );
+    expect(createdEvent).toBeDefined();
+    const created = createdEvent!.payload as ChatMessageCreatedEvent;
     expect(created.sender_id).toBe(ZAI_ID);
     expect(created.message_id).toBe('msg-int-1');
     expect(created.trace_id).toBe('trace-int-1');

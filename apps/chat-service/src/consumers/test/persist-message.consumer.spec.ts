@@ -52,7 +52,10 @@ describe('PersistMessageConsumer', () => {
     delIfValueMatches: jest.Mock;
     invalidateRecentMessages: jest.Mock;
   };
-  let membershipService: { canUserAccessConversation: jest.Mock };
+  let membershipService: {
+    canUserAccessConversation: jest.Mock;
+    listActiveMemberIds: jest.Mock;
+  };
   let appConfig: AppConfig;
   let notificationPublisher: { publish: jest.Mock };
   let userRepo: { findOne: jest.Mock; find: jest.Mock };
@@ -150,6 +153,7 @@ describe('PersistMessageConsumer', () => {
 
     membershipService = {
       canUserAccessConversation: jest.fn(),
+      listActiveMemberIds: jest.fn().mockResolvedValue([]),
     };
 
     appConfig = {

@@ -385,7 +385,10 @@ describe('EntityDetectionEngine', () => {
       const result = await engine.generateInfo(baseEvent);
 
       expect(result.title).toBe('Telegram');
-      expect(result.summary).toBe('');
+      // On unrecoverable parse failure the engine returns a user-facing
+      // placeholder summary (graceful degradation) rather than a blank string,
+      // so the info panel shows a message instead of an empty field.
+      expect(result.summary).toBe('Unable to generate information at this time.');
     });
 
     it('returns fallback response on LLM failure', async () => {

@@ -372,7 +372,9 @@ describe('PromptBuilderService', () => {
 
     it('system prompt includes uncertainty guard', () => {
       const result = builder.buildEntityInfoPrompt('ChatGPT', 'product', 'vi');
-      expect(result[0].content).toContain('omit');
+      // Case-insensitive: the prompt phrases this as "Omit uncertain dates…".
+      // content is typed string | LlmContentPart[]; this prompt is a string.
+      expect(String(result[0].content).toLowerCase()).toContain('omit');
     });
   });
 });

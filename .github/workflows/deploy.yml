@@ -261,41 +261,45 @@ jobs:
         id: image-tag
         run: echo "tag=sha-${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
 
+      - name: Write deploy env file
+        run: |
+          # Write CI-resolved values to a temp file on the runner, then scp it to
+          # EC2. The remote script sources this file so all values are available
+          # without relying on SSH AcceptEnv or heredoc expression expansion.
+          printf '%s\n' \
+            "IMAGE_TAG=${{ steps.image-tag.outputs.tag }}" \
+            "GH_ACTOR=${{ github.actor }}" \
+            "GH_TOKEN=${{ env.GH_TOKEN }}" \
+            "DOCKER_PRUNE_UNTIL=${{ env.DOCKER_PRUNE_UNTIL }}" \
+            "BFF_CHANGED=${{ needs.detect-changes.outputs.bff }}" \
+            "SSO_CHANGED=${{ needs.detect-changes.outputs.sso }}" \
+            "INTERACTION_CHANGED=${{ needs.detect-changes.outputs.interaction }}" \
+            "MEDIA_CHANGED=${{ needs.detect-changes.outputs.media }}" \
+            "CHAT_CHANGED=${{ needs.detect-changes.outputs.chat }}" \
+            "WS_CHANGED=${{ needs.detect-changes.outputs.ws }}" \
+            "PRESENCE_CHANGED=${{ needs.detect-changes.outputs.presence }}" \
+            "NOTIFICATION_CHANGED=${{ needs.detect-changes.outputs.notification }}" \
+            "AI_CHANGED=${{ needs.detect-changes.outputs.ai }}" \
+            > /tmp/ci-deploy.env
+          scp -o BatchMode=yes -o ConnectTimeout=10 \
+              /tmp/ci-deploy.env \
+              ${{ env.EC2_USER }}@${{ env.EC2_HOST }}:~/Backend/.ci-deploy.env
+
       - name: Deploy Services
         id: deploy
-        env:
-          BFF_CHANGED: ${{ needs.detect-changes.outputs.bff }}
-          SSO_CHANGED: ${{ needs.detect-changes.outputs.sso }}
-          INTERACTION_CHANGED: ${{ needs.detect-changes.outputs.interaction }}
-          MEDIA_CHANGED: ${{ needs.detect-changes.outputs.media }}
-          CHAT_CHANGED: ${{ needs.detect-changes.outputs.chat }}
-          WS_CHANGED: ${{ needs.detect-changes.outputs.ws }}
-          PRESENCE_CHANGED: ${{ needs.detect-changes.outputs.presence }}
-          NOTIFICATION_CHANGED: ${{ needs.detect-changes.outputs.notification }}
-          AI_CHANGED: ${{ needs.detect-changes.outputs.ai }}
         run: |
-          # Pass all GitHub-resolved values as env var prefixes so the heredoc can
-          # remain single-quoted (prevents bash variable expansion on the runner).
-          # Single-quoted heredocs are safe for remote bash — no accidental $VAR
-          # expansion of remote shell variables on the GitHub Actions runner side.
-          ssh -o BatchMode=yes -o ConnectTimeout=10 ${{ env.EC2_USER }}@${{ env.EC2_HOST }} \
-            IMAGE_TAG="${{ steps.image-tag.outputs.tag }}" \
-            GH_ACTOR="${{ github.actor }}" \
-            GH_TOKEN="${{ env.GH_TOKEN }}" \
-            DOCKER_PRUNE_UNTIL="${{ env.DOCKER_PRUNE_UNTIL }}" \
-            BFF_CHANGED="${{ env.BFF_CHANGED }}" \
-            SSO_CHANGED="${{ env.SSO_CHANGED }}" \
-            INTERACTION_CHANGED="${{ env.INTERACTION_CHANGED }}" \
-            MEDIA_CHANGED="${{ env.MEDIA_CHANGED }}" \
-            CHAT_CHANGED="${{ env.CHAT_CHANGED }}" \
-            WS_CHANGED="${{ env.WS_CHANGED }}" \
-            PRESENCE_CHANGED="${{ env.PRESENCE_CHANGED }}" \
-            NOTIFICATION_CHANGED="${{ env.NOTIFICATION_CHANGED }}" \
-            AI_CHANGED="${{ env.AI_CHANGED }}" \
-            bash -s << 'DEPLOY_SCRIPT'
+          ssh -o BatchMode=yes -o ConnectTimeout=10 ${{ env.EC2_USER }}@${{ env.EC2_HOST }} bash -s << 'DEPLOY_SCRIPT'
             set -euo pipefail
             cd ~/Backend
             mkdir -p .rollback
+
+            # Load .env.prod first (service URLs, secrets, etc.), then overlay
+            # CI-injected values so IMAGE_TAG from the current build always wins.
+            set -a
+            [ -f .env.prod ] && source .env.prod
+            source .ci-deploy.env
+            set +a
+            rm -f .ci-deploy.env
 
             echo "$GH_TOKEN" | docker login ghcr.io -u "$GH_ACTOR" --password-stdin
 
@@ -306,15 +310,6 @@ jobs:
             docker network prune -f
             docker network create --driver bridge --subnet 172.28.0.0/16 zalo_network 2>/dev/null || echo "Network exists"
 
-            if [ -f .env.prod ]; then
-              set -a
-              source .env.prod
-              set +a
-            fi
-
-            # IMAGE_TAG is injected from the CI build via env prefix above;
-            # it overrides whatever tag was in .env.prod.
-            export IMAGE_TAG
             echo "📦 Deploying with IMAGE_TAG=$IMAGE_TAG"
 
             DEPLOYMENT_FAILED=false

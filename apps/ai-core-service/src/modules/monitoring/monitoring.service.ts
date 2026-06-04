@@ -22,7 +22,10 @@ interface PromVector {
 interface LokiResp {
   status: string;
   data?: {
-    result?: Array<{ stream: Record<string, string>; values: [string, string][] }>;
+    result?: Array<{
+      stream: Record<string, string>;
+      values: [string, string][];
+    }>;
   };
 }
 

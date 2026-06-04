@@ -7,8 +7,8 @@ function mockFetchOnce(body: unknown, ok = true, status = 200) {
   (global.fetch as jest.Mock).mockResolvedValueOnce({
     ok,
     status,
-    json: async () => body,
-    text: async () => JSON.stringify(body),
+    json: () => Promise.resolve(body),
+    text: () => Promise.resolve(JSON.stringify(body)),
   });
 }
 
@@ -74,7 +74,11 @@ describe('MonitoringService', () => {
         ],
       },
     });
-    const logs = await service.getContainerLogs('zalo_ws_gateway', 'ERROR', 100);
+    const logs = await service.getContainerLogs(
+      'zalo_ws_gateway',
+      'ERROR',
+      100,
+    );
     expect(logs).toHaveLength(1);
     expect(logs[0].line).toContain('ERROR boom');
   });

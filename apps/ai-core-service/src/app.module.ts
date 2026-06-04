@@ -24,6 +24,7 @@ import { DocumentModule } from './modules/document/document.module';
 import { EntityDetectionModule } from './modules/entity-detection/entity-detection.module';
 import { CatchUpModule } from './modules/catch-up/catch-up.module';
 import { ZaiChatModule } from './modules/zai-chat/zai-chat.module';
+import { MonitoringModule } from './modules/monitoring/monitoring.module';
 import { AiConsumer } from './transport/ai.consumer';
 import { AiPublisher } from './transport/ai.publisher';
 import { AiChatPublisher } from './transport/ai-chat.publisher';
@@ -71,6 +72,7 @@ import { HealthCheckService } from '@libs/shared';
     EntityDetectionModule,
     CatchUpModule,
     ZaiChatModule,
+    MonitoringModule,
   ],
   controllers: [AiConsumer, HealthController],
   providers: [AiPublisher, AiChatPublisher, HealthCheckService],

@@ -1,0 +1,35 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+
+  - job_name: 'blackbox-health'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+          - http://bff-service:5000/api/health
+          - http://sso-service:5001/api/health
+          - http://interaction-service:5004/api/health
+          - http://media-service:3003/api/health
+          - http://chat-service:5002/api/health
+          - http://ws-gateway:3001/api/health
+          - http://ai-core-service:5005/api/health
+          - http://notification-service:3004/api/health
+          - http://presence-service:3002/api/health
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115

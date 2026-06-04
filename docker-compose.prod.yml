@@ -276,6 +276,10 @@ services:
       DB_NAME: ${POSTGRES_DB:-postgres}
       # Zai AI bot
       ZAI_BOT_USER_ID: ${ZAI_BOT_USER_ID:-00000000-0000-4000-8000-0000000000a1}
+      # WebRTC TURN/STUN (Coturn)
+      COTURN_HOST: ${COTURN_HOST}
+      COTURN_SECRET: ${COTURN_SECRET}
+      COTURN_PORT: ${COTURN_PORT:-3478}
     networks:
       - zalo_network
     depends_on:

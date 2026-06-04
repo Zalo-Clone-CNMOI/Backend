@@ -71,6 +71,11 @@ export const entities = [
         ssl: {
           rejectUnauthorized: false,
         },
+        extra: {
+          max: 20,
+          connectionTimeoutMillis: 5000,
+          idleTimeoutMillis: 30000,
+        },
         entities,
         synchronize: config.nodeEnv === 'development', // Only sync in dev
         logging: config.nodeEnv === 'development',

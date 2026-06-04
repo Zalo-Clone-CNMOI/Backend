@@ -8,7 +8,7 @@ import {
   RpcAllExceptionsFilter,
   TransformResponseInterceptor,
 } from '@app/interceptors';
-import { JwtAuthGuard } from '@libs/auth';
+
 import { createKafkaMicroserviceOptions } from '@libs/kafka/kafka.util';
 import { loadConfig, assertProductionCors } from '@libs/config';
 import { MicroserviceOptions } from '@nestjs/microservices';
@@ -61,9 +61,6 @@ async function bootstrap() {
 
   app.useGlobalFilters(new HttpExceptionFilter(), new RpcAllExceptionsFilter());
   app.useGlobalInterceptors(new TransformResponseInterceptor());
-
-  const jwtAuthGuard = app.get(JwtAuthGuard);
-  app.useGlobalGuards(jwtAuthGuard);
 
   if (process.env.NODE_ENV !== 'production') {
     const document = createSwaggerDocument(app);

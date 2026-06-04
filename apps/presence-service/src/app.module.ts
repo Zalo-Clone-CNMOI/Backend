@@ -6,6 +6,8 @@ import { RedisModule } from '@libs/redis';
 import { MetricsModule } from '@libs/metrics';
 import { PresenceConsumer } from './consumers/presence.consumer';
 import { PresencePublisher } from './services/presence.publisher';
+import { HealthController } from './health.controller';
+import { HealthCheckService } from '@libs/shared';
 import { PresenceStore } from './services/presence.store';
 import { PresenceMetrics } from './services/presence.metrics';
 
@@ -17,7 +19,12 @@ import { PresenceMetrics } from './services/presence.metrics';
     RedisModule.forRootAsync(),
     MetricsModule,
   ],
-  controllers: [PresenceConsumer],
-  providers: [PresencePublisher, PresenceStore, PresenceMetrics],
+  controllers: [PresenceConsumer, HealthController],
+  providers: [
+    HealthCheckService,
+    PresencePublisher,
+    PresenceStore,
+    PresenceMetrics,
+  ],
 })
 export class AppModule {}

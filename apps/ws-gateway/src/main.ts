@@ -15,6 +15,8 @@ async function bootstrap() {
   logger.log('[Bootstrap] Creating Nest application for ws-gateway...');
   const app = await NestFactory.create(AppModule);
 
+  app.setGlobalPrefix('api');
+
   app.enableCors({
     origin: config.allowedOrigins,
     credentials: true,

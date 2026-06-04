@@ -27,6 +27,8 @@ import { ZaiChatModule } from './modules/zai-chat/zai-chat.module';
 import { AiConsumer } from './transport/ai.consumer';
 import { AiPublisher } from './transport/ai.publisher';
 import { AiChatPublisher } from './transport/ai-chat.publisher';
+import { HealthController } from './health.controller';
+import { HealthCheckService } from '@libs/shared';
 
 @Module({
   imports: [
@@ -70,8 +72,8 @@ import { AiChatPublisher } from './transport/ai-chat.publisher';
     CatchUpModule,
     ZaiChatModule,
   ],
-  controllers: [AiConsumer],
-  providers: [AiPublisher, AiChatPublisher],
+  controllers: [AiConsumer, HealthController],
+  providers: [AiPublisher, AiChatPublisher, HealthCheckService],
   exports: [AiPublisher, AiChatPublisher],
 })
 export class AppModule {}

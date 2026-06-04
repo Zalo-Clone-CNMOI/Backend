@@ -10,6 +10,8 @@ import { RedisModule } from '@libs/redis';
 import { MediaClientModule } from '@app/clients/media-client';
 import { MembershipClientModule } from '@app/clients/membership-client';
 import { WsMembershipModule } from './access/ws-membership.module';
+import { HealthController } from './health.controller';
+import { HealthCheckService } from '@libs/shared';
 import { ChatGateway } from './socket/chat.gateway';
 import { ActiveStreamTracker } from './socket/active-stream.tracker';
 import {
@@ -60,9 +62,11 @@ import {
     InteractionFanoutConsumer,
     AiFanoutConsumer,
     NotificationFanoutConsumer,
+    HealthController,
   ],
   providers: [
     { provide: APP_FILTER, useClass: RpcAllExceptionsFilter },
+    HealthCheckService,
     ChatGateway,
     ActiveStreamTracker,
     ChatHandler,

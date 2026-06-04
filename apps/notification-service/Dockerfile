@@ -28,6 +28,6 @@ COPY --from=build --chown=nestjs:nodejs /app/package.json ./
 USER nestjs
 
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=40s \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3004/metrics || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3004/api/health || exit 1
 
 CMD ["node", "dist/main.js"]

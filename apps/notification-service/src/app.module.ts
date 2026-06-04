@@ -14,6 +14,8 @@ import {
 } from '@libs/database/entities';
 import { NotificationConsumer } from './transport/notification.consumer';
 import { NotificationPublisher } from './transport/notification.publisher';
+import { HealthController } from './health.controller';
+import { HealthCheckService } from '@libs/shared';
 import { NOTIFICATION_PROVIDER } from './providers/notification.provider';
 import { FcmNotificationProvider } from './providers/fcm/fcm-notification.provider';
 import { NotificationService } from './services/notification.service';
@@ -43,8 +45,9 @@ import { NotificationMetrics } from './services/notification.metrics';
       }),
     }),
   ],
-  controllers: [NotificationConsumer],
+  controllers: [NotificationConsumer, HealthController],
   providers: [
+    HealthCheckService,
     NotificationPublisher,
     NotificationService,
     NotificationBatcher,

@@ -2,7 +2,9 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { APP_CONFIG, AppConfig } from '@libs/config';
 import { AiGatewayService } from '../ai-gateway/services/ai-gateway.service';
 import {
+  ALLOWED_LOG_LEVELS,
   HEALTH_QUERY_TIMEOUT_MS,
+  MAX_LOG_LIMIT,
   MONITORED_CONTAINERS,
   PROMQL,
 } from './monitoring.constants';
@@ -48,7 +50,14 @@ export class MonitoringService {
 
   private async promInstant(query: string): Promise<PromVector> {
     const url = `${this.config.prometheusUrl}/api/v1/query?query=${encodeURIComponent(query)}`;
-    return this.getJson<PromVector>(url);
+    try {
+      return await this.getJson<PromVector>(url);
+    } catch (e) {
+      this.logger.warn(
+        `Prometheus query failed (${query}): ${e instanceof Error ? e.message : 'unknown'}`,
+      );
+      return { status: 'error' };
+    }
   }
 
   /** Map PromVector → { containerName: numericValue } by label `name`. */
@@ -76,18 +85,10 @@ export class MonitoringService {
 
   async getContainers(): Promise<ContainerStatus[]> {
     const [up, restarts, uptime, probe] = await Promise.all([
-      this.promInstant(PROMQL.up).catch(
-        () => ({ status: 'error' }) as PromVector,
-      ),
-      this.promInstant(PROMQL.restarts24h).catch(
-        () => ({ status: 'error' }) as PromVector,
-      ),
-      this.promInstant(PROMQL.uptime).catch(
-        () => ({ status: 'error' }) as PromVector,
-      ),
-      this.promInstant(PROMQL.probeSuccess).catch(
-        () => ({ status: 'error' }) as PromVector,
-      ),
+      this.promInstant(PROMQL.up),
+      this.promInstant(PROMQL.restarts24h),
+      this.promInstant(PROMQL.uptime),
+      this.promInstant(PROMQL.probeSuccess),
     ]);
     const upMap = this.vectorByName(up);
     const restartMap = this.vectorByName(restarts);
@@ -109,16 +110,32 @@ export class MonitoringService {
     level: string | undefined,
     limit: number,
   ): Promise<LogLine[]> {
-    const selector =
-      level && level.trim()
-        ? `{container="${container}"} |= "${level.trim()}"`
-        : `{container="${container}"}`;
+    // Defense-in-depth: only allow known containers + known log levels before
+    // interpolating into LogQL (prevents selector/pipeline injection).
+    const known = MONITORED_CONTAINERS.find((c) => c.container === container);
+    if (!known) {
+      throw new Error(`Unknown container: ${container}`);
+    }
+    const normalizedLevel = level?.trim().toUpperCase();
+    const safeLevel = (ALLOWED_LOG_LEVELS as readonly string[]).includes(
+      normalizedLevel ?? '',
+    )
+      ? normalizedLevel
+      : undefined;
+    const safeLimit = Math.min(
+      Math.max(1, Math.floor(limit) || 100),
+      MAX_LOG_LIMIT,
+    );
+
+    const selector = safeLevel
+      ? `{container="${container}"} |= "${safeLevel}"`
+      : `{container="${container}"}`;
     const end = Date.now() * 1_000_000; // ns
     const start = (Date.now() - 60 * 60 * 1000) * 1_000_000; // 1h ago, ns
     const url =
       `${this.config.lokiUrl}/loki/api/v1/query_range` +
       `?query=${encodeURIComponent(selector)}` +
-      `&limit=${limit}&start=${start}&end=${end}&direction=backward`;
+      `&limit=${safeLimit}&start=${start}&end=${end}&direction=backward`;
     const resp = await this.getJson<LokiResp>(url);
     const lines: LogLine[] = [];
     for (const stream of resp.data?.result ?? []) {

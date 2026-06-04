@@ -5,8 +5,16 @@ import {
   Injectable,
   Logger,
 } from '@nestjs/common';
+import { timingSafeEqual } from 'crypto';
 import { Request } from 'express';
 import { APP_CONFIG, AppConfig } from '@libs/config';
+
+/** Constant-time string compare; false if either side empty or length differs. */
+function safeEqual(a: string, b: string): boolean {
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  return ab.length > 0 && ab.length === bb.length && timingSafeEqual(ab, bb);
+}
 
 /**
  * Guards internal-only HTTP endpoints (e.g. ai-core monitoring) behind a shared
@@ -31,7 +39,7 @@ export class InternalTokenGuard implements CanActivate {
     }
     const request = context.switchToHttp().getRequest<Request>();
     const token = request.headers['x-internal-token'] as string | undefined;
-    if (token !== expected) {
+    if (!token || !safeEqual(token, expected)) {
       this.logger.warn('InternalTokenGuard: token missing/mismatch');
       return false;
     }

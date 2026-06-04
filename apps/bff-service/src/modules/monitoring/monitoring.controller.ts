@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
+import { timingSafeEqual } from 'crypto';
 import { AccessToken, Public } from '@app/decorator';
 import { BusinessException } from '@app/types';
 import { JwtService } from '@libs/auth';
@@ -78,10 +79,13 @@ export class MonitoringController {
     summary: 'Composite stack health (UptimeRobot, X-Monitor-Token)',
   })
   stackHealth(@Headers('x-monitor-token') monitorToken?: string) {
-    if (
-      !this.config.monitorToken ||
-      monitorToken !== this.config.monitorToken
-    ) {
+    const expected = this.config.monitorToken ?? '';
+    const got = monitorToken ?? '';
+    const ab = Buffer.from(got);
+    const eb = Buffer.from(expected);
+    const valid =
+      eb.length > 0 && ab.length === eb.length && timingSafeEqual(ab, eb);
+    if (!valid) {
       throw BusinessException.unauthorized('Invalid monitor token');
     }
     return this.service.getStackHealth();

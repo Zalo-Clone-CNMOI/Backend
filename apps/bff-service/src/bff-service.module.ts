@@ -17,6 +17,7 @@ import { MediaModule } from './modules/media';
 import { EntityInfoModule } from './modules/entity-info';
 import { EntityDetectionsModule } from './modules/entity-detections/entity-detections.module';
 import { AiAssistModule } from './modules/ai-assist/ai-assist.module';
+import { MonitoringModule } from './modules/monitoring/monitoring.module';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import { ThrottlerModule, seconds } from '@nestjs/throttler';
 import { LoggerModule } from '@libs/logger';
@@ -48,6 +49,7 @@ import { RedisModule } from '@libs/redis';
     EntityInfoModule,
     EntityDetectionsModule,
     AiAssistModule,
+    MonitoringModule,
   ],
   controllers: [BffServiceController],
   providers: [BffServiceService],

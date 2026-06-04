@@ -25,6 +25,10 @@ services:
       KAFKA_BROKERS: kafka:29092
       KAFKA_CLIENT_ID: bff-service
       REDIS_URL: redis://redis:6379
+      # Container monitoring (AI_CORE_SERVICE_URL already set above)
+      INTERNAL_MONITORING_TOKEN: ${INTERNAL_MONITORING_TOKEN}
+      MONITOR_TOKEN: ${MONITOR_TOKEN}
+      ADMIN_USER_IDS: ${ADMIN_USER_IDS}
     ports:
       - "${BFF_PORT:-5000}:5000"
     networks:
@@ -507,6 +511,11 @@ services:
       S3_PRESIGN_EXPIRES_SECONDS: ${S3_PRESIGN_EXPIRES_SECONDS:-60}
       # Omit CDN_BASE_URL to auto-build from S3_BUCKET + AWS_REGION; set for CloudFront
       # CDN_BASE_URL: ${CDN_BASE_URL}
+      # Container monitoring
+      INTERNAL_MONITORING_TOKEN: ${INTERNAL_MONITORING_TOKEN}
+      PROMETHEUS_URL: http://prometheus:9090
+      LOKI_URL: http://loki:3100
+      GRAFANA_HEALTH_URL: http://grafana:3000/api/health
     ports:
       - "${AI_CORE_PORT:-5005}:5005"
     networks:

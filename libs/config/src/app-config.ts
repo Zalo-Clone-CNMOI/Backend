@@ -127,6 +127,20 @@ export interface AppConfig {
    * the object store is NOT reachable by the router (e.g. LocalStack in dev).
    */
   zaiVisionInlineBase64?: boolean;
+
+  // --- Container monitoring ---
+  /** Prometheus base URL (Docker service name). Default http://prometheus:9090. */
+  prometheusUrl?: string;
+  /** Loki base URL (Docker service name). Default http://loki:3100. */
+  lokiUrl?: string;
+  /** Grafana health URL. Default http://grafana:3000/api/health. */
+  grafanaHealthUrl?: string;
+  /** Shared secret BFF↔ai-core for internal monitoring endpoints. */
+  internalMonitoringToken?: string;
+  /** Shared secret for UptimeRobot → BFF stack-health (machine-to-machine). */
+  monitorToken?: string;
+  /** Admin user IDs (JWT sub) allowed to access monitoring. */
+  adminUserIds?: string[];
 }
 
 interface ServiceConfigRequirements {
@@ -480,6 +494,17 @@ export function loadConfig(serviceName: string): AppConfig {
       readPositiveInteger(process.env.ZAI_VISION_MAX_IMAGES, 1, 10) ?? 4,
     zaiVisionInlineBase64:
       readBoolean(process.env.ZAI_VISION_INLINE_BASE64) ?? false,
+
+    // --- Container monitoring ---
+    prometheusUrl:
+      process.env.PROMETHEUS_URL?.trim() || 'http://prometheus:9090',
+    lokiUrl: process.env.LOKI_URL?.trim() || 'http://loki:3100',
+    grafanaHealthUrl:
+      process.env.GRAFANA_HEALTH_URL?.trim() ||
+      'http://grafana:3000/api/health',
+    internalMonitoringToken: process.env.INTERNAL_MONITORING_TOKEN?.trim(),
+    monitorToken: process.env.MONITOR_TOKEN?.trim(),
+    adminUserIds: readCsv(process.env.ADMIN_USER_IDS),
   };
 
   assertServiceConfig(config);

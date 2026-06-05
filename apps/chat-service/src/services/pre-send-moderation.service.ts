@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { AxiosError } from 'axios';
 import { APP_CONFIG, AppConfig } from '@libs/config';
 import { CacheService } from '@libs/redis';
-import { AiCoreClientService } from '@app/clients';
+import { AiCoreClientService, ModerationDecisionSource } from '@app/clients';
 import { hashMessageBody } from '@libs/shared';
 import { ConversationType } from '@app/constant';
 import type {
@@ -139,11 +139,31 @@ export class PreSendModerationService {
         traceId: input.traceId,
       });
 
+      if (
+        verdict.decision_source ===
+          ModerationDecisionSource.fallback_provider_failure ||
+        verdict.decision_source ===
+          ModerationDecisionSource.fallback_parse_failure
+      ) {
+        outcomeForDuration = 'fail_open';
+        this.metrics.recordOutcome('fail_open', convTypeLabel, 'http_error');
+        this.logger.warn(
+          `[${input.traceId}] pre-send moderation fail-open: ${verdict.decision_source}`,
+          {
+            senderId: input.senderId,
+            conversationId: input.conversationId,
+            convType: convTypeLabel,
+            bodyHash,
+          },
+        );
+        return null;
+      }
+
       const threshold = this.threshold;
 
       const labels = this.coerceLabels(verdict.labels);
 
-      // 5. Block branch.
+      // 6. Block branch.
       if (verdict.is_flagged && verdict.confidence >= threshold) {
         if (
           verdict.confidence >= CACHE_POPULATE_MIN_CONFIDENCE &&
@@ -171,7 +191,7 @@ export class PreSendModerationService {
         };
       }
 
-      // 6. Allow branch — conditional clean-cache populate.
+      // 7. Allow branch — conditional clean-cache populate.
       if (
         !verdict.is_flagged &&
         labels.includes('clean') &&

@@ -295,4 +295,53 @@ describe('PreSendModerationService', () => {
       'network_error',
     );
   });
+
+  it('decision_source=fallback_provider_failure → null + fail_open, NO cache write', async () => {
+    // Root-cause regression test: ai-core returns is_flagged:true,confidence:1
+    // as a fail-closed safe-default when the LLM provider is unavailable.
+    // Pre-send MUST treat this as fail-open (not block), because post-send
+    // moderation still runs and blocking here would prevent all messages when
+    // the LLM is down.
+    const { service, cacheService, metrics } = makeService({
+      llmCheck: jest.fn().mockResolvedValue({
+        is_flagged: true,
+        labels: ['spam'],
+        confidence: 1,
+        decision_source: 'fallback_provider_failure',
+      }),
+    });
+
+    const result = await service.checkOrAllow(DEFAULT_INPUT);
+
+    expect(result).toBeNull();
+    expect(metrics.recordOutcome).toHaveBeenCalledWith(
+      'fail_open',
+      'group',
+      'http_error',
+    );
+    expect(cacheService.setModerationFastResult).not.toHaveBeenCalled();
+  });
+
+  it('decision_source=fallback_parse_failure → null + fail_open, NO cache write', async () => {
+    // Same contract: LLM responded but JSON was unparseable — pre-send
+    // must not block on parse glitches.
+    const { service, cacheService, metrics } = makeService({
+      llmCheck: jest.fn().mockResolvedValue({
+        is_flagged: false,
+        labels: ['clean'],
+        confidence: 0,
+        decision_source: 'fallback_parse_failure',
+      }),
+    });
+
+    const result = await service.checkOrAllow(DEFAULT_INPUT);
+
+    expect(result).toBeNull();
+    expect(metrics.recordOutcome).toHaveBeenCalledWith(
+      'fail_open',
+      'group',
+      'http_error',
+    );
+    expect(cacheService.setModerationFastResult).not.toHaveBeenCalled();
+  });
 });

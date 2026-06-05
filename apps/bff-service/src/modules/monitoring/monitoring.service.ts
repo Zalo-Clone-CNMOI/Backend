@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { APP_CONFIG, AppConfig } from '@libs/config';
+import { BusinessException } from '@app/types';
 
 const TIMEOUT_MS = 30_000;
 
@@ -34,7 +35,9 @@ export class MonitoringService {
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
     if (!res.ok) {
-      throw new Error(`ai-core monitoring ${path} failed: HTTP ${res.status}`);
+      throw BusinessException.internal(
+        `ai-core monitoring ${path} failed: HTTP ${res.status}`,
+      );
     }
     return (await res.json()) as T;
   }

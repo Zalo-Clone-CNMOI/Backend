@@ -8,6 +8,7 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
+
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { timingSafeEqual } from 'crypto';
@@ -16,6 +17,7 @@ import { BusinessException } from '@app/types';
 import { JwtService } from '@libs/auth';
 import { APP_CONFIG, AppConfig } from '@libs/config';
 import { AiAnalyzeDto } from './dto/ai-analyze.dto';
+import { GetContainerLogsDto } from './dto/get-container-logs.dto';
 import { MonitoringService } from './monitoring.service';
 
 @ApiTags('Monitoring')
@@ -53,15 +55,10 @@ export class MonitoringController {
   logs(
     @AccessToken() token: string | null,
     @Param('id') id: string,
-    @Query('level') level?: string,
-    @Query('limit') limit?: string,
+    @Query() query: GetContainerLogsDto,
   ) {
     this.requireAdmin(token);
-    return this.service.getContainerLogs(
-      id,
-      level,
-      limit ? Number(limit) : undefined,
-    );
+    return this.service.getContainerLogs(id, query.level, query.limit);
   }
 
   @Post('ai-analyze')
@@ -72,7 +69,8 @@ export class MonitoringController {
     return this.service.aiAnalyze(userId, body.question);
   }
 
-  // Machine-to-machine for UptimeRobot — uses X-Monitor-Token, not JWT.
+  // External watchdog (HetrixTools/UptimeRobot) — X-Monitor-Token, not JWT.
+  // Intentionally unthrottled: called from fixed external IPs every 5 min.
   @Public()
   @Get('stack-health')
   @ApiOperation({

@@ -61,8 +61,9 @@ describe('BFF MonitoringService', () => {
     });
   });
 
-  it('throws when ai-core returns non-ok', async () => {
+  it('throws BusinessException when ai-core returns non-ok', async () => {
+    const { BusinessException } = await import('@app/types');
     mockFetchOnce({}, false, 502);
-    await expect(service.getStackHealth()).rejects.toThrow();
+    await expect(service.getStackHealth()).rejects.toThrow(BusinessException);
   });
 });

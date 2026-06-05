@@ -10,6 +10,8 @@ describe('BFF MonitoringController', () => {
   let service: jest.Mocked<MonitoringService>;
   let jwt: jest.Mocked<JwtService>;
 
+  afterEach(() => jest.clearAllMocks());
+
   beforeEach(async () => {
     service = {
       getContainers: jest.fn().mockResolvedValue([]),
@@ -49,6 +51,19 @@ describe('BFF MonitoringController', () => {
     const res = await controller.containers('tok');
     expect(res).toEqual([]);
     expect(service.getContainers).toHaveBeenCalled();
+  });
+
+  it('logs passes DTO fields to service', async () => {
+    jwt.verifyAccessToken.mockReturnValue({ sub: 'admin-1' } as never);
+    await controller.logs('tok', 'zalo_bff_service', {
+      level: 'ERROR' as never,
+      limit: 50,
+    });
+    expect(service.getContainerLogs).toHaveBeenCalledWith(
+      'zalo_bff_service',
+      'ERROR',
+      50,
+    );
   });
 
   it('ai-analyze passes verified userId', async () => {

@@ -11,3 +11,4 @@ export * from './ws/events';
 export * from './ws/limits';
 export * from './kafka/interaction.events';
 export * from './types/ai-conversation';
+export * from './types/monitoring';

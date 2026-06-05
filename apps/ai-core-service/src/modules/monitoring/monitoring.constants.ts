@@ -1,3 +1,5 @@
+import { LogLevel } from '@libs/contracts';
+
 // Docker container name (cAdvisor `name` label) ↔ display service name
 export const MONITORED_CONTAINERS: ReadonlyArray<{
   container: string;
@@ -23,15 +25,11 @@ export const PROMQL = {
   probeSuccess: 'probe_success{job="blackbox-health"}',
 } as const;
 
-// NestJS log levels (logs are plain text). Used to validate the `level` filter
-// before interpolating into LogQL (defense-in-depth against injection).
-export const ALLOWED_LOG_LEVELS = [
-  'ERROR',
-  'WARN',
-  'LOG',
-  'DEBUG',
-  'VERBOSE',
-] as const;
+// Canonical source: libs/contracts/src/types/monitoring.ts (LogLevel enum).
+// Mirrors it here as a readonly array for O(1) includes() checks in the service.
+export const ALLOWED_LOG_LEVELS = Object.values(
+  LogLevel,
+) as ReadonlyArray<string>;
 
 export const MAX_LOG_LIMIT = 1000;
 

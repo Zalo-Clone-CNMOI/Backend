@@ -15,6 +15,7 @@ import { AccessToken, Public } from '@app/decorator';
 import { BusinessException } from '@app/types';
 import { JwtService } from '@libs/auth';
 import { APP_CONFIG, AppConfig } from '@libs/config';
+import { AiAnalyzeDto } from './dto/ai-analyze.dto';
 import { MonitoringService } from './monitoring.service';
 
 @ApiTags('Monitoring')
@@ -39,6 +40,7 @@ export class MonitoringController {
   }
 
   @Get('containers')
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @ApiOperation({ summary: 'Container status (admin only)' })
   containers(@AccessToken() token: string | null) {
     this.requireAdmin(token);
@@ -46,6 +48,7 @@ export class MonitoringController {
   }
 
   @Get('containers/:id/logs')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiOperation({ summary: 'Container logs (admin only)' })
   logs(
     @AccessToken() token: string | null,
@@ -64,10 +67,7 @@ export class MonitoringController {
   @Post('ai-analyze')
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @ApiOperation({ summary: 'LLM analysis (admin only, rate-limited 5/min)' })
-  aiAnalyze(
-    @AccessToken() token: string | null,
-    @Body() body: { question: string },
-  ) {
+  aiAnalyze(@AccessToken() token: string | null, @Body() body: AiAnalyzeDto) {
     const userId = this.requireAdmin(token);
     return this.service.aiAnalyze(userId, body.question);
   }

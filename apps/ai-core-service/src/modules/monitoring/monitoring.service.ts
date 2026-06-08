@@ -117,9 +117,7 @@ export class MonitoringService {
       throw new Error(`Unknown container: ${container}`);
     }
     const normalizedLevel = level?.trim().toUpperCase();
-    const safeLevel = (ALLOWED_LOG_LEVELS as readonly string[]).includes(
-      normalizedLevel ?? '',
-    )
+    const safeLevel = ALLOWED_LOG_LEVELS.includes(normalizedLevel ?? '')
       ? normalizedLevel
       : undefined;
     const safeLimit = Math.min(
